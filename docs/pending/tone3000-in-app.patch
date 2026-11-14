@@ -1,0 +1,92 @@
+diff --git a/mobile/package-lock.json b/mobile/package-lock.json
+index 89c69a65..9128e57e 100644
+--- a/mobile/package-lock.json
++++ b/mobile/package-lock.json
+@@ -19,6 +19,8 @@
+         "expo-blur": "~57.0.3",
+         "expo-build-properties": "~57.0.22",
+         "expo-clipboard": "~57.0.2",
++        "expo-crypto": "~57.0.4",
++        "expo-secure-store": "~57.0.4",
+         "expo-haptics": "~57.0.3",
+         "expo-image-manipulator": "~57.0.21",
+         "expo-image-picker": "~57.0.20",
+@@ -31,7 +33,8 @@
+         "react-native": "0.86.3",
+         "react-native-purchases": "^10.10.0",
+         "react-native-safe-area-context": "~5.7.0",
+-        "react-native-url-polyfill": "^4.0.0"
++        "react-native-url-polyfill": "^4.0.0",
++        "react-native-webview": "13.16.1"
+       },
+       "devDependencies": {
+         "@babel/core": "^7.25.2",
+@@ -3666,6 +3669,24 @@
+         "react-native": "*"
+       }
+     },
++    "node_modules/expo-crypto": {
++      "version": "57.0.4",
++      "resolved": "https://registry.npmjs.org/expo-crypto/-/expo-crypto-57.0.4.tgz",
++      "integrity": "sha512-LqMMs/N6wvwZyw4deVmcl3AgXgqMwCVQ9WyWf2eaWyrk99TXSKk5da3QspiLOOjnn5Qv9f8C50cDNuoyLThpdw==",
++      "license": "MIT",
++      "peerDependencies": {
++        "expo": "*"
++      }
++    },
++    "node_modules/expo-secure-store": {
++      "version": "57.0.4",
++      "resolved": "https://registry.npmjs.org/expo-secure-store/-/expo-secure-store-57.0.4.tgz",
++      "integrity": "sha512-7zBA1RThURTXdP4w65kBzZNbcSsfArqVd+p+ETAnPRWXO8J296Qd0YaCVyRpJ0HSwlCnGdvOnqO+NgSreHsOhA==",
++      "license": "MIT",
++      "peerDependencies": {
++        "expo": "*"
++      }
++    },
+     "node_modules/expo-eas-client": {
+       "version": "57.0.5",
+       "resolved": "https://registry.npmjs.org/expo-eas-client/-/expo-eas-client-57.0.5.tgz",
+@@ -6537,6 +6558,20 @@
+         "react-native": "*"
+       }
+     },
++    "node_modules/react-native-webview": {
++      "version": "13.16.1",
++      "resolved": "https://registry.npmjs.org/react-native-webview/-/react-native-webview-13.16.1.tgz",
++      "integrity": "sha512-If0eHhoEdOYDcHsX+xBFwHMbWBGK1BvGDQDQdVkwtSIXiq1uiqjkpWVP2uQ1as94J0CzvFE9PUNDuhiX0Z6ubw==",
++      "license": "MIT",
++      "dependencies": {
++        "escape-string-regexp": "^4.0.0",
++        "invariant": "2.2.4"
++      },
++      "peerDependencies": {
++        "react": "*",
++        "react-native": "*"
++      }
++    },
+     "node_modules/react-native/node_modules/babel-plugin-syntax-hermes-parser": {
+       "version": "0.36.0",
+       "resolved": "https://registry.npmjs.org/babel-plugin-syntax-hermes-parser/-/babel-plugin-syntax-hermes-parser-0.36.0.tgz",
+diff --git a/mobile/package.json b/mobile/package.json
+index ae14d843..67bd54d6 100644
+--- a/mobile/package.json
++++ b/mobile/package.json
+@@ -22,6 +22,8 @@
+     "expo-blur": "~57.0.3",
+     "expo-build-properties": "~57.0.22",
+     "expo-clipboard": "~57.0.2",
++    "expo-crypto": "~57.0.4",
++    "expo-secure-store": "~57.0.4",
+     "expo-haptics": "~57.0.3",
+     "expo-image-manipulator": "~57.0.21",
+     "expo-image-picker": "~57.0.20",
+@@ -34,7 +36,8 @@
+     "react-native": "0.86.3",
+     "react-native-purchases": "^10.10.0",
+     "react-native-safe-area-context": "~5.7.0",
+-    "react-native-url-polyfill": "^4.0.0"
++    "react-native-url-polyfill": "^4.0.0",
++    "react-native-webview": "13.16.1"
+   },
+   "devDependencies": {
+     "@babel/core": "^7.25.2",

@@ -4,10 +4,13 @@
  * "Next I want to add TONE3000 so users can search, preview and download
  * tones for the NAM block directly in the app." (Justin, 13 November 2026.)
  * This is the part that needs nothing from a unit: sign in, browse and
- * audition on TONE3000's own page (it opens in the browser and comes back
- * here), and the tone picked shows with its creator, its licence and its
- * captures. A capture can be fetched and checked: what kind it is, how many
- * numbers are in it, and about what sending it to a unit would take.
+ * audition on TONE3000's own page, and the tone picked shows with its
+ * creator, its licence and its captures. The page comes up inside the app
+ * on a copy built with the web view (components/Tone3000Page, lib/
+ * tone3000Parts), and in the device's browser, coming back here by the
+ * app's own link, on every copy built before it. A capture can be fetched
+ * and checked: what kind it is, how many numbers are in it, and about what
+ * sending it to a unit would take.
  *
  * AND A CAPTURE CAN BE SENT TO AN AXE-FX III (lib/nam-install: Axe-Edit
  * III's own messages, from a recording of it, 13 November 2026), over
@@ -40,14 +43,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
 import { logDebug } from '../lib/debugLog'
-import { T3K_POWERED, toneCredit } from '../lib/tone3000'
-import { onTone3000Return, t3k } from '../lib/tone3000Here'
+import { readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
+import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Note from './Note'
 import Press from './Press'
+import Tone3000Page from './Tone3000Page'
 
 /** A capture's name, as TONE3000 gives it. */
 export const captureLabel = (m) => (m?.name ? String(m.name) : `Capture ${m?.id}`)
@@ -61,6 +65,11 @@ export const STEPS = Object.freeze([
 export const STEPS_FOOT = 'The preset you are on needs NAM 1 in it (with only NAM 2 there, Play it in NAM 2 comes up after the send). Nothing is saved until you save the preset, and a capture already on the unit is never written over.'
 export const SEND_AND_PLAY = 'Send it and play it in NAM 1'
 export const SEND_AND_PLAY_SUB = 'Into the first empty capture slot on the Axe-Fx III'
+/** Only where the page comes up inside the app: the way round a sign-in that will not work there. */
+export const BROWSE_OUTSIDE = 'Open TONE3000 in the browser instead'
+export const BROWSE_OUTSIDE_SUB = 'If its page will not work inside the app'
+/** While the return is being finished with TONE3000, which the page inside the app has already closed for. */
+export const COMING_BACK = 'Coming back from TONE3000…'
 
 /*
  * ONE SEND AT A TIME, WHOEVER DRAWS THE CARD. A send goes on after the card
@@ -95,6 +104,10 @@ export default function Tone3000Test() {
   const texts = useRef({})
   /* The send in hand: { id, line, slot, done, again, played }. `line` is what became of the send, `played` what the NAM block said. */
   const [send, setSend] = useState(null)
+  /* TONE3000's page, while it is up inside the app: its address, or null. */
+  const [page, setPage] = useState(null)
+  /* The last return of TONE3000's that was taken up: the page inside the app and the phone's own link can each hand over the same one. */
+  const lastReturn = useRef(null)
 
   const load = async (toneId) => {
     setBusy('tone')
@@ -115,48 +128,76 @@ export default function Tone3000Test() {
     }
   }
 
+  /*
+   * TONE3000 sent the player back, by the page inside the app or by the
+   * app's own link. A link that is not TONE3000's (Siri's are the same
+   * scheme) is no business of this card's, and the same return handed over
+   * twice is finished once.
+   */
+  const returned = async (url) => {
+    if (!readCallback(url) || url === lastReturn.current) return
+    lastReturn.current = url
+    if (!alive.current) return
+    setPage(null)
+    /* Only over nothing, or over the opening of the page: a send that is going keeps its own word. */
+    setBusy((was) => (was === null || was === 'open' ? 'back' : was))
+    let done = null
+    try {
+      done = await t3k.finish(url)
+    } catch (err) {
+      /* The device would not read or let go of what it kept for the sign-in (lib/tone3000 says everything else in words of its own). */
+      logDebug('tone3000', `the return was not finished: ${err?.message || err}`)
+      /* Not taken up after all: the same return may be handed over again. */
+      lastReturn.current = null
+      if (alive.current) setFault('The sign-in to TONE3000 couldn’t be finished on this device. Tap Browse TONE3000 again.')
+      return
+    } finally {
+      if (alive.current) setBusy((was) => (was === 'back' ? null : was))
+    }
+    /* A return with no sign-in waiting for it (a launch link handed over again). */
+    if (!done || !alive.current) return
+    if (!done.ok) {
+      logDebug('tone3000', `sign-in not finished: ${done.why}`)
+      if (done.canceled) setSaid(done.why)
+      else setFault(done.why)
+      return
+    }
+    setSignedIn(true)
+    setFault('')
+    if (done.toneId) {
+      setSaid('')
+      load(done.toneId)
+    } else {
+      setSaid('Signed in. No tone was picked.')
+    }
+  }
+
   useEffect(() => {
     alive.current = true
     t3k.signedIn().then((yes) => alive.current && setSignedIn(yes))
-    const stop = onTone3000Return(async (url) => {
-      const done = await t3k.finish(url)
-      /* Not TONE3000's link, or one with no sign-in waiting for it (a launch link handed over again). */
-      if (!done || !alive.current) return
-      setBusy(null)
-      if (!done.ok) {
-        logDebug('tone3000', `sign-in not finished: ${done.why}`)
-        if (done.canceled) setSaid(done.why)
-        else setFault(done.why)
-        return
-      }
-      setSignedIn(true)
-      setFault('')
-      if (done.toneId) {
-        setSaid('')
-        load(done.toneId)
-      } else {
-        setSaid('Signed in. No tone was picked.')
-      }
-    })
+    const stop = onTone3000Return(returned)
+    /* While this card is up it is where TONE3000's page is drawn, on a copy that can draw it. */
+    const unhost = hostPage((url) => alive.current && setPage(url))
     return () => {
       alive.current = false
       stop()
+      unhost()
     }
   }, [])
 
-  const browse = async () => {
+  const browse = async (outside = false) => {
     if (busy) return
     setBusy('open')
     setFault('')
     setSaid('')
     try {
-      await t3k.start()
-      logDebug('tone3000', 'opened TONE3000’s page to pick a tone')
+      await (outside === true ? startOutside() : t3k.start())
+      logDebug('tone3000', `opened TONE3000’s page ${outside !== true && pageInApp() ? 'inside the app' : 'in the browser'} to pick a tone`)
     } catch (err) {
       setFault(`TONE3000’s page didn’t open: ${err?.message || err}`)
     } finally {
-      /* The browser is in front from here; the button comes back for when it is not. */
-      if (alive.current) setBusy(null)
+      /* The page is in front from here; the button comes back for when it is not. */
+      if (alive.current) setBusy((was) => (was === 'open' ? null : was))
     }
   }
 
@@ -317,7 +358,14 @@ export default function Tone3000Test() {
   }
 
   const signOut = async () => {
-    await t3k.signOut()
+    try {
+      await t3k.signOut()
+    } catch (err) {
+      /* Never "signed out" over a pass the device would not let go of. */
+      logDebug('tone3000', `not signed out: ${err?.message || err}`)
+      if (alive.current) setFault('TONE3000 couldn’t be signed out of on this device just now. Try again.')
+      return
+    }
     if (!alive.current) return
     texts.current = {}
     setSend(null)
@@ -339,7 +387,9 @@ export default function Tone3000Test() {
         </Text>
       ))}
       <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{STEPS_FOOT}</Text>
-      <Press label={busy === 'open' ? 'Opening…' : tone ? 'Browse TONE3000 again' : 'Browse TONE3000'} tone="live" disabled={!!busy} onPress={browse} />
+      <Press label={busy === 'open' ? 'Opening…' : tone ? 'Browse TONE3000 again' : 'Browse TONE3000'} tone="live" disabled={!!busy} onPress={() => browse()} />
+      {pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true)} /> : null}
+      {busy === 'back' ? <Note>{COMING_BACK}</Note> : null}
       {busy === 'tone' ? <Note>Fetching the tone you picked…</Note> : null}
       {said ? <Note>{said}</Note> : null}
       {fault ? <Note tone="warn">{fault}</Note> : null}
@@ -385,6 +435,18 @@ export default function Tone3000Test() {
       ) : null}
       {signedIn ? <Press label="Sign out of TONE3000" disabled={!!busy} onPress={signOut} /> : null}
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{T3K_POWERED}</Text>
+      {/* TONE3000's page inside the app; nothing at all on a copy built without the web view. */}
+      <Tone3000Page
+        url={page}
+        onReturn={returned}
+        onClosed={() => alive.current && setPage(null)}
+        onFault={(why, status) => {
+          logDebug('tone3000', `TONE3000’s page was closed: ${why}${status ? ` It answered ${status}.` : ''}`)
+          if (!alive.current) return
+          setPage(null)
+          setFault(why)
+        }}
+      />
     </View>
   )
 }

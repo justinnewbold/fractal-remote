@@ -5095,6 +5095,19 @@ export function run(test) {
     for (const dir of ['src/', 'shared/', 'mobile/src/']) walk(new URL(`../${dir}`, import.meta.url))
     assert.ok(files.length > 50, `only found ${files.length} source files to check`)
 
+    /*
+     * ONE FILE MAY SAY `require`, AND ONLY THAT FILE. On the phone,
+     * `require('a-name')` is not a name looked up when the line runs: the
+     * phone's bundler rewrites each one, when the app is bundled, into a call
+     * of its own loader. mobile/src/lib/tone3000Parts.js asks for three native
+     * packages that way, each inside a `try`, because a package that is not
+     * installed cannot be imported at all (test/tone3000-page.mjs holds it to
+     * three of them, each a name in quotes, each in a try of its own).
+     * Everywhere else `require` is still a name that does not exist: the
+     * browser has none, and a phone file that used it as anything but that
+     * call would throw.
+     */
+    const MAY_REQUIRE = 'mobile/src/lib/tone3000Parts.js'
     const broken = []
     for (const file of files) {
       const code = readFileSync(file, 'utf8')
@@ -5111,9 +5124,9 @@ export function run(test) {
           globals = Object.keys(path.scope.globals)
         }
       })
-      const unknown = globals.filter((name) => !KNOWN.has(name)).sort()
+      const short = file.startsWith(root) ? file.slice(root.length) : file
+      const unknown = globals.filter((name) => !KNOWN.has(name) && !(name === 'require' && short === MAY_REQUIRE)).sort()
       if (unknown.length) {
-        const short = file.startsWith(root) ? file.slice(root.length) : file
         broken.push(`${short} uses ${unknown.join(', ')} — defined nowhere, so it throws when that line runs`)
       }
     }

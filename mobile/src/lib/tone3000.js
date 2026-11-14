@@ -16,10 +16,13 @@
  * captures. Everything browsed is TONE3000's page, under TONE3000's name,
  * which is what their terms ask of an integration.
  *
- * NO NEW BUILD. The page opens in the phone's browser and comes back
+ * WHERE THE PAGE OPENS IS NOT THIS FILE'S BUSINESS: `open` is handed in.
+ * On every copy out today it opens in the phone's browser and comes back
  * through the app's own link (fractalremote://tone3000, registered on the
- * key). An in-app page, with TONE3000's native preview player, is their
- * example for a phone app too, and needs native pieces: the next build.
+ * key). TONE3000's own examples for a phone show it in a web view inside
+ * the app instead, which is a native piece: lib/tone3000Parts has the
+ * three that wait for a build, and lib/tone3000Here uses each where a copy
+ * has it. Either way the return is one address, read by `readCallback`.
  *
  * EVERY ADDRESS, FIELD AND ANSWER HERE IS AS TONE3000'S OWN EXAMPLE CLIENT
  * HAS IT (github.com/tone-3000/api, web/src/tone3000-client.ts, read 13
@@ -37,8 +40,10 @@
  * and a guaranteed source of random bytes. `randomBytes` uses the engine's
  * own when it has one and falls back to the ordinary random numbers when it
  * has not: the one-time word then is harder to guess than `state` alone
- * makes it, not as hard as it should be, and the secure source comes with
- * the build that brings the in-app page.
+ * makes it, not as hard as it should be. The phone's own secure source is
+ * one of the pieces that wait for a build (lib/tone3000Parts); a copy that
+ * has it hands it in as `random` (lib/tone3000Keep `sureRandom`), with
+ * `randomBytes` as the spare.
  *
  * This file imports only lib/sha256. What touches the phone (storage, the
  * browser, the network) is handed in, so every step here runs in the tests.
@@ -275,7 +280,20 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
   async function finish(url) {
     const back = readCallback(url, redirect)
     if (!back) return null
-    const pending = await kept(T3K_PENDING_KEY)
+    /*
+     * Read straight from the device, not through `kept`: a read the device
+     * REFUSES is thrown to whoever asked, never taken for "no sign-in
+     * waiting". That answer shows nothing on the screen, so a return whose
+     * one-time word could not be read just then would vanish without a word
+     * (the phone's secure storage can refuse a read for a moment).
+     */
+    const raw = await store.get(T3K_PENDING_KEY)
+    let pending = null
+    try {
+      pending = raw ? JSON.parse(raw) : null
+    } catch {
+      pending = null
+    }
     if (!pending) return null
     await store.remove(T3K_PENDING_KEY)
     if (now() - (Number(pending.at) || 0) > T3K_PENDING_MS) return { ok: false, why: 'That sign-in was started too long ago. Start again.' }

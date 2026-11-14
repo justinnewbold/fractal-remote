@@ -1124,8 +1124,26 @@ the capture on the unit, which is the hard half.
   is where every address, field and answer in lib/tone3000.js came from
   (the pick-a-tone page is `prompt=select_tone` with `format=nam`,
   `architecture=2`, `preview=true`; leaving `architecture` out returns the
-  older kind only). Its react-native/ example is the in-app version: a web
-  view and a native C++ preview player, both native, so the next build.
+  older kind only). Its ios/, android/ and react-native/ examples are the
+  in-app version, and all three do it the same way: TONE3000's page in a
+  WEB VIEW in a sheet with a Close button, the return address caught inside
+  the web view, the pass in the Keychain or Keystore, the one-time word
+  from the platform's random numbers. Their ios/README.md says why a web
+  view and not the phone's sign-in sheet: "That avoids the system "Wants to
+  Use … to Sign In" prompt, and the TONE3000 session persists so later
+  flows skip sign-in." TWO DIFFERENT PLAYERS, not to be mixed up: the
+  players on TONE3000's own page ("the hosted catalog's preview players",
+  `preview=true`) are for listening BEFORE a tone is picked, and are all
+  this app uses; and every one of their demos, the pick-a-tone one
+  included, ALSO previews the picked tone's captures afterwards with a
+  native C++ player (the open NAM engine run on the phone). This app has
+  no such player: after the pick, hearing a capture means sending it to
+  the unit. Whether a player on the phone is wanted is a decision still to
+  make, and it would be a native piece of its own (another build). READ THE
+  PHONE EXAMPLES BEFORE CHOOSING A NATIVE PIECE: on 14 November 2026 the
+  phone's in-app browser (expo-web-browser) had been mapped in full, with
+  its three unknowns that only a device could settle, before their
+  examples were opened and showed a web view with none of them.
 - **What is built (1.90.55): Developer → Testing → TONE3000.** Browse
   opens TONE3000's page in the device's browser (sign in, search, audition
   on its own players, pick), TONE3000 sends the device back by the app's
@@ -1136,6 +1154,52 @@ the capture on the unit, which is the hard half.
   one-time word uses the engine's secure random numbers where it has them.
   On a page only his account has, so it has no switch yet; it gets one in
   lib/features when it moves to where a player meets it.
+- **INSIDE THE APP: WRITTEN, WAITING FOR A BUILD (1.90.64, 14 November
+  2026).** "Have you built out the built-in tone 3000 into our app so you
+  don't have to go to Safari?" It had not been, and a web view is native.
+  So it is in two halves, and the half that is code is already merged:
+  - *The patch*, docs/pending/tone3000-in-app.patch: react-native-webview
+    13.16.1, expo-secure-store ~57.0.4 and expo-crypto ~57.0.4. Three
+    packages and nothing else: nothing in app.json, nothing of the app's
+    own. It moves the android and ios lines, so it is a build pair he has
+    to say yes to.
+  - *THE SECURE STORAGE'S PLUGIN IS NEVER LISTED IN app.json.* The first
+    cut listed it (with its Face ID sentence switched off) and called its
+    Android half good practice. Its Android half is two backup rule files
+    that name the app's settings file to include, and once a rule names
+    something Android backs up ONLY that: the app's own sign-in, setlists
+    and settings, which are in a database, would have stopped going to a
+    customer's new phone, for every Android customer, from a patch meant
+    for one Developer card. A reviewer read the two files; a build would
+    have shipped it. So: A PACKAGE'S PLUGIN IS READ BEFORE IT IS LISTED,
+    down to the files it puts in the app, and what it does to an app that
+    listed nothing before is asked for the whole app, not for the
+    feature. The package works without its plugin. A test fails on the
+    plugin and on any backup rule in app.json.
+  - *The code*, in the tree and doing nothing new on any copy out today:
+    lib/tone3000Parts asks for each package with `require` inside a `try`
+    of its own and gives `null` for one that is not there (Expo's bundler
+    lets a missing package through when it is asked for that way; a plain
+    `import` of a package that is not installed stops the app bundling,
+    and a test fails on one). lib/tone3000Here uses each where it came:
+    the page inside the app (components/Tone3000Page, whose rules are
+    lib/tone3000Page), the pass in the secure storage on that phone only,
+    moved there from the ordinary storage the first time it is read so
+    the build signs nobody out (lib/tone3000Keep `movingStore`), and the
+    one-time word from the phone's secure random numbers (`sureRandom`).
+    Where a piece did not come, exactly what it did before: the browser,
+    the ordinary storage, `randomBytes`.
+  - *The browser stays one tap away*: "Open TONE3000 in the browser
+    instead", under Browse, only on a copy that has the page. A sign-in
+    that will not run inside a web view (Google's does not) then needs no
+    update. And the app's own link is still listened for on every copy.
+  - *The app never reaches into TONE3000's page*: no code put into it,
+    nothing read out of it, no name given to it (a test holds the web
+    view to that). Only the address it is sent back to is read.
+  - NOT SEEN ON A PHONE: nothing of this has run on one. The two free
+    builds (android-minified.yml on the pull request, duo.yml by hand)
+    show the pieces compile and the app starts with them in, not the
+    page. docs/pending/README.md has what only a real phone can show.
 - **What a capture is, measured** (the open NAM engine's own A2 example):
   666 KB of text holding 14,017 numbers, 1,871 in the lite network and
   12,146 in the full one, about 56 KB at four bytes a number and about 64
@@ -1431,14 +1495,15 @@ the capture on the unit, which is the hard half.
 - **The order from here:** his first send from the card (either way); the
   capture picker in Edit is built (above, his account); then the TONE3000
   screen where a player meets it,
-  which is a store version (new for customers, and its in-app browser and
-  preview are native). Only an Axe-Fx III has a NAM block. A slot is only
+  which is a store version (new for customers; its page inside the app is
+  written and waits in docs/pending, above). Only an Axe-Fx III has a NAM
+  block. A slot is only
   ever written when it reads <EMPTY>, unless the player says to replace
   what is there (over the device's own wire only).
 - **No build for it yet.** A build now would cut every store copy off from
-  updates until it is in the stores, and the in-app TONE3000 screen will
-  add native pieces of its own, so the build pair waits for the list to be
-  whole. He has 7 iPhone and 10 Android builds left in November, by his
+  updates until it is in the stores, so the build pair waits for the list
+  to be whole. The in-app page's native pieces are ready for it
+  (docs/pending/tone3000-in-app.patch). He has 7 iPhone and 10 Android builds left in November, by his
   own count. The free Android APK from a side branch is where the native
   pieces can be tried first.
 
@@ -1764,6 +1829,13 @@ asked for once, when he says the list is whole. Waiting there now:
   tick, a cross). The patch's Done is a titled action for that reason;
   its first version was the system item, and the two reviewers of the
   patch caught it before a build was spent.
+- **tone3000-in-app** (14 November 2026): TONE3000's page inside the app
+  instead of in the browser. "Have you built out the built-in tone 3000
+  into our app so you don't have to go to Safari?" Three packages and
+  none of the app's own code, which is already in the tree and waits for
+  them (the TONE3000 notes above have what each piece is for, and why the
+  secure storage's plugin is never listed).
+  It moves the android and ios lines. His account only, as the card is.
 - **Not in, by his word:** a second screen and home-screen widgets ("go
   ahead and skip the second screen and the widgets for now").
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the

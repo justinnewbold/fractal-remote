@@ -9,6 +9,7 @@ When the build is agreed:
 
     git apply docs/pending/<name>.patch      # in the order of the table below
     (cd mobile && npm install)                # when a patch adds a package
+    npm run notices                           # when a patch adds a package: NOTICES.md and public/notices.txt list every package the app ships
     npm run sync:rules
     npm run fingerprint -- --write
     npm test
@@ -23,10 +24,12 @@ those must still pass the other.
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
 | `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, opens quick edit on a held pedal where the iPhone offers it (its channels in one row over a list of the block's knobs, the Digital Crown turning the one picked; "Hold a pedal for quick edit." under the pedals), and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 | `bluetooth-done.patch` | Puts a Done button on Apple's Bluetooth MIDI Devices screen, top right, where iOS 27 shows only Edit: Apple's screen is drawn inside a screen whose bar is the app's own (`PairingHost`), so Apple's code can no longer take the button off. Edit stays, on the left. The build says so (`pairHasDone`), and the app's words go back from "swipe that screen down" to "then Done". | **iPhone only** (android and the watch do not move) |
+| `tone3000-in-app.patch` | TONE3000's page comes up inside the app instead of in the browser: a web view over the Developer card, with TONE3000's name and a Close button, the way TONE3000's own examples for a phone do it. Its sign-in is kept in the phone's secure storage, on that phone only, and a sign-in's one-time word comes from the phone's secure random numbers. Adds react-native-webview, expo-secure-store and expo-crypto, and nothing else: everything that uses them is already in the tree and does what it did before until a build brings them. His account only, as the card is. | **android and ios** (the watch line does not move) |
 
-Three patches are waiting: phone-turns (10 November 2026), whose section is
-next, watch-page-order (11 November 2026), whose section follows it, and
-bluetooth-done (14 November 2026), whose section is after that.
+Four patches are waiting: phone-turns (10 November 2026), whose section is
+next, watch-page-order (11 November 2026), whose section follows it,
+bluetooth-done (14 November 2026), whose section is after that, and
+tone3000-in-app (14 November 2026), whose section is the last of the four.
 Before them, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
@@ -773,6 +776,152 @@ a button is drawn.
 nothing has to. The words follow the build by themselves. Say in that
 build's What's new (`only: 'ios'`) that Apple's Bluetooth screen has a
 Done button again.
+
+**tone3000-in-app.patch, and why it waits.** Justin, 14 November 2026:
+"Have you built out the built-in tone 3000 into our app so you don't have
+to go to Safari?" It had not been. The Developer card's Browse TONE3000
+opens the device's browser, and TONE3000 sends the device back by the
+app's own link. A page inside the app is a web view, which is native, and
+TONE3000's own examples for a phone use two more native pieces beside it.
+
+**It is TONE3000's own way, from its examples, not ours.**
+github.com/tone-3000/api (read at cc37a11, 14 November 2026) has the same
+demo for an iPhone, for Android and for React Native, and the React Native
+one is this app's own stack to the number (Expo 57, React Native 0.86.3).
+All three show TONE3000's page in a web view, in a sheet with its name and
+a Close button, "rather than `ASWebAuthenticationSession`. That avoids the
+system "Wants to Use … to Sign In" prompt, and the TONE3000 session
+persists so later flows skip sign-in" (their ios/README.md). The address
+TONE3000 sends the player back to is caught inside the web view before it
+loads, so nothing leaves the app and comes back. The pass is kept in the
+Keychain or the Android Keystore, and the one-time word of a sign-in is
+made from the platform's random numbers. So the phone's in-app browser and
+its sign-in sheet (expo-web-browser, expo-auth-session) are NOT how this is
+done, and a test keeps both out of the app.
+
+**What the patch does: three packages, and nothing else.** Nothing in
+app.json, and none of the app's own code.
+
+- `react-native-webview` 13.16.1, the version Expo 57 pairs with and the
+  one in TONE3000's example: the page.
+- `expo-secure-store` ~57.0.4: the Keychain, or the Android Keystore.
+- `expo-crypto` ~57.0.4: secure random numbers.
+
+**The secure storage's plugin is NOT listed in app.json, and must not
+be.** The package works without it, and listed it does two things by
+default that are both wrong here. It writes a Face ID sentence into the
+iPhone app, which never asks for Face ID (a sentence for something an app
+does not do is a question from App Review). And it gives the Android app
+backup rules that say "back up the app's settings file", and from the
+moment a rule names something to include, Android backs up ONLY what is
+named. This app keeps its own sign-in, its setlists and its settings in a
+database, which those rules do not name: every Android customer moving to
+a new phone, or restoring one, would have opened the app signed out and
+empty. The first cut of this patch listed the plugin, with the Face ID
+half switched off and the backup half described here as a good thing. One
+of the four reviewers of the change read the plugin's two rule files and
+found it, before a build was spent (14 November 2026). TONE3000's own
+example lists the plugin bare; that is its app's business. So Android
+backs up everything, as it always has. The secure storage's file may ride
+in a backup, locked with a key that never leaves the phone it was made on;
+another phone cannot open it, the package answers "nothing kept" and
+throws the entry away, and the app asks for a sign-in to TONE3000 again.
+test/tone3000-page.mjs fails if the plugin, or any backup rule, is in
+app.json.
+
+**Everything that uses them is already in the tree**, merged with this
+patch by update (1.90.64), and does on every copy built without them
+exactly what it did before. mobile/src/lib/tone3000Parts.js asks for each
+package inside a `try` of its own and answers `null` for one that is not
+there: Expo's bundler lets a missing package through when it is asked for
+that way, and the app's loader throws "Cannot find module" where it is
+reached, which is caught. Checked both ways on 14 November 2026: the app
+bundles for both phones with none of the three installed, and with all
+three (the web view, the secure storage and the random numbers are in both
+bundles then, and in neither without). components/Tone3000Page.js is the
+page; lib/tone3000Page.js is what it may load and when it is over;
+lib/tone3000Keep.js moves a pass from the app's ordinary storage to the
+secure one the first time it is read, so the build signs nobody out, and
+makes the one-time word. So this patch does not have to be remade because
+the card changed, and the build needs no code with it.
+
+**What it moves, and what that costs.** mobile/package.json and
+mobile/package-lock.json. `npm run fingerprint` with the patch applied and
+the packages installed moves the android and ios lines and not the watch's
+(checked 14 November 2026: android 27d15e4d to a8ad2a25, ios c16f1c0d to
+e0f97f60, the watch the same). So it is a build pair: one iPhone slot and
+one Android slot.
+
+**How the patch is written, for whoever remakes it.** Two things were
+done by hand, and test/tone3000-page.mjs fails on each if it is undone:
+
+- The lock file's `"hasInstallScript": true` line, which npm writes into
+  the lock's first entry whenever it installs here, is left out.
+  phone-turns adds that same line in that same place, and two patches that
+  add one line cannot both apply.
+- `expo-secure-store` is NOT in its place by the alphabet. That place is
+  the line under `expo-keep-awake` in package.json and in the lock's own
+  list, and just before `expo-server`'s block in the lock: exactly where
+  phone-turns puts `expo-screen-orientation`. The first cut of this patch
+  put it there. It applied alone, and it applied after the other three,
+  and it would still have turned web.yml's second run red: with both
+  patches in, phone-turns' lines no longer sat together, so the suite's
+  question "is this patch in the tree?" (asked by taking it back out)
+  answered no for phone-turns. A later patch may add beside an earlier
+  one's lines, never between them; test/mobile.mjs now asks that of every
+  waiting patch on the first run too. So the secure storage's three
+  entries ride directly under `expo-crypto`'s. npm reads those lists by
+  name, so the order means nothing to it (`npm ci` installs from this lock
+  as it is: android-minified.yml does exactly that), and it writes them
+  back by the alphabet the next time it installs, which the build day's
+  `npm install` is.
+
+**What was checked for free.** The suite runs with the patch applied
+(web.yml's second pass). The app was bundled for both phones with the
+three packages installed. android-minified.yml runs on any pull request
+that touches docs/pending: it applies every waiting patch, installs, and
+builds the Android app the way Google Play gets it, shrunk, and starts it
+on a phone and a tablet. duo.yml, started by hand on the branch, applies
+every waiting patch and builds the iPhone app with Xcode 27.1. Neither
+opens TONE3000's page (that needs his account), so what they show is that
+the three pieces compile and link into the app on both phones, the lock
+file installs clean, and the app still starts with them in.
+
+**What only a real phone can show**, most likely first:
+
+- That signing in to TONE3000 works inside the page. Their example signs
+  in there, so it is expected to. A sign-in that goes through another
+  company's page may not (Google's refuses to run inside an app's web
+  view). The card has "Open TONE3000 in the browser instead" under Browse
+  for exactly that, on every copy that has the page, so the old way is one
+  tap away and needs no update.
+- That TONE3000's players play in the page, on one tap, with the phone's
+  silent switch either way.
+- That picking a tone closes the page and the card has the tone, and that
+  Close closes it with nothing changed.
+- On Android: that the keyboard does not cover TONE3000's sign-in boxes
+  (the page is a pop-up, and Android 15 draws to the screen's edges), and
+  that the phone's Back goes back a page and closes from the first.
+- That a sign-in made before the build is still there after it (the pass
+  moving to the secure storage), and that Sign out of TONE3000 still signs
+  out.
+- An iPad, and a phone on its side: the pop-up turns every way up, as the
+  app's others do.
+
+**What goes with it in the build pull request, outside the patch:**
+`npm run notices`, after the packages are installed. The app ships a list
+of every package in it with its licence (NOTICES.md, and
+public/notices.txt, which the apps link to), made from what is installed,
+and react-native-webview's licence asks that its notice travel with it.
+Nothing regenerates that list by itself and no test compares it with
+mobile/package.json, so a build made without this step would carry three
+packages its notices do not name. (phone-turns adds a package too, and
+needs the same step; it is in the steps at the top of this file now.)
+Nothing else has to go with it. It stays on the Developer card, his
+account's, until the TONE3000 screen is built where a player meets it.
+That screen, and the privacy page and App Store notes that go with showing
+another company's page and keeping a sign-in to it, are a store version's
+work and not this patch's.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it
