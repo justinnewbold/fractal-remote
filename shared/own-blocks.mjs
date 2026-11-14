@@ -48,14 +48,22 @@ export const OWN_BLOCKS = Object.freeze({
 })
 
 /**
- * The picture each one borrows, and no new picture: the NAM block is a
- * captured amp and wears the amp's, the IR Player plays cabinet responses
- * and wears the cab's, Dynamic Distortion the drive's, a crossover (a pair
- * of filters) the filter's, Tone Match (an EQ curve) the graphic EQ's, the
- * Vocoder the formant's. The phone's own choice, word for word
+ * The picture each one wears. The NAM block's is its own since 1.90.72, a
+ * small neural network (scripts/nam-icon.mjs draws it; it wore the amp's).
+ * The rest borrow one: the IR Player plays cabinet responses and wears the
+ * cab's, Dynamic Distortion the drive's, a crossover (a pair of filters)
+ * the filter's, Tone Match (an EQ curve) the graphic EQ's, the Vocoder the
+ * formant's. The phone's own choice, word for word
  * (mobile/src/lib/blockIcons.js PHONE_ONLY).
  */
-export const OWN_ICON = Object.freeze({ nam: 'amp', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' })
+export const OWN_ICON = Object.freeze({ nam: 'nam', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' })
+
+/**
+ * The blocks whose picture is also drawn IN ITS OWN COLOURS: the NAM
+ * block's rainbow. The phone's list, name for name
+ * (mobile/src/lib/blockIcons.js OWN_COLOURS).
+ */
+export const OWN_COLOURS = Object.freeze(['nam'])
 
 /** One of them by the unit's slug and the block's effect id: `{ slug, name }`, numbered where the unit has more than one ("NAM 1"), or null. */
 export function ownBlock(unitSlug, effectId) {

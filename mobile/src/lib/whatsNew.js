@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-14",
     "day": "14 November 2026",
-    "version": "1.90.60",
+    "version": "1.90.72",
     "lines": [
+      {
+        "text": "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM block has its own picture on Play: a small neural network in rainbow colors.",
+        "only": null
+      },
       {
         "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.",
         "only": "ios"

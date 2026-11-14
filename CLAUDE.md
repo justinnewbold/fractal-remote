@@ -988,6 +988,38 @@ what the computer sends for the same edit, and a test holds it there.
     (`ownBlocksOpenTo(link.account?.id)`). It is inside the computer app,
     so it came with a computer release, and a change to the list is one
     too: KEEP IT IN STEP WITH mobile/src/lib/gen3Catalog.js `OWN`.
+  - *THE NAM BLOCK HAS ITS OWN PICTURE, since 1.90.72: a small neural
+    network in a rainbow.* "Make the NAM block look similar to this. but
+    with the same aesthetics that we use in our app now. But like with the
+    rainbow type color in that same type of glyph" (14 November 2026, with
+    a picture of the block as his editor draws it). It wore the amp's.
+    OUR OWN DRAWING, AND IT STAYS SO: scripts/nam-icon.mjs draws both
+    files from nothing (a textbook network, three, four and three dots,
+    a plain rainbow), test/nam-icon.mjs holds the files to the script dot
+    for dot, and the picture he sent is in no commit: the rule about
+    artwork from Fractal's editors (above) is why it is made this way.
+    Two files in mobile/assets/icons: `nam.png`, white like every other
+    block's, and `nam-rainbow.png`, in its own colours with a thin dark
+    edge (without it the blue end vanished on the lit purple tile). The
+    tile keeps the app's grammar: the fill still says on, the rainbow is
+    drawn as it is lit or not, and where a tile is one colour by rule
+    (grey when off, the quiet outline) the white one is tinted like every
+    other. The phone has no gradient and no SVG, which is why the rainbow
+    is baked into a file; a drawing package would have been a build.
+    Both ends: `blockIconOwn` (mobile/src/lib/blockIcons.js, and
+    src/lib/blockIcons.js with `pictureWears`), the lists held equal. In
+    the browser it is inside the computer app, so it came with a computer
+    release. To change the drawing, change the script, run it, and the
+    test follows; never drop a picture file in by hand. AN INDEPENDENT
+    READ before it went out found three things, all fixed: the violet
+    end faded into the lit purple tile at the smallest picture (the dark
+    edge is wider and darker now, and under the lines too, which had let
+    a fifth of the tile through); the edge's blend was worked out wrong
+    where it met the colour; and on an iPhone, a grey tile switched on
+    would have shown the old white picture in the system's blue for a
+    frame (the two pictures are two image views now, by `key`). The
+    script also spells its square roots out, because Math.hypot is only
+    promised to be close and the test draws the files again on GitHub.
   - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
     and old bytes from earlier answers after it. The codec's decodeReply
     trims noughts off the end and wants the rest printable, so every value

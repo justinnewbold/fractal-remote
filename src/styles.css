@@ -7706,6 +7706,32 @@ button.gig-block:disabled {
   mask-position: center;
 }
 
+/*
+ * A PICTURE IN ITS OWN COLOURS: the NAM block's rainbow (lib/blockIcons
+ * pictureWears). Drawn as it is, lit or not, where every other picture is a
+ * white mask over the lettering colour. Its class is set twice in each
+ * selector so that it outranks the rules that colour a mask (an unlit
+ * tile's among them), wherever they sit in this file.
+ */
+.gig-block-icon.gig-block-icon-own.gig-block-icon-own,
+button.gig-block.off .gig-block-icon.gig-block-icon-own {
+  background-color: transparent;
+  background-image: var(--pic-own);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Grey when off is every picture's, this one's too: its white twin as a mask, in the grey. A rainbow would be the one thing still lit. */
+:root button.gig-block.off[data-off='grey'] .gig-block-icon.gig-block-icon-own {
+  background-image: none;
+  background-color: var(--off-ink);
+  -webkit-mask-image: var(--pic);
+  mask-image: var(--pic);
+}
+
 @media (max-width: 620px) {
   .gig[data-fx-abbr] .gig-block-full {
     display: none;

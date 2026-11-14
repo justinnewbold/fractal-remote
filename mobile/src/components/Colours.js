@@ -28,7 +28,7 @@ import {
   scenesAllRed,
   unitFamilies
 } from '../lib/colourPage'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn } from '../lib/blockIcons'
 import { loadIcons } from '../lib/gigSize'
 import { shortName } from '../lib/shortName'
 import { useRig } from '../lib/rig'
@@ -134,6 +134,7 @@ export default function Colours() {
            dot, so it says what it means and a screen reader says it too. */
         sub={yourFamily(f) ? 'Your color' : undefined}
         icon={icons ? blockIcon(f) : undefined}
+        iconOwn={icons ? blockIconOwn(f) : undefined}
         fill={hue.fill}
         ink={hue.ink}
         picked={hue.picked}

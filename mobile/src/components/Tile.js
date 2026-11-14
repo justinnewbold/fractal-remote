@@ -132,6 +132,15 @@ export default function Tile({
    */
   icon,
   /*
+   * The same picture IN ITS OWN COLOURS, for the one block that has one:
+   * the NAM block's rainbow (lib/blockIcons blockIconOwn). Drawn as it is,
+   * lit or not, with no tint. Where a picture is plainly one colour by
+   * rule, grey when off and the quiet outline, the white `icon` is tinted
+   * as every other tile's is: a rainbow on a tile that is meant to have
+   * gone grey would be the one thing on the screen still lit.
+   */
+  iconOwn,
+  /*
    * The rule under the name, in the tile's own colour. Scenes wear one and
    * blocks do not — see the note where it is drawn.
    */
@@ -342,6 +351,8 @@ export default function Tile({
    */
   const unlitPicture = grey ? off.ink : isDark() ? lighter(hue, 0.35) : hue
   const pictureTint = on ? lit : unlitPicture
+  /* The picture in its own colours, where the block has one and nothing says the tile is one colour. */
+  const ownPicture = iconOwn && !quiet && !grey ? iconOwn : null
   /*
    * THE QUIET WORDS ON AN UNLIT TILE — its number, Off, the channel — in the
    * dim silkscreen grey, unless the wash under them is too bright for it.
@@ -737,13 +748,15 @@ export default function Tile({
       >
         {picture ? (
           <Image
-            source={icon}
+            /* Two pictures, two image views: on an iPhone a view that had held the tinted white one would paint it in the system's blue for a frame once its tint was taken off, until the coloured one had loaded. */
+            key={ownPicture ? 'own' : 'tint'}
+            source={ownPicture || icon}
             /* Silent: the Pressable above already says the block's name and
                state, and a second announcement for the picture of it would
                make every tile read itself out twice. */
             accessible={false}
             /* Clear, keeping its box, while a word that must be seen is in its place or over it (`mustSay`). */
-            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, ...(cleared ? { opacity: 0 } : null) }}
+            style={{ width: picture, height: picture, marginBottom: 2, ...(ownPicture ? null : { tintColor: quiet ? foreground : pictureTint }), ...(cleared ? { opacity: 0 } : null) }}
             resizeMode="contain"
           />
         ) : null}

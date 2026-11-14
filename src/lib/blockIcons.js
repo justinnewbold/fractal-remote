@@ -4,7 +4,7 @@
  * same picture at both ends. The phone's copy is mobile/src/lib/blockIcons.js.
  */
 import { blockIconName } from '../../shared/block-icons.mjs'
-import { OWN_ICON } from '../../shared/own-blocks.mjs'
+import { OWN_COLOURS, OWN_ICON } from '../../shared/own-blocks.mjs'
 import amp from '../../mobile/assets/icons/amp.png'
 import cab from '../../mobile/assets/icons/cab.png'
 import comp from '../../mobile/assets/icons/comp.png'
@@ -33,11 +33,34 @@ import tremolo from '../../mobile/assets/icons/tremolo.png'
 import volpan from '../../mobile/assets/icons/volpan.png'
 import sendfx from '../../mobile/assets/icons/sendfx.png'
 import returnfx from '../../mobile/assets/icons/returnfx.png'
+import nam from '../../mobile/assets/icons/nam.png'
+import namRainbow from '../../mobile/assets/icons/nam-rainbow.png'
 
-const FILES = { amp, cab, comp, delay, drive, flanger, phaser, reverb, wah, chorus, enhancer, filter, formant, gate, geq, looper, mixer, multiplexer, peq, pitch, resonator, ringmod, rotary, synth, tremolo, volpan, sendfx, returnfx }
+const FILES = { amp, cab, comp, delay, drive, flanger, phaser, reverb, wah, chorus, enhancer, filter, formant, gate, geq, looper, mixer, multiplexer, peq, pitch, resonator, ringmod, rotary, synth, tremolo, volpan, sendfx, returnfx, nam }
+/* The pictures drawn in their own colours, by the block's name (shared/own-blocks.mjs OWN_COLOURS says which blocks). */
+const OWN_FILES = { nam: namRainbow }
 
 export function blockIcon(slug) {
-  /* And the blocks Play names for itself (shared/own-blocks.mjs), each in the picture it borrows: the NAM block the amp's, the IR Player the cab's. */
+  /* And the blocks Play names for itself (shared/own-blocks.mjs), each in the picture it wears: the NAM block its own, the IR Player the cab's. */
   const name = blockIconName(slug) || OWN_ICON[String(slug || '').toLowerCase()] || null
   return name ? FILES[name] || null : null
+}
+
+/** The block's picture in its own colours, where it has one (the NAM block's rainbow); null for every other block. */
+export function blockIconOwn(slug) {
+  const key = String(slug || '').toLowerCase()
+  return OWN_COLOURS.includes(key) ? OWN_FILES[key] || null : null
+}
+
+/**
+ * What a tile's picture element wears: its class and its style. A white
+ * picture is a mask over the tile's lettering colour, as always. One with
+ * its own colours (`own`) is drawn as it is, and keeps the white one by, for
+ * the one state every picture is plainly grey in (grey when off:
+ * styles.css).
+ */
+export function pictureWears(icon, own) {
+  return own
+    ? { className: 'gig-block-icon gig-block-icon-own', style: { '--pic': `url(${icon})`, '--pic-own': `url(${own})` } }
+    : { className: 'gig-block-icon', style: { WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` } }
 }

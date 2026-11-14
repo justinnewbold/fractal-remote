@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { LIGHT_INK, inkOn, paperEdge } from '../lib/ink'
 import { isFractalRemoteLook, offMode } from '../lib/looks'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn, pictureWears } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { useLooks } from '../lib/useLooks'
 import { tick } from '../lib/feedback'
@@ -356,10 +356,7 @@ export default function ColourSheet({ target, chain = [], spelt, icons = true, o
         >
           <span className="gig-block-name">
             {icons && blockIcon(target.slug) ? (
-              <span
-                className="gig-block-icon"
-                style={{ WebkitMaskImage: `url(${blockIcon(target.slug)})`, maskImage: `url(${blockIcon(target.slug)})` }}
-              />
+              <span {...pictureWears(blockIcon(target.slug), blockIconOwn(target.slug))} />
             ) : null}
             <span>{shortName(target.slug)}</span>
           </span>
