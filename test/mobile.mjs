@@ -9911,6 +9911,8 @@ export function run(test) {
       'Customers',
       'App health',
       'Testing',
+      /* A page of its own since its list was drawn in the app (14 November 2026). */
+      'TONE3000',
       /* "Move the Play Screen section down to the bottom of the list." */
       '# Play screen',
       'Tiles & scenes',

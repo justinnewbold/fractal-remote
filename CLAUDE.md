@@ -1115,10 +1115,12 @@ the capture on the unit, which is the hard half.
   made to be shipped in apps) is in mobile/src/lib/tone3000.js, with
   `fractalremote://tone3000` on its list of return addresses. The secret
   one (`t3k_cs_…`) is never in the app, the repository or the chat. Their
-  terms, which the code keeps: everything browsed is TONE3000's own page
-  under TONE3000's name ("Powered by TONE3000"), the creator and licence
-  are always shown, a capture is fetched only when a player asks for it,
-  nothing is cached or fetched ahead.
+  terms, which the code keeps: TONE3000's name on everything of its that
+  is shown ("Powered by TONE3000"), the creator on every row and on a
+  tone's own view, the licence on a tone's view, a capture fetched only
+  when a player asks for it, nothing cached or fetched ahead. (Until 1.90.65 everything browsed was TONE3000's own
+  page; since then the app draws a list of its own too, below, which
+  their Design Requirements allow and say how.)
 - **Use TONE3000's own example, never memory.** github.com/tone-3000/api
   has the same three demo apps in six stacks; web/src/tone3000-client.ts
   is where every address, field and answer in lib/tone3000.js came from
@@ -1144,7 +1146,95 @@ the capture on the unit, which is the hard half.
   phone's in-app browser (expo-web-browser) had been mapped in full, with
   its three unknowns that only a device could settle, before their
   examples were opened and showed a web view with none of them.
-- **What is built (1.90.55): Developer → Testing → TONE3000.** Browse
+- **THE LIST IS DRAWN IN THE APP SINCE 1.90.65 (14 November 2026), on a
+  page of its own: Developer → TONE3000, HIS ACCOUNT ONLY.** "Do you want
+  me to resend you the screenshot I sent you from the headrush Remote app
+  I created. It to look like that and function like that. Not just going
+  off a built-in web browser in our app but actually native in our app
+  using the API ... Make it look just like this and function like that."
+  He had been shown the web-view page and a picture of it; what he wanted
+  was the Tones tab of his HeadRush app (headrush mobile/src/t3k.tsx,
+  read, never changed). So, by update and with no build:
+  - *What it is.* A search box and a Search button; one row of chips that
+    slides sideways, the order (Trending, Newest, Most downloaded) and then
+    the kind of gear (All, Amps, Amp + Cab, Pedals); a row a tone with its
+    picture, its title, and "maker · kind · NAM · 44,988 downloads" with
+    the maker's picture; More under the last. A tap on a tone shows it on
+    the same page (‹ Back to the list, its picture, maker, licence,
+    description) over its captures, each with the card's Send it and play
+    it in NAM 1. The steps are behind the ⓘ, as on his HeadRush tab.
+    components/Tone3000Browser draws the list, lib/tone3000Browse holds
+    what is asked and when, lib/tone3000 `search`, `feed` and `me` do the
+    asking, components/Tone3000Test is the page.
+  - *TONE3000 IS ASKED ONLY WHEN THE LIST OPENS, ON SEARCH, ON A CHIP AND
+    FOR MORE.* Never on a keystroke or a clock: its search is "heavily
+    rate-limited by default". A test fails on a clock in either file and
+    on a second `onChangeText`. Always `format=nam` and `architecture=2`
+    (25 to a page, the most it gives), so only tones the AX3's NAM block
+    plays are listed. A chip asks with the words in the box, as Search
+    does and as his HeadRush tab's chips do. An answer to anything but the
+    newest question is thrown away. The list lives while the page is up,
+    so Back from a tone asks nothing; nothing is written down.
+  - *WHETHER ITS SEARCH IS OPEN TO HIS KEY IS NOT KNOWN.* Their Commercial
+    Terms keep search for apps with a commercial agreement, which he says
+    he has; nothing here could ask with his sign-in. If TONE3000 answers
+    403 the page shows its own short trending list for Trending and its
+    newest for Newest (ten at most, which every key may ask for, cut down
+    here to what the NAM block plays, so the note gives no number), says
+    "TONE3000 hasn’t opened its search to this app yet", and does not ask
+    search again while it is up. If he sees that sentence, the key's
+    agreement is what to raise with TONE3000; nothing in the app is wrong.
+  - *Before a sign-in* the page is TONE3000's own "partnership splash" (its
+    Design Requirements' words, with the app's name in and the impulse
+    responses out) and Continue, which opens TONE3000's SIGN-IN ALONE
+    (`start({ pick: false })`: its "prompt omitted: standard authorization
+    only") and comes straight back to the list. Their requirements say the
+    sign-in is "via the TONE3000 Select flow" and also that "a tone list
+    view is the first view they should see" after it; the pick-a-tone page
+    would put their catalog first, so the plain sign-in was chosen. NOT
+    TRIED ON A PHONE: if Continue does not come back signed in, Browse
+    TONE3000 (the pick-a-tone page, which his phone has run) signs in too.
+  - *Browse TONE3000 is on every signed-in view*, the list and a tone's:
+    their rule ("Always provide a clear, persistent path to browse the full
+    TONE3000 catalog via the Select flow"). It is also the only place with
+    play buttons: the app has no player, so in the app's own list a capture
+    is heard by sending it to the unit.
+  - *A sign-in TONE3000 no longer takes* (401, to any request the page
+    makes: the list, whose sign-in it is, a tone, its captures, a
+    capture's file) puts the page back on its sign-in view with "Your
+    TONE3000 sign-in has run out", in place of a list that can only fail.
+  - *A RETURN OF TONE3000'S IS TAKEN UP ONCE FOR AS LONG AS THE APP RUNS*
+    (`taken`, outside the component). The phone hands the link that
+    started the app back every time it is asked, and the page asks at
+    each drawing; finishing an old return throws away the sign-in under
+    way. And a tone picked on TONE3000's page while a capture is going to
+    the unit is not opened over it.
+  - *NOT YET, and wanted before TONE3000 signs off anything a customer
+    sees* (their Design Requirements, tone3000.com/api): their Favorites,
+    Created and Downloaded tabs; their logo in place of their name in type
+    (they give the files); the way in from where a capture is chosen
+    (Edit's NAM block, beside the capture picker) rather than a Developer
+    page; the tone's picture and TONE3000's mark on the NAM block that
+    plays a capture sent from it; and the splash's wording, and the plain
+    sign-in in place of the pick-a-tone page, agreed with them. Each send still takes
+    a new empty slot on the unit, so auditioning ten captures fills ten
+    slots: a slot kept for trying captures in was thought of and not built.
+  - NOTHING OF IT HAS RUN ON A PHONE OR AGAINST TONE3000: the tests run it
+    against a stand-in. His first look is the first check, of the search,
+    the sign-in alone, the pictures and the layout.
+  - Four readers and a skeptic each went through a frozen copy before it
+    went out, and found sixteen things, none of them in what is sent to a
+    unit: a More button left up after TONE3000 refused a further page,
+    which then asked nothing for ever; Continue greyed for good when the
+    sign-in ran out during a tone's fetch; the old return above; whose
+    sign-in it is going stale; "its own top ten" over the ten NEWEST or
+    over nothing; "has everything" of a page opened for the NAM block's
+    captures alone; "Tap Browse TONE3000 again" on a view that has no such
+    button. Each has a test that was run with its fix taken out and seen
+    to fail (22 of them). WORDS THAT NAME A BUTTON ARE CHECKED AGAINST
+    EVERY VIEW THEY CAN APPEAR ON.
+- **What was built first (1.90.55): Developer → Testing → TONE3000, now
+  Developer → TONE3000.** Browse
   opens TONE3000's page in the device's browser (sign in, search, audition
   on its own players, pick), TONE3000 sends the device back by the app's
   link, and the card shows the tone, its creator and licence and its A2
@@ -1493,8 +1583,9 @@ the capture on the unit, which is the hard half.
     way he is connected. Not built: the browser's (a computer release
     nobody has asked for), and anything that renames or removes a capture.
 - **The order from here:** his first send from the card (either way); the
-  capture picker in Edit is built (above, his account); then the TONE3000
-  screen where a player meets it,
+  capture picker in Edit is built (above, his account); the list drawn in
+  the app is built (above, his account); then the TONE3000 screen where a
+  player meets it, from Edit's NAM block,
   which is a store version (new for customers; its page inside the app is
   written and waits in docs/pending, above). Only an Axe-Fx III has a NAM
   block. A slot is only
