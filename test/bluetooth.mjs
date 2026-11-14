@@ -11628,7 +11628,7 @@ export function run(test) {
     assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.fill, halted\.play, halted\.back === true\)\} \/> : null\}/)
     assert.match(card, /\{halted && !mine \? <Note>\{halted\.line\}<\/Note> : null\}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
-    assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) \} else \{/)
+    assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
     assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{twice \? ', on the second try' : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)

@@ -124,8 +124,13 @@ export const PARTNER = 'Fractal Remote has partnered with TONE3000 to give you a
 export const partnerMore = () => `Continue opens TONE3000’s own sign-in: your email, then a code it sends you. After that it stays signed in on this ${deviceNoun()}.`
 export const CONTINUE = 'Continue'
 export const BACK_TO_LIST = '‹ Back'
-/** In a held block's pop-up there are two ways back, one over the other: this one says where it goes. */
-export const BACK_TO_LIST_HELD = '‹ Back to the list'
+/**
+ * In a held block's pop-up there are two ways back, one over the other:
+ * this one says where it goes. "The tones", never "the list": from Edit's
+ * capture list the other one goes back to a list too, the captures on the
+ * unit.
+ */
+export const BACK_TO_LIST_HELD = '‹ Back to the tones'
 /** The two buttons on a capture's line, as on the HeadRush app's tone view. */
 export const PREVIEW = 'Preview'
 export const GET = 'Get'
@@ -230,12 +235,21 @@ function LineButton({ icon, label, says, lit = false, disabled, onPress }) {
  * pop-up, and `onDone(line)` hands the pop-up back to the block's knobs
  * with what the block said it is playing. `onWorking(yes)` says when a
  * capture is being fetched, sent or pointed at, so the way back to the
- * knobs can wait for it as this page's own Back does.
+ * knobs can wait for it as this page's own Back does. `backTo` is where
+ * that way back leads, for what the page says: 'knobs' (Play's pop-up) or
+ * 'captures' (the capture list in Edit). `onPointed(slot)` says each time
+ * the unit has named what that block is on after this page pointed it
+ * there (a Preview, a Play, a Get), whether or not the page is still up:
+ * whoever draws the block's capture is told which, and need not depend on
+ * a read of the block to find out. An empty slot is said too (the block is
+ * on it), and `null` after a pick that failed, since it may have landed:
+ * the slot said before it is then no longer vouched for.
  */
-export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDone = null, onWorking = null }) {
+export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDone = null, onWorking = null, backTo = 'knobs', onPointed = null }) {
   /* The NAM block a preview plays in: the one held, else NAM 1. Never a block that is not a NAM. */
   const playIn = NAM_BLOCKS.includes(block) ? block : NAM_BLOCKS[0]
-  const where = { n: NAM_BLOCKS.indexOf(playIn) + 1, held: held === true && typeof onDone === 'function' }
+  /* And where a Get goes back to from there, for the words only: the block's knobs, or the captures on the unit. */
+  const where = { n: NAM_BLOCKS.indexOf(playIn) + 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' ? 'captures' : 'knobs' }
   /* null until the device has said whether a sign-in is kept: neither the list nor the sign-in card is drawn on a guess. */
   const [signedIn, setSignedIn] = useState(null)
   /* Whose sign-in it is, as TONE3000 has them: shown across the top (its rule for a list of its tones). */
@@ -619,17 +633,23 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         played(`${which} is on slot ${namSlotSaid(slot)}, and it is empty, so there is nothing to hear.`, { done: false, line: `The Axe-Fx III shows slot ${namSlotSaid(slot)} as empty now, so the capture did not stay there. Send it once more.` })
         /* Not on the unit after all: its two buttons come back. */
         unplace(id)
+        /* The block is on that slot all the same, empty as it is: the unit named it, and an earlier slot is no longer where the block is. */
+        if (block === playIn) onPointed?.(slot)
       } else {
         const line = `${which} is playing “${got.name}” now, through your own rig. Save the preset to keep it there.`
         played(line)
         /* The unit has named what the slot holds: it is on the unit, whatever the read after the send did not say. */
         if (placed.has(String(id))) place(id, slot, true)
+        /* The block this page is for is on that slot now, by the unit's own word. Said before anything asks whether the page is still up. */
+        if (block === playIn) onPointed?.(slot)
         /* What the block is playing, for whoever asked: the one answer that means it is. */
         return line
       }
     } catch (err) {
       logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)
       played(err?.message || `${which} was not changed.`)
+      /* The pick may have landed with its answer lost: where the block is now is not known, so no earlier slot is vouched for. */
+      if (block === playIn) onPointed?.(null)
     }
     return null
   }
@@ -748,7 +768,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
             </Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Back to the list"
+              accessibilityLabel={where.held ? 'Back to the tones' : 'Back to the list'}
               disabled={!!busy && busy !== 'tone'}
               onPress={() => {
                 tick()
@@ -840,7 +860,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                 {there && where.held ? (
                   <>
                     <Press label={busy === `pick ${playIn}` && mine ? 'Changing…' : `Play it in ${namBlockSaid(where.n)}`} sub="In the preset the unit is on" height={48} disabled={!!busy} onPress={() => useIn(playIn, at.slot, m.id)} />
-                    <Press label={USE_AND_BACK} sub={useAndBackSub(where.n)} tone="live" height={48} disabled={!!busy} onPress={() => useIn(playIn, at.slot, m.id, true)} />
+                    <Press label={USE_AND_BACK} sub={useAndBackSub(where.n, where.back)} tone="live" height={48} disabled={!!busy} onPress={() => useIn(playIn, at.slot, m.id, true)} />
                   </>
                 ) : null}
                 {checked[m.id] && (noUse || mine) ? (

@@ -563,13 +563,13 @@ export function runPreviewAndGet(test) {
     const words = await wordsOf()
     assert.deepEqual([words.PREVIEW, words.GET, words.BACK_TO_LIST], ['Preview', 'Get', '‹ Back'])
     /* The title with Back beside it, on one line. */
-    assert.match(card, /<View style=\{\{ flexDirection: 'row', alignItems: 'center', gap: space\.md \}\}> <Text accessibilityRole="header" numberOfLines=\{2\} style=\{\{[^}]*\}\}> \{tone\.title \|\| 'Untitled tone'\} <\/Text> <Pressable accessibilityRole="button" accessibilityLabel="Back to the list"/)
+    assert.match(card, /<View style=\{\{ flexDirection: 'row', alignItems: 'center', gap: space\.md \}\}> <Text accessibilityRole="header" numberOfLines=\{2\} style=\{\{[^}]*\}\}> \{tone\.title \|\| 'Untitled tone'\} <\/Text> <Pressable accessibilityRole="button" accessibilityLabel=\{where\.held \? 'Back to the tones' : 'Back to the list'\}/)
     /* A line a capture: its name, then the two buttons, each with a picture AND its word (never a picture alone). */
     assert.match(card, /<LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{previewSays\(named, where\.n\)\} disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, true\)\} \/>/)
     /* Get plays only where the page was opened from a held block (`where.held`, which is false on the Developer page): there it is the end of the errand, test/tone3000-quick.mjs. */
     assert.match(card, /<LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{getSays\(named, where\)\} lit disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, where\.held, where\.held\)\} \/>/)
-    assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function' \}/)
-    assert.match(card, /export default function Tone3000Test\(\{ block = NAM_BLOCKS\[0\], held = false, onDone = null, onWorking = null \}\)/)
+    assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' \? 'captures' : 'knobs' \}/)
+    assert.match(card, /export default function Tone3000Test\(\{ block = NAM_BLOCKS\[0\], held = false, onDone = null, onWorking = null, backTo = 'knobs', onPointed = null \}\)/)
     const said = await import('../mobile/src/lib/tone3000Words.js')
     assert.equal(said.previewSays('Plexi', 1), 'Preview Plexi: puts it on the Axe-Fx III and plays it in NAM 1')
     assert.equal(said.getSays('Plexi'), 'Get Plexi: puts it on the Axe-Fx III')

@@ -1212,7 +1212,8 @@ the capture on the unit, which is the hard half.
     can click on it and browse tones preview them and then download them
     directly and then it'll take them back to that screen so it's very
     streamlined." (14 November 2026, with a picture of NAM 2's quick edit.
-    The other places are his to name; none is built.) This is also where
+    The second is the capture list in Edit, below; any other is his to
+    name.) This is also where
     TONE3000 wants an app's way in: "associated with adding a tone to a
     signal block".
     - *What it is.* Hold NAM 1 or NAM 2 on Play: over the knobs, a button,
@@ -1238,6 +1239,43 @@ the capture on the unit, which is the hard half.
       (lib/useTone3000Quick). Play's own file holds the door's three names
       (components/Tone3000Quick) and nothing else of TONE3000's; a test
       holds that.
+    - *ON THE CAPTURE LIST IN EDIT TOO (1.90.68).* "Also want it on the
+      capture screen when I can they see the ones they've already
+      downloaded but then they can also click tone 3000 from that and it
+      pulls up and they can browse preview and do it that way as well"
+      (the same day, with a picture of the Capture sheet). Over the
+      captures on the unit, the same TONE3000 button; a tap puts the same
+      page in the list's place IN THAT SHEET, with "‹ Back to the captures
+      on the unit" over it. Preview and Get play in the block the picker
+      is drawn for; Get then gives the sheet back to the list, with what
+      the block is playing over it. When the list comes back it is read
+      again if a capture was sent, and Edit reads the block again
+      (components/CapturePicker `onChanged`, Edit `captureChanged`): the
+      page points the block by its own pick, not Edit's, so the Capture
+      button would otherwise still name the old one. The picker itself
+      still writes nothing to the unit, and Edit's file holds nothing of
+      TONE3000's. Same gate: his account, `TONE3000_QUICK_FOR_EVERYONE`,
+      and it is inside the capture picker, which is his account's too.
+      Two readers and a skeptic each went through it first. Fixed, each
+      with a test seen to fail without it (31): Edit's read after the
+      page was dropped if another was still out, and went by what was so
+      when Get was tapped, half a minute before (lib/captureReread, which
+      a test runs whole: one more read after the one out, and everything
+      asked for when it runs); a read that failed left the button on the
+      old capture and no Save offered, after the page had said to save
+      (the page says which slot the unit named, `onPointed`, and that is
+      believed where the read says nothing); a pick still out when the
+      sheet was closed tells Edit when it lands; the tone's Back says
+      "Back to the tones", since "the list" is also what the captures on
+      the unit are; and the TONE3000 button's words are in the live
+      colour, in both places, because in plain ink over the captures it
+      read as one more capture.
+      And the fixes were read too, which found two more: an earlier slot
+      stayed vouched for after a later pick answered <EMPTY> or failed
+      (the page says the empty slot, and says none after a failure), and
+      a pick of Edit's own with its read still out let the outside read
+      run over it (the outside one stands back and reads once the pick
+      is over, `after()`).
     - *Two readers and a skeptic each went through it first.* Fixed, each
       with a test seen to fail without it (18): a send that landed after
       the page had gone (the pop-up closed, a preset changed on the unit)
@@ -1675,9 +1713,11 @@ the capture on the unit, which is the hard half.
   - *A unit that is not a III is asked once.* The device remembers a
     refusal ("unsupported") by the kind of request, numbers out of the
     path, so the rest of the list is not asked of it slot after slot.
-  - NOTHING HAS BEEN PICKED FROM EDIT ON A UNIT, and the list has not been
-    read from one by the app: his first look is the first check, either
-    way he is connected. Not built: the browser's (a computer release
+  - THE LIST HAS BEEN READ FROM HIS AX3 (his picture of the Capture sheet,
+    14 November 2026: 001 Archean LD Gain BAL2, 002 Bad Kitty ER30 Edge
+    BAL and on, each "by amalgamaudio" with its gear, which are the unit's
+    own factory captures). Whether a PICK from it has been made on the
+    unit he has not said. Not built: the browser's (a computer release
     nobody has asked for), and anything that renames or removes a capture.
 - **The order from here:** his first send from the card (either way); the
   capture picker in Edit is built (above, his account); the list drawn in
