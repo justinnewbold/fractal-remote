@@ -11640,7 +11640,9 @@ export function run(test) {
     assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \} \}\)\)/)
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */
     assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)\} \/> : null\}/)
-    assert.match(card, /\{halted && !mine \? <Note>\{halted\.line\}<\/Note> : null\}/)
+    /* The lines under a capture are lib/captureLine's (run whole, below): the page draws what it answers, in order, and nothing else of its own. */
+    assert.match(bare, /\{captureLine\(\{ working, fetching: busy === m\.id, mine, send, at, slotSaid: at \? namSlotSaid\(at\.slot\) : '', name: named, halted \}\)\.map\(\(x, i\) => x\.card \? <SentCard key=\{i\} tone=\{x\.card\} head=\{x\.head\} line=\{x\.line\} more=\{x\.more\} \/> : <Note key=\{i\}>\{x\.note\}<\/Note> \)\}/)
+    assert.equal((bare.match(/<SentCard /g) || []).length, 1, 'a card is drawn from somewhere other than the rule')
     /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ playing: false, done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
@@ -11654,7 +11656,10 @@ export function run(test) {
     assert.equal((bare.match(/atWork = Date\.now\(\)/g) || []).length, 2, 'the mark is set somewhere other than the send and the Play buttons')
     /* And a TONE3000 return asks that mark before it opens another tone. */
     assert.match(bare, /if \(goingNow\(\)\) setSaid\(PICK_AFTER_SEND\) else load\(done\.toneId\)/)
-    assert.match(card, /\} finally \{ if \(atWork === mine\) atWork = 0 if \(alive\.current\) setBusy\(null\) \} \}/)
+    assert.match(card, /\} finally \{ if \(atWork === mine\) \{ atWork = 0 settled\(\) \} if \(alive\.current\) setBusy\(null\) \} \}/)
+    /* Both ends of work say they are over (the send's and the block's), and nothing else puts the mark down. */
+    assert.equal((card.match(/if \(atWork === mine\) \{ atWork = 0 settled\(\) \}/g) || []).length, 2)
+    assert.equal((card.match(/atWork = 0/g) || []).length, 3, 'the mark is put down somewhere that tells nobody')
     /* And never for good: a request that never came back does not close the card until the app is restarted. */
     assert.match(card, /const goingNow = \(\) => atWork !== 0 && Date\.now\(\) - atWork < STILL_GOING_MS/)
     assert.ok(!/if \(atWork\)/.test(card), 'the card asks the mark itself, which never runs out')
@@ -11670,16 +11675,180 @@ export function run(test) {
      * card's last line; the send's own line and a pick that failed keep
      * theirs, so nothing is said twice and nothing is lost.
      */
-    assert.match(bare, /\{there \? <SentCard sure=\{at\.sure\} head=\{at\.sure \? ON_UNIT : SENT_TO_UNIT\} line=\{onUnitLine\(namSlotSaid\(at\.slot\), named\)\} more=\{mine && send\.playing === true \? send\.played : ''\} \/> : null\}/)
     const words3k = await import('../mobile/src/lib/tone3000Words.js')
     assert.deepEqual([words3k.ON_UNIT, words3k.SENT_TO_UNIT, words3k.onUnitLine('035', 'MES DRECF'), words3k.onUnitLine('035', '')], ['On your Axe-Fx III', 'Sent to your Axe-Fx III', 'Slot 035 · MES DRECF', 'Slot 035'])
+    assert.deepEqual([words3k.GETTING_CAPTURE, words3k.SENDING_TO_UNIT, words3k.NOT_ON_UNIT], ['Getting it from TONE3000…', 'Sending to your Axe-Fx III…', 'Not on your Axe-Fx III'])
+    /*
+     * EVERY STATE OF A CAPTURE'S LINE, RUN (lib/captureLine). "This is the
+     * screen that shows up after hitting send.." (Justin, with a picture of
+     * a tone's view that had nothing on it to say a tap had been taken.)
+     * From the tap on there is always a card under the capture's name.
+     */
+    const { captureLine, waitOver } = await import('../mobile/src/lib/captureLine.js')
+    const at35 = { slot: 34, sure: true }
+    const base = { slotSaid: '035', name: 'MES DRECF' }
+    /* Nothing tapped: nothing said. */
+    assert.deepEqual(captureLine({ ...base }), [])
+    /* Tapped, and the file is coming: said at once, before anything else is known. */
+    assert.deepEqual(captureLine({ ...base, working: true, fetching: true }), [{ card: 'busy', head: 'Getting it from TONE3000…', line: '', more: '' }])
+    /* Being sent: the head, and how far it has got under it. */
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, send: { line: 'Sending “MES DRECF” to slot 035: 60 of 130' } }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'Sending “MES DRECF” to slot 035: 60 of 130', more: '' }])
+    /* On the unit, by the unit's word: green, the slot and the name, and the send's own line is not said again under it. */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: at35, send: { done: true, line: 'In slot 035 as “MES DRECF”, in 3 seconds.' } }), [{ card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' }])
+    /* ...and playing: what the block said is the card's last line, once. */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: at35, send: { done: true, line: 'x', played: 'NAM 2 is playing “MES DRECF” now, through your own rig. Save the preset to keep it there.', playing: true } }), [
+      { card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: 'NAM 2 is playing “MES DRECF” now, through your own rig. Save the preset to keep it there.' }
+    ])
+    /* On the unit and not the send in hand (another capture's is): the card alone. */
+    assert.deepEqual(captureLine({ ...base, at: at35, mine: false, send: { done: true, line: 'another capture’s line', played: 'another’s', playing: true } }), [{ card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' }])
+    /* The unit took it and said nothing of the slot: never the green card, and the sentence that says so stays. */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: { slot: 34, sure: false }, send: { done: true, line: 'Sent to slot 035 in 12 seconds, but the unit didn’t say what the slot holds now.' } }), [
+      { card: 'plain', head: 'Sent to your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' },
+      { note: 'Sent to slot 035 in 12 seconds, but the unit didn’t say what the slot holds now.' }
+    ])
+    /* Not on the unit: said as plainly, with the reason (not kept, no empty slot, a file that could not be fetched, a send that failed). */
+    for (const why of ['The Axe-Fx III took the capture and then still shows slot 035 as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.', 'That capture couldn’t be fetched.', 'The unit’s first 128 capture slots are all taken. Clear one on the unit, then send again.']) {
+      assert.deepEqual(captureLine({ ...base, mine: true, send: { line: why } }), [{ card: 'warn', head: 'Not on your Axe-Fx III', line: why, more: '' }])
+    }
+    /* A pick that found the slot empty took it back off the unit: not on it, and what the block said under that. */
+    assert.deepEqual(captureLine({ ...base, mine: true, send: { done: false, line: 'The Axe-Fx III shows slot 035 as empty now, so the capture did not stay there. Send it once more.', played: 'NAM 2 is on slot 035, and it is empty, so there is nothing to hear.', playing: false } }), [
+      { card: 'warn', head: 'Not on your Axe-Fx III', line: 'The Axe-Fx III shows slot 035 as empty now, so the capture did not stay there. Send it once more.', more: '' },
+      { note: 'NAM 2 is on slot 035, and it is empty, so there is nothing to hear.' }
+    ])
+    /* On the unit, and the block could not be pointed at it: the card, and the block's own words under it, never as the card's last line. */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: at35, send: { done: true, line: 'x', played: 'NAM 1 is not in the preset the unit is on now', playing: false } }), [
+      { card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' },
+      { note: 'NAM 1 is not in the preset the unit is on now' }
+    ])
+    /* A send of this capture that stopped part-way keeps its reason while another capture's send is in hand; when it is the one in hand, its line is the card's and is not said twice. */
+    assert.deepEqual(captureLine({ ...base, mine: false, send: { line: 'another’s' }, halted: { line: 'the unit stopped answering after 60 of 130 messages.' } }), [{ note: 'the unit stopped answering after 60 of 130 messages.' }])
+    assert.deepEqual(captureLine({ ...base, mine: true, send: { line: 'the unit stopped answering after 60 of 130 messages.' }, halted: { line: 'the unit stopped answering after 60 of 130 messages.' } }), [{ card: 'warn', head: 'Not on your Axe-Fx III', line: 'the unit stopped answering after 60 of 130 messages.', more: '' }])
+    /*
+     * A tap taken while another send is going: nothing has become of this
+     * capture, so it is a plain line, never "Not on your Axe-Fx III" (what an
+     * independent read found the first version drawing). And the page marks
+     * that line as such.
+     */
+    const going = 'A capture is still going to the unit. Tap again when it has finished.'
+    assert.deepEqual(captureLine({ ...base, mine: true, send: { line: '', wait: going } }), [{ note: going }])
+    assert.deepEqual(captureLine({ ...base, mine: true, at: at35, send: { done: true, line: '', wait: going } }), [{ card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' }, { note: going }])
+    /* Under a card that carries what the block last said: that stays the card's, and the wait is its own line. */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: at35, send: { done: true, line: '', played: 'NAM 2 is playing “MES DRECF” now.', playing: true, wait: going } }), [{ card: 'ok', head: 'On your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: 'NAM 2 is playing “MES DRECF” now.' }, { note: going }])
+    /* Another capture's wait is not said here, and once it has come down ('') nothing is. */
+    assert.deepEqual(captureLine({ ...base, mine: false, send: { line: '', wait: going } }), [])
+    assert.deepEqual(captureLine({ ...base, mine: true, send: { line: '', wait: '' } }), [])
+    assert.match(bare, /if \(goingNow\(\)\) \{ setSend\(\{ id: m\.id, line: '', wait: STILL_GOING \}\) return \}/)
+    /*
+     * WHEN NOTHING IS GOING ANY MORE (`waitOver`, which the page hands the
+     * send in hand to). A send that was nothing but the wait is let go of;
+     * a third read found it kept as an empty shell, still "the one in
+     * hand", which hid why an earlier send of that capture had stopped.
+     */
+    const stoppedWhy = 'the unit stopped answering after 60 of 130 messages.'
+    const waited = { id: 9, line: '', wait: going }
+    /* While it waits: why it stopped, then the wait. */
+    assert.deepEqual(captureLine({ ...base, mine: true, send: waited, halted: { line: stoppedWhy } }), [{ note: stoppedWhy }, { note: going }])
+    /* Over: no send in hand, and the reason is back on its own. */
+    assert.equal(waitOver(waited), null)
+    assert.deepEqual(captureLine({ ...base, mine: false, send: waitOver(waited), halted: { line: stoppedWhy } }), [{ note: stoppedWhy }])
+    /* A send with anything of its own keeps it, without the wait: a capture on the unit, a line, what the block said. */
+    assert.deepEqual(waitOver({ id: 9, slot: 34, done: true, line: '', wait: going }), { id: 9, slot: 34, done: true, line: '', wait: '' })
+    assert.deepEqual(waitOver({ id: 9, line: 'x', wait: going }), { id: 9, line: 'x', wait: '' })
+    assert.deepEqual(waitOver({ id: 9, line: '', played: 'p', wait: going }), { id: 9, line: '', played: 'p', wait: '' })
+    /* One that was not waiting is handed back as it is, the very same; and no send is no send. */
+    const plainSend = { id: 9, line: 'x' }
+    assert.equal(waitOver(plainSend), plainSend)
+    assert.equal(waitOver(null), null)
+    assert.match(bare, /if \(!goingNow\(\)\) setSend\(waitOver\)/)
+    /*
+     * A Play tapped on a capture that is on the unit, with no send of its
+     * own in hand: nothing under the card but what the block says. "In slot
+     * 035." under a card that reads "Slot 035" said the slot twice (the
+     * second read), and the unit not having named the slot is the grey
+     * card's to say.
+     */
+    assert.deepEqual(captureLine({ ...base, mine: true, at: { slot: 34, sure: false }, send: { done: true, line: '' } }), [{ card: 'plain', head: 'Sent to your Axe-Fx III', line: 'Slot 035 · MES DRECF', more: '' }])
+    assert.match(card, /export const STILL_GOING = 'A capture is still going to the unit\. Tap again when it has finished\.'/)
+    /*
+     * Fetched again after a fetch that failed: the old failure is not read
+     * under "Getting it from TONE3000…" as this try's (the same read). The
+     * page takes this capture's line down as the fetch starts, so the busy
+     * card has nothing under it, and a file that then turns out to be no A2
+     * capture has no stale "Not on your Axe-Fx III" card either.
+     */
+    assert.match(bare, /const check = async \(m\) => \{ if \(busy\) return setBusy\(m\.id\) setFault\(''\) setSend\(\(was\) => \(was\?\.id === m\.id \? null : was\)\) try \{/)
+    assert.deepEqual(captureLine({ ...base, working: true, fetching: true, mine: false, send: null }), [{ card: 'busy', head: 'Getting it from TONE3000…', line: '', more: '' }])
+    /*
+     * WHAT IS ON THE UNIT, HEARD BY EVERY DRAWING (lib/capturePlaced, run).
+     * A send that outlived its page lands under the page that is up.
+     */
+    const onUnitList = await import('../mobile/src/lib/capturePlaced.js')
+    const heardA = []
+    const heardB = []
+    const stopA = onUnitList.watchPlaced((now) => heardA.push(now))
+    const stopB = onUnitList.watchPlaced((now) => heardB.push(now))
+    assert.equal(onUnitList.isPlaced('t71-a'), false)
+    onUnitList.place('t71-a', 34, false)
+    assert.equal(onUnitList.isPlaced('t71-a'), true)
+    assert.deepEqual(onUnitList.placedNow()['t71-a'], { slot: 34, sure: false })
+    assert.deepEqual([heardA.length, heardB.length], [1, 1], 'a drawing was not told a capture landed')
+    assert.deepEqual(heardA[0]['t71-a'], { slot: 34, sure: false })
+    /* A number or a string, the same capture; and the unit naming the slot makes it sure. */
+    onUnitList.place(7101, 35, true)
+    assert.equal(onUnitList.isPlaced('7101'), true)
+    assert.equal(onUnitList.isPlaced(7101), true)
+    onUnitList.place('t71-a', 34, true)
+    assert.deepEqual(heardA.at(-1)['t71-a'], { slot: 34, sure: true })
+    /* A send that ended without landing: every drawing looks again all the same (`settled`), which is what takes a "still going" line down. */
+    const mark = [heardA.length, heardB.length]
+    onUnitList.settled()
+    assert.deepEqual([heardA.length, heardB.length], [mark[0] + 1, mark[1] + 1], 'a drawing was not told a send had ended')
+    /* A drawing that has gone hears no more, and the other still does. */
+    stopA()
+    const before = heardA.length
+    onUnitList.unplace('t71-a')
+    assert.equal(heardA.length, before)
+    assert.equal(onUnitList.isPlaced('t71-a'), false)
+    assert.ok(!('t71-a' in heardB.at(-1)), 'a drawing was not told a capture came off the unit')
+    /* Taking off what is not there tells nobody; one drawing that throws does not keep the next from hearing. */
+    const told = heardB.length
+    onUnitList.unplace('t71-none')
+    assert.equal(heardB.length, told)
+    const stopBad = onUnitList.watchPlaced(() => {
+      throw new Error('gone')
+    })
+    const heardC = []
+    const stopC = onUnitList.watchPlaced((now) => heardC.push(now))
+    onUnitList.unplace(7101)
+    assert.equal(heardC.length, 1)
+    stopB()
+    stopBad()
+    stopC()
+    /* What a drawing is handed is its own copy: changing it changes nothing onUnitList. */
+    onUnitList.place('t71-b', 3, true)
+    onUnitList.placedNow()['t71-b'].slot = 99
+    delete onUnitList.placedNow()['t71-b']
+    assert.deepEqual(onUnitList.placedNow()['t71-b'], { slot: 3, sure: true })
+    assert.equal(onUnitList.isPlaced('t71-b'), true)
+    onUnitList.unplace('t71-b')
+    assert.deepEqual([...src('mobile/src/lib/capturePlaced.js').matchAll(/^import /gm)], [], 'the list reaches into something')
+
+    /* While it is being sent again nothing of an earlier try is said beside the busy card. */
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, at: null, send: { line: 'Looking for an empty slot on the unit…' } }).map((x) => x.card || 'note'), ['busy'])
+    /* And nothing says "on the unit" while it is still going there: one card at a time. */
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, at: at35, send: { line: 'Sending…' } }).map((x) => x.card || 'note'), ['busy'])
+    /* It imports only the words. */
+    assert.deepEqual([...src('mobile/src/lib/captureLine.js').replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./tone3000Words.js'])
+
+    /* The card's four looks: green and a tick only for 'ok'. */
     const sentCard = src('mobile/src/components/SentCard.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
-    /* Green and a tick only where it is sure: a send the unit took and said nothing of is drawn plain, so it does not look like one that was confirmed. */
-    assert.match(sentCard, /export default function SentCard\(\{ head, line = '', more = '', sure = true \}\) \{ const ink = sure \? color\.ok : color\.silk/)
-    assert.match(sentCard, /borderColor: sure \? color\.ok : color\.rule/)
-    assert.match(sentCard, /backgroundColor: sure \? `\$\{color\.ok\}1f` : 'transparent'/)
-    assert.match(sentCard, /<Text style=\{\{ color: ink, fontSize: font\.body, fontWeight: '700' \}\}>\{sure \? `✓ \$\{head\}` : head\}<\/Text>/)
+    assert.match(sentCard, /const LOOKS = \{ ok: \(c\) => \(\{ ink: c\.ok, edge: c\.ok, wash: `\$\{c\.ok\}1f`, mark: '✓ ' \}\), busy: \(c\) => \(\{ ink: c\.live, edge: c\.live, wash: `\$\{c\.live\}1f`, mark: '' \}\), warn: \(c\) => \(\{ ink: c\.signal, edge: c\.signal, wash: `\$\{c\.signal\}1f`, mark: '' \}\), plain: \(c\) => \(\{ ink: c\.silk, edge: c\.rule, wash: 'transparent', mark: '' \}\) \}/)
+    assert.match(sentCard, /export default function SentCard\(\{ head, line = '', more = '', tone = 'ok' \}\) \{ const look = \(LOOKS\[tone\] \|\| LOOKS\.plain\)\(color\)/)
+    assert.match(sentCard, /<Text style=\{\{ color: look\.ink, fontSize: font\.body, fontWeight: '700' \}\}>\{`\$\{look\.mark\}\$\{head\}`\}<\/Text>/)
     assert.match(sentCard, /accessibilityLiveRegion="polite"/)
+    /* A tap on Preview or Get is in the log like every other button, and a file that could not be fetched is said under the capture and logged. */
+    assert.match(bare, /onPress=\{\(\) => \{ tick\(\) fire\(`press \$\{label\}`, onPress\) \}\}/)
+    assert.match(bare, /\} catch \(err\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was not fetched: \$\{err\?\.message \|\| err\}`\) if \(alive\.current && err\?\.status !== 401\) setSend\(\{ id: m\.id, line: err\?\.message \|\| 'That capture couldn’t be fetched\.' \}\) \} finally \{/)
     /* And felt: once, when the capture is on the unit. */
     assert.match(bare, /if \(got\.name\) thud\(\) if \(!play\) return/)
     assert.equal((bare.match(/thud\(\)/g) || []).length, 1)
@@ -11691,7 +11860,6 @@ export function run(test) {
     assert.match(card, /if \(rec\?\.ok\) texts\.current\[m\.id\] = text/)
     /* The send's line and the block's line each keep their place: one never writes over the other. */
     assert.match(card, /const mine = send\?\.id === m\.id/)
-    assert.match(bare, /\{mine && !\(there && send\.done && at\.sure\) \? <Note>\{send\.line\}<\/Note> : null\} \{mine && send\.played && !\(there && send\.playing === true\) \? <Note>\{send\.played\}<\/Note> : null\}/)
     assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
   })
 

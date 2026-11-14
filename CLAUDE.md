@@ -1533,6 +1533,46 @@ the capture on the unit, which is the hard half.
     block says it is playing; the phone taps once. The same card is over
     the knobs, or the captures on the unit, when a Get hands them back.
     "On" only where the unit named the slot; else "Sent to".
+  - *AND FROM THE TAP ON, since 1.90.71.* "This is the screen that shows
+    up after hitting send.." (the same day, with a picture of a tone's
+    view at 1.90.66 that had nothing on it to say a tap had been taken).
+    Under a capture's name there is now always a card: "Getting it from
+    TONE3000…", then "Sending to your Axe-Fx III…" with how far it has
+    got, then the green one, or "Not on your Axe-Fx III" in amber with
+    the reason. Which, for every state, is lib/captureLine, run whole by
+    a test; the page draws what it answers. A file that could not be
+    fetched is said under the capture that was tapped (it was a note at
+    the top of the page, out of sight) and is logged, and a tap on
+    Preview or Get is in the log like every other button (it left no
+    line, so his log could not say whether one had been made).
+    AND WHAT AN INDEPENDENT READ FOUND before it went out, both fixed:
+    a fetch tried again showed the LAST try's failure under "Getting it
+    from TONE3000…" (the line comes down as the fetch starts); and "a
+    capture is still going, tap again when it has finished" was drawn as
+    the amber "Not on your Axe-Fx III" card (it is a plain line now,
+    `wait`). Behind that one was a tap that did NOTHING: a send goes on
+    after its page is left, and the page opened after it had taken what
+    was on the unit once, as it was drawn, so a capture that landed a
+    moment later still showed Preview and Get, and a tap on either
+    returned without a word. What is on the unit lives in
+    lib/capturePlaced now, run by a test, and every drawing of the page
+    hears of a capture as it lands. A SECOND READ, OF THOSE FIXES, found
+    two more, fixed too: the "still going" line came down only when the
+    other send LANDED, so one that failed left it up for good (whoever
+    does the work now says when it is over, kept or not: `settled`, and
+    the line comes down only once nothing is going); and "In slot 035."
+    was said under a card that already read "Slot 035" (a Play tapped on
+    a capture with no send of its own has no line now). A THIRD, of
+    those: a send that had been nothing but the "still going" line was
+    kept as an empty shell once it cleared, still "the one in hand",
+    which hid why an earlier send of that capture had stopped (it is let
+    go of now: `waitOver` in lib/captureLine, run by the test). AND THE SMALL
+    RUNNER USED FOR MUTATION CHECKS HAD BEEN SKIPPING A GROUP OF TESTS:
+    test/tone3000-browse.mjs has two exported groups (`run` and
+    `runPreviewAndGet`) and the runner called only `run`, so seven broken
+    versions went "uncaught" by pins that were never run. A runner calls
+    every exported run* of a file. The lesson above again, one level up:
+    the thing that proves a guard fails has to be seen to run the guard.
   - *THE FIRST SEND WAS TAKEN AND NOT KEPT, AND THE NAME HAS A CHECK BYTE
     (14 November 2026).* His first send from the card, over Bluetooth: all
     130 messages answered "taken", and then "NAM 1 is playing “<EMPTY>”

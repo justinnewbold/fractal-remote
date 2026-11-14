@@ -55,6 +55,14 @@ export const T3K_CATALOG_PAGE = false
 export const ON_UNIT = 'On your Axe-Fx III'
 /** The same where the unit took it and has not said what the slot holds. */
 export const SENT_TO_UNIT = 'Sent to your Axe-Fx III'
+/**
+ * The heads of the same card while a capture is on its way, and when it did
+ * not get there: after a tap on Preview or Get the capture's own line says
+ * what is becoming of it at every moment, in words nobody can miss.
+ */
+export const GETTING_CAPTURE = 'Getting it from TONE3000…'
+export const SENDING_TO_UNIT = 'Sending to your Axe-Fx III…'
+export const NOT_ON_UNIT = 'Not on your Axe-Fx III'
 /** The card's second line: which slot, and the capture's name. */
 export const onUnitLine = (slotSaid, name) => `Slot ${slotSaid}${name ? ` · ${name}` : ''}`
 
