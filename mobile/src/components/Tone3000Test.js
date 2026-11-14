@@ -43,7 +43,8 @@ import { logDebug } from '../lib/debugLog'
 import { T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { onTone3000Return, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
-import { NAM_BLOCKS, NAM_EMPTY, NAM_NAME_PLACES, namRecord, namSlotSaid } from '../lib/nam-install'
+import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
+import { sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Note from './Note'
 import Press from './Press'
@@ -181,7 +182,7 @@ export default function Tone3000Test() {
    * A fetched capture into the unit's first empty slot (or, `again`, back
    * into the slot a send of this card's stopped part-way in).
    */
-  const sendToUnit = async (m, again = null) => {
+  const sendToUnit = async (m, again = null, fill = false) => {
     if (busy) return
     if (goingNow()) {
       setSend({ id: m.id, line: STILL_GOING })
@@ -196,6 +197,7 @@ export default function Tone3000Test() {
     }
     /* Named by the file's own word, else TONE3000's name for it, else its number there: a name in another script keeps none of its letters on the unit. */
     const named = { name: captureLabel(m), fallback: `Capture ${m.id}`, by: tone?.user?.username }
+    /* Only to know it is a capture and what it is called, before the unit is asked anything; lib/captureSend packs what is sent. */
     const rec = namRecord(texts.current[m.id], named)
     if (!rec.ok) {
       setSend({ id: m.id, line: rec.why })
@@ -219,41 +221,39 @@ export default function Tone3000Test() {
       const said = namSlotSaid(slot)
       setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}…` })
       logDebug('tone3000', `sending capture ${m.id} (“${rec.name}”) to slot ${said}${again !== null ? ', over what a stopped send left there' : ''}`)
-      /* One send. The name comes back without the spaces a filled-out one ends in, whichever copy of the computer app read the slot. */
-      const goes = (words, second = false) =>
-        namInstallHere(slot, words, {
-          replace: again !== null,
-          onProgress: (sent, of) => {
-            /* Every tenth message and the last: 130 redraws are no use to anybody. */
-            if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}${second ? ' once more' : ''}: ${sent} of ${of}` })
-          }
-        }).then((g) => (typeof g?.name === 'string' ? { ...g, name: g.name.replace(/ +$/, '') } : g))
-      let got = await goes(rec.words)
-      logDebug('tone3000', `capture ${m.id} went to slot ${said} in ${got.seconds.toFixed(1)} s; the unit reads the slot as “${got.name ?? 'nothing it would say'}”`)
       /*
-       * TAKEN AND NOT KEPT, AND ITS NAME IS SHORT: once more, with the name
-       * filled out to all 31 places (namRecord's `fill`). The one capture
-       * seen kept by a unit had a name that filled them; a shorter one is
-       * the same rule on trust. Sent as it is first, since that is what
-       * Axe-Edit must send (the unit lists short names with nothing after
-       * them), and filled out only when the unit did not keep that. The log
-       * says which of the two a unit kept, which settles the rule.
+       * The send, and the second try for a short name the unit took and did
+       * not keep (lib/captureSend, which says why and is run whole in a
+       * test). The card's part is the lines on the screen.
        */
-      let twice = false
-      if (got.name === NAM_EMPTY && rec.name.length < NAM_NAME_PLACES) {
-        const full = namRecord(texts.current[m.id], { ...named, fill: true })
-        if (full.ok && full.filled) {
-          twice = true
-          logDebug('tone3000', `capture ${m.id} was NOT KEPT with its name as it is (${rec.name.length} characters): sending it to slot ${said} once more with the name filled out to ${NAM_NAME_PLACES} places`)
-          if (alive.current) setSend({ id: m.id, slot, line: `The Axe-Fx III took it and didn’t keep it. Sending it once more, a little differently…` })
-          got = await goes(full.words, true)
-          logDebug('tone3000', `capture ${m.id}, its name filled out, went to slot ${said} in ${got.seconds.toFixed(1)} s; the unit reads the slot as “${got.name ?? 'nothing it would say'}”${got.name && got.name !== NAM_EMPTY ? ': KEPT WITH THE NAME FILLED OUT, not as it was' : ''}`)
+      const went = await sendCapture({
+        text: texts.current[m.id],
+        named,
+        slot,
+        replace: again !== null,
+        fill,
+        install: (to, words, how) =>
+          namInstallHere(to, words, {
+            replace: how.replace,
+            filled: how.filled,
+            onProgress: (sent, of) => {
+              /* Every tenth message and the last: 130 redraws are no use to anybody. */
+              if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}${how.second ? ' once more' : ''}: ${sent} of ${of}` })
+            }
+          }),
+        log: (line) => logDebug('tone3000', `capture ${m.id}, slot ${said}: ${line}`),
+        onSecond: () => {
+          if (alive.current) setSend({ id: m.id, slot, line: 'The Axe-Fx III took it and didn’t keep it. Sending it once more, a little differently…' })
         }
-      }
+      })
       if (!alive.current) return
+      if (!went.ok) {
+        setSend({ id: m.id, line: went.why })
+        return
+      }
+      const { got, twice } = went
       /* Every message was taken and the slot still reads empty: the unit did not keep it. Never "done", and nothing to play. */
       if (got.name === NAM_EMPTY) {
-        logDebug('tone3000', `capture ${m.id} was NOT KEPT${twice ? ', either way' : ''}: slot ${said} still reads ${NAM_EMPTY} after every message was taken`)
         setSend({
           id: m.id,
           slot,
@@ -270,7 +270,8 @@ export default function Tone3000Test() {
       await point(NAM_BLOCKS[0], slot)
     } catch (err) {
       logDebug('tone3000', `capture ${m.id} was not sent: ${err?.message || err}`)
-      if (alive.current) setSend({ id: m.id, line: err?.message || 'The capture was not sent.', again: err?.partial === true && Number.isInteger(err?.slot) ? err.slot : null })
+      /* A send that stopped part-way is offered again into the same slot, and with its name as it was going: a second try that stopped is not started over from the first. */
+      if (alive.current) setSend({ id: m.id, line: err?.message || 'The capture was not sent.', again: err?.partial === true && Number.isInteger(err?.slot) ? err.slot : null, fill: err?.filled === true })
     } finally {
       if (atWork === mine) atWork = 0
       if (alive.current) setBusy(null)
@@ -364,7 +365,7 @@ export default function Tone3000Test() {
               {send?.id === m.id ? <Note>{send.line}</Note> : null}
               {send?.id === m.id && send.played ? <Note>{send.played}</Note> : null}
               {send?.id === m.id && Number.isInteger(send.again) ? (
-                <Press label={`Send it again to slot ${namSlotSaid(send.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, send.again)} />
+                <Press label={`Send it again to slot ${namSlotSaid(send.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, send.again, send.fill === true)} />
               ) : null}
               {send?.id === m.id && send.done
                 ? NAM_BLOCKS.map((block, i) => (

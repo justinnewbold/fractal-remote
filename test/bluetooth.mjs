@@ -11203,8 +11203,15 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, fullNamesOnly: false }
-    const headOf = (slot) => held.get(slot) || empty()
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, fullNamesOnly: false, keepsNothing: false, lateSlot: null, lateLooks: 0 }
+    /* `lateSlot`, `lateLooks`: a unit slow to file. The slot it has kept still reads <EMPTY> for that many looks, and then as what it holds. */
+    const headOf = (slot) => {
+      if (held.has(slot) && u.lateSlot === slot && u.lateLooks > 0) {
+        u.lateLooks--
+        return empty()
+      }
+      return held.get(slot) || empty()
+    }
     const said = (b, payload) => t.say(sx.frame(0x10, 0x01, [...b.slice(6, 12), ...payload]))
     const hear = t.unit.hear
     t.unit.hear = (b) => {
@@ -11237,7 +11244,7 @@ export function run(test) {
          */
         const head = bytesOf(words, 68)
         /* `fullNamesOnly`: a unit whose rule for a name shorter than 31 characters is not the app's guess. Only the shape seen kept (31 characters and the check byte) is kept by it. */
-        if (head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0 || (u.fullNamesOnly && head[30] === 0)) u.unkept.push(slot)
+        if (u.keepsNothing || head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0 || (u.fullNamesOnly && head[30] === 0)) u.unkept.push(slot)
         else {
           head[31] = 0
           held.set(slot, head)
@@ -11271,7 +11278,7 @@ export function run(test) {
     const asks = (path, options2 = {}) => drive(t.clock, t.wire.request(path, { capturing: true, ...options2 }))
     /* Every frame of a capture's shapes that left the phone. */
     const shaped = () => t.frames().filter((f) => nam.namShaped(f, 0x10))
-    return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said) }
+    return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said), text: (name, from) => A2(name, from) }
   }
 
   test('a capture goes to an Axe-Fx III as Axe-Edit sends one: the first empty slot found, 130 messages each taken, and the slot read back', async () => {
@@ -11441,7 +11448,7 @@ export function run(test) {
     assert.equal(fullName.reduce((x, c) => x ^ c, 0), 0, 'the filled-out name does not XOR to nought')
     /* Nothing but the name's own 32 bytes differs from the record as it was. */
     assert.deepEqual(full.words.slice(8), rec.words.slice(8))
-    const filledKept = await asks('/nam/slots/4', { method: 'POST', body: { words: full.words } })
+    const filledKept = await asks('/nam/slots/4', { method: 'POST', body: { words: full.words, filled: true } })
     assert.deepEqual([filledKept.slot, filledKept.name, u.unkept], [4, 'Mesa Recto Red Modern Classic', [4]], 'a name filled out was not kept, or came back with its spaces')
     assert.ok(t.logs.some((l) => /a capture went to slot 005 in [\d.]+ s, 130 messages, its name 31 characters \(filled out with spaces\), check byte 0x[0-9a-f]{2}, the closing message answered in \d+ ms: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
     /* A name that already fills all 31 places has nothing to fill: the same record, and it says so. */
@@ -11449,17 +11456,25 @@ export function run(test) {
     const longFilled = record('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57', 5, { fill: true })
     assert.deepEqual([long.name.length, longFilled.filled], [31, false])
     assert.deepEqual(longFilled.words, long.words)
+    /* And "filled out" in the log is what the request said, not the name's last place: a long name cut at a space ends in one and was never filled. */
+    const cutAtSpace = record('Twin Reverb Clean Channel 1 Ch 2 bright', 5)
+    const cutName = []
+    for (let i = 0; i < 8; i++) cutName.push(cutAtSpace.words[i] & 0xff, (cutAtSpace.words[i] >>> 8) & 0xff, (cutAtSpace.words[i] >>> 16) & 0xff, cutAtSpace.words[i] >>> 24)
+    assert.equal(cutName[30], 0x20, 'the test’s long name is not cut at a space')
+    await asks('/nam/slots/5', { method: 'POST', body: { words: cutAtSpace.words } })
+    assert.ok(t.logs.some((l) => /a capture went to slot 006 in [\d.]+ s, 130 messages, its name 31 characters, check byte/.test(l)), t.logs.slice(-2).join(' | '))
+    assert.ok(!t.logs.some((l) => /slot 006 .*filled out with spaces/.test(l)), 'a long name cut at a space was logged as filled out')
     u.fullNamesOnly = false
 
     /* The card: a slot that reads empty after a send is "did not keep it", with no Play button; and a block pointed at an empty slot says so. */
     const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
-    /* A short-named capture the unit did not keep is sent once more with its name filled out, in the same slot, before anything is called not kept. */
-    assert.match(card, /let got = await goes\(rec\.words\)/)
-    assert.match(card, /if \(got\.name === NAM_EMPTY && rec\.name\.length < NAM_NAME_PLACES\) \{ const full = namRecord\(texts\.current\[m\.id\], \{ \.\.\.named, fill: true \}\) if \(full\.ok && full\.filled\) \{ twice = true/)
-    assert.match(card, /got = await goes\(full\.words, true\)/)
-    assert.match(card, /KEPT WITH THE NAME FILLED OUT, not as it was/)
+    /* The send and its second try are lib/captureSend's (run whole in the test below); the card hands it the sender and draws the lines. */
+    assert.match(card, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, fill, install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, filled: how\.filled, onProgress:/)
     assert.equal(nam.NAM_NAME_PLACES, 31)
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT\$\{twice \? ', either way' : ''\}: [^`]*`\) setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    /* A send that stopped part-way is offered again with its name as it was going. */
+    assert.match(card, /again: err\?\.partial === true && Number\.isInteger\(err\?\.slot\) \? err\.slot : null, fill: err\?\.filled === true \}\)/)
+    assert.match(card, /onPress=\{\(\) => sendToUnit\(m, send\.again, send\.fill === true\)\}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done": its button returns, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
@@ -11477,6 +11492,163 @@ export function run(test) {
     /* The send's line and the block's line each keep their place: one never writes over the other. */
     assert.match(card, /\{send\?\.id === m\.id \? <Note>\{send\.line\}<\/Note> : null\} \{send\?\.id === m\.id && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
     assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
+  })
+
+  /*
+   * ONE CAPTURE INTO ONE SLOT, RUN WHOLE (lib/captureSend, 1.90.62). The
+   * second try for a short name went out in 1.90.61 inside the card, where
+   * a test could only read it as text. An independent read of it the same
+   * day found a unit slow to file reported as a failure, and a second try
+   * that stopped part-way started over from the first. It is the card's no
+   * longer, and every path of it is sent to a unit here.
+   */
+  test('one capture into one slot: the second try for a short name, a unit slow to file, and a second try that stopped part-way', async () => {
+    const { sendCapture, heldAlready } = await import('../mobile/src/lib/captureSend.js')
+    /* A line, a unit, and the sender the card hands over: what was asked of it, and what was logged. */
+    const bench = async () => {
+      const c = await capturesLine()
+      const sent = []
+      const logs = []
+      let seconds = 0
+      const send = (name, extra = {}) =>
+        sendCapture({
+          text: c.text(name, 5),
+          named: { name: 'TONE3000’s name for it', fallback: 'Capture 7' },
+          slot: 3,
+          install: (slot, words, how) => {
+            sent.push({ slot, ...how })
+            extra.before?.(how)
+            return c.asks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace: how.replace, filled: how.filled } })
+          },
+          log: (l) => logs.push(l),
+          onSecond: () => seconds++,
+          ...extra.with
+        })
+      return { ...c, sent, logs, send, seconds: () => seconds }
+    }
+    const uploads = (b) => b.u.begun.map((x) => x.slot)
+
+    /* A unit that keeps a short name as it is: one send, and nothing of the second try. */
+    const plain = await bench()
+    const one = await plain.send('Short One')
+    assert.deepEqual([one.ok, one.name, one.got.name, one.twice, one.late], [true, 'Short One', 'Short One', false, false])
+    assert.deepEqual(plain.sent, [{ slot: 3, replace: false, filled: false, second: false }])
+    assert.equal(plain.seconds(), 0)
+    assert.ok(!plain.logs.some((l) => /NOT KEPT/.test(l)))
+
+    /* A unit that keeps only the shape seen kept: sent as it is, then filled out, into the SAME slot and over nothing. */
+    const fussy = await bench()
+    fussy.u.fullNamesOnly = true
+    const two = await fussy.send('Short One')
+    assert.deepEqual([two.name, two.got.name, two.twice, two.late], ['Short One', 'Short One', true, false], 'a short name filled out was not kept, or not said as the second try')
+    assert.deepEqual(fussy.sent, [
+      { slot: 3, replace: false, filled: false, second: false },
+      { slot: 3, replace: false, filled: true, second: true }
+    ])
+    assert.deepEqual(uploads(fussy), [3, 3])
+    assert.deepEqual(fussy.u.unkept, [3])
+    assert.equal(fussy.seconds(), 1, 'the screen was not told the second try was going')
+    assert.ok(fussy.logs.some((l) => /^NOT KEPT with its name as it is \(9 characters\): sending it once more with the name filled out to 31 places$/.test(l)), fussy.logs.join(' | '))
+    assert.ok(fussy.logs.some((l) => /its name filled out, went in [\d.]+ s; the unit reads the slot as “Short One”: KEPT WITH THE NAME FILLED OUT, not as it was$/.test(l)), fussy.logs.join(' | '))
+    assert.ok(fussy.t.logs.some((l) => /a capture went to slot 004 .*its name 31 characters \(filled out with spaces\)/.test(l)), 'the wire was not told the name was filled out')
+
+    /*
+     * A UNIT SLOW TO FILE. It kept the first send, and the slot read <EMPTY>
+     * at both looks after it. The second try's own first look finds the
+     * capture there: that is the first send KEPT, not a send refused. No
+     * second upload, no second copy, and the slot is said to hold it.
+     */
+    const slow = await bench()
+    slow.u.lateSlot = 3
+    slow.u.lateLooks = 2
+    const late = await slow.send('Short One')
+    assert.deepEqual([late.ok, late.got.name, late.twice, late.late], [true, 'Short One', false, true], 'a first send the unit filed late was not said as kept')
+    assert.deepEqual(uploads(slow), [3], 'a second copy was sent to a unit that had kept the first')
+    assert.equal(slow.sent.length, 2)
+    assert.ok(slow.logs.some((l) => /^KEPT AS IT WAS: the unit filed the first send after the slot had twice read <EMPTY>, and the second try found it there\. Nothing more was sent$/.test(l)), slow.logs.join(' | '))
+    assert.ok(!slow.logs.some((l) => /KEPT WITH THE NAME FILLED OUT|NOT KEPT, either way|still reads/.test(l)), slow.logs.join(' | '))
+    assert.ok(late.got.seconds >= 0, 'the seconds of the send that was kept are not handed on')
+
+    /* Refused because the slot holds ANOTHER capture (filled from somewhere else meanwhile): that is a refusal, and it is thrown as one. */
+    const taken = await bench()
+    taken.u.fullNamesOnly = true
+    await assert.rejects(
+      taken.send('Short One', {
+        before: (how) => {
+          if (how.second) taken.u.held.set(3, taken.u.held.get(1))
+        }
+      }),
+      (e) => e.status === 409 && e.holds === 'Clean One' && e.filled === true
+    )
+    assert.deepEqual(uploads(taken), [3])
+
+    /* A unit that keeps nothing: both tries, and it is said not kept either way. A name that fills all 31 places has no second try to make. */
+    const deaf = await bench()
+    deaf.u.keepsNothing = true
+    const none = await deaf.send('Short One')
+    assert.deepEqual([none.got.name, none.twice, none.late, deaf.sent.length], ['<EMPTY>', true, false, 2])
+    assert.ok(deaf.logs.some((l) => /^NOT KEPT, either way: the slot still reads <EMPTY> after every message was taken$/.test(l)), deaf.logs.join(' | '))
+    const deafLong = await bench()
+    deafLong.u.keepsNothing = true
+    const full = await deafLong.send('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57')
+    assert.deepEqual([full.name.length, full.got.name, full.twice, deafLong.sent.length, deafLong.seconds()], [31, '<EMPTY>', false, 1, 0], 'a name that fills all 31 places was sent a second time')
+    assert.ok(deafLong.logs.some((l) => /^NOT KEPT: the slot still reads <EMPTY>/.test(l)))
+
+    /*
+     * A SECOND TRY THAT STOPS PART-WAY says what was going (`filled`) with
+     * the slot it may have left half-filled, and sent again it goes as it
+     * was going: filled out, once, over what the stopped send left. Not the
+     * short name over again, half a minute on a shape just shown not kept.
+     */
+    const cut = await bench()
+    cut.u.fullNamesOnly = true
+    let fell = null
+    await assert.rejects(
+      cut.send('Short One', {
+        before: (how) => {
+          if (how.second) cut.u.silentAt = 5
+        }
+      }),
+      (e) => {
+        fell = e
+        return true
+      }
+    )
+    assert.deepEqual([fell.partial, fell.slot, fell.filled], [true, 3, true], `a second try that stopped part-way does not say what was going (${fell.message})`)
+    cut.u.silentAt = null
+    cut.sent.length = 0
+    const again = await cut.send('Short One', { with: { replace: true, fill: true } })
+    assert.deepEqual(cut.sent, [{ slot: 3, replace: true, filled: true, second: false }], 'a second try sent again started over from the short name')
+    assert.deepEqual([again.got.name, again.twice, again.late], ['Short One', false, false])
+    /* And a first send that stops part-way says the name was as it is. */
+    const cutFirst = await bench()
+    cutFirst.u.silentAt = 5
+    await assert.rejects(cutFirst.send('Short One'), (e) => e.partial === true && e.slot === 3 && e.filled === false)
+
+    /* Over the card's own half-sent slot the second send writes over the first, so the log does not claim to know which of the two a unit keeps. */
+    const over = await bench()
+    over.u.fullNamesOnly = true
+    await over.send('Short One', { with: { replace: true } })
+    assert.ok(over.logs.some((l) => /“Short One”: kept on the second send$/.test(l)) && !over.logs.some((l) => /not as it was/.test(l)), over.logs.join(' | '))
+
+    /* A file that is no capture goes nowhere. */
+    const not = await bench()
+    const refused = await sendCapture({ text: '{"architecture":"WaveNet","weights":[1,2,3]}', named: { name: 'x' }, slot: 3, install: () => assert.fail('something was sent') })
+    assert.deepEqual([refused.ok, typeof refused.why], [false, 'string'])
+    assert.deepEqual(uploads(not), [])
+
+    /* The refusal that means "kept": by the name the wire's failure carries, or, through the computer, by the words alone. */
+    assert.equal(heldAlready({ status: 409, holds: 'Short One' }, 'Short One'), true)
+    assert.equal(heldAlready({ status: 409, holds: 'Short One   ' }, 'Short One'), true)
+    assert.equal(heldAlready({ status: 409, holds: 'Clean One' }, 'Short One'), false)
+    assert.equal(heldAlready({ status: 409, message: 'capture slot 004 already holds "Short One"; nothing was sent' }, 'Short One'), true)
+    assert.equal(heldAlready({ status: 409, message: 'Capture slot 004 already holds “Short One”. Nothing was sent.' }, 'Short One'), true)
+    assert.equal(heldAlready({ status: 409, message: 'capture slot 004 already holds "Short One Hundred"; nothing was sent' }, 'Short One'), false)
+    assert.equal(heldAlready({ status: 409, message: 'The capture tools are already at work. Try again in a moment.' }, 'Short One'), false)
+    assert.equal(heldAlready({ status: 504, holds: 'Short One' }, 'Short One'), false)
+    assert.equal(heldAlready({ status: 409, holds: '' }, ''), false)
+    /* The computer's own words for it are these (ForgeFX gen3.ts namInstall), so the phone reads them right. */
+    assert.match('capture slot 004 already holds "Short One"; nothing was sent', /^capture slot \d{3} already holds "[^"]+"; nothing was sent$/)
   })
 
   test('a slot in use is never written over unless the request says so, and a NAM block is pointed at a slot by the one write', async () => {

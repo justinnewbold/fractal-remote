@@ -1240,6 +1240,21 @@ the capture on the unit, which is the hard half.
     was"). Kept as it is: the fill is never used. Only the filled one
     kept: fill every name until the short rule is understood. Neither
     kept: the check byte was not the reason.
+  - *The send and its second try are lib/captureSend's, not the card's*
+    (1.90.62), so a test runs every path of them against the stand-in
+    unit. They went out inside the card, read only as text, and an
+    independent read the same day found three things, fixed there: A UNIT
+    SLOW TO FILE (the slot reads <EMPTY> at both looks, then holds it) had
+    its second try refused "already holds", which the card said as a
+    failure with no Play button, and the next tap sent a second copy; a
+    second try refused because the slot holds THIS capture is the first
+    send kept (`heldAlready`, "KEPT AS IT WAS" in the log). A second try
+    that stopped part-way was sent again short name first; the failure
+    now says what was going (`err.filled`) and "Send it again" sends
+    that. And the wire's "(filled out with spaces)" is what the request
+    says (`filled`), not the name's last place, where a long name cut at
+    a space said it too. WHAT SHIPS UNREAD GETS READ: the reviewers'
+    copy was frozen before these went in.
   - *Axe-Edit sends no "store it" message* (checked 14 November 2026,
     docs/nam-install.md): the 30 messages it sent between the unit's last
     answer and "it is over" are its own screen refreshing, the same reads
