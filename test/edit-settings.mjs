@@ -163,7 +163,7 @@ export function run(test) {
     const raw = read('mobile/src/screens/Edit.js')
     assert.ok(raw.indexOf('shown.map((p) =>') < raw.indexOf('<BlockSettings '), 'the settings are over the knobs')
     assert.ok(raw.indexOf('{level && !bare ? (') < raw.indexOf('<BlockSettings '), 'the settings are over the Level')
-    assert.ok(raw.indexOf('<BlockSettings ') < raw.indexOf('{namOnUnit ? <Note>'), 'the settings are under the line for what is left to the unit')
+    assert.ok(raw.indexOf('<BlockSettings ') < raw.indexOf('{namOnUnit && !namPicker ? <Note>') && raw.indexOf('{namOnUnit && !namPicker ? <Note>') > 0, 'the settings are under the line for what is left to the unit')
     /* The component draws and asks; it never writes. Buttons for a short list, one button that opens a sheet for a long one. */
     const comp = code(read('mobile/src/components/BlockSettings.js'))
     assert.ok(!/setEnum|setParam|blockParams|remoteRequest|lib\/device|lib\/rig/.test(comp), 'the settings component writes or reads the unit itself')

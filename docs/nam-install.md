@@ -244,12 +244,44 @@ seven, high bit first, after a length of `10 02`. The answer does not say
 which slot it is. An empty slot's name is `<EMPTY>` and the rest noughts.
 Axe-Edit asked all 257 in 0.4 seconds.
 
+**The app's picker reads it in pieces** (mobile/src/lib/captureList.js,
+1.90.63, his account only): `GET /nam/heads/<from>/<count>` answers up to
+32 slots' heads in order, `{ from, heads: [{ slot, name, by, make, model,
+gearType, toneType, empty }], stopped? }`, on the device's own wire
+(bleWire `namHeads`) and through the computer (ForgeFX `namHeads`, from
+the release that carries d44528e). One question a slot, as above, and
+nothing else is sent: no "a transfer is under way". Because the answer
+does not say which slot it is, the first slot that does not answer in time
+ends the piece there (`stopped`), and NO SLOT IS ASKED, by anyone, until
+that answer can no longer come: two seconds, held by each sender itself
+(bleWire `namQuietUntil`, ForgeFX `#namQuietUntil` and `NAM_LATE_MS`), so
+a late answer is never taken for the next question's, whether that is the
+list's, a block's button's, or the search for an empty slot before an
+upload. On the computer that wait is taken before a question joins the
+transport's queue, and two lists can be read at once there, so a slot's
+answer is believed only if no slot went unanswered between its asking and
+its answer (`#namSilences`); an upload waits the quiet out before it takes
+the line. The list waits 2.5 seconds on top and asks from that slot again.
+A unit that has answered and then stops is said so when two slots running
+have each said nothing twice, and the list read before it is neither cut
+down nor written over. The
+numbers are in the path because the relay drops a query string. Slot 257
+(256 as the unit counts) is read when a block is on it and never offered:
+in the recording it listed the same capture as the one just loaded.
+
 ## Pointing a NAM block at a slot
 
 An ordinary typed write (function `0x01`, `09 00`): the block (206 or 207),
 setting 0, the slot as a float (29.0). The unit answers with the slot over
 256 (0.11328125) and the capture's name. The block's own data then reads
 29 where it read 0. Axe-Edit then saved the preset the usual way (`26 00`).
+
+**Which capture a block is on comes with the block's own read** (1.90.63):
+the first of each channel's 18 values is the slot, counted from nought, so
+a NAM block's params read carries `capture: { slot }` beside its knobs
+(`{ slot: null }` where the number is no slot or the read failed). The
+picker in Edit is drawn from that, and picks with the write above; after
+a pick the block is read again and that read is what is shown.
 
 ## Also in the recording, not used
 

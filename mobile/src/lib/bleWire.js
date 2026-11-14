@@ -108,6 +108,7 @@ import * as axefx3Edit from './axefx3-edit.js'
 import { ANSWER_MS, describeAllowed, describeBlock, describeEcho } from './gen3-describe.js'
 import {
   NAM_BLOCKS,
+  NAM_HEADS_MOST,
   NAM_RECORD_WORDS,
   NAM_SLOTS,
   NAM_SLOT_PROVEN_MOST,
@@ -3018,10 +3019,30 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
   }
 
+  /*
+   * A SLOT'S ANSWER DOES NOT SAY WHICH SLOT IT IS: only its order does. So
+   * after one goes unanswered, no slot is asked until its answer can no
+   * longer come (LATE_MS, as after a stored name on an AM4): the next
+   * question, of any slot and from anyone (the list, the slot a block is
+   * on, the first empty slot, an upload's own looks at its slot), would be
+   * handed the late one, and a name would be filed under the wrong slot.
+   * An answer that arrives during the wait has nobody waiting and is
+   * dropped.
+   */
+  let namQuietUntil = 0
+  /* What is left of that quiet, waited out: never longer than the quiet itself, whatever the clock does. */
+  const namQuiet = async () => {
+    const wait = Math.min(namQuietUntil - time.now(), LATE_MS)
+    if (wait > 0) await pause(wait)
+  }
   async function namSlotHead(slot) {
+    await namQuiet()
     const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true })
     if (rejected(got)) throw failure(`The ${spec.name} would not say what is in capture slot ${namSlotSaid(slot)} (${rejectedWords(got.rejected)}). Its firmware may be older than the NAM block.`, 502)
-    if (!got) throw failure(`The ${spec.name} didn’t say what is in capture slot ${namSlotSaid(slot)}.`, 504)
+    if (!got) {
+      namQuietUntil = time.now() + LATE_MS
+      throw failure(`The ${spec.name} didn’t say what is in capture slot ${namSlotSaid(slot)}.`, 504)
+    }
     return got
   }
 
@@ -3036,6 +3057,41 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return { slot: null, heads }
     })
 
+  /*
+   * GET /nam/heads/<from>/<count>: some of the slots' heads, in order, for
+   * the picker in Edit. Each slot is asked as Axe-Edit asks it when it reads
+   * its list, one question a slot, and a piece is one turn of the capture
+   * tools: the picker asks for the list a piece at a time, so a pick, a tap
+   * on Play and the footswitch watch each get in between two.
+   *
+   * A SLOT THAT SAYS NOTHING ENDS THE PIECE THERE (`stopped`). A slot's answer
+   * does not say which slot it is, so after one that was not answered in time
+   * the next slot's question could be handed the answer that came late: no
+   * slot is asked until it can no longer come (namSlotHead), and the picker
+   * asks from that slot again.
+   *
+   * It reads and nothing else: no "a transfer is under way", so nothing is
+   * held back for it (a list read never sets captureBusy).
+   */
+  function namHeads(from, count) {
+    if (!Number.isInteger(from) || from < 0 || from >= NAM_SLOTS) throw badInput('There is no such capture slot.')
+    if (!Number.isInteger(count) || count < 1 || count > NAM_HEADS_MOST) throw badInput(`The list is read ${NAM_HEADS_MOST} slots at a time at most.`)
+    return captureRun({ list: true }, async () => {
+      const heads = []
+      for (let slot = from; slot < Math.min(NAM_SLOTS, from + count); slot++) {
+        let head
+        try {
+          head = await namSlotHead(slot)
+        } catch (err) {
+          if (err?.status === 504) return { from, heads, stopped: slot }
+          throw err
+        }
+        heads.push({ slot, name: head.name, by: head.by, make: head.make, model: head.model, gearType: head.gearType, toneType: head.toneType, empty: head.empty })
+      }
+      return { from, heads }
+    })
+  }
+
   function namInstall(slot, body, onProgress) {
     const words = body?.words
     if (!Number.isInteger(slot) || slot < 0 || slot > NAM_SLOT_PROVEN_MOST) throw badInput(`A capture can go into slots 001 to ${namSlotSaid(NAM_SLOT_PROVEN_MOST)} from here.`)
@@ -3046,6 +3102,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const off = namBusyFrame(model, false)
     const busy = (f) => (namBusyAnswer(f, model) ? true : undefined)
     return captureRun({ list: true, frames: [on, off, ...frames] }, async () => {
+      /* What is left of the quiet after a slot said nothing is waited out BEFORE the hold is taken: nothing is going to the unit during it, and a tap should not be refused for it. No other slot question can start a new quiet meanwhile: this run has the capture tools. */
+      await namQuiet()
       const started = time.now()
       /* Held from the slot's own read on, as the computer holds it: nothing goes between that read and the start either. captureRun lets go however this ends. */
       captureBusy = true
@@ -3164,9 +3222,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
       if (!list.some((b) => b.effectId === eid)) throw failure(`${which} isn’t in the preset the ${spec.name} is on now.`, 409)
       const got = await ex(namPickFrame(model, eid, slot), { match: (f) => readNamPick(f, model, eid) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `${which} pointed at capture slot ${namSlotSaid(slot)}`, priority: 'write', capture: true })
+      /* Whatever came back, the block's kept read is no longer to be trusted: a pick with no answer may still have landed, and Edit's next read must be the unit's. */
+      forgetEdits(eid)
       if (rejected(got)) throw failure(`The ${spec.name} refused it (${rejectedWords(got.rejected)}).`, 502)
       if (!got) throw failure(`The ${spec.name} didn’t answer, so ${which} may not have changed.`, 504)
-      forgetEdits(eid)
       if (got.slot !== slot) throw failure(`The ${spec.name} says ${which} is on capture slot ${namSlotSaid(got.slot)}, not ${namSlotSaid(slot)}.`, 502)
       say(`${which} is on capture slot ${namSlotSaid(slot)} now: “${got.name}”`)
       return { block: eid, slot: got.slot, name: got.name }
@@ -3635,6 +3694,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* An Axe-Fx III's captures (lib/nam-install), only when the request says it is theirs and they are open to this account (captureOn): his alone. */
     if (opts?.capturing === true && captureOn() && part[0] === 'nam') {
       if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(namEmptySlot)
+      if (method === 'GET' && part.length === 4 && part[1] === 'heads' && isNum(part[2]) && isNum(part[3])) return editRoute(() => namHeads(Number(part[2]), Number(part[3])))
       if (method === 'POST' && part.length === 3 && part[1] === 'slots' && isNum(part[2])) return editRoute(() => namInstall(Number(part[2]), body, opts.onProgress))
       if (method === 'POST' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namPick(Number(part[2]), body))
     }

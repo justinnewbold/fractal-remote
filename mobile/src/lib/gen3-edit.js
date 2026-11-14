@@ -42,6 +42,8 @@ import { FN, checksumOk, decode14, encode14, floatBits, frame, fromSeptets32, bi
 
 /* The read and the three parts of its answer. */
 export const READ_ALL = 0x1f
+/* How many capture slots an Axe-Fx III has (lib/nam-install NAM_SLOTS, held equal by a test: this file builds no capture message and imports nothing of them). */
+const CAPTURE_SLOTS = 257
 const HEAD = 0x74
 const CHUNK = 0x75
 const FOOT = 0x76
@@ -278,7 +280,7 @@ const drawn = (page) => ({
  * @param {object} c
  * @param {number} c.model     the unit's model byte (fractal-sysex MODELS)
  * @param {object} c.blocks    effect id → [slug, family, name, palette page]
- * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; and `typedKnobs: false` on a family whose knobs are only ever sent their place (ONE WAY ONLY, below)
+ * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; `typedKnobs: false` on a family whose knobs are only ever sent their place (ONE WAY ONLY, below); and `captureId` on a NAM block's, the setting a read finds its capture slot in (never a row: nothing here writes it)
  * @param {object} c.rosters   slug → [[value, name, maker, based on] | null]
  * @param {object} c.pages     family → the editor's trimmed pages
  */
@@ -367,6 +369,18 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     numberRepeats(enums)
     const out = { block: b.name, slug: b.slug, page: b.page, named, enums, type }
     if (layout) out.layout = layout
+    /*
+     * A NAM block's capture: the slot its channel is on, the first value of
+     * the channel's read and the slot itself, counted from nought (0 on the
+     * unit's "001", 28 on its "029"). Beside the knobs and switches and never
+     * among them, as the computer answers it (ForgeFX blockParams `capture`).
+     * Null for a value that is no slot: slot 0 is a real capture, so nothing
+     * defaults to it.
+     */
+    if (Number.isInteger(f.captureId)) {
+      const slot = bulk.values[base + f.captureId]
+      out.capture = { slot: Number.isInteger(slot) && slot >= 0 && slot < CAPTURE_SLOTS ? slot : null }
+    }
     return out
   }
 

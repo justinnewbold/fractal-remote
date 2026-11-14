@@ -111,6 +111,8 @@ export const NAM_BUSY = Object.freeze({ block: 1, setting: 114 })
 export const NAM_TYPE_SETTING = 0
 /** An empty slot's name, as the unit says it. */
 export const NAM_EMPTY = '<EMPTY>'
+/** The most slot heads one request for the list reads (GET /nam/heads/<from>/<count>): the picker asks for the list in pieces, so a tap gets its turn between two of them. The computer's is the same number (ForgeFX namCaptures.ts). */
+export const NAM_HEADS_MOST = 32
 
 const FIELD = 32
 /** How many characters a capture's name has room for: the 32nd place is its check byte. */
