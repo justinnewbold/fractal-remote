@@ -4249,7 +4249,7 @@ export function run(test) {
     /* And each reason on the list, checked rather than trusted. */
     const flat = (f) => withoutComments(read(f)).replace(/\s+/g, ' ')
     assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'In Apple’s screen, tap your adapter[^']*' : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? appleScreenHint\(\) : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
     assert.match(flat('mobile/src/screens/Settings.js'), /const mine = Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'/)
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
@@ -12721,7 +12721,7 @@ export function run(test) {
      */
     assert.match(
       flat,
-      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
+      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
       'the reconnect button is shown on a live link'
     )
   })

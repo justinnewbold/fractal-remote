@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-14",
+    "day": "14 November 2026",
+    "version": "1.90.60",
+    "lines": [
+      {
+        "text": "On an iPhone or iPad on iOS 27, Apple’s Bluetooth screen shows no Done button, so the app now says how to close it: swipe that screen down.",
+        "only": "ios"
+      }
+    ]
+  },
+  {
     "date": "2026-11-13",
     "day": "13 November 2026",
     "version": "1.90.53",

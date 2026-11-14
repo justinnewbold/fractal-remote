@@ -6011,7 +6011,7 @@ export function run(test) {
      * and says so under itself whenever it will (test 'Reconnect' holds the
      * words).
      */
-    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/)
+    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/)
     /*
      * AND ON AN IPHONE WHOSE ADAPTER HAS GONE IT DOES NOT WAIT FIFTEEN
      * SECONDS. A customer's report of 13 November 2026: back at the rig
@@ -6024,7 +6024,7 @@ export function run(test) {
      * under the note.
      */
     assert.match(waking, /const gone = useAdapterGone\(\)/)
-    const early = "{gone && link.link !== 'connected' ? ( <Press label=\"Look for the adapter again\" sub={APPLE_SCREEN_OPENS} tone=\"live\" style={{ alignSelf: 'stretch' }} onPress={() => lookForAdapterAgain(onRetry)} /> ) : null}"
+    const early = "{gone && link.link !== 'connected' ? ( <Press label=\"Look for the adapter again\" sub={appleScreenOpens()} tone=\"live\" style={{ alignSelf: 'stretch' }} onPress={() => lookForAdapterAgain(onRetry)} /> ) : null}"
     assert.ok(waking.includes(early), 'the waiting screen does not offer Look for the adapter again at once on an iPhone whose adapter has gone')
     assert.ok(waking.indexOf(early) < waking.indexOf('<Press label="Use the computer instead"'), 'the way to get the adapter back is under the way back to the computer')
     assert.ok(waking.indexOf(early) < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the early Look again waits for the note')
@@ -6043,7 +6043,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useAdapterGone, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, appleScreenOpens, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useAdapterGone, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -6082,7 +6082,7 @@ export function run(test) {
      * server: with no signal at a gig it answers nobody, and the row, the
      * page and its Stop button would vanish with Bluetooth still on.
      */
-    assert.match(one, /import \{ APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks \} from '\.\.\/lib\/bluetooth'/)
+    assert.match(one, /import \{ appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks \} from '\.\.\/lib\/bluetooth'/)
     assert.match(one, /const bluetoothAllowed = useBluetoothAllowed\(\)/)
     assert.ok(!/bluetoothAllowed = [^\n;]*account/.test(code('mobile/src/screens/Settings.js')), 'the row asks the account server whose phone this is')
     /* Every way onto the row and the page goes through that gate: no other mention of either. */
@@ -7979,27 +7979,30 @@ export function run(test) {
     /*
      * EVERY BUTTON THAT OPENS APPLE'S SCREEN SAYS SO UNDER ITSELF, and what to
      * do there, in the page's own words, once (lib/bluetooth
-     * APPLE_SCREEN_OPENS): tapped before Connected, Done leaves the adapter
+     * appleScreenOpens): tapped before Connected, Done leaves the adapter
      * unconnected, and nothing on the waiting screen said the screen would
      * open at all.
      */
     const ble = src('mobile/src/lib/bluetooth.js')
-    assert.match(ble, /export const APPLE_SCREEN_OPENS = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done\.'/)
+    assert.match(ble, /export const APPLE_SCREEN_OPENS_DONE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done\.'/)
+    /* Where Apple's screen has no Done (iOS 27, appleDoneGone), the same button says how that screen is closed. */
+    assert.match(ble, /export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then swipe that screen down\.'/)
+    assert.match(ble, /export const appleScreenOpens = \(\) => \(doneGoneHere\(\) \? APPLE_SCREEN_OPENS_SWIPE : APPLE_SCREEN_OPENS_DONE\)/)
     assert.match(ble, /export const opensApplesScreen = \(\) => adapterAway\(\) && !pairScreenShut\(\)/)
     assert.match(ble, /export async function lookForAdapterAgain\(poke\) \{\n  if \(opensApplesScreen\(\)\) \{/, 'the tap and the words under the button ask different questions')
     /* The page: Reconnect while it is on and away, over Stop, and never while Apple's screen is kept shut. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const reconnect = \(\) => lookForAdapterAgain\(probeNow\)/)
-    assert.match(page, /\{away \? <Press label="Reconnect" tone="live" sub=\{APPLE_SCREEN_OPENS\} onPress=\{reconnect\} \/> : null\}/)
+    assert.match(page, /\{away \? <Press label="Reconnect" tone="live" sub=\{appleScreenOpens\(\)\} onPress=\{reconnect\} \/> : null\}/)
     const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
     assert.ok(onHalf.indexOf('label="Reconnect"') > 0 && onHalf.indexOf('label="Reconnect"') < onHalf.indexOf('label={stop.label}'), 'Reconnect is not over Stop while it is on')
     /* And the hint over it says to check the adapter first: a power bank that switched itself off leaves Apple's screen empty on every tap. */
     assert.match(page, /: away \? `The adapter isn’t connected to this \$\{deviceNoun\(\)\} now\. Check it is plugged in and lit, then tap Reconnect\.`/)
     /* The waiting screen's Look again, and Phone & computer's. */
     const waking = flat('mobile/App.js').slice(flat('mobile/App.js').indexOf('function Waking('))
-    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/, 'the waiting screen’s Look again opens Apple’s screen without saying so')
+    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/, 'the waiting screen’s Look again opens Apple’s screen without saying so')
     /* On a USB cable, the unit, looked for again by the link's poke alone (opensApplesScreen is false for one, held below). */
-    assert.match(flat('mobile/src/screens/Settings.js'), /label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\}/, 'Phone & computer’s Look again opens Apple’s screen without saying so')
+    assert.match(flat('mobile/src/screens/Settings.js'), /label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\}/, 'Phone & computer’s Look again opens Apple’s screen without saying so')
     /* Never for a watch tap or anything that is not a hand on a screen: link.js's own poke is untouched. */
     assert.match(flat('mobile/src/lib/link.js'), /export function probeNow\(\) \{ \/\*[^*]*\*\/ if \(bluetoothOn\(\) && !isDemo\(\)\) return pokeBluetooth\(\)/)
     assert.ok(!/findAdapters|lookForAdapterAgain/.test(code('mobile/src/lib/link.js') + code('mobile/src/lib/bleLink.js')), 'the link opens Apple’s screen by itself')
@@ -8264,7 +8267,7 @@ export function run(test) {
     /* And no hint on the page sends anybody to the screen while it is shut, nor the red "nothing connected" line under the note that says why. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const shut = pairScreenShut\(\)/)
-    assert.match(page, /: shut \? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\. Connect uses an adapter that is already connected to this \$\{deviceNoun\(\)\}\.` : ios \? 'In Apple’s screen, tap your adapter/, 'an iPad on iOS 27 is told its adapter must be connected to the iPhone')
+    assert.match(page, /: shut \? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\. Connect uses an adapter that is already connected to this \$\{deviceNoun\(\)\}\.` : ios \? appleScreenHint\(\) :/, 'an iPad on iOS 27 is told its adapter must be connected to the iPhone')
     assert.match(page, /\{shut \? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect\.' : away \?/)
     /* Reconnect, which opens Apple's screen, is never offered while it is shut. */
     assert.match(page, /const away = b\.on && b\.phase === 'connecting' && ios && !shut && adapterAway\(\)/)
@@ -8285,12 +8288,98 @@ export function run(test) {
       : read('mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift')
     assert.match(added, /if #available\(iOS 27, \*\) \{\s*central\.tableView = UITableView\(frame: \.zero, style: \.grouped\)\s*central\.viewDidLoad\(\)\s*\}/, 'Apple’s screen is not handed a table and its search started, as Apple’s workaround does')
     assert.match(added, /Function\("pairsOnIOS27"\) \{ \(\) -> Bool in\s*true\s*\}/, 'the build does not tell the JavaScript it has the fix')
-    assert.match(waiting ? patch : added, /central\.viewDidLoad\(\)\s*\+?\s*\}\s*\n\s*let sheet = UINavigationController\(rootViewController: central\)/, 'the workaround is not between making the screen and putting it in its sheet')
+    /* Its sheet holds it directly, or (docs/pending/bluetooth-done, once applied) inside the host whose bar carries Done. */
+    assert.match(waiting ? patch : added, /central\.viewDidLoad\(\)\s*\+?\s*\}\s*\n(?:\s*let host = PairingHost\(central\)\n)?\s*let sheet = UINavigationController\(rootViewController: (?:central|host)\)/, 'the workaround is not between making the screen and putting it in its sheet')
     if (waiting) assert.match(read('docs/pending/README.md'), /^\| `ble-pair-ios27\.patch` \|.*\| \*\*iPhone only\*\*/m, 'the README does not say the fix moves only the iPhone')
     /* And duo.yml builds the next build: every waiting patch applied, so the device build compiles this one on Xcode 27.1. */
     const duo = read('.github/workflows/duo.yml')
     const applied = duo.indexOf('name: The waiting patches, applied')
     assert.ok(applied > 0 && applied < duo.indexOf('name: Install'), 'duo.yml builds main without the patches the next build carries')
+  })
+
+  /*
+   * APPLE'S BLUETOOTH SCREEN HAS NO DONE BUTTON ON iOS 27. "Can we have this
+   * screen have a button that says done? All it says now is edit, which is
+   * confusing to people." (Justin, 14 November 2026, a picture of the sheet on
+   * iOS 27.2.1.) The build has always put a Done on that screen's bar, and
+   * every sentence said "then Done"; Apple's screen takes the button off
+   * again there. Two halves: the words, by update, say to swipe that screen
+   * down wherever the Done is gone; and the Done itself comes back in the
+   * next build, from a patch that draws Apple's screen inside a screen whose
+   * bar is the app's own.
+   */
+  test('on iOS 27 the app says to swipe Apple’s screen down, and its Done comes back in a build that draws that screen under its own bar', async () => {
+    const cases = [
+      ['iOS 18', { version: 18 }, false],
+      ['iOS 26.4', { version: '26.4' }, false],
+      ['iOS 27.2.1, every copy out today', { version: '27.2.1', extra: { pairsOnIOS27: () => true } }, true],
+      ['iOS 27.0, a build with no word on it', { version: 27 }, true],
+      ['iOS 27.2.1, a build that says its Done is its own', { version: '27.2.1', extra: { pairsOnIOS27: () => true, pairHasDone: () => true } }, false],
+      ['iOS 27, a build that answers something else', { version: 27, extra: { pairHasDone: () => 'yes' } }, true],
+      ['iOS 27, a build that throws when asked', { version: 27, extra: { pairHasDone: () => { throw new Error('no') } } }, true],
+      ['iOS 28', { version: '28.0' }, true],
+      ['Android 16', { os: 'android', version: 36 }, false]
+    ]
+    for (const [what, { os = 'ios', version, extra = {} }, gone] of cases) {
+      const asked = []
+      const said = extra.pairHasDone
+      const mod = { supported: () => true, devices: () => [], authorization: () => 'allowedAlways', pair: async () => {}, addListener: () => ({ remove() {} }), ...extra }
+      if (said) mod.pairHasDone = () => (asked.push('pairHasDone'), said())
+      const bench = await bluetoothOnABench({ os, version, mod })
+      try {
+        const b = bench.ble
+        /* Loading the file asks the build nothing: a customer Bluetooth is not open to is never drawn these words, and their build is never asked. */
+        assert.deepEqual(asked, [], `${what}: the build was asked about its Done before any words were drawn`)
+        assert.equal(b.appleScreenOpens(), gone ? b.APPLE_SCREEN_OPENS_SWIPE : b.APPLE_SCREEN_OPENS_DONE, `${what}: the buttons that open Apple’s screen say the wrong way out of it`)
+        assert.equal(b.appleScreenHint(), gone ? b.APPLE_SCREEN_HINT_SWIPE : b.APPLE_SCREEN_HINT_DONE, `${what}: the hint under Connect says the wrong way out of Apple’s screen`)
+        /* Asked once on an iPhone, however often the words are drawn, and never on Android. */
+        b.appleScreenOpens()
+        b.appleScreenHint()
+        assert.deepEqual(asked, said && os === 'ios' ? ['pairHasDone'] : [], `${what}: the build was asked more than once, or on a phone that has no such screen`)
+        /* The rule itself, asked directly. */
+        assert.equal(b.appleDoneGone({ os, version, hasDone: extra.pairHasDone ? (() => { try { return extra.pairHasDone() === true } catch { return false } })() : false }), gone, what)
+        /* Neither wording promises what the other is for. */
+        assert.ok(!/Done/.test(b.APPLE_SCREEN_OPENS_SWIPE) && !/Done/.test(b.APPLE_SCREEN_HINT_SWIPE), 'the words for a screen with no Done name a Done')
+        assert.match(b.APPLE_SCREEN_HINT_SWIPE, /wait until it says Connected, then swipe that screen down to close it\./)
+        assert.match(b.APPLE_SCREEN_HINT_DONE, /wait until it says Connected, then tap Done\./)
+      } finally {
+        bench.done()
+      }
+    }
+    /* The page's hint is the one for this device, never a sentence of its own. */
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? appleScreenHint\(\) : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds/)
+    assert.ok(!/then tap Done/.test(src('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page says "then tap Done" in words of its own')
+
+    /*
+     * The native half waits for a build. Read from the patch while it waits,
+     * and from the module once it is applied and the patch deleted in the
+     * same change (docs/pending/README.md).
+     */
+    const waiting = existsSync(new URL('../docs/pending/bluetooth-done.patch', import.meta.url))
+    const patch = waiting ? src('docs/pending/bluetooth-done.patch') : ''
+    const added = waiting
+      ? patch.split('\n').filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
+      : src('mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift')
+    assert.match(added, /Function\("pairHasDone"\) \{ \(\) -> Bool in\s*true\s*\}/, 'the build does not tell the JavaScript its Done is there')
+    /* Apple's screen is a child of a screen of the app's own, whose bar Apple's code never writes on. */
+    assert.match(added, /final class PairingHost: UIViewController \{/)
+    assert.match(added, /addChild\(central\)[\s\S]*?view\.addSubview\(central\.view\)[\s\S]*?central\.didMove\(toParent: self\)/, 'Apple’s screen is not put inside the host as a child')
+    assert.match(added, /let host = PairingHost\(central\)\s*let sheet = UINavigationController\(rootViewController: host\)/, 'the sheet does not hold the host')
+    /* Done on the right, closing the sheet; and while the list is edited, one Done, on the left, that ends the editing. */
+    assert.match(added, /navigationItem\.rightBarButtonItem = UIBarButtonItem\(systemItem: \.done, primaryAction: UIAction \{ \[weak self\] _ in\s*self\?\.close\(\)\s*\}\)/, 'there is no Done on the right that closes the sheet')
+    assert.match(added, /if central\.isEditing \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.done,[\s\S]*?navigationItem\.rightBarButtonItem = nil\s*\} else \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.edit,/, 'while the list is edited there are two Dones, or no Edit when it is not')
+    /* Compiled only where Apple's screen exists: the simulator has none. */
+    assert.match(added, /#if !targetEnvironment\(simulator\)\s*\/\*[\s\S]*?\*\/\s*final class PairingHost/)
+    /* The Done that Apple's screen wiped is no longer put on Apple's own bar. */
+    if (waiting) assert.match(patch, /^-\s*central\.navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.done, primaryAction: done\)$/m)
+    else assert.ok(!/central\.navigationItem\.leftBarButtonItem/.test(added), 'a Done is still put on Apple’s own bar, which Apple’s screen wipes')
+    if (waiting) {
+      const readme = src('docs/pending/README.md')
+      assert.match(readme, /^\| `bluetooth-done\.patch` \|.*\| \*\*iPhone only\*\*/m, 'the README does not say the Done moves only the iPhone')
+      assert.match(readme, /\*\*bluetooth-done\.patch, and why it waits\.\*\*/)
+    }
+    /* The guide says both ways, since a web page cannot know which screen its reader has. */
+    assert.match(src('public/bluetooth-guide.html').replace(/\s+/g, ' '), /wait until it says Connected, then tap Done\. If that screen shows no Done button, swipe it down to close it\./)
   })
 
   test('on iOS 27, Connect leaves Apple’s screen shut in a build without the fix, and opens it in one with it', async () => {
@@ -16601,7 +16690,7 @@ export function run(test) {
     assert.match(page, /setBluetoothUnit\(answeredKey, \{ carry: true \}\)/)
     /* An iPhone's row for an adapter not connected to it opens Apple's screen, and says so under itself. */
     assert.match(page, /const viaApple = ios && d\.offline && !isCable\(d\) && !shut/)
-    assert.match(page, /sub=\{viaApple \? APPLE_SCREEN_OPENS : undefined\}/)
+    assert.match(page, /sub=\{viaApple \? appleScreenOpens\(\) : undefined\}/)
     assert.match(page, /onPress=\{\(\) => \(viaApple \? connectInApplesScreen\(\) : choose\(d\)\)\}/)
     /* Another unit's adapter in the list says whose it is. */
     assert.match(page, /\$\{whose \? ` · \$\{adapterOfUnit\(whose\)\}` : ''\}/)

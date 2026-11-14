@@ -22,9 +22,11 @@ those must still pass the other.
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
 | `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, opens quick edit on a held pedal where the iPhone offers it (its channels in one row over a list of the block's knobs, the Digital Crown turning the one picked; "Hold a pedal for quick edit." under the pedals), and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `bluetooth-done.patch` | Puts a Done button on Apple's Bluetooth MIDI Devices screen, top right, where iOS 27 shows only Edit: Apple's screen is drawn inside a screen whose bar is the app's own (`PairingHost`), so Apple's code can no longer take the button off. Edit stays, on the left. The build says so (`pairHasDone`), and the app's words go back from "swipe that screen down" to "then Done". | **iPhone only** (android and the watch do not move) |
 
-Two patches are waiting: phone-turns (10 November 2026), whose section is
-next, and watch-page-order (11 November 2026), whose section follows it.
+Three patches are waiting: phone-turns (10 November 2026), whose section is
+next, watch-page-order (11 November 2026), whose section follows it, and
+bluetooth-done (14 November 2026), whose section is after that.
 Before them, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
@@ -686,6 +688,68 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
 
 No store-version key: the rows wait for the watch's own word, and only a
 watch from the new build says it.
+
+**bluetooth-done.patch, and why it waits.** Justin, 14 November 2026, with a
+picture of Apple's Bluetooth MIDI Devices sheet on his iPhone (iOS 27.2.1),
+its title and Edit and nothing else: "Can we have this screen have a button
+that says done? All it says now is edit, which is confusing to people." The
+build has always put a Done on that screen (the left of its bar, since
+Apple's own spinner pushes a Done off the right), and every sentence in the
+app said "then Done". On iOS 27 Apple's screen takes the button off again:
+by the time the sheet is up, Edit is the only button on it. Swiping the
+sheet down closes it, as it always has, and nothing said so.
+
+**It is in two halves, and the words are already merged.** By update, on
+iOS 27 and later the app says "then swipe that screen down" wherever it
+said "then Done" (lib/bluetooth `appleDoneGone`, `APPLE_SCREEN_OPENS`,
+`APPLE_SCREEN_HINT`), until a build answers `pairHasDone`. The button
+itself is native, so it waits here.
+
+**What the patch does.** Apple's screen is no longer the screen the sheet
+shows: it is a child of one of the app's own (`PairingHost`, in
+FractalBleMidiModule.swift), whose bar Apple's code never sees and so
+cannot write on. That bar has Apple's own title, Done on the right (it
+closes the sheet, as the old Done did, and settles the same promise once),
+and Edit on the left, which does what Apple's Edit does (the list's own
+editing: how an adapter is forgotten there). While the list is being
+edited there is one button, Done on the left, which ends the editing:
+never two Dones that do different things. Every button is the system's
+own, so each is in the phone's language as Apple's screen is. Apple's iOS
+27 workaround (the table handed over first, `viewDidLoad` run once by
+hand) is untouched and still comes before the host is made. And
+`pairHasDone` answers true, which is what turns the words back to "then
+Done" in that build.
+
+**What it moves, and what that costs.** FractalBleMidiModule.swift only.
+`npm run fingerprint` with the patch applied moves the ios line and
+nothing else (checked 14 November 2026: android and the watch read the
+same with and without it), so it could be built for the iPhone alone, but
+it rides the next build pair, which is both phones together.
+
+**What was checked for free.** The suite runs with the patch applied
+(web.yml's second pass). duo.yml, started by hand on the branch, applies
+every waiting patch and builds the app for a real iPhone with Xcode 27.1,
+which is the one compile this Swift gets before a build: the screen is
+device code only, since the simulator has no Bluetooth MIDI screen at all.
+
+**What only a real iPhone can show**, most likely first:
+
+- That Done is there, top right, on iOS 27, and stays while the screen
+  looks for adapters and after one connects. This is the point of it.
+- That the list is not hidden under the bar, and scrolls under it as it
+  did (the host tells the bar which list it sits over).
+- That Edit on the left still lets an adapter be forgotten. Apple's own
+  Edit is taken to be the list's standard editing, which is what ours
+  starts; if Apple's does something of its own, ours shows Edit and
+  changes nothing, and the way that has always worked is still there
+  (the iPhone's Settings → Bluetooth, ⓘ, Forget This Device).
+- The same on an iPad, where the sheet is a card in the middle of the
+  screen, and on iOS 26, where the old Done still showed.
+
+**What goes with it in the build pull request, outside the patch:**
+nothing has to. The words follow the build by themselves. Say in that
+build's What's new (`only: 'ios'`) that Apple's Bluetooth screen has a
+Done button again.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it

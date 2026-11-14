@@ -1519,6 +1519,20 @@ asked for once, when he says the list is whole. Waiting there now:
   build. The Swift has never been compiled; watch.yml, started by hand
   with "Apply the watch patches waiting in docs/pending first", compiles
   and tests it for free.
+- **bluetooth-done** (14 November 2026): a Done button on Apple's
+  Bluetooth MIDI Devices screen. "Can we have this screen have a button
+  that says done? All it says now is edit, which is confusing to people"
+  (his picture, iOS 27.2.1). The build has always put a Done there; on
+  iOS 27 Apple's screen takes it off again, so the sheet showed only Edit
+  while every sentence in the app said "then Done". The patch draws
+  Apple's screen inside a screen whose bar is the app's own (`PairingHost`
+  in FractalBleMidiModule.swift): Done top right, Edit on the left. It
+  moves the ios line only. THE WORDS WENT OUT BY UPDATE (1.90.60): on iOS
+  27 and later, in a build that does not answer `pairHasDone`, the app
+  says "then swipe that screen down" (lib/bluetooth `appleDoneGone`),
+  which has always closed that sheet. Never write "then Done" about
+  Apple's screen in a sentence of its own again: use `APPLE_SCREEN_OPENS`
+  or `APPLE_SCREEN_HINT`, which know.
 - **Not in, by his word:** a second screen and home-screen widgets ("go
   ahead and skip the second screen and the widgets for now").
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the

@@ -1836,7 +1836,7 @@ export function cableAway() {
  * now: an iPhone whose adapter has gone, with that screen not kept shut.
  * Never for a unit on a USB cable, which is never away in that sense
  * (adapterAway), so for one the tap is the link's poke alone. The
- * button says so under itself when it does (APPLE_SCREEN_OPENS), so the one
+ * button says so under itself when it does (appleScreenOpens), so the one
  * question decides both what the tap does and what the button says.
  */
 export const opensApplesScreen = () => adapterAway() && !pairScreenShut()
@@ -1849,9 +1849,59 @@ export const opensApplesScreen = () => adapterAway() && !pairScreenShut()
  * for before Done: tapped early, Done leaves it unconnected, and the waiting
  * screen's note said only to check Bluetooth was on. The page's own words,
  * once, so the three buttons say the same thing. iPhone only, so Apple's name
- * is never on another phone.
+ * is never on another phone. Two wordings, since on iOS 27 Apple's screen
+ * has no Done (appleDoneGone, below): which one this device reads is
+ * appleScreenOpens().
  */
-export const APPLE_SCREEN_OPENS = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done.'
+export const APPLE_SCREEN_OPENS_DONE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done.'
+export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then swipe that screen down.'
+/* The hint under Connect on the Bluetooth page, the same two ways. */
+export const APPLE_SCREEN_HINT_DONE = 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
+export const APPLE_SCREEN_HINT_SWIPE = 'In Apple’s screen, tap your adapter, wait until it says Connected, then swipe that screen down to close it.'
+
+/**
+ * WHETHER APPLE'S BLUETOOTH SCREEN SHOWS NO DONE BUTTON ON THIS DEVICE.
+ *
+ * "Can we have this screen have a button that says done? All it says now is
+ * edit, which is confusing to people." (Justin, 14 November 2026, a picture
+ * of Apple's Bluetooth MIDI Devices sheet on iOS 27.2.1: its title, Edit,
+ * and nothing else.) The build has always put a Done on that screen's bar,
+ * and every sentence here said "then Done"; on iOS 27 Apple's screen takes
+ * the button off again, so the words sent people to a button that is not
+ * there. Swiping the sheet down has always closed it.
+ *
+ * So on iOS 27 and later the words say to swipe it down, until a build that
+ * draws Apple's screen under a bar of its own (docs/pending/bluetooth-done,
+ * the module's pairHasDone) says its Done is there. Pure, so a test can ask
+ * it every way; the answer for this device is read below, when it is needed.
+ */
+export const appleDoneGone = ({ os, version, hasDone = false } = {}) => os === 'ios' && hasDone !== true && parseInt(String(version), 10) >= 27
+
+/*
+ * THIS DEVICE'S ANSWER, ASKED WHEN THE WORDS ARE DRAWN AND NEVER BEFORE. The
+ * build is asked nothing about Bluetooth until somebody is on a screen that
+ * sends them to Apple's (a customer Bluetooth is not open to never is: two
+ * tests hold that the module is asked nothing for them), so this is not read
+ * when the file loads. Kept once it is known: neither the iOS version nor
+ * the build changes while the app runs.
+ */
+let doneGone
+const doneGoneHere = () => {
+  if (doneGone !== undefined) return doneGone
+  if (Platform.OS !== 'ios') return (doneGone = false)
+  /* A build that cannot say, or throws saying, has no Done of its own. */
+  let hasDone = false
+  try {
+    hasDone = ble()?.pairHasDone?.() === true
+  } catch {
+    hasDone = false
+  }
+  return (doneGone = appleDoneGone({ os: Platform.OS, version: Platform.Version, hasDone }))
+}
+/** What a button that opens Apple's screen says under itself, on this device. */
+export const appleScreenOpens = () => (doneGoneHere() ? APPLE_SCREEN_OPENS_SWIPE : APPLE_SCREEN_OPENS_DONE)
+/** The hint under Connect on the Bluetooth page, on this device. */
+export const appleScreenHint = () => (doneGoneHere() ? APPLE_SCREEN_HINT_SWIPE : APPLE_SCREEN_HINT_DONE)
 
 /**
  * LOOK AGAIN, BY HAND: the Bluetooth page's Reconnect and the waiting

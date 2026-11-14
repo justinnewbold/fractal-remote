@@ -8,7 +8,6 @@ import { APP_VERSION } from '../lib/version'
 import { BLE_UNITS, WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
-  APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   adapterAway,
   adapterBeforeCable,
@@ -17,6 +16,8 @@ import {
   adapterKeptFor,
   adapterName,
   adaptersForOtherUnits,
+  appleScreenHint,
+  appleScreenOpens,
   cableAway,
   cablesConnectTakes,
   cablesHere,
@@ -841,7 +842,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                       : `If this stays here, check the ${deviceNoun()}’s Bluetooth is on, and that the adapter is plugged in and lit.`}
               </Hint>
             ) : null}
-            {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
+            {away ? <Press label="Reconnect" tone="live" sub={appleScreenOpens()} onPress={reconnect} /> : null}
             {/* Another adapter the phone can see while the one kept is not there: said by name, and used only on the tap (otherAdapterNow, switchAdapter). */}
             {otherWords ? (
               <View style={{ gap: space.sm }}>
@@ -910,7 +911,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                         : shut
                           ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                           : ios
-                            ? 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
+                            ? appleScreenHint()
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
@@ -949,7 +950,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 <Press
                   key={d.id}
                   label={`${d.name || 'An adapter with no name'}${detail ? ` · ${detail}` : ''}${whose ? ` · ${adapterOfUnit(whose)}` : ''}`}
-                  sub={viaApple ? APPLE_SCREEN_OPENS : undefined}
+                  sub={viaApple ? appleScreenOpens() : undefined}
                   height={52}
                   disabled={!canStart}
                   onPress={() => (viaApple ? connectInApplesScreen() : choose(d))}
