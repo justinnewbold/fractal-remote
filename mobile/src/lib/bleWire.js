@@ -395,13 +395,17 @@ const refusedBy = (code) => failure(`The unit refused it: ${rejectedWords(code)}
 const SKIPPED = Symbol('skipped')
 
 /*
- * The rests round the end of a capture's upload, in milliseconds, from the
- * recording of Axe-Edit III (lib/nam-install): it said "it is over" 124 ms
- * after the unit answered the last message, and read its list of slots 335
- * ms after that. `again` is the app's own: a slot that reads empty is asked
- * once more, this long after.
+ * The rests in a capture's upload, in milliseconds, from the recording of
+ * Axe-Edit III (lib/nam-install): it sent the opening message 28 ms after
+ * the unit answered "a transfer is under way" (`begin`; everywhere else
+ * between the 130 it sent the next within 2 ms of an answer), said "it is
+ * over" 124 ms after the unit answered the last message (`over`), and read
+ * its list of slots 335 ms after that (`read`), with nothing sent in
+ * between. `again` is the app's own: a slot that reads empty is asked once
+ * more, this long after. The computer's are the same numbers (ForgeFX
+ * namCaptures.ts NAM_REST).
  */
-export const NAM_REST = Object.freeze({ over: 150, read: 350, again: 1000 })
+export const NAM_REST = Object.freeze({ begin: 30, over: 150, read: 350, again: 1000 })
 
 const realClock = {
   now: () => Date.now(),
@@ -973,8 +977,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       return
     }
-    /* Edit's, while Play holds the line (editWaits): Play's own never wait here. */
-    if (edits(waiting[0])) {
+    /*
+     * Edit's, while Play holds the line (editWaits): Play's own never wait
+     * here. NOR DOES A CAPTURE'S OWN while it holds everything else: its
+     * slot reads are asked the way Edit asks (namSlotHead), and a Play
+     * request asked during the upload is held by the capture, so the Play
+     * run it opened cannot end. The slot's read back then waited out Play's
+     * whole limit, ten seconds of nothing sent after "it is over" where
+     * Axe-Edit left a third of a second (found in review, 14 November 2026,
+     * before it went out).
+     */
+    if (edits(waiting[0]) && !(captureBusy && waiting[0].opts.capture === true)) {
       const wait = editWaits()
       if (wait > 0) {
         if (editTimer !== null) time.clearTimeout(editTimer)
@@ -3034,9 +3047,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const busy = (f) => (namBusyAnswer(f, model) ? true : undefined)
     return captureRun({ list: true, frames: [on, off, ...frames] }, async () => {
       const started = time.now()
+      /* Held from the slot's own read on, as the computer holds it: nothing goes between that read and the start either. captureRun lets go however this ends. */
+      captureBusy = true
       const before = await namSlotHead(slot)
       if (!before.empty && body?.replace !== true) throw failure(`Capture slot ${said} already holds “${before.name}”. Nothing was sent.`, 409, { holds: before.name })
-      captureBusy = true
       const told = await ex(on, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that a capture is coming', priority: 'write', capture: true })
       if (rejected(told)) throw failure(`The ${spec.name} refused the start of the transfer (${rejectedWords(told.rejected)}). Nothing was sent.`, 502)
       if (!told) {
@@ -3053,49 +3067,76 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       let sent = 0
       /* When the unit answered the last message: how long the send took, without the rests and the read-back after it. */
       let took = null
+      /*
+       * How long the unit took to answer the closing message, in ms, for the
+       * log. In the recording his unit took 272 over USB, against under 3 on
+       * average and never over 28 for the messages before it: most likely
+       * the time it spent filing the capture (not proven). One answered as
+       * fast as the rest was likely not filed, which is worth knowing when a
+       * slot reads back empty.
+       */
+      let closing = null
+      let after = null
+      const readBack = () => namSlotHead(slot).catch(() => null)
       try {
-        for (const f of frames) {
-          const a = await ex(f, {
-            match: (g) => {
-              const x = namAnswer(g, model)
-              return x && x.fn === f[5] ? x : undefined
-            },
-            ms: WAIT.namChunk,
-            what: `message ${sent + 1} of ${frames.length} of a capture`,
-            priority: 'write',
-            capture: true
-          })
-          const again = sent > 0 ? ` Slot ${said} may hold part of a capture now: send it again to the same slot.` : ' Nothing was kept.'
-          if (!a) throw failure(`The ${spec.name} stopped answering after ${sent} of ${frames.length} messages.${again}`, 504, { partial: sent > 0, slot })
-          if (!a.ok) throw failure(`The ${spec.name} refused the capture at message ${sent + 1} of ${frames.length} (it answered ${a.code}).${again}`, 502, { partial: sent > 0, slot })
-          sent++
-          if (sent === frames.length) took = time.now()
-          try {
-            if (typeof onProgress === 'function') onProgress(sent, frames.length)
-          } catch {
-            // A screen that has gone cannot stop the upload it started.
+        try {
+          /* The moment Axe-Edit left between the unit's answer and the opening message. */
+          await pause(NAM_REST.begin)
+          for (const f of frames) {
+            const asked = time.now()
+            const again = sent > 0 ? ` Slot ${said} may hold part of a capture now: send it again to the same slot.` : ' Nothing was kept.'
+            const a = await ex(f, {
+              match: (g) => {
+                const x = namAnswer(g, model)
+                return x && x.fn === f[5] ? x : undefined
+              },
+              ms: WAIT.namChunk,
+              what: `message ${sent + 1} of ${frames.length} of a capture`,
+              priority: 'write',
+              capture: true
+            }).catch((err) => {
+              /* The line went part-way (the adapter dropped, Bluetooth was switched off): said like a unit that stopped answering, with the slot it may have left half-filled. */
+              throw failure(`${err?.message || 'The connection was lost.'} That was after ${sent} of ${frames.length} messages.${again}`, err?.status || 503, { partial: sent > 0, slot })
+            })
+            if (!a) throw failure(`The ${spec.name} stopped answering after ${sent} of ${frames.length} messages.${again}`, 504, { partial: sent > 0, slot })
+            if (!a.ok) throw failure(`The ${spec.name} refused the capture at message ${sent + 1} of ${frames.length} (it answered ${a.code}).${again}`, 502, { partial: sent > 0, slot })
+            sent++
+            if (sent === frames.length) {
+              took = time.now()
+              closing = took - asked
+            }
+            try {
+              if (typeof onProgress === 'function') onProgress(sent, frames.length)
+            } catch {
+              // A screen that has gone cannot stop the upload it started.
+            }
           }
+        } finally {
+          /* "It is over", whether it went or not, as Axe-Edit says it after the last message, and after the moment Axe-Edit left first. */
+          await pause(NAM_REST.over)
+          await ex(off, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that the capture is over', priority: 'write', capture: true }).catch(() => null)
         }
+        /*
+         * The slot read back, after the rest Axe-Edit took before it read
+         * its list (a third of a second, with nothing sent in it). STILL
+         * HELD: the first thing the unit hears after "it is over" is the
+         * slot's question, as it was Axe-Edit's, and what was asked
+         * meanwhile goes after that.
+         */
+        await pause(NAM_REST.read)
+        after = await readBack()
       } finally {
-        /* "It is over", whether it went or not, as Axe-Edit says it after the last message, and after the moment Axe-Edit left first. */
-        await pause(NAM_REST.over)
-        await ex(off, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that the capture is over', priority: 'write', capture: true }).catch(() => null)
         captureBusy = false
         /* What was asked meanwhile goes now. */
         pump()
       }
       /*
-       * The slot read back, after the rest Axe-Edit took before it read its
-       * list (a third of a second). A slot that still says <EMPTY>, or says
-       * nothing (a unit still filing it is as likely to do one as the
-       * other), is asked once more a second later before it is called not
-       * kept: nothing is known of how long a unit takes to file a capture
-       * that arrived over half a minute. What the first read said stands if
-       * the second says nothing.
+       * A slot that still says <EMPTY>, or says nothing (a unit still
+       * filing it is as likely to do one as the other), is asked once more
+       * a second later before it is called not kept: nothing is known of
+       * how long a unit takes to file a capture that arrived over half a
+       * minute. What the first read said stands if the second says nothing.
        */
-      const readBack = () => namSlotHead(slot).catch(() => null)
-      await pause(NAM_REST.read)
-      let after = await readBack()
       if (!after || after.empty) {
         await pause(NAM_REST.again)
         after = (await readBack()) || after
@@ -3106,7 +3147,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* How long the name is goes in the log with its check byte: the recording proves the byte for a name that fills all 31 places, and a shorter one is the same rule on trust. */
       let named = 0
       while (named < 31 && ((words[named >> 2] >>> ((named & 3) * 8)) & 0xff) !== 0) named++
-      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name ${named} characters, check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}: ${reads}`)
+      /* A name filled out with spaces to all 31 places (namRecord's `fill`) is said so: which shape a unit kept is the thing to know. */
+      const filledOut = named === 31 && ((words[7] >>> 16) & 0xff) === 0x20
+      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name ${named} characters${filledOut ? ' (filled out with spaces)' : ''}, check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}, the closing message answered in ${closing ?? '?'} ms: ${reads}`)
       return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
     })
   }

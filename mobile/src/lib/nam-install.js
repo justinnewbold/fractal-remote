@@ -113,6 +113,8 @@ export const NAM_TYPE_SETTING = 0
 export const NAM_EMPTY = '<EMPTY>'
 
 const FIELD = 32
+/** How many characters a capture's name has room for: the 32nd place is its check byte. */
+export const NAM_NAME_PLACES = FIELD - 1
 const NAN_BITS = 0x7fc00000
 
 /** The text fields of a record's head, in order, each 32 bytes. */
@@ -148,6 +150,16 @@ export const namCheck = (bytes) => {
  * loaded; `said` is what the app knows the capture by where the file does
  * not say: name, by, make, model, gearType, toneType. An A2 capture only, with its two networks the
  * sizes an A2's are: anything else is refused rather than guessed at.
+ *
+ * `said.fill` FILLS THE NAME OUT TO ALL 31 PLACES WITH SPACES. The one
+ * capture seen kept by a unit had a name that filled them (31 characters
+ * and the check byte); for a shorter name the check byte's place and rule
+ * are the same on trust. A name filled out is that proven shape whatever
+ * the rule for a short one is, so the card sends a short-named capture as
+ * it is first (as Axe-Edit must, since the unit lists short names with no
+ * spaces after them) and, only if the unit does not keep it, once more
+ * filled out. `name` in what comes back is the name without the spaces,
+ * and `filled` says whether any were added.
  */
 export function namRecord(text, said = {}) {
   const got = namNetworks(text)
@@ -177,6 +189,15 @@ export function namRecord(text, said = {}) {
   const head = []
   for (const key of NAM_FIELDS) head.push(...field(texts[key]))
   if (!head[0]) return { ok: false, why: 'This capture has no name to file it under.' }
+  let filled = false
+  if (said.fill === true) {
+    for (let i = 0; i < FIELD - 1; i++) {
+      if (head[i] === 0) {
+        head[i] = 0x20
+        filled = true
+      }
+    }
+  }
   /* The name's check byte, as Axe-Edit sends it: without it the unit took every message and filed the slot as empty. */
   head[FIELD - 1] = namCheck(head)
   /* The seventh line of text: noughts, as Axe-Edit sent it. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
@@ -198,7 +219,7 @@ export function namRecord(text, said = {}) {
     }
   }
   for (let i = 0; i < NAM_TAIL_NANS; i++) words[at++] = NAN_BITS
-  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD - 1).filter(Boolean)) }
+  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD - 1).filter(Boolean)).replace(/ +$/, ''), filled }
 }
 
 /** Every word of a record XORed together: what the 0x56 message carries. */
@@ -246,10 +267,11 @@ export function namSlotQuery(model, slot) {
 const HEAD_LEN_AT = 19
 const HEAD_AT = 21
 
+/* A field's text as the unit says it, without the spaces a name filled out (namRecord's `fill`) ends in. */
 const textAt = (bytes, at) => {
   let s = ''
   for (let i = at; i < at + FIELD && bytes[i]; i++) s += String.fromCharCode(bytes[i])
-  return s
+  return s.replace(/ +$/, '')
 }
 const floatAt = (bytes, at) => bitsFloat((bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16) | (bytes[at + 3] << 24)) >>> 0)
 
