@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { FIND_FROM, SETTINGS_HEAD, choiceSaid, choicesFound, settingKind, settingValue } from '../lib/editSettings'
+import { choiceSaid, choicesFound, FIND_FROM, SETTING_LIST_TALL, SETTING_TALL, settingKind, SETTINGS_HEAD, settingValue } from '../lib/editSettings'
 import Note from './Note'
 import Press from './Press'
 import Sheet from './Sheet'
@@ -49,7 +49,7 @@ export default function BlockSettings({ settings, choosing = null, disabled = fa
                   <View key={o.value} style={{ flex: 1 }}>
                     <Press
                       label={o.label}
-                      height={TAP}
+                      height={SETTING_TALL}
                       tone="signal"
                       on={o.value === at}
                       disabled={disabled}
@@ -68,6 +68,7 @@ export default function BlockSettings({ settings, choosing = null, disabled = fa
             key={s.id}
             label={s.name}
             sub={`${choiceSaid(s, at)} ▾`}
+            height={SETTING_LIST_TALL}
             disabled={disabled}
             accessibilityLabel={`${s.name}: ${choiceSaid(s, at)}. Opens a list.`}
             onPress={() => {
