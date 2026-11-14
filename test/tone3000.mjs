@@ -439,7 +439,14 @@ export function run(test) {
       } catch {
         continue
       }
-      assert.ok(!/tone3000/i.test(src), `${p} reaches TONE3000`)
+      /*
+       * Play's own file holds one way in and nothing of TONE3000's: the door
+       * in a held NAM block's pop-up (components/Tone3000Quick, test/
+       * tone3000-quick.mjs), by its three names. No client, no card, no word
+       * of its own.
+       */
+      if (p === 'mobile/src/screens/Stage.js') src = src.replace(/\b(Tone3000Door|Tone3000InPop|useTone3000Door)\b|'\.\.\/components\/Tone3000Quick'/g, '')
+      assert.ok(!/tone3000|t3k/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), `${p} reaches TONE3000`)
     }
     /* Nothing of the unit's in the client or its bindings: no wire, no device, no Bluetooth. */
     for (const src of [here, read('mobile/src/lib/tone3000.js')]) {

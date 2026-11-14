@@ -73,7 +73,7 @@ let lastFrame = null
  * (components/Knob), and the sheet must not scroll under it. False, which
  * every other sheet is, and it scrolls as it always did.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, still = false, children }) {
+export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, still = false, scrollKey = undefined, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -198,6 +198,8 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
 
             {head ? <View style={{ gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm }}>{head}</View> : null}
             <ScrollView
+              /* Another page in the same sheet (`scrollKey`) starts at its own top: left where the last one was scrolled to, a short page under a long one came up blank. */
+              key={scrollKey}
               contentContainerStyle={{ padding: space.lg, paddingTop: head ? space.sm : space.lg, gap: space.md }}
               keyboardShouldPersistTaps="handled"
               scrollEnabled={!still}

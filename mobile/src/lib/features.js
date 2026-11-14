@@ -336,6 +336,29 @@ export const EDIT_SETTINGS_FOR_EVERYONE = false
 export const NAM_PICKER_FOR_EVERYONE = false
 
 /**
+ * TONE3000 FROM A HELD NAM BLOCK (lib/tone3000Quick, components/
+ * Tone3000Quick): "I want it in the app in a few places. One is if they hold
+ * a nam block it pulls up the quick edit screen on top of it have it say
+ * tone 3000 where they can click on it and browse tones preview them and
+ * then download them directly and then it'll take them back to that screen
+ * so it's very streamlined." (Justin, 14 November 2026.)
+ *
+ * On Play, a hold on NAM 1 or NAM 2 of an Axe-Fx III opens its pop-up with
+ * a TONE3000 button over the knobs. It opens TONE3000's list in the same
+ * pop-up; Preview plays a capture in that block, and Get puts it on the
+ * unit, plays it in that block and gives the pop-up back to its knobs.
+ *
+ * His account first, as every new thing is: sending a capture answers his
+ * account alone on the device's own wire as well (lib/bluetooth
+ * `captures`), and NO CAPTURE SENT FROM THE APP HAS BEEN KEPT BY HIS UNIT
+ * YET. Off, it is his account only (lib/useTone3000Quick) and everybody
+ * else's pop-up is the one it was. Opening it to customers is a store
+ * version (new for them, and TONE3000 has to sign the screen off), never
+ * this switch alone.
+ */
+export const TONE3000_QUICK_FOR_EVERYONE = false
+
+/**
  * SAVING FROM THE APP OVER BLUETOOTH OR THE UNIT'S USB CABLE (lib/bleSave,
  * bleWire storePreset): Edit's Save, and Play's, write the unit's edit
  * buffer over the preset it is on, with no computer.

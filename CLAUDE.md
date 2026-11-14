@@ -1206,6 +1206,55 @@ the capture on the unit, which is the hard half.
     now); a file that read as A2 and that the packer refuses kept its
     buttons under two lines that contradicted each other; nothing on the
     view said a preview stays in its slot.
+  - *FROM A HELD NAM BLOCK, ON PLAY (1.90.67, HIS ACCOUNT ONLY).* "I want
+    it in the app in a few places. One is if they hold a nam block it pulls
+    up the quick edit screen on top of it have it say tone 3000 where they
+    can click on it and browse tones preview them and then download them
+    directly and then it'll take them back to that screen so it's very
+    streamlined." (14 November 2026, with a picture of NAM 2's quick edit.
+    The other places are his to name; none is built.) This is also where
+    TONE3000 wants an app's way in: "associated with adding a tone to a
+    signal block".
+    - *What it is.* Hold NAM 1 or NAM 2 on Play: over the knobs, a button,
+      TONE3000 ("Browse captures, preview them, and get one for NAM 2"). A
+      tap puts TONE3000's list in the knobs' place IN THE SAME POP-UP (its
+      title and its way out stay; the channels at its foot are put away
+      while the list is up), with "‹ Back to NAM 2’s knobs" over it.
+      **Preview** puts the capture on the unit and plays it in THAT block,
+      and the page stays. **Get** does the same and gives the pop-up back
+      to the knobs, with what the block said it is playing over them. A
+      capture already on the unit has Play it in NAM 2 and Use it and go
+      back. The page is the Developer page's own (components/Tone3000Test
+      with `block`, `held`, `onDone`); what each button says it does is
+      lib/tone3000Words, for the place it is in.
+    - *Get goes back only when the block has NAMED what it is playing.* A
+      slot the unit calls empty, a pick it refused and one that never came
+      back leave the page up with the reason on it.
+    - *Where.* lib/tone3000Quick: a block filed as NAM whose effect id is
+      one of the capture tools' two, in the pop-up that has the knobs. The
+      pop-up with the channels alone is word for word what it was, and so
+      is every other account's: the switch is
+      `TONE3000_QUICK_FOR_EVERYONE` in features.js, false
+      (lib/useTone3000Quick). Play's own file holds the door's three names
+      (components/Tone3000Quick) and nothing else of TONE3000's; a test
+      holds that.
+    - *Two readers and a skeptic each went through it first.* Fixed, each
+      with a test seen to fail without it (18): a send that landed after
+      the page had gone (the pop-up closed, a preset changed on the unit)
+      was forgotten, so the capture was offered again and took a second
+      slot (it is written down before anything asks whether the page is
+      still up); the way back to the knobs waits while a capture is going;
+      Get said it always goes back (it says "once NAM 2 is playing it"
+      now); the wrong button said Sending; two Backs one over the other
+      (the tone's says "Back to the list" there); Sign out is not drawn in
+      the pop-up; and the sheet's two pages each start at their own top
+      (Sheet `scrollKey`).
+    - NOT TRIED ON A PHONE: the list and its search box inside the
+      pop-up's sheet, TONE3000's own page coming up over that sheet (a
+      sheet over a sheet), and a half-minute send with the pop-up open.
+      OPENING IT TO CUSTOMERS IS A STORE VERSION (new for them, the capture
+      tools answer his account alone on the wire, and TONE3000 signs the
+      screen off first), never the switch alone.
   - *A PREVIEW THAT DOES NOT FILL A SLOT IS NOT BUILT, AND CANNOT BE FROM
     WHAT IS KNOWN.* Ten previews are ten slots. Reusing one slot means
     writing over a capture or clearing one, and the only upload ever
@@ -1262,9 +1311,9 @@ the capture on the unit, which is the hard half.
   - *NOT YET, and wanted before TONE3000 signs off anything a customer
     sees* (their Design Requirements, tone3000.com/api): their Favorites,
     Created and Downloaded tabs; their logo in place of their name in type
-    (they give the files); the way in from where a capture is chosen
-    (Edit's NAM block, beside the capture picker) rather than a Developer
-    page; the tone's picture and TONE3000's mark on the NAM block that
+    (they give the files); the way in from Edit's NAM block, beside the
+    capture picker (the one from Play's hold pop-up is built, above, his
+    account); the tone's picture and TONE3000's mark on the NAM block that
     plays a capture sent from it; and the splash's wording, and the plain
     sign-in in place of the pick-a-tone page, agreed with them.
   - NOTHING OF IT HAS RUN ON A PHONE OR AGAINST TONE3000: the tests run it

@@ -11623,9 +11623,9 @@ export function run(test) {
     assert.equal(nam.NAM_NAME_PLACES, 31)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
     /* A send that stopped part-way is offered again with its name as it was going. */
-    assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, fill: err\?\.filled === true, play, line \} \}\)\)/)
+    assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, fill: err\?\.filled === true, play, back, line \} \}\)\)/)
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */
-    assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.fill, halted\.play\)\} \/> : null\}/)
+    assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.fill, halted\.play, halted\.back === true\)\} \/> : null\}/)
     assert.match(card, /\{halted && !mine \? <Note>\{halted\.line\}<\/Note> : null\}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) \} else \{/)

@@ -550,7 +550,7 @@ export function run(test) {
     assert.match(card, /const returned = async \(url\) => \{ if \(!readCallback\(url\) \|\| taken\.has\(url\)\) return taken\.add\(url\) if \(!alive\.current\) return setPage\(null\)/)
     /* Remembered for as long as the app runs, not for one drawing of the card: the phone hands the link that started the app back at every drawing, and finishing an old return throws away the sign-in under way. */
     assert.equal((card.match(/const taken = new Set\(\)/g) || []).length, 1)
-    assert.ok(card.indexOf('const taken = new Set()') < card.indexOf('export default function Tone3000Test()'), 'the returns taken up are forgotten with each drawing of the card')
+    assert.ok(card.indexOf('const taken = new Set()') < card.indexOf('export default function Tone3000Test('), 'the returns taken up are forgotten with each drawing of the card')
     assert.ok(!/lastReturn/.test(card))
     assert.match(card, /const stop = onTone3000Return\(returned\)/)
     /* A return that could not be finished on the device may be handed over again, and says so on the card. */
