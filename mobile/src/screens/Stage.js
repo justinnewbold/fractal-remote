@@ -36,6 +36,7 @@ import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
 import PopKnobs from '../components/PopKnobs'
+import { Tone3000Door, Tone3000InPop, useTone3000Door } from '../components/Tone3000Quick'
 import StageView from '../components/StageView'
 import { setlistOn } from '../lib/songNotes'
 import {
@@ -2563,6 +2564,43 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   useEffect(() => {
     if (!withKnobs) setHeld(false)
   }, [withKnobs])
+  /*
+   * A NAM BLOCK'S POP-UP OFFERS ITS CAPTURES' LIBRARY (components/
+   * Tone3000Quick, which says where and for whom): a button over the knobs,
+   * and the library's page in the knobs' place, in this same sheet, until a
+   * capture is got or Back is tapped. `came` is what the block said it is
+   * playing when a Get handed the sheet back. Both are the held block's:
+   * another block, or the pop-up closed, starts with neither. Only in the
+   * pop-up that has the knobs ("the quick edit screen"): the one with the
+   * channels alone is word for word what it was.
+   */
+  const library = useTone3000Door(withKnobs ? block : null)
+  const [browsing, setBrowsing] = useState(false)
+  const [came, setCame] = useState('')
+  useEffect(() => {
+    setBrowsing(false)
+    setCame('')
+  }, [library.id])
+  if (browsing && library.offered) {
+    return (
+      <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Captures" tall scrollKey="library">
+        <Tone3000InPop
+          id={library.id}
+          n={library.n}
+          onBack={(line) => {
+            setCame(line)
+            setBrowsing(false)
+          }}
+        />
+      </Sheet>
+    )
+  }
+  const libraryDoor = library.offered ? (
+    <>
+      <Tone3000Door n={library.n} onPress={() => setBrowsing(true)} />
+      {came ? <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 20 }}>{came}</Text> : null}
+    </>
+  ) : null
   if (withKnobs) {
     return (
       <Sheet
@@ -2589,6 +2627,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
           </View>
         }
       >
+        {libraryDoor}
         <PopKnobs block={block} onScrollLock={setHeld} />
         <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
           {block?.channel ? `${name} is on channel ${block.channel}. ` : ''}
