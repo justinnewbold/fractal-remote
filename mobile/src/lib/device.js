@@ -22,6 +22,7 @@ import { fixRead } from './param-fixes'
 import { demoDevice } from './demo'
 import { demoRequest } from './demoWire'
 import { bluetoothWire } from './bleSwitch'
+import { namRecordTravels } from './nam-travel'
 import { linkIsDown } from './tapGate'
 import { notSentError } from './relay-rules'
 import { logDebug } from './debugLog'
@@ -607,26 +608,55 @@ export const readerBlocks = () => readerAsks('/reader/blocks')
 export const describeBlockHere = (eid) => readerAsks(`/reader/blocks/${eid}`)
 
 /*
- * AN AXE-FX III'S NAM CAPTURES, FROM THIS DEVICE (lib/nam-install, bleWire
- * namEmptySlot, namInstall, namPick): the first empty slot, a capture's
- * record sent into a slot, a NAM block pointed at one. Only over the
- * device's own wire (Bluetooth, or the unit's USB cable into it), only on
- * an Axe-Fx III, and only for his account: the wire answers it for nobody
- * else, and never unless the request says it is the captures'.
+ * AN AXE-FX III'S NAM CAPTURES, FROM THIS DEVICE: the first empty slot, a
+ * capture's record sent into a slot, a NAM block pointed at one.
+ *
+ * Over the device's own wire (an adapter, or the unit's USB cable into it)
+ * the device sends the unit's messages itself (lib/nam-install, bleWire
+ * namEmptySlot, namInstall, namPick): only on an Axe-Fx III, and only for
+ * his account, since the wire answers it for nobody else and never unless
+ * the request says it is the captures'.
+ *
+ * THROUGH THE COMPUTER (or the Raspberry Pi) the computer app sends them
+ * (ForgeFX's three /nam routes, from the computer release that carries
+ * them): "Why not over a raspberry pi?" (Justin, 14 November 2026). The
+ * device hands it the packed record (lib/nam-travel) in one message, so
+ * there is no count as it goes, and it is never sent twice (relay-rules
+ * NOT_REPEATABLE). The computer writes a slot only when it reads <EMPTY>:
+ * it has no replace, so `replace` is the wire's alone. An older computer
+ * app is said in words. Only the developer's TONE3000 card calls these
+ * (a test holds that), which is what keeps this his account's.
  */
 const CAPTURING = Object.freeze({ capturing: true })
-export const CAPTURES_NEED_THE_WIRE = 'Sending a capture works through an adapter, or with the Axe-Fx III’s USB cable plugged into this device.'
-const captureAsks = (path, options = {}) => {
-  const ble = demoDevice() || onVp4 ? null : bluetoothWire()
-  if (!ble) return Promise.reject(Object.assign(new Error(CAPTURES_NEED_THE_WIRE), { status: 501 }))
-  return ble.request(path, { ...CAPTURING, ...options })
+/* What is said where there is no unit to send to: the demo, and a VP4. */
+export const CAPTURES_NEED_A_UNIT = 'Sending a capture needs an Axe-Fx III, through a computer, an adapter or its USB cable.'
+export const CAPTURES_NEED_COMPUTER = 'Update the computer app to send a capture through it.'
+export const CAPTURES_ONLY_A_III = 'Only an Axe-Fx III takes captures.'
+/* A computer app from before the routes answers 404 to the read and 403 to the writes; a unit that is not a III, 501. */
+const captureSaid = (err) => {
+  if (err?.status === 404 || (err?.status === 403 && err?.remoteBlocked)) throw Object.assign(new Error(CAPTURES_NEED_COMPUTER), { status: err.status })
+  if (err?.status === 501) throw Object.assign(new Error(CAPTURES_ONLY_A_III), { status: 501 })
+  throw err
 }
+const captureAsks = async (path, onWire = {}, throughComputer = undefined) => {
+  if (demoDevice() || onVp4) throw Object.assign(new Error(CAPTURES_NEED_A_UNIT), { status: 501 })
+  const ble = bluetoothWire()
+  if (ble) return ble.request(path, { ...CAPTURING, ...onWire })
+  return remoteRequest(path, typeof throughComputer === 'function' ? throughComputer() : undefined).catch(captureSaid)
+}
+/** Whether a capture sent now goes through the computer (one message, no count as it goes) and not the device's own wire. */
+export const capturesThroughComputer = () => !demoDevice() && !onVp4 && !bluetoothWire()
 /** The first empty capture slot: { slot, heads: [{ slot, name, empty }] }, slot null where the first 128 are all taken. */
 export const namEmptySlotHere = () => captureAsks('/nam/empty')
-/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken. */
-export const namInstallHere = (slot, words, { replace = false, onProgress } = {}) => captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace }, onProgress })
+/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken, over the device's own wire. */
+export const namInstallHere = (slot, words, { replace = false, onProgress } = {}) =>
+  captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace }, onProgress }, () => {
+    const record = namRecordTravels(words)
+    if (!record) throw new Error('That is not a capture’s record.')
+    return { method: 'POST', body: JSON.stringify({ record }) }
+  })
 /** NAM 1 (206) or NAM 2 (207) pointed at a slot: { block, slot, name }. */
-export const namPickHere = (block, slot) => captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } })
+export const namPickHere = (block, slot) => captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } }, () => ({ method: 'POST', body: JSON.stringify({ slot }) }))
 
 /** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
 export const fcModel = () => remoteRequest('/fc/model')

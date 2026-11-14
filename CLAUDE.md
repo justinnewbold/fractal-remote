@@ -1089,7 +1089,8 @@ what the computer sends for the same edit, and a test holds it there.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
-1.90.58; nothing has been sent to a real unit from the app yet.**
+1.90.58, and through the computer or the Raspberry Pi since 1.90.59;
+nothing has been sent to a real unit from the app yet.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -1186,14 +1187,31 @@ the capture on the unit, which is the hard half.
     only seen for slot 29, so which bytes hold a bigger number is a guess.
     His unit had 31 captures (0 to 28 and 256) and Axe-Edit took the first
     empty one.
-- **The order from here:** his first send from the card; then a capture
-  picker in Edit (the list of all 257, read once and kept, and the same
-  typed write); sending through the computer or the Pi (an engine route, a
-  new pin and a computer release); then the TONE3000 screen where a player
-  meets it, which is a store version (new for customers, and its in-app
-  browser and preview are native). Only an Axe-Fx III has a NAM block. A
-  slot is only ever written when it reads <EMPTY>, unless the player says
-  to replace what is there.
+  - *THROUGH THE COMPUTER OR THE RASPBERRY PI SINCE 1.90.59, the same
+    card, HIS ACCOUNT ONLY.* "But this will only work over Bluetooth or
+    plugged in directly? Why not over a raspberry pi?" (14 November 2026.)
+    The computer app sends Axe-Edit's messages itself from the release that
+    carries ForgeFX 4e6f05b (server/src/namCaptures.ts, three routes:
+    GET /nam/empty, POST /nam/slots/<n>, POST /nam/blocks/<id>/slot). The
+    device packs the record (the one packer) and hands it over in one
+    message (lib/nam-travel), so there is no count as it goes; on USB the
+    unit takes a capture in about a second. THE COMPUTER NEVER REPLACES: it
+    writes a slot only when it reads <EMPTY>, which is why a device may ask
+    for these through the relay (shared/relay-rules `hostAllows`, in step
+    with ForgeFX `remoteAllowed`). lib/device sends by whichever way the
+    device is connected (`captureAsks`); only the Developer card calls it
+    (a test holds that), which is what keeps it his. An older computer app
+    is answered "Update the computer app to send a capture through it.";
+    COMPUTER_NEEDED did not move. namCaptures.ts and nam-install.js ARE
+    CHANGED TOGETHER. NOTHING HAS BEEN SENT TO A REAL UNIT THROUGH THE
+    COMPUTER: his Raspberry Pi is the first check.
+- **The order from here:** his first send from the card (either way); then
+  a capture picker in Edit (the list of all 257, read once and kept, and
+  the same typed write); then the TONE3000 screen where a player meets it,
+  which is a store version (new for customers, and its in-app browser and
+  preview are native). Only an Axe-Fx III has a NAM block. A slot is only
+  ever written when it reads <EMPTY>, unless the player says to replace
+  what is there (over the device's own wire only).
 - **No build for it yet.** A build now would cut every store copy off from
   updates until it is in the stores, and the in-app TONE3000 screen will
   add native pieces of its own, so the build pair waits for the list to be
