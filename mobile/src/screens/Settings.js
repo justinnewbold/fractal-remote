@@ -78,7 +78,7 @@ import SiriHelp from '../components/SiriHelp'
 import WatchPageOrder from '../components/WatchPageOrder'
 import WatchTunerStays from '../components/WatchTunerStays'
 import { useWatchPages } from '../lib/watchPages'
-import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
+import { appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
@@ -1682,11 +1682,11 @@ export default function Settings({
             {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
                 screen first (lib/bluetooth lookForAdapterAgain), and said
                 under the button whenever the tap will open it
-                (APPLE_SCREEN_OPENS), as on the waiting screen. */}
+                (appleScreenOpens), as on the waiting screen. */}
             {link !== 'connected' ? (
               <Press
                 label={throughAdapter ? (cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again') : 'Look for the computer again'}
-                sub={throughAdapter && opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+                sub={throughAdapter && opensApplesScreen() ? appleScreenOpens() : undefined}
                 onPress={throughAdapter ? () => lookForAdapterAgain(onReconnect) : onReconnect}
               />
             ) : null}

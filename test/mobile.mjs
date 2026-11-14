@@ -4249,7 +4249,7 @@ export function run(test) {
     /* And each reason on the list, checked rather than trusted. */
     const flat = (f) => withoutComments(read(f)).replace(/\s+/g, ' ')
     assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'In Apple’s screen, tap your adapter[^']*' : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? appleScreenHint\(\) : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
     assert.match(flat('mobile/src/screens/Settings.js'), /const mine = Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'/)
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
@@ -12721,7 +12721,7 @@ export function run(test) {
      */
     assert.match(
       flat,
-      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
+      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
       'the reconnect button is shown on a live link'
     )
   })
@@ -15273,7 +15273,9 @@ export function run(test) {
     assert.ok(once(own.report), 'the report screen’s back listener is added again after a render')
     assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/, 'Android back on the report screen does not ask back()')
     assert.match(form, /const backNow = useRef\(back\) backNow\.current = back /, 'Android back on the report screen asks a back() from a render ago')
-    assert.match(form, /<Press label="Back" height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back()')
+    /* Back while it is being written (Done there sounds like Send), Done once it has gone: one button, one back() ("Can we have this say done instead of back?", 14 November 2026, of the screen after sending). */
+    assert.match(form, /<Press label=\{sent \? 'Done' : 'Back'\} height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back(), or does not say Done once the report is sent')
+    assert.match(form, /const unsent = !sent && /, 'a report that has been sent still asks before Done leaves')
     assert.match(form, /const back = \(\) => \{ if \(!unsent \|\| busy\) return onBack\?\.\(\) Alert\.alert\('Not sent yet', 'What you wrote has not been sent\. Leave without sending it\?'/, 'back() on the report screen no longer asks before what was written is lost')
     assert.match(form, /import EdgeBack from '\.\.\/components\/EdgeBack'/)
     let root = null

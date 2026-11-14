@@ -3,6 +3,15 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-14",
+      "version": "1.90.60",
+      "lines": [
+        { "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.", "only": "ios" },
+        "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
+        "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had."
+      ]
+    },
+    {
       "date": "2026-11-13",
       "version": "1.90.53",
       "lines": [

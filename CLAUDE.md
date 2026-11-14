@@ -1089,8 +1089,9 @@ what the computer sends for the same edit, and a test holds it there.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
-1.90.58, and through the computer or the Raspberry Pi since 1.90.59;
-nothing has been sent to a real unit from the app yet.**
+1.90.58, and through the computer or the Raspberry Pi since 1.90.59. ONE
+SEND HAS GONE TO HIS UNIT (14 November 2026, over Bluetooth): taken and not
+kept; 1.90.60 carries what was changed for the next.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -1160,8 +1161,33 @@ the capture on the unit, which is the hard half.
     sm57". All 14,017 numbers are the recording's bit for bit, its loudness
     and gain are the two numbers before them, and the thirty-two bytes are
     the file's own `weights_hash`. `namRecord` packs that file to the
-    record Axe-Edit sent, word for word but for the name's 32nd byte, which
-    the unit overwrites. The files are not in the repository.
+    record Axe-Edit sent, word for word, the name's check byte included
+    (below). The files are not in the repository.
+  - *THE FIRST SEND WAS TAKEN AND NOT KEPT, AND THE NAME HAS A CHECK BYTE
+    (14 November 2026).* His first send from the card, over Bluetooth: all
+    130 messages answered "taken", and then "NAM 1 is playing “<EMPTY>”
+    now". The app's record differed from Axe-Edit's by ONE byte, the name's
+    32nd: Axe-Edit sent 0x60, the unit's list answers a NUL there, and the
+    first build took that for the unit's own ending and sent a NUL. 0x60 is
+    the name's other 31 bytes XORed together, so the name field XORs to
+    nought (`namCheck`); `namRecord` sends it since 1.90.60. LIKELY, NOT
+    PROVEN: it is the best reading of the bytes, and it stays "likely"
+    until a send from the app is kept by his unit. The lesson either way:
+    A BYTE AXE-EDIT SENDS IS SENT, even one the unit seems to throw away;
+    "the unit overwrote it" was a guess from one sample.
+  - *The card after that send*: "this whole screen is confusing to me. What
+    am I supposed to be doing?" It now says its steps in order, each
+    capture has ONE button (Send it and play it in NAM 1: fetch, send,
+    point NAM 1 at it), what became of the send and what the block said
+    keep a line each, and a slot that still reads <EMPTY> after a send is
+    said as "took the capture and ... did not keep it" with no Play button
+    (the wire's log says the same, with the check byte it sent). What he
+    hears on TONE3000's page is TONE3000's own demo, never his rig: the
+    card says so.
+  - *I cannot read his phone's log from here* (the read-only door for
+    reports still waits on his key). He pastes a log when one is needed;
+    the [tone3000] lines and "a capture went to slot" say what the unit
+    answered.
   - *THE SENDER IS BUILT (1.90.58), HIS ACCOUNT ONLY: Developer → Testing →
     TONE3000.* A fetched capture has Send to the Axe-Fx III: the phone
     reads the unit's slots from the first up to the first that says
@@ -1176,10 +1202,28 @@ the capture on the unit, which is the hard half.
     half-filled. While it goes the watch asks nothing and any other write
     is refused. Every frame of these shapes is held at the way out
     (`namShaped`, `namAllowed`). The switch is the wire's `captures`
-    option (lib/bluetooth: his account). NOTHING HAS BEEN SENT TO A REAL
-    UNIT FROM THE APP: his first send is the first check, and so is his
-    first pick. Nothing is saved on the unit by it: the preset is saved the
-    usual way.
+    option (lib/bluetooth: his account). His first send (above) was taken
+    and not kept; his first pick was answered, with the slot it asked for.
+    Nothing is saved on the unit by it: the preset is saved the usual way.
+  - *WHILE A CAPTURE GOES, NOTHING ELSE LEAVES THE PHONE* (1.90.60, bleWire
+    `pump`). Axe-Edit sent nothing between "a transfer is under way" and
+    the unit's answer to the last message; the first build let reads
+    through (the rig's half-minute "which preset are you on?" lands inside
+    a half-minute upload nine times in ten). A read asked meanwhile waits
+    and goes after; anything that would change the unit is refused up
+    front (`request`), since a route that reads before it writes would
+    otherwise write half a minute late. Round the end the phone rests as
+    Axe-Edit did (`NAM_REST`), and a slot that reads <EMPTY> is read once
+    more before it is called not kept. THE COMPUTER'S PATH DOES NOT HOLD
+    OTHER REQUESTS YET (ForgeFX queues each of the 130 on its own): that
+    is the next ForgeFX change, with a pin and a computer release.
+  - *One send at a time, whoever draws the card* (`atWork` in the card):
+    a send goes on after the card is left, and the computer refuses no
+    second one. A capture is named by the file's own word where any of it
+    survives as plain ASCII, else TONE3000's name, else "Capture <id>",
+    and never "<EMPTY>". What the card says a send takes is the record's
+    real size (`RECORD_SEND` in lib/nam-file, 83,227 bytes, held to the
+    130 messages by a test), not the old estimate.
   - *The recording is not in the repository* (a creator's capture, and the
     names of Fractal's own). He has it as NAM.mmon. Never ask for his
     Fractal-Bot backup either: it holds Fractal's own captures.
@@ -1519,6 +1563,28 @@ asked for once, when he says the list is whole. Waiting there now:
   build. The Swift has never been compiled; watch.yml, started by hand
   with "Apply the watch patches waiting in docs/pending first", compiles
   and tests it for free.
+- **bluetooth-done** (14 November 2026): a Done button on Apple's
+  Bluetooth MIDI Devices screen. "Can we have this screen have a button
+  that says done? All it says now is edit, which is confusing to people"
+  (his picture, iOS 27.2.1). The build has always put a Done there; on
+  iOS 27 Apple's screen takes it off again, so the sheet showed only Edit
+  while every sentence in the app said "then Done". The patch draws
+  Apple's screen inside a screen whose bar is the app's own (`PairingHost`
+  in FractalBleMidiModule.swift): Done top right (the word, not the
+  system's tick), Edit on the left. It moves the ios line only. THE WORDS WENT OUT BY UPDATE (1.90.60): on iOS
+  26 and later (26, since that is where the system's Done became a tick),
+  in a build that does not answer `pairHasDone`, the app
+  says "then swipe that screen down" (lib/bluetooth `appleDoneGone`),
+  which has always closed that sheet. The line under a button is two lines
+  at most, so that sentence is kept to 88 characters (a test holds it). Never write "then Done" about
+  Apple's screen in a sentence of its own again: use `appleScreenOpens()`
+  or `appleScreenHint()`, which know (and which ask the device only when
+  they are drawn: a customer Bluetooth is not open to is asked nothing).
+  AND A BAR BUTTON THAT MUST SAY A WORD IS NEVER A SYSTEM ITEM: since iOS
+  26 the system's Done, Cancel and Close items are drawn as symbols (a
+  tick, a cross). The patch's Done is a titled action for that reason;
+  its first version was the system item, and the two reviewers of the
+  patch caught it before a build was spent.
 - **Not in, by his word:** a second screen and home-screen widgets ("go
   ahead and skip the second screen and the widgets for now").
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the
@@ -2039,6 +2105,74 @@ page, with every checksum right: it is written down as what it is now, not
 as a refusal. And on an iPhone whose adapter has gone, the waiting screen
 offers Look for the adapter again from the first try that misses it
 (lib/bluetooth `useAdapterGone`), not after fifteen seconds.
+
+**The adapter kept for a unit is not always the adapter it is on today.**
+Justin, 14 November 2026: "For some reason I can't get the aX3 to connect
+over Bluetooth, I restarted the Bluetooth device and I turned Bluetooth on
+and off on my phone, and I forced close the app and restarted it." His log
+said, again and again, "nothing at all has come back from WIDI Master
+Bluetooth since it connected (0 bytes)". The phone kept the WIDI Master for
+the Axe-Fx III from the day before; the Axe-Fx III was on the WIDI Uhost
+that day, and the WIDI Master was powered and connected to the phone, on
+nothing that answered. Six minutes later he reached the WIDI Uhost and the
+unit answered in 47 ms. Nothing in the wire was wrong (checked both ways
+against 1.90.48, the version it last worked on: the same bytes out, and
+every byte in is counted before anything looks at it). What was wrong was
+what the page offered:
+
+- **Zero bytes on a connected adapter means "is this the right adapter?"
+  as much as "check the plugs".** With Bluetooth on, Use a different
+  adapter was drawn only when the adapter was gone; connected and silent,
+  the way to another one was Stop first. Now it is drawn there too
+  (screens/Bluetooth `silentAdapter`), saying "If WIDI Master Bluetooth
+  isn't on your Axe-Fx III" (the adapter first: "If your Axe-Fx III isn't
+  on" read as the unit being switched off), and on an iPhone another
+  adapter connected to it is offered by name, unless it is kept for
+  another unit: that one is in Use a different adapter's list, marked as
+  that unit's (the list is only read; never a search on Android under a
+  live connection). Never for a VP4, which never answers.
+- **Use a different adapter never goes straight back to the one let go
+  of.** Apple's screen closed with the WIDI Master still the only one
+  connected, and the phone chose it again as "the only one here". The pick
+  now leaves it in the list for a tap (bleAdapters `pickAdapter`
+  `letGoOf`, lib/bluetooth `letGoOf`, in memory until an adapter is chosen
+  or another unit picked; a USB cable chosen does not end it) and the page
+  says how to get the other one and how to keep this one after all
+  (`sameAdapterWords`; the note goes when another unit is picked). One he
+  connects in Apple's screen himself is still taken, and "just connected"
+  there means connected now and not before the screen, whatever its ids:
+  CoreMIDI keeps the ids of an adapter it already knows, so "an id that is
+  new" missed the commonest case (the review of this fix found it).
+- **The log says why the phone chose nothing** (`whyNotPicked`): his first
+  two Connects that day ended with an adapter listed and nothing chosen,
+  and nothing said why (the page was on another unit, and the adapter was
+  one kept for the Axe-Fx III).
+- **A throw in the wire's send step is a failed send**, said in the log,
+  and no longer leaves every later request waiting for ever (bleWire
+  `pump`).
+- **A new connection starts as a unit being asked** (bleLink `connected`,
+  from the review of the above). The rig's "missing" or "silent" outlived
+  the connection it was said of, so the page redrew "isn't answering" the
+  moment another adapter came up, with the adapter just left offered in
+  the button's place. It is taken back to "unknown" as the connection is
+  announced; and if that connection's first read fails before it says
+  anything, the old word goes back (`askedOver`), because the rig's own
+  watch reads a unit whole again only when one called missing or silent
+  starts answering. A unit that was answering keeps its word across a
+  drop, so nothing flashes mid-song.
+- **The way to another adapter is on Play too**: the note under the pill
+  has Use a different adapter beside Connect again (which only reconnects
+  to the same adapter), opening the Bluetooth page. After each restart
+  that morning he landed on Play, not on that page.
+- **The few seconds after Apple's screen** (`tookAfterScreen`) never take
+  an adapter kept for another unit: with "just connected" meaning
+  connected now and not before, one that only came online by itself would
+  otherwise be moved to this unit with no tap.
+
+On an iPhone "connected" means CoreMIDI took the port, and "sent" that it
+took the bytes: neither says a byte left the phone or reached a unit. When
+a report shows 0 bytes, ask which adapter is on the unit before anything
+else.
 
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by

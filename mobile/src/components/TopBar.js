@@ -799,6 +799,9 @@ const ofAllBlocks = (s) => s.allBlocks
  * adapter and nothing to switch to, so this note, and the switch back to the
  * computer, stay one tap from the bar.
  */
+/* The Bluetooth page's own button's words (screens/Bluetooth), for the way to it from the pill's note. */
+const DIFFERENT_ADAPTER = 'Use a different adapter'
+
 function Which({ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null }) {
   const adapter = link?.macName || 'the adapter'
   /* A unit on a USB cable: the cable's words (lib/cableWords cableNote), and the same one way back to the computer, named for it. */
@@ -890,6 +893,30 @@ function Which({ link, cable = false, quiet = false, onClose, onReport = null, o
             style={button}
           >
             <Text style={{ color: color.silk, fontSize: font.body }}>{CONNECT_AGAIN}</Text>
+          </Pressable>
+        ) : null}
+        {/*
+          AND THE WAY TO ANOTHER ADAPTER (14 November 2026). A silent unit is
+          as likely on another adapter as on the wrong plugs: his Axe-Fx III
+          was on the WIDI Uhost while the phone kept the WIDI Master, and
+          after each restart he landed here, where Connect again only made a
+          fresh connection to the same wrong one. This opens the Bluetooth
+          page, where Use a different adapter is, only where that page is
+          drawn for this account (App's onBluetoothPage).
+        */}
+        {quiet && onBluetoothPage ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={DIFFERENT_ADAPTER}
+            accessibilityHint="Opens the Bluetooth page, where another adapter is chosen"
+            onPress={() => {
+              tick()
+              fire(`press ${DIFFERENT_ADAPTER}`, () => onBluetoothPage())
+              onClose()
+            }}
+            style={button}
+          >
+            <Text style={{ color: color.silk, fontSize: font.body }}>{DIFFERENT_ADAPTER}</Text>
           </Pressable>
         ) : null}
         {/*

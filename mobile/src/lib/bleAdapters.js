@@ -204,7 +204,7 @@ export function cablesFor(list, { unit = null, units = null, refused = null } = 
  * question is the same; only the answer is left to a tap, under the red
  * FM3 note. A cable is not refused here: it is the unit itself.
  */
-export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null, taken = null } = {}) {
+export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null, taken = null, letGoOf = null } = {}) {
   /* A cable named for another unit than the one picked is listed, never chosen for the player (anotherUnit, above). */
   const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline && !anotherUnit(d, { unit, units }))
   const just = here.filter((d) => fresh.has(d.id))
@@ -219,7 +219,40 @@ export function pickAdapter(list, fresh = new Set(), { unit = null, units = null
    * own choice, and is taken.
    */
   if (pick && !fresh.has(pick.id) && taken?.has?.(pick.id)) return null
+  /*
+   * NOR THE ONE JUST LET GO OF (`letGoOf`, its id: lib/bluetooth's Use a
+   * different adapter). Justin, 14 November 2026: his Axe-Fx III was on the
+   * WIDI Uhost and the phone kept the WIDI Master for it from the day
+   * before. He tapped Use a different adapter, Apple's screen closed with
+   * the WIDI Master still the only one connected, and the phone chose it
+   * again, the very one he had just said was wrong. Listed, for a tap, if it
+   * is wanted after all. One just connected in Apple's screen is his own
+   * choice there, and is taken.
+   */
+  if (pick && !fresh.has(pick.id) && typeof letGoOf === 'string' && pick.id === letGoOf) return null
   return pick
+}
+
+/**
+ * WHY THE PHONE CHOSE NOTHING BY ITSELF, for the log: { why, dev } or null
+ * when it did choose, or nothing is there to choose. Two Connects in his log
+ * of 14 November 2026 ended with an adapter listed and nothing chosen, and
+ * the log did not say why. The same questions pickAdapter asks, in its order.
+ */
+export function whyNotPicked(list, fresh = new Set(), rule = {}) {
+  const { unit = null, units = null, refused = null, taken = null, letGoOf = null } = rule || {}
+  const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline && !anotherUnit(d, { unit, units }))
+  /* Rows listed and none of them one to choose (not connected now, or a cable named for another unit): said, where the log used to say nothing. */
+  if (!here.length) return (Array.isArray(list) ? list : []).some(isAdapter) ? { why: 'nothing listed is connected now and for the unit picked', dev: null } : null
+  if (pickAdapter(list, fresh, rule || {})) return null
+  const just = here.filter((d) => fresh.has(d.id))
+  if (just.length > 1) return { why: `${just.length} were just connected, so the list asks which`, dev: null }
+  if (!just.length && here.length > 1) return { why: `${here.length} are here and none is new, so the list asks which`, dev: null }
+  const one = just.length === 1 ? just[0] : here[0]
+  if (!isCable(one) && typeof refused === 'function' && refused(one.name)) return { why: 'it is not one the app uses with the unit picked', dev: one }
+  if (!fresh.has(one.id) && taken?.has?.(one.id)) return { why: 'it is kept for another unit', dev: one }
+  if (!fresh.has(one.id) && typeof letGoOf === 'string' && one.id === letGoOf) return { why: 'it is the one just let go of', dev: one, letGo: true }
+  return { why: 'nothing here could be chosen', dev: one }
 }
 
 /*

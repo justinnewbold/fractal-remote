@@ -66,10 +66,10 @@ import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo, useDemoUnit } from './src/lib/demo'
 import {
   ALLOW_WORDS,
-  APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   adapterInsteadOfCable,
   allowBluetooth,
+  appleScreenOpens,
   editBuiltFor,
   editOverBluetooth,
   lookForAdapterAgain,
@@ -2754,7 +2754,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
       {gone && link.link !== 'connected' ? (
         <Press
           label="Look for the adapter again"
-          sub={APPLE_SCREEN_OPENS}
+          sub={appleScreenOpens()}
           tone="live"
           style={{ alignSelf: 'stretch' }}
           onPress={() => lookForAdapterAgain(onRetry)}
@@ -2828,14 +2828,14 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               cannot bring it back by itself, and Stop, Connect and the
               screen was three taps mid-set. And said under the button
               whenever the tap will open it (opensApplesScreen,
-              APPLE_SCREEN_OPENS), with what to do there: a screen that
+              appleScreenOpens), with what to do there: a screen that
               pops up unannounced, Done tapped before Connected, and
               nothing connects. */}
           {bluetooth ? (
             gone ? null : (
               <Press
                 label={cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again'}
-                sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+                sub={opensApplesScreen() ? appleScreenOpens() : undefined}
                 onPress={() => lookForAdapterAgain(onRetry)}
               />
             )

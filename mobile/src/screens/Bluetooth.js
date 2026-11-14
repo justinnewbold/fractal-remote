@@ -8,7 +8,6 @@ import { APP_VERSION } from '../lib/version'
 import { BLE_UNITS, WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
-  APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   adapterAway,
   adapterBeforeCable,
@@ -17,6 +16,8 @@ import {
   adapterKeptFor,
   adapterName,
   adaptersForOtherUnits,
+  appleScreenHint,
+  appleScreenOpens,
   cableAway,
   cablesConnectTakes,
   cablesHere,
@@ -606,7 +607,25 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * with the one chosen, as the first time; then the same as another(): the
    * search, never a cable in its place.
    */
-  const offerDifferent = keptAdapter && canStart && (!b.on || notThere || footswitch)
+  /*
+   * AND WHILE THE ADAPTER IS CONNECTED AND THE UNIT SAYS NOTHING THROUGH IT
+   * (`silentAdapter`). Justin, 14 November 2026: his Axe-Fx III was on the
+   * WIDI Uhost, the phone kept the WIDI Master for it from the day before,
+   * and the WIDI Master was powered and connected to the phone, on nothing
+   * that answered. The page said to check the plugs and offered Connect
+   * again, for six minutes; Use a different adapter was only drawn with
+   * Bluetooth off, or with the adapter gone. A connected adapter that hears
+   * nothing is as likely the wrong adapter as the wrong plugs, so the
+   * button is here too, saying which case it is for, and another adapter
+   * the phone can see is offered by name (`other`, below), unless it is
+   * kept for another unit: that one is in Use a different adapter's list,
+   * marked as that unit's, for a tap. (His WIDI Master was on his HeadRush
+   * that day, which the app knows nothing of: the phone cannot tell an
+   * adapter on another maker's gear from one on a Fractal that is off.)
+   * Not for a VP4, which never answers, nor a unit on a USB cable.
+   */
+  const silentAdapter = quiet && keptAdapter && !vp4 && !footswitch
+  const offerDifferent = keptAdapter && canStart && (!b.on || notThere || footswitch || silentAdapter)
   const different = () => {
     if (!canStart || !letGoOfKeptAdapter()) return
     arm()
@@ -623,9 +642,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * that look heard (otherAdapterNow).
    */
   useEffect(() => {
-    if (notThere) glanceForAdapters()
-  }, [notThere, b.adapter?.id])
-  const other = notThere ? otherAdapterNow(listed) : null
+    if (notThere || silentAdapter) glanceForAdapters({ silent: silentAdapter })
+  }, [notThere, silentAdapter, b.adapter?.id])
+  const other = notThere || silentAdapter ? otherAdapterNow(listed) : null
   const otherWords = other ? otherAdapterWords(b.adapter, other) : null
   const takeOther = (d) => {
     if (!canStart) return
@@ -675,7 +694,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     <Press key={d.id} label={CABLE_USE_HERE} sub={d.name || CABLE_ROW} tone={b.on ? 'live' : undefined} height={52} disabled={b.looking} onPress={() => useCable(d)} />
   ))
   const differentButton = offerDifferent ? (
-    <Press label="Use a different adapter" sub={b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
+    <Press label="Use a different adapter" sub={silentAdapter ? `If ${adapterName(b.adapter) || 'this adapter'} isn’t on your ${unitName(b.unit)}` : b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
   ) : null
   /*
    * RECONNECT, ON AN IPHONE WHOSE ADAPTER HAS GONE. An iPhone lets a
@@ -841,8 +860,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                       : `If this stays here, check the ${deviceNoun()}’s Bluetooth is on, and that the adapter is plugged in and lit.`}
               </Hint>
             ) : null}
-            {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
-            {/* Another adapter the phone can see while the one kept is not there: said by name, and used only on the tap (otherAdapterNow, switchAdapter). */}
+            {away ? <Press label="Reconnect" tone="live" sub={appleScreenOpens()} onPress={reconnect} /> : null}
+            {/* Another adapter the phone can see while the one kept is not there, or is connected and silent: said by name, and used only on the tap (otherAdapterNow, switchAdapter). */}
             {otherWords ? (
               <View style={{ gap: space.sm }}>
                 <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{otherWords.line}</Text>
@@ -910,7 +929,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                         : shut
                           ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                           : ios
-                            ? 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
+                            ? appleScreenHint()
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
@@ -949,7 +968,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 <Press
                   key={d.id}
                   label={`${d.name || 'An adapter with no name'}${detail ? ` · ${detail}` : ''}${whose ? ` · ${adapterOfUnit(whose)}` : ''}`}
-                  sub={viaApple ? APPLE_SCREEN_OPENS : undefined}
+                  sub={viaApple ? appleScreenOpens() : undefined}
                   height={52}
                   disabled={!canStart}
                   onPress={() => (viaApple ? connectInApplesScreen() : choose(d))}

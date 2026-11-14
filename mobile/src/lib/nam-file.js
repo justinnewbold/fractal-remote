@@ -120,11 +120,20 @@ export function sendEstimate(numbers) {
   return { bytes, midiBytes, dinSeconds: Math.ceil(midiBytes / DIN_BYTES_A_SECOND) }
 }
 
-/** The line the test card shows for a capture that was read: what is in it, and what sending it would take. */
+/**
+ * WHAT A SEND TO A UNIT REALLY IS, whatever the capture (lib/nam-install,
+ * which a test holds this number to): one record of 16,384 words in 130
+ * messages, 83,227 bytes on the wire. `sendEstimate` above was the guess
+ * made before the packing was known (63 KB, 21 seconds for an A2 capture),
+ * and the card went on saying it after the real send was built.
+ */
+export const RECORD_SEND = Object.freeze({ midiBytes: 83227, dinSeconds: Math.ceil(83227 / DIN_BYTES_A_SECOND) })
+
+/** The line the test card shows for a capture that was read: what is in it, and what sending it takes. */
 export function namSaid(read) {
   if (!read?.ok) return read?.why || 'This capture could not be read.'
   if (!read.a2) return `This is an older kind of capture (${read.architecture}). The Axe-Fx III’s NAM block plays A2 captures only.`
-  const est = sendEstimate(read.numbers)
   const parts = read.networks.length > 1 ? ` (${read.networks.map((x) => x.numbers.toLocaleString('en-US')).join(' and ')})` : ''
-  return `An A2 capture: ${read.numbers.toLocaleString('en-US')} numbers${parts}. About ${Math.round(est.midiBytes / 1024)} KB to send: about ${est.dinSeconds} seconds over a Bluetooth adapter, a second or two by USB. An estimate until installing is built.`
+  /* "About half a minute", not a figure to the second: 27 seconds is a 5-pin MIDI jack's speed, and over Bluetooth each of the 130 messages also waits for its answer. */
+  return `An A2 capture: ${read.numbers.toLocaleString('en-US')} numbers${parts}. About ${Math.round(RECORD_SEND.midiBytes / 1024)} KB to send: about half a minute over a Bluetooth adapter, a second or two by USB.`
 }

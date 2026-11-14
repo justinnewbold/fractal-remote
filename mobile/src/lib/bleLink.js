@@ -21,7 +21,7 @@ import {
   unitName
 } from './bluetooth'
 import { isCable } from './bleAdapters'
-import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit, writeTuner } from './rig'
+import { getState, handleEvent, refreshAll, reset as resetRig, set as setRig, stopWatching, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
@@ -118,6 +118,8 @@ let missed = false
  * every new round: Connect, Disconnect, another unit or adapter.
  */
 let afresh = false
+/* The rig's "missing" or "silent" that a new connection took back to "being asked" (connected), kept until a read has said something in its place. */
+let askedOver = null
 /* Android said Bluetooth was off at the last try (the trouble 'bluetooth-off'): its going is the moment to try again (settingsMoved). */
 let wasOff = false
 /*
@@ -344,6 +346,20 @@ async function connected(e) {
   setSwitch({ on: bluetoothOn(), wire: made })
   const name = adapterName(e) || adapterName(s.adapter) || fallbackName(s.adapter)
   missed = false
+  /*
+   * A NEW CONNECTION HAS NOT BEEN ASKED YET, so the last one's "not
+   * answering" is not its word. The rig's word for the unit was only cleared
+   * for another unit, never for another adapter, a fresh connection or a
+   * drop that came back: the moment the new one was up the page was already
+   * "isn't answering", and since Use a different adapter is drawn there too
+   * (14 November 2026), a tap on Use WIDI Uhost redrew the same red line
+   * with Use WIDI Master where the button just tapped had been. Until the
+   * first read says, the unit is being asked.
+   */
+  if (getState().unit === 'missing' || getState().unit === 'silent') {
+    askedOver = getState().unit
+    setRig({ unit: 'unknown' })
+  }
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
@@ -407,6 +423,16 @@ async function connected(e) {
   } catch {
     // The rig store keeps what it learned, including the failure.
   }
+  /*
+   * A READ THAT FAILED BEFORE IT SAID ANYTHING leaves the word at "being
+   * asked", which nothing ever takes back: the rig's own watch reads a unit
+   * whole again only when one called missing or silent starts answering, so
+   * the bar would say Looking for good, with no Connect again and no Use a
+   * different adapter. The word this connection took over (askedOver) goes
+   * back, on this same wire, and the watch finds it as it always did.
+   */
+  if (wire === made && askedOver && getState().unit === 'unknown') setRig({ unit: askedOver })
+  if (getState().unit !== 'unknown') askedOver = null
   if (wire !== made || !running) return
   /*
    * BACK WITH THE TUNER STILL OPEN. A drop leaves the app's tuner open and
@@ -684,6 +710,7 @@ function settingsMoved(s) {
   return letGoOfWireInTurn((had) => {
     if (unitMoved) {
       resetRig()
+      askedOver = null
       /* Another unit: an owed close, the AM4's 0 or a Gen 3 unit's, is not for it. */
       unitTunerOwed = false
       gen3TunerOwed = null

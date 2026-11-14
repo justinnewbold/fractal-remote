@@ -3777,7 +3777,8 @@ export function run(test) {
     assert.match(body, /A VP4 gets presets and scenes only\./, 'the guide promises a VP4 more than presets and scenes')
 
     /* CONNECTING, in the app's words, where the app has them. */
-    const app = read('mobile/src/screens/Bluetooth.js')
+    /* The page, and the file its words about Apple's screen are in (lib/bluetooth APPLE_SCREEN_HINT_DONE). */
+    const app = read('mobile/src/screens/Bluetooth.js') + read('mobile/src/lib/bluetooth.js')
     for (const said of ['wait until it says Connected, then tap Done', 'Report a Bluetooth problem']) {
       assert.ok(app.includes(said), `the Bluetooth page no longer says "${said}"; read the guide against it again`)
       assert.ok(words.includes(said), `the guide does not say "${said}" as the app does`)

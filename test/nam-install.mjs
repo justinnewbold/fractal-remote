@@ -156,18 +156,30 @@ export function run(test) {
   })
 
   test('a .nam file becomes the record a unit keeps: seven lines of text, four numbers, 14,017 floats in the file’s order, ten "not a number"s', async () => {
-    const { namRecord, NAM_RECORD_WORDS, NAM_HEAD_WORDS, NAM_WEIGHTS, NAM_A2_NETWORKS, NAM_TAIL_NANS } = await lib()
+    const { namRecord, namCheck, NAM_RECORD_WORDS, NAM_HEAD_WORDS, NAM_WEIGHTS, NAM_A2_NETWORKS, NAM_TAIL_NANS } = await lib()
     const { bitsFloat, floatBits } = await sx()
     assert.deepEqual([NAM_HEAD_WORDS, NAM_WEIGHTS, [...NAM_A2_NETWORKS], NAM_TAIL_NANS], [68, 14017, [1871, 12146], 10])
     const rec = namRecord(a2({ metadata: { loudness: -11.75, gain: 0.25 } }), { name: 'Orange Amp: Flat EQ, Gain 6, AK47 and more', by: 'tone3000', make: 'Orange OTR 120 2X12', model: 'Orange OTR 120 2X12', gearType: 'amp_cab', toneType: 'crunch' })
     assert.equal(rec.ok, true)
     assert.equal(rec.words.length, NAM_RECORD_WORDS)
     assert.ok(rec.words.every((w) => Number.isInteger(w) && w >= 0 && w <= 0xffffffff))
-    /* The name: 31 characters and the unit's own ending, as the unit kept the one Axe-Edit sent. */
+    /* The name: 31 characters and its check byte, the 31 XORed together. For this name that is 0x60, which is the byte Axe-Edit sent after the same 31 characters. */
     assert.equal(rec.name, 'Orange Amp: Flat EQ, Gain 6, AK')
     assert.equal(rec.words[0], 0x6e61724f)
     assert.equal(rec.words[1], 0x41206567)
-    assert.equal(rec.words[7] >>> 24, 0, 'the name’s 32nd byte is not the ending')
+    assert.equal(rec.words[7] >>> 24, 0x60, 'the name’s 32nd byte is not the check byte Axe-Edit sent')
+    assert.equal(namCheck([...'Orange Amp: Flat EQ, Gain 6, AK'].map((c) => c.charCodeAt(0))), 0x60)
+    /* A shorter name: the rest of the field is noughts, so the check byte is the name's own characters XORed, still in the 32nd place. */
+    const short = namRecord(a2({ metadata: { name: 'Plexi' } }))
+    assert.equal(short.name, 'Plexi')
+    assert.equal(short.words[7], (0x50 ^ 0x6c ^ 0x65 ^ 0x78 ^ 0x69) << 24)
+    for (const r of [rec, short]) {
+      let x = 0
+      for (let i = 0; i < 8; i++) x ^= (r.words[i] & 0xff) ^ ((r.words[i] >>> 8) & 0xff) ^ ((r.words[i] >>> 16) & 0xff) ^ (r.words[i] >>> 24)
+      assert.equal(x, 0, 'a name’s 32 bytes do not XOR to nought')
+    }
+    /* No other line of text carries one. */
+    assert.equal(rec.words[15] >>> 24, 0)
     assert.equal(rec.words[8], 0x656e6f74, '"tone", where who made it starts')
     /* The spare line, and the thirty-two bytes where the file has no hash of its own: noughts, as Fractal's own captures have them. */
     for (let i = 48; i < 64; i++) assert.equal(rec.words[i], 0, `word ${i}`)
@@ -195,6 +207,23 @@ export function run(test) {
     const own = namRecord(a2({ metadata: { name: '  Café  “Plexi”\n100 ', modeled_by: 'me' } }), { name: 'The app’s name for it', by: 'someone else' })
     assert.equal(own.name, 'Cafe Plexi 100')
     assert.equal(own.words[8], 0x0000656d, '"me", who made it by the file’s own word')
+
+    /*
+     * A name is chosen by what survives. A field keeps plain ASCII only, so
+     * a name in another script kept none of its letters and the capture
+     * could never be sent: now the app's name for it is used, and after
+     * that its number at TONE3000. And never the unit's own word for an
+     * empty slot, which would read as not kept and be written over.
+     */
+    const other = namRecord(a2({ metadata: { name: '日本語のアンプ' } }), { name: 'Plexi from TONE3000', fallback: 'Capture 42' })
+    assert.deepEqual([other.ok, other.name], [true, 'Plexi from TONE3000'])
+    const both = namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ', fallback: 'Capture 42' })
+    assert.deepEqual([both.ok, both.name], [true, 'Capture 42'])
+    assert.match(namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ' }).why, /no name/)
+    const empty = namRecord(a2({ metadata: { name: '<EMPTY>' } }), { name: ' <Empty> ', fallback: 'Capture 7' })
+    assert.deepEqual([empty.ok, empty.name], [true, 'Capture 7'])
+    /* The other lines of text fall back the same way. */
+    assert.equal(namRecord(a2({ metadata: { name: 'Plexi', modeled_by: 'アンプ' } }), { by: 'somebody' }).words[8], 0x656d6f73, '"some", who made it by the app’s word when the file’s keeps no letter')
 
     /* Refused in plain words, never guessed at. */
     assert.match(namRecord(a2({ lite: 1870 }), { name: 'x' }).why, /isn’t the A2 kind/)
@@ -237,7 +266,7 @@ export function run(test) {
 
     /* Who reaches this file: the wire, which sends; the card, which packs and names a slot; and nothing else. */
     assert.match(read('mobile/src/lib/bleWire.js'), /from '\.\/nam-install\.js'/)
-    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
+    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
     for (const f of ['mobile/src/lib/device.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/lib/bluetooth.js']) assert.ok(!/nam-install['.]/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')), `${f} builds capture messages of its own`)
     /* The card sends through the three calls and no other way, and only the wire's own switch opens them: his account's. */
     const card = read('mobile/src/components/Tone3000Test.js')
@@ -246,7 +275,7 @@ export function run(test) {
     assert.match(read('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' '), /captures: \(\) => allUnits === true,/)
     /* And the notes say what the recording taught, without the recording. */
     const doc = read('docs/nam-install.md')
-    for (const said of [/0x54/, /0x55/, /0x56/, /16,384/, /14,017/, /257/, /<EMPTY>/, /not in the repository/, /NAM_PACKING_PROVEN/, /weights_hash/, /word for word/]) assert.match(doc, said)
+    for (const said of [/0x54/, /0x55/, /0x56/, /16,384/, /14,017/, /257/, /<EMPTY>/, /not in the repository/, /NAM_PACKING_PROVEN/, /weights_hash/, /word for word/, /namCheck/, /took the\s+capture and did not keep it/, /likely and not proven/]) assert.match(doc, said)
   })
 
   /*
@@ -305,7 +334,8 @@ export function run(test) {
     /* Who asks: the card, through lib/device's three calls, and nobody else in the app. */
     const device = read('mobile/src/lib/device.js')
     assert.match(device, /import \{ namRecordTravels \} from '\.\/nam-travel'/)
-    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\) return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
+    /* Over the device's own wire, or else through the computer. And a unit the wire takes no captures on is answered in the computer's own words, never the bare "unsupported". */
+    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) \{ return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\)\.catch\(\(err\) => \{ if \(err\?\.unsupported === true\) throw Object\.assign\(new Error\(CAPTURES_ONLY_A_III\), \{ status: 501 \}\) throw err \}\) \} return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
     assert.match(device, /body: JSON\.stringify\(\{ record \}\)/, 'the computer is sent more than the record, or not the record')
     const { readdirSync } = await import('node:fs')
     const walk = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.jsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []))

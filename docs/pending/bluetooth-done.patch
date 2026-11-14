@@ -1,0 +1,172 @@
+diff --git a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
+index 53abccab..8c933a13 100644
+--- a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
++++ b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
+@@ -131,6 +131,13 @@ public class FractalBleMidiModule: Module {
+       true
+     }
+ 
++    /* Whether Apple's screen is shown under a bar of the app's own, with a
++       Done button nothing of Apple's can take off it (PairingHost). Builds
++       before this one have no such function: on iOS 27 their Done is gone. */
++    Function("pairHasDone") { () -> Bool in
++      true
++    }
++
+     /* UIKit, so the main queue. */
+     AsyncFunction("pair") { (promise: Promise) in
+       self.pair(promise)
+@@ -214,12 +221,17 @@ public class FractalBleMidiModule: Module {
+   // MARK: - Pairing
+ 
+   /* On the main queue. Apple's screen lists the Bluetooth MIDI adapters in
+-     range and connects the one tapped. It has no Done button of its own, so it
+-     is put in a navigation bar that has one. Done goes on the LEFT: Apple's
+-     screen puts its own "searching" spinner on the right once it starts
+-     looking, and a Done there would be pushed out by it (AudioKit puts its
+-     Done back after every layout for that reason). Swiping the sheet down is
+-     a way out too. Either way the promise settles, once. */
++     range and connects the one tapped. It has no Done button of its own, and
++     it takes the buttons of its own bar back whenever it likes: a Done put on
++     the right is pushed out by its "searching" spinner (AudioKit puts its
++     Done back after every layout for that reason), and on iOS 27 a Done put
++     on the left is gone by the time the screen is up, with Apple's Edit the
++     only button there ("All it says now is edit, which is confusing to
++     people", Justin, 14 November 2026, iOS 27.2.1). So Apple's screen is
++     shown INSIDE a screen of the app's own (PairingHost), whose bar is not
++     Apple's own navigation item, which is the one its code rewrites: Done on
++     the right, always. Swiping the sheet down is a way out too. However the
++     sheet goes, the promise settles, once. */
+   private func pair(_ promise: Promise) {
+     #if targetEnvironment(simulator)
+     promise.reject("E_SIMULATOR", "Bluetooth MIDI needs a real iPhone or iPad: the simulator has no Bluetooth.")
+@@ -248,21 +260,25 @@ public class FractalBleMidiModule: Module {
+      * (developer.apple.com/forums/thread/850584, FB25301268): hand it a table
+      * first, so loadView never runs, then run viewDidLoad once by hand,
+      * which is what starts the search. A table alone opened the screen and
+-     * never found anything. Done goes on after it, as it always has after
+-     * the screen's setup; nothing here depends on that order.
++     * never found anything. The host takes it after that, with its view
++     * already there, so the host never makes loadView run either.
+      */
+     if #available(iOS 27, *) {
+       central.tableView = UITableView(frame: .zero, style: .grouped)
+       central.viewDidLoad()
+     }
+-    let sheet = UINavigationController(rootViewController: central)
++    let host = PairingHost(central)
++    let sheet = UINavigationController(rootViewController: host)
+     sheet.modalPresentationStyle = .formSheet
+-    let done = UIAction { [weak self, weak sheet] _ in
++    host.close = { [weak self, weak sheet] in
+       sheet?.dismiss(animated: true) {
+         self?.pairingDone()
+       }
+     }
+-    central.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: done)
++    /* And however else the sheet goes (PairingHost.gone): pairingDone shrugs off a second call. */
++    host.gone = { [weak self] in
++      self?.pairingDone()
++    }
+     /* The sheet only holds its delegate weakly, so it is kept here until
+        pairingDone lets it go. */
+     let gone = SheetGone { [weak self] in
+@@ -659,6 +675,98 @@ public class FractalBleMidiModule: Module {
+   }
+ }
+ 
++#if !targetEnvironment(simulator)
++/* Apple's Bluetooth screen, inside a screen whose bar is the app's own.
++   Apple's screen writes on its own bar (its Edit button, a spinner while it
++   looks) and wipes what anybody else put there; shown as a child, its bar is
++   never drawn, and this one's is. Done is on the right, where a sheet's Done
++   goes, and Edit on the left does what Apple's Edit does (the list's own
++   editing, which is how an adapter is forgotten there). While the list is
++   being edited there is one button, Done on the left, which ends the
++   editing: never two Dones that do different things.
++
++   DONE IS A BUTTON WITH THE WORD ON IT, NOT THE SYSTEM'S DONE ITEM. Since
++   iOS 26 the system's Done item is drawn as a tick, and what was asked for
++   is "a button that says done": a tick beside words that say "then Done"
++   would be the same trouble again, after a build was spent on it. A titled
++   action is drawn as its word on every iOS (Apple's own Edit, in his
++   picture, is one). The title is on the action, never on the item beside
++   it: with a primary action the item takes its title from the action. Edit
++   stays the system's own, which is still a word. */
++final class PairingHost: UIViewController {
++  private let central: CABTMIDICentralViewController
++  /* Done: the module dismisses the sheet and settles the promise. */
++  var close: () -> Void = {}
++  /* The sheet has gone, by whatever closed it: the module settles the promise if nothing has yet. */
++  var gone: () -> Void = {}
++
++  init(_ central: CABTMIDICentralViewController) {
++    self.central = central
++    super.init(nibName: nil, bundle: nil)
++  }
++
++  @available(*, unavailable)
++  required init?(coder: NSCoder) {
++    fatalError("PairingHost is made in code")
++  }
++
++  override func viewDidLoad() {
++    super.viewDidLoad()
++    view.backgroundColor = .systemGroupedBackground
++    addChild(central)
++    central.view.frame = view.bounds
++    central.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
++    view.addSubview(central.view)
++    central.didMove(toParent: self)
++    /* The bar follows the list as it scrolls, as it did when the list was the screen. */
++    setContentScrollView(central.tableView)
++    /* Apple's own title, in the phone's language, where it has set one by now. */
++    let said = central.navigationItem.title ?? central.title ?? ""
++    navigationItem.title = said.isEmpty ? "Bluetooth MIDI Devices" : said
++    bar()
++  }
++
++  /* Gone, and not by Done or a swipe (the app under it closing it, say): the
++     promise would never settle, and every Connect after it would be told
++     Apple's screen is already open. Done and a swipe come through here too,
++     and pairingDone takes the first of them. Not when a swipe is let go of
++     half way: the sheet is still up then, and this is not called. */
++  override func viewDidDisappear(_ animated: Bool) {
++    super.viewDidDisappear(animated)
++    if isBeingDismissed || navigationController?.isBeingDismissed == true {
++      gone()
++    }
++  }
++
++  private func bar() {
++    if central.isEditing {
++      navigationItem.leftBarButtonItem = UIBarButtonItem(primaryAction: UIAction(title: "Done") { [weak self] _ in
++        guard let self = self else { return }
++        /* Apple's screen may have ended the editing by itself: then this is the only button, and it is the way out. */
++        if self.central.isEditing {
++          self.edit(false)
++        } else {
++          self.close()
++        }
++      })
++      navigationItem.rightBarButtonItem = nil
++    } else {
++      navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .edit, primaryAction: UIAction { [weak self] _ in
++        self?.edit(true)
++      })
++      navigationItem.rightBarButtonItem = UIBarButtonItem(primaryAction: UIAction(title: "Done") { [weak self] _ in
++        self?.close()
++      })
++    }
++  }
++
++  private func edit(_ on: Bool) {
++    central.setEditing(on, animated: true)
++    bar()
++  }
++}
++#endif
++
+ /* Tells the module when Apple's Bluetooth sheet has been swiped away, which
+    UIKit reports only to the sheet's presentation delegate. A tap on Done
+    dismisses it in code, which UIKit does not report here, so the two never

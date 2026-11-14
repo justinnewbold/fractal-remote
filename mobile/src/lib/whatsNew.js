@@ -10,6 +10,25 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-14",
+    "day": "14 November 2026",
+    "version": "1.90.60",
+    "lines": [
+      {
+        "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.",
+        "only": "ios"
+      },
+      {
+        "text": "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
+        "only": null
+      },
+      {
+        "text": "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-13",
     "day": "13 November 2026",
     "version": "1.90.53",

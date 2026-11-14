@@ -15,9 +15,14 @@
  *
  *   bytes   0..223   seven text fields of 32 bytes, NUL-padded: the name,
  *                    who made it, the gear's make, its model, its kind
- *                    ("amp_cab"), the tone's kind ("crunch"), one spare.
- *                    The unit keeps 31 characters of the name and ends it
- *                    itself (it wrote a NUL over the 32nd byte it was sent).
+ *                    ("amp_cab"), the tone's kind ("crunch"), and a seventh
+ *                    Axe-Edit sent as noughts (some captures on a unit hold
+ *                    "TONE3000" there; the unit keeps both kinds).
+ *                    The name is 31 characters and A CHECK BYTE: its
+ *                    32nd byte is the other 31 XORed together, so the
+ *                    field XORs to nought (`namCheck`). Axe-Edit sent
+ *                    0x60 there, which is exactly that for the name it
+ *                    sent; the unit's own list answers a NUL in its place.
  *   bytes 224..255   the file's own `weights_hash` ("nam-content-v1:" and
  *                    64 hex digits), as its 32 bytes. Fractal's own captures
  *                    have noughts there, so a file with none sends noughts.
@@ -31,9 +36,17 @@
  *
  * THE PACKING IS PROVEN (`NAM_PACKING_PROVEN`, 13 November 2026): the file
  * that was loaded ("Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57") packed by
- * `namRecord` is the record Axe-Edit sent, word for word, but for one byte:
- * the name's 32nd, which Axe-Edit sent and the unit overwrote with its own
- * ending. All 14,017 numbers, the four before them and the thirty-two bytes.
+ * `namRecord` is the record Axe-Edit sent, word for word: all 14,017
+ * numbers, the four before them, the thirty-two bytes and the name's check
+ * byte.
+ *
+ * THAT CHECK BYTE WAS LEFT OUT AT FIRST, AND THE UNIT DID NOT KEEP THE
+ * CAPTURE. The first build took Axe-Edit's 32nd byte for something the unit
+ * had written over and sent a NUL. Justin's first send (14 November 2026,
+ * over Bluetooth) was answered "taken" at every one of the 130 messages, and
+ * the unit then named the slot "<EMPTY>". It is the one byte the app's
+ * record differed by, so the record now carries it; a unit that still says
+ * "<EMPTY>" after a send is said so plainly (the card), never "done".
  *
  * HOW IT GOES TO THE UNIT (all function bytes of the unit's own model):
  *
@@ -121,6 +134,13 @@ const field = (text) => {
 
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? floatBits(x) : NAN_BITS)
 
+/** The name's check byte: its first 31 bytes XORed together, which goes in the 32nd. */
+export const namCheck = (bytes) => {
+  let x = 0
+  for (let i = 0; i < FIELD - 1; i++) x ^= bytes[i] & 0xff
+  return x
+}
+
 /**
  * A .nam file's text as the record a unit keeps: `{ ok: true, words, name }`
  * (16,384 whole numbers, each 32 bits) or `{ ok: false, why }` in plain
@@ -137,9 +157,17 @@ export function namRecord(text, said = {}) {
     return { ok: false, why: 'This capture isn’t the A2 kind the Axe-Fx III’s NAM block plays.' }
   }
   const meta = got.metadata
-  const own = (x, other) => (typeof x === 'string' && x.trim() ? x : other)
+  /*
+   * The file's own word where it has one THAT SURVIVES: a field keeps plain
+   * ASCII only, so a name in another script came out empty and the capture
+   * could never be sent, with the app's own name for it never tried.
+   */
+  const lasts = (x) => typeof x === 'string' && field(x)[0] !== 0
+  const own = (x, other) => (lasts(x) ? x : other)
+  /* And a capture is never filed under the unit's own word for an empty slot: it would read as not kept, and be written over by the next send. */
+  const named = (x) => lasts(x) && String.fromCharCode(...field(x).filter(Boolean)).toUpperCase() !== NAM_EMPTY
   const texts = {
-    name: own(meta.name, said.name),
+    name: [meta.name, said.name, said.fallback].find(named),
     by: own(meta.modeled_by, said.by),
     make: own(meta.gear_make, said.make),
     model: own(meta.gear_model, said.model),
@@ -149,7 +177,9 @@ export function namRecord(text, said = {}) {
   const head = []
   for (const key of NAM_FIELDS) head.push(...field(texts[key]))
   if (!head[0]) return { ok: false, why: 'This capture has no name to file it under.' }
-  /* The spare field: noughts. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
+  /* The name's check byte, as Axe-Edit sends it: without it the unit took every message and filed the slot as empty. */
+  head[FIELD - 1] = namCheck(head)
+  /* The seventh line of text: noughts, as Axe-Edit sent it. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
   while (head.length < 224) head.push(0)
   const hash = /^nam-content-v1:([0-9a-f]{64})$/i.exec(typeof meta.weights_hash === 'string' ? meta.weights_hash.trim() : '')
   for (let i = 0; i < 32; i++) head.push(hash ? parseInt(hash[1].slice(i * 2, i * 2 + 2), 16) : 0)
@@ -168,7 +198,7 @@ export function namRecord(text, said = {}) {
     }
   }
   for (let i = 0; i < NAM_TAIL_NANS; i++) words[at++] = NAN_BITS
-  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD).filter(Boolean)) }
+  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD - 1).filter(Boolean)) }
 }
 
 /** Every word of a record XORed together: what the 0x56 message carries. */
