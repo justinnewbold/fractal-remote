@@ -15,7 +15,7 @@ export const WHATS_NEW = [
     "version": "1.90.60",
     "lines": [
       {
-        "text": "On an iPhone or iPad on iOS 27, Apple’s Bluetooth screen shows no Done button, so the app now says how to close it: swipe that screen down.",
+        "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.",
         "only": "ios"
       },
       {

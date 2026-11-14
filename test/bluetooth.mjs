@@ -1003,6 +1003,7 @@ async function linkOnABench(t) {
       export const handleEvent = () => {}
       export const refreshAll = () => bench.refreshAll()
       export const reset = () => { bench.resets++ }
+      export const set = (patch) => { Object.assign(bench.rig, patch) }
       export const stopWatching = () => {}
       export const watchUnit = () => {}
       /* The phone's tuner put down and its close sent through the wire, as rig writeTuner does (bench.tunerWrites counts them). */
@@ -3864,6 +3865,43 @@ export function run(test) {
       .map(hex)
       .filter((h) => h === READ_TUNER_CC || h === READ_CHANNEL || !h.startsWith('F0'))
 
+  /*
+   * A NEW CONNECTION IS NOT "NOT ANSWERING" BEFORE IT HAS BEEN ASKED (14
+   * November 2026, from the review of Use a different adapter). The rig's
+   * word for the unit outlived the connection it was said of, so the page
+   * redrew its "isn't answering" layout the moment another adapter came up,
+   * with the adapter just left offered where the button just tapped had been.
+   */
+  test('the link: a new connection starts as a unit being asked, never as the last connection’s "not answering"', async () => {
+    for (const word of ['silent', 'missing']) {
+      const t = await onTheLine('am4', {})
+      const b = await linkOnABench(t)
+      try {
+        b.link.startBluetoothLink(() => {})
+        await advance(t.clock, 2000)
+        assert.ok(b.bench.current, 'the link did not connect')
+        /* The unit said nothing through this adapter, and the rig said so. */
+        b.rig.unit = word
+        const back = b.away()
+        b.drop()
+        assert.equal(b.rig.unit, word, 'a drop alone changed the rig’s word')
+        /* What the rig's word was when the new connection asked it to read everything. */
+        let atRead = null
+        b.bench.refreshAll = async () => {
+          atRead = b.rig.unit
+        }
+        back()
+        await advance(t.clock, 3000)
+        assert.equal(atRead, 'unknown', `a new connection began as “${word}”`)
+      } finally {
+        b.done()
+      }
+    }
+    /* A unit that was answering is left as it was: only a "not answering" is taken back. */
+    const src = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(src, /if \(getState\(\)\.unit === 'missing' \|\| getState\(\)\.unit === 'silent'\) setRig\(\{ unit: 'unknown' \}\) noteBluetooth\(\{ phase: 'connected'/)
+  })
+
   test('the link: a 0 owed by a wire let go of is sent by the next connection, after the rig has read everything', async () => {
     const t = await onTheLine('am4', { unitTunerCc: 20 })
     const b = await linkOnABench(t)
@@ -5617,6 +5655,11 @@ export function run(test) {
       assert.equal(heard[1][1].onProgress, count)
       assert.deepEqual(heard[2][1].body, { slot: 30 })
       assert.deepEqual(relay.asked, [], 'a capture went to the computer while the device was on its own wire')
+      /* A unit the wire takes no captures on (an FM3 picked, say) answers "unsupported", which is no sentence: said in the computer's own words. Any other failure comes through as it is, with what it carries. */
+      sw.setSwitch({ on: true, wire: { request: async () => { throw Object.assign(new Error('unsupported'), { unsupported: true }) } } })
+      await assert.rejects(device.namEmptySlotHere(), (e) => e.message === device.CAPTURES_ONLY_A_III && e.status === 501)
+      sw.setSwitch({ on: true, wire: { request: async () => { throw Object.assign(new Error('The Axe-Fx III stopped answering after 6 of 130 messages.'), { status: 504, partial: true, slot: 30 }) } } })
+      await assert.rejects(device.namInstallHere(30, words), (e) => e.status === 504 && e.partial === true && e.slot === 30 && /stopped answering after 6 of 130/.test(e.message))
     } finally {
       done()
     }
@@ -8551,7 +8594,7 @@ export function run(test) {
      * a moment after Done is still taken by the same rule (tookAfterScreen),
      * so the line after the pick waits a few seconds for one.
      */
-    assert.match(ble, /const pick = pickAdapter\(list, fresh, pickRule\(\)\) if \(pick\) chooseAdapter\(pick\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ else \{ afterScreen = \{ before, until: Date\.now\(\) \+ AFTER_SCREEN_MS \} sayWhyNotPicked\(list, fresh\) \} return pick/, 'after Apple’s screen the adapter is not chosen by itself, or nothing says why it was not')
+    assert.match(ble, /const pick = pickAdapter\(list, fresh, pickRule\(\)\) if \(pick\) chooseAdapter\(pick\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ else \{ afterScreen = \{ before, until: Date\.now\(\) \+ AFTER_SCREEN_MS \} \/\*[^*]*\*\/ if \(!saved\.adapter\) sayWhyNotPicked\(list, fresh\) \} return pick/, 'after Apple’s screen the adapter is not chosen by itself, or nothing says why it was not')
     assert.match(ble, /const pick = saved\.adapter \? null : pickAdapter\(now\.devices, new Set\(\), pickRule\(\)\) if \(pick\) chooseAdapter\(pick\)/, 'after an Android search the only adapter is not chosen by itself')
     /* The pick is told what the cable rule is, and for an FM3 the adapters never offered for one: listed, never chosen by themselves. */
     /* And, since 7 November 2026, never another unit's adapter as the only one there (`taken`: each unit keeps its own). */
@@ -10450,6 +10493,18 @@ export function run(test) {
     assert.match(ble, /function Which\(\{ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
     assert.match(ble, /\{quiet \? \( <Pressable accessibilityRole="button" accessibilityLabel=\{CONNECT_AGAIN\}/)
     assert.match(ble, /fire\(`press \$\{CONNECT_AGAIN\}`, \(\) => connectBluetoothAgain\(\)\)/)
+    /*
+     * And the way to another adapter, since 14 November 2026: in the same
+     * state as Connect again (which only reconnects to the same adapter), a
+     * button that opens the Bluetooth page, where Use a different adapter
+     * is. Only where that page is drawn for this account, and it changes
+     * nothing by itself.
+     */
+    assert.match(bar, /const DIFFERENT_ADAPTER = 'Use a different adapter'/)
+    assert.match(ble, /\{quiet && onBluetoothPage \? \( <Pressable accessibilityRole="button" accessibilityLabel=\{DIFFERENT_ADAPTER\} accessibilityHint="Opens the Bluetooth page, where another adapter is chosen" onPress=\{\(\) => \{ tick\(\) fire\(`press \$\{DIFFERENT_ADAPTER\}`, \(\) => onBluetoothPage\(\)\) onClose\(\) \}\}/)
+    assert.ok(!/letGoOfKeptAdapter|forgetAdapter|setBluetooth\(false\)\)[^}]*DIFFERENT_ADAPTER/.test(ble.slice(ble.indexOf('{quiet && onBluetoothPage'), ble.indexOf('{cable && onBluetoothPage'))), 'the pill’s button lets go of the adapter by itself')
+    /* The same words as the page's own button. */
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label="Use a different adapter"/)
     /* Two buttons, each its own element to VoiceOver inside a note that is not one. */
     assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/)
     assert.match(ble, /accessibilityRole="button" accessibilityLabel=\{off\} accessibilityHint=\{`The \$\{deviceNoun\(\)\} goes back to using the computer`\}/)
@@ -11115,7 +11170,7 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false }
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0 }
     const headOf = (slot) => held.get(slot) || empty()
     const said = (b, payload) => t.say(sx.frame(0x10, 0x01, [...b.slice(6, 12), ...payload]))
     const hear = t.unit.hear
@@ -11159,7 +11214,14 @@ export function run(test) {
       const sub = sx.decode14(b[6], b[7])
       const eid = sx.decode14(b[8], b[9])
       const pid = sx.decode14(b[10], b[11])
-      if (sub === 0x88) return said(b, [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(sx.fromSeptets32(b, 12)))])
+      if (sub === 0x88) {
+        /* A unit busy filing a capture may say nothing to a slot's question for a moment (u.quietHeads of them). */
+        if (u.quietHeads > 0) {
+          u.quietHeads--
+          return
+        }
+        return said(b, [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(sx.fromSeptets32(b, 12)))])
+      }
       if (sub === 0x09 && eid === 1 && pid === 114) {
         u.busy.push(sx.bitsFloat(sx.fromSeptets32(b, 12)))
         if (u.quietBusy) return
@@ -11276,7 +11338,7 @@ export function run(test) {
     const kept = await asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } })
     assert.deepEqual([kept.slot, kept.name], [3, 'Mesa Recto Red Modern Classic'])
     assert.deepEqual(u.unkept, [])
-    assert.ok(t.logs.some((l) => /a capture went to slot 004 in [\d.]+ s, 130 messages, its name’s check byte 0x[0-9a-f]{2}: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
+    assert.ok(t.logs.some((l) => /a capture went to slot 004 in [\d.]+ s, 130 messages, its name 29 characters, check byte 0x[0-9a-f]{2}: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
 
     /* The record as the first build sent it, a NUL where the check byte goes: taken at every message, and not kept. */
     const old = rec.words.slice()
@@ -11294,8 +11356,19 @@ export function run(test) {
 
     /* The card: a slot that reads empty after a send is "did not keep it", with no Play button; and a block pointed at an empty slot says so. */
     const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT: [^`]*`\) setSend\(\{ id: m\.id, slot, line: `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\.` \}\) return \}/)
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and the Axe-Fx III says that slot is empty, so there is nothing to hear\.`\)/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT: [^`]*`\) setSend\(\{ id: m\.id, slot, line: `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    /* And a pick that names the slot <EMPTY> takes the send back from "done": its button returns, and the two Play buttons, which could only point at the same empty slot, go. */
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and the Axe-Fx III says that slot is empty, so there is nothing to hear\. Send it once more\.`, \{ done: false \}\)/)
+    assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
+    /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
+    assert.match(card, /let atWork = 0/)
+    assert.match(card, /const mine = \(atWork = Date\.now\(\)\) setBusy\(`send \$\{m\.id\}`\)/)
+    assert.match(card, /\} finally \{ if \(atWork === mine\) atWork = 0 if \(alive\.current\) setBusy\(null\) \} \}/)
+    /* And never for good: a request that never came back does not close the card until the app is restarted. */
+    assert.match(card, /const goingNow = \(\) => atWork !== 0 && Date\.now\(\) - atWork < STILL_GOING_MS/)
+    assert.ok(!/if \(atWork\)/.test(card), 'the card asks the mark itself, which never runs out')
+    /* The one button is not drawn for a file that turned out not to be an A2 capture. */
+    assert.match(card, /\{\(send\?\.id === m\.id && send\.done\) \|\| \(checked\[m\.id\] && !texts\.current\[m\.id\]\) \? null : \(/)
     /* The send's line and the block's line each keep their place: one never writes over the other. */
     assert.match(card, /\{send\?\.id === m\.id \? <Note>\{send\.line\}<\/Note> : null\} \{send\?\.id === m\.id && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
     assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
@@ -11350,10 +11423,24 @@ export function run(test) {
     u.quietBusy = true
     await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 504 && !e.partial && /didn’t answer the start of the transfer\. Nothing was sent\./.test(e.message))
     assert.equal(u.begun.length, 2, 'a capture was begun on a unit that never answered the start')
+    /* It may have taken "a transfer is under way" and only its answer been lost: "it is over" is still said, as Axe-Edit always pairs the two. */
+    assert.deepEqual(u.busy, [1, 0, 1, 0, 1, 0], 'a unit told a transfer is under way was never told it is over')
     /* And it goes when the unit answers again. */
     u.quietBusy = false
     const got = await asks('/nam/slots/3', { method: 'POST', body: { words: rec.words, replace: true } })
     assert.deepEqual([got.slot, got.name], [3, 'Cut Short'])
+    /* A unit that says nothing to the first question after the send (still filing it) is asked once more, and what it says then is the answer. */
+    const slow = record('Slow To File', 4)
+    const said = await asks('/nam/slots/5', {
+      method: 'POST',
+      body: { words: slow.words },
+      onProgress: (sent, of) => {
+        if (sent === of) u.quietHeads = 1
+      }
+    })
+    assert.deepEqual([said.slot, said.name], [5, 'Slow To File'], 'a slot that said nothing once after the send was not asked again')
+    /* And the seconds are the send's own: up to the unit's answer to the last message, without the rests and the read-back after it. */
+    assert.ok(said.seconds >= 0 && said.seconds < 2.5, `the time a send took counts the wait for a slot that said nothing (${said.seconds} s)`)
   })
 
   test('the captures are his account’s alone, an Axe-Fx III’s alone, and only for a request that says it is theirs; and the way out passes nothing else of their shapes', async () => {
@@ -15833,7 +15920,7 @@ export function run(test) {
     /* Connected to a footswitch taken for the adapter (8 November 2026): the way out, under the line that names it. */
     assert.equal(drawnWith(state({ on: true, phase: 'connected' }), false, true, true), true, 'no Use a different adapter under a footswitch')
     /* Named, and "from last time" only when it is: with Bluetooth on it can be one picked a moment ago. */
-    assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{silentAdapter \? `If your \$\{unitName\(b\.unit\)\} isn’t on \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\}` : b\.on \? `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}` : `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{b\.looking\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter, or says from last time of one picked a moment ago')
+    assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{silentAdapter \? `If \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\} isn’t on your \$\{unitName\(b\.unit\)\}` : b\.on \? `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}` : `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{b\.looking\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter, or says from last time of one picked a moment ago')
     const ternary = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
     const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
     assert.ok(cut > 0, 'the on/off ternary could not be split')
@@ -15871,6 +15958,8 @@ export function run(test) {
     /* And why nothing was chosen, for the log: the same questions, in the pick's order. */
     assert.equal(whyNotPicked([MASTER], new Set(), {}), null, 'a reason was given for a pick that was made')
     assert.equal(whyNotPicked([], new Set(), {}), null)
+    /* Rows listed and not one of them to choose from (not connected now): said, where the log said nothing. */
+    assert.deepEqual(whyNotPicked([{ ...MASTER, offline: true }], new Set(), {}), { why: 'nothing listed is connected now and for the unit picked', dev: null })
     assert.deepEqual(whyNotPicked([MASTER], new Set(), { letGoOf: 'm1' }), { why: 'it is the one just let go of', dev: MASTER, letGo: true })
     assert.equal(whyNotPicked([MASTER], new Set(), { taken: new Set(['m1']) }).why, 'it is kept for another unit')
     assert.equal(whyNotPicked([MASTER], new Set(), { refused: () => true }).why, 'it is not one the app uses with the unit picked')
@@ -15896,8 +15985,13 @@ export function run(test) {
         asked.push('pair')
         inApplesScreen()
       },
-      addListener: () => ({ remove() {} })
+      /* The list's own news (onDevices), kept so the test can send some. */
+      addListener: (event, fn) => {
+        heard[event] = fn
+        return { remove() {} }
+      }
     }
+    const heard = {}
     const disk = { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'axefx3', adapter: { id: 'm1', name: 'WIDI Master Bluetooth' } }) }
     const bench = await bluetoothOnABench({ os: 'ios', version: '27.2.1', mod, disk })
     try {
@@ -15924,7 +16018,7 @@ export function run(test) {
       assert.deepEqual(asked, ['pair'])
       assert.equal(b.useBluetooth().adapter ?? null, null)
       assert.equal(b.useBluetooth().said, b.sameAdapterWords('WIDI Master Bluetooth', { os: 'ios', noun: 'phone' }))
-      assert.equal(b.useBluetooth().said, 'Only WIDI Master Bluetooth is connected to this phone, the adapter you had. To use another, tap Connect, tap the other adapter in Apple’s screen, and wait until it says Connected.')
+      assert.equal(b.useBluetooth().said, 'WIDI Master Bluetooth, the adapter you had, is the only one connected to this phone. To use another, tap Connect, tap the other adapter in Apple’s screen, and wait until it says Connected. To use WIDI Master Bluetooth after all, tap it below.')
       assert.ok(bench.log.some((l) => l === 'ble no adapter chosen by the phone: WIDI Master Bluetooth: it is the one just let go of'), `the log does not say why nothing was chosen: ${bench.log.slice(-4).join(' | ')}`)
       assert.deepEqual(b.useBluetooth().devices.map((d) => d.id), ['m1'], 'the one let go of is not listed for a tap')
 
@@ -15955,6 +16049,82 @@ export function run(test) {
       assert.equal(b.letGoOfKeptAdapter(), true)
       b.setBluetoothUnit('fm9')
       assert.equal((await b.findAdapters({ cableFirst: false }))?.id, 'm1', 'an adapter let go of for another unit is held back from this one')
+
+      /*
+       * WHAT THE REVIEW OF THIS FOUND (14 November 2026), each a case.
+       *
+       * The note about the adapter he had is the last unit's: another unit
+       * picked takes it down with the memory. It stayed, under the other
+       * unit's working connection.
+       */
+      assert.equal(b.letGoOfKeptAdapter(), true)
+      assert.equal((await b.findAdapters({ cableFirst: false })) ?? null, null)
+      assert.match(b.useBluetooth().said || '', /^WIDI Master Bluetooth, the adapter you had, is the only one connected to this phone\./)
+      b.setBluetoothUnit('axefx3')
+      assert.equal(b.useBluetooth().said ?? null, null, 'the note about the last unit’s adapter stays up under another unit')
+
+      /*
+       * An adapter the iPhone already knows, listed and not connected, that
+       * he connects in Apple's screen himself. CoreMIDI keeps its ids, so it
+       * was "not new", and where it was the one let go of it was held back
+       * with a note telling him to do what he had just done. Just connected
+       * is "connected now and not before", whatever the ids.
+       */
+      b.chooseAdapter(MASTER)
+      assert.equal(b.letGoOfKeptAdapter(), true)
+      list = [{ ...MASTER, offline: true }]
+      inApplesScreen = () => {
+        list = [MASTER]
+      }
+      assert.equal((await b.findAdapters({ cableFirst: false }))?.id, 'm1', 'the adapter he connected in Apple’s screen himself was held back: its ids were not new')
+      assert.equal(b.useBluetooth().said ?? null, null)
+      /* And still held back when nothing was tapped there: connected before the screen and after it. */
+      inApplesScreen = () => {}
+      assert.equal(b.letGoOfKeptAdapter(), true)
+      assert.equal((await b.findAdapters({ cableFirst: false })) ?? null, null, 'the adapter let go of, still connected and untouched in Apple’s screen, was chosen again')
+      /* Two the iPhone knew, one connected in Apple's screen: that one is his choice, where "2 are here and none is new" used to ask. */
+      list = [MASTER, { ...UHOST, offline: true }]
+      inApplesScreen = () => {
+        list = [MASTER, UHOST]
+      }
+      assert.equal((await b.findAdapters({ cableFirst: false }))?.id, 'u1', 'the adapter he connected in Apple’s screen was not taken as his choice')
+
+      /*
+       * The note is true of the list at one moment, and the rows under it
+       * are live: when the list moves and no longer says so, the note comes
+       * down. Still the only one connected: it stays. Another adapter comes
+       * into the list: it goes, and the two rows ask which.
+       */
+      inApplesScreen = () => {}
+      list = [UHOST]
+      assert.equal(b.letGoOfKeptAdapter(), true)
+      assert.equal((await b.findAdapters({ cableFirst: false })) ?? null, null)
+      const note = b.useBluetooth().said
+      assert.match(note || '', /^WIDI Uhost Bluetooth, the adapter you had, is the only one connected to this phone\./)
+      assert.equal(typeof heard.onDevices, 'function', 'the list is not listened to after a search')
+      heard.onDevices({ devices: [UHOST] })
+      assert.equal(b.useBluetooth().said, note, 'the note went while the list still said the same')
+      /* Past the few seconds in which a port new after Apple's screen is taken by itself (tookAfterScreen): this is the note's own rule. */
+      const realNow = Date.now
+      Date.now = () => realNow() + 10000
+      try {
+        heard.onDevices({ devices: [UHOST, MASTER] })
+      } finally {
+        Date.now = realNow
+      }
+      assert.equal(b.useBluetooth().adapter ?? null, null, 'an adapter that came into the list long after Apple’s screen was taken by itself')
+      assert.equal(b.useBluetooth().said ?? null, null, 'the note still says only one adapter is connected, over two rows')
+      assert.deepEqual(b.useBluetooth().devices.map((d) => d.id).sort(), ['m1', 'u1'])
+
+      /* A USB cable chosen says nothing about which adapter is the right one: the WIDI Uhost, let go of above, is still held back after it. */
+      inApplesScreen = () => {}
+      list = [UHOST]
+      b.chooseAdapter({ id: 'usb:c1', name: 'Axe-Fx III', driver: 'AppleMIDIUSBDriver' })
+      assert.equal(b.useBluetooth().adapter?.id, 'usb:c1')
+      /* The cable is not an adapter to let go of this way; the next search still leaves the WIDI Uhost for a tap. */
+      assert.equal(b.letGoOfKeptAdapter(), false)
+      assert.equal((await b.findAdapters({ cableFirst: false })) ?? null, null, 'a cable chosen in between ended the memory of the adapter let go of')
+      assert.equal(b.useBluetooth().adapter?.id, 'usb:c1')
     } finally {
       bench.done()
     }
@@ -15962,8 +16132,8 @@ export function run(test) {
     /* Android's words, and never Apple's name there. */
     const android = await bluetoothOnABench({ os: 'android', version: 36, mod: { supported: () => true, devices: () => [], addListener: () => ({ remove() {} }) } })
     try {
-      assert.equal(android.ble.sameAdapterWords('WIDI Master'), 'Only WIDI Master was found, the adapter you had. To use another, check it is plugged in and lit, then tap Connect.')
-      assert.equal(android.ble.sameAdapterWords(null), 'Only the adapter you had was found. To use another, check it is plugged in and lit, then tap Connect.')
+      assert.equal(android.ble.sameAdapterWords('WIDI Master'), 'WIDI Master, the adapter you had, is the only one found. To use another, check it is plugged in and lit, then tap Connect. To use WIDI Master after all, tap it below.')
+      assert.equal(android.ble.sameAdapterWords(null), 'The adapter you had is the only one found. To use another, check it is plugged in and lit, then tap Connect. To use it after all, tap it below.')
       assert.equal(await android.ble.glanceForAdapters({ silent: true }), false)
     } finally {
       android.done()
@@ -15974,7 +16144,7 @@ export function run(test) {
     assert.match(page, /const silentAdapter = quiet && keptAdapter && !vp4 && !footswitch /)
     assert.match(page, /useEffect\(\(\) => \{ if \(notThere \|\| silentAdapter\) glanceForAdapters\(\{ silent: silentAdapter \}\) \}, \[notThere, silentAdapter, b\.adapter\?\.id\]\)/)
     assert.match(page, /const other = notThere \|\| silentAdapter \? otherAdapterNow\(listed\) : null/)
-    assert.match(page, /sub=\{silentAdapter \? `If your \$\{unitName\(b\.unit\)\} isn’t on \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\}` : b\.on \?/)
+    assert.match(page, /sub=\{silentAdapter \? `If \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\} isn’t on your \$\{unitName\(b\.unit\)\}` : b\.on \?/)
     /* Android's ten-second search says why too, and the pick rule carries what was let go of. */
     const lib = flat('mobile/src/lib/bluetooth.js')
     assert.match(lib, /if \(pick\) chooseAdapter\(pick\) else if \(!saved\.adapter\) sayWhyNotPicked\(now\.devices, new Set\(\)\)/)

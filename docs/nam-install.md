@@ -109,8 +109,21 @@ other write is refused. Every frame of these shapes is held at the way out
 question while the list is read, the one pick being made. test/bluetooth.mjs
 holds it against a unit that answers as his did.
 
-**Nothing has been sent to a real unit from the app yet.** His first send
-is the first check.
+**One send from the app so far** (14 November 2026, over Bluetooth): taken
+at every message and not kept. "The name's check byte, and the first send
+that was not kept", above, has what was changed for the next one.
+
+While a capture goes, nothing but its own messages leaves the phone
+(bleWire `pump`): Axe-Edit sent nothing else between "a transfer is under
+way" and the unit's answer to the last message, and the first build let
+reads through (the rig's half-minute "which preset are you on?" among them).
+A read asked meanwhile waits and goes after; anything that would change the
+unit is refused. Round the end the phone rests as Axe-Edit did (`NAM_REST`:
+150 ms before "it is over", 350 ms before the slot is read back), and a
+slot that reads `<EMPTY>` is read once more a second later before it is
+called not kept. Slot 257 (the last) listed the same head as slot 029 in
+the recording, so it may not be a slot of its own: it is never a target,
+and is not offered as a pick until it is understood.
 
 ## Through the computer, or the Raspberry Pi
 

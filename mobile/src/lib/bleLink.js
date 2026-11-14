@@ -21,7 +21,7 @@ import {
   unitName
 } from './bluetooth'
 import { isCable } from './bleAdapters'
-import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit, writeTuner } from './rig'
+import { getState, handleEvent, refreshAll, reset as resetRig, set as setRig, stopWatching, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
@@ -344,6 +344,17 @@ async function connected(e) {
   setSwitch({ on: bluetoothOn(), wire: made })
   const name = adapterName(e) || adapterName(s.adapter) || fallbackName(s.adapter)
   missed = false
+  /*
+   * A NEW CONNECTION HAS NOT BEEN ASKED YET, so the last one's "not
+   * answering" is not its word. The rig's word for the unit was only cleared
+   * for another unit, never for another adapter, a fresh connection or a
+   * drop that came back: the moment the new one was up the page was already
+   * "isn't answering", and since Use a different adapter is drawn there too
+   * (14 November 2026), a tap on Use WIDI Uhost redrew the same red line
+   * with Use WIDI Master where the button just tapped had been. Until the
+   * first read says, the unit is being asked.
+   */
+  if (getState().unit === 'missing' || getState().unit === 'silent') setRig({ unit: 'unknown' })
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)

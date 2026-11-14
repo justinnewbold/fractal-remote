@@ -1089,8 +1089,9 @@ what the computer sends for the same edit, and a test holds it there.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
-1.90.58, and through the computer or the Raspberry Pi since 1.90.59;
-nothing has been sent to a real unit from the app yet.**
+1.90.58, and through the computer or the Raspberry Pi since 1.90.59. ONE
+SEND HAS GONE TO HIS UNIT (14 November 2026, over Bluetooth): taken and not
+kept; 1.90.60 carries what was changed for the next.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -1201,10 +1202,28 @@ the capture on the unit, which is the hard half.
     half-filled. While it goes the watch asks nothing and any other write
     is refused. Every frame of these shapes is held at the way out
     (`namShaped`, `namAllowed`). The switch is the wire's `captures`
-    option (lib/bluetooth: his account). NOTHING HAS BEEN SENT TO A REAL
-    UNIT FROM THE APP: his first send is the first check, and so is his
-    first pick. Nothing is saved on the unit by it: the preset is saved the
-    usual way.
+    option (lib/bluetooth: his account). His first send (above) was taken
+    and not kept; his first pick was answered, with the slot it asked for.
+    Nothing is saved on the unit by it: the preset is saved the usual way.
+  - *WHILE A CAPTURE GOES, NOTHING ELSE LEAVES THE PHONE* (1.90.60, bleWire
+    `pump`). Axe-Edit sent nothing between "a transfer is under way" and
+    the unit's answer to the last message; the first build let reads
+    through (the rig's half-minute "which preset are you on?" lands inside
+    a half-minute upload nine times in ten). A read asked meanwhile waits
+    and goes after; anything that would change the unit is refused up
+    front (`request`), since a route that reads before it writes would
+    otherwise write half a minute late. Round the end the phone rests as
+    Axe-Edit did (`NAM_REST`), and a slot that reads <EMPTY> is read once
+    more before it is called not kept. THE COMPUTER'S PATH DOES NOT HOLD
+    OTHER REQUESTS YET (ForgeFX queues each of the 130 on its own): that
+    is the next ForgeFX change, with a pin and a computer release.
+  - *One send at a time, whoever draws the card* (`atWork` in the card):
+    a send goes on after the card is left, and the computer refuses no
+    second one. A capture is named by the file's own word where any of it
+    survives as plain ASCII, else TONE3000's name, else "Capture <id>",
+    and never "<EMPTY>". What the card says a send takes is the record's
+    real size (`RECORD_SEND` in lib/nam-file, 83,227 bytes, held to the
+    130 messages by a test), not the old estimate.
   - *The recording is not in the repository* (a creator's capture, and the
     names of Fractal's own). He has it as NAM.mmon. Never ask for his
     Fractal-Bot backup either: it holds Fractal's own captures.
@@ -2105,18 +2124,25 @@ what the page offered:
   as much as "check the plugs".** With Bluetooth on, Use a different
   adapter was drawn only when the adapter was gone; connected and silent,
   the way to another one was Stop first. Now it is drawn there too
-  (screens/Bluetooth `silentAdapter`), saying "If your Axe-Fx III isn't on
-  WIDI Master Bluetooth", and on an iPhone another adapter connected to it
-  is offered by name (the list is only read; never a search on Android
-  under a live connection). Never for a VP4, which never answers.
+  (screens/Bluetooth `silentAdapter`), saying "If WIDI Master Bluetooth
+  isn't on your Axe-Fx III" (the adapter first: "If your Axe-Fx III isn't
+  on" read as the unit being switched off), and on an iPhone another
+  adapter connected to it is offered by name, unless it is kept for
+  another unit: that one is in Use a different adapter's list, marked as
+  that unit's (the list is only read; never a search on Android under a
+  live connection). Never for a VP4, which never answers.
 - **Use a different adapter never goes straight back to the one let go
   of.** Apple's screen closed with the WIDI Master still the only one
   connected, and the phone chose it again as "the only one here". The pick
   now leaves it in the list for a tap (bleAdapters `pickAdapter`
   `letGoOf`, lib/bluetooth `letGoOf`, in memory until an adapter is chosen
-  or another unit picked) and the page says how to get the other one
-  (`sameAdapterWords`). One he connects in Apple's screen himself is still
-  taken.
+  or another unit picked; a USB cable chosen does not end it) and the page
+  says how to get the other one and how to keep this one after all
+  (`sameAdapterWords`; the note goes when another unit is picked). One he
+  connects in Apple's screen himself is still taken, and "just connected"
+  there means connected now and not before the screen, whatever its ids:
+  CoreMIDI keeps the ids of an adapter it already knows, so "an id that is
+  new" missed the commonest case (the review of this fix found it).
 - **The log says why the phone chose nothing** (`whyNotPicked`): his first
   two Connects that day ended with an adapter listed and nothing chosen,
   and nothing said why (the page was on another unit, and the adapter was

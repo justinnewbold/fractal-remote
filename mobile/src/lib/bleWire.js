@@ -3039,8 +3039,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       captureBusy = true
       const told = await ex(on, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that a capture is coming', priority: 'write', capture: true })
       if (rejected(told)) throw failure(`The ${spec.name} refused the start of the transfer (${rejectedWords(told.rejected)}). Nothing was sent.`, 502)
-      if (!told) throw failure(`The ${spec.name} didn’t answer the start of the transfer. Nothing was sent.`, 504)
+      if (!told) {
+        /*
+         * The unit may have TAKEN "a transfer is under way" and its answer
+         * been lost: left at that, nothing the app sends later says it is
+         * over (the next capture begins with another "under way"), and what
+         * a unit does while left there is not known. Axe-Edit always pairs
+         * the two, so "it is over" is said before giving up.
+         */
+        await ex(off, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that the capture is over', priority: 'write', capture: true }).catch(() => null)
+        throw failure(`The ${spec.name} didn’t answer the start of the transfer. Nothing was sent.`, 504)
+      }
       let sent = 0
+      /* When the unit answered the last message: how long the send took, without the rests and the read-back after it. */
+      let took = null
       try {
         for (const f of frames) {
           const a = await ex(f, {
@@ -3057,6 +3069,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
           if (!a) throw failure(`The ${spec.name} stopped answering after ${sent} of ${frames.length} messages.${again}`, 504, { partial: sent > 0, slot })
           if (!a.ok) throw failure(`The ${spec.name} refused the capture at message ${sent + 1} of ${frames.length} (it answered ${a.code}).${again}`, 502, { partial: sent > 0, slot })
           sent++
+          if (sent === frames.length) took = time.now()
           try {
             if (typeof onProgress === 'function') onProgress(sent, frames.length)
           } catch {
@@ -3073,26 +3086,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       /*
        * The slot read back, after the rest Axe-Edit took before it read its
-       * list (a third of a second). A slot that still says <EMPTY> is asked
-       * once more a second later before it is called not kept: nothing is
-       * known of how long a unit takes to file a capture that arrived over
-       * half a minute.
+       * list (a third of a second). A slot that still says <EMPTY>, or says
+       * nothing (a unit still filing it is as likely to do one as the
+       * other), is asked once more a second later before it is called not
+       * kept: nothing is known of how long a unit takes to file a capture
+       * that arrived over half a minute. What the first read said stands if
+       * the second says nothing.
        */
-      let after = null
-      try {
-        await pause(NAM_REST.read)
-        after = await namSlotHead(slot)
-        if (after.empty) {
-          await pause(NAM_REST.again)
-          after = await namSlotHead(slot)
-        }
-      } catch {
-        /* What it read before it stopped answering stands; nothing read is "did not read back". */
+      const readBack = () => namSlotHead(slot).catch(() => null)
+      await pause(NAM_REST.read)
+      let after = await readBack()
+      if (!after || after.empty) {
+        await pause(NAM_REST.again)
+        after = (await readBack()) || after
       }
-      const seconds = (time.now() - started) / 1000
+      const seconds = ((took ?? time.now()) - started) / 1000
       /* A slot that still reads empty after every message was taken was not kept: said so here, and by the card. */
       const reads = !after ? 'the slot did not read back' : after.empty ? `the slot STILL READS “${after.name}”: the unit took every message and did not keep it` : `the slot now reads “${after.name}”`
-      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name’s check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}: ${reads}`)
+      /* How long the name is goes in the log with its check byte: the recording proves the byte for a name that fills all 31 places, and a shorter one is the same rule on trust. */
+      let named = 0
+      while (named < 31 && ((words[named >> 2] >>> ((named & 3) * 8)) & 0xff) !== 0) named++
+      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name ${named} characters, check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}: ${reads}`)
       return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
     })
   }

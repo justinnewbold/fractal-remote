@@ -208,6 +208,23 @@ export function run(test) {
     assert.equal(own.name, 'Cafe Plexi 100')
     assert.equal(own.words[8], 0x0000656d, '"me", who made it by the file’s own word')
 
+    /*
+     * A name is chosen by what survives. A field keeps plain ASCII only, so
+     * a name in another script kept none of its letters and the capture
+     * could never be sent: now the app's name for it is used, and after
+     * that its number at TONE3000. And never the unit's own word for an
+     * empty slot, which would read as not kept and be written over.
+     */
+    const other = namRecord(a2({ metadata: { name: '日本語のアンプ' } }), { name: 'Plexi from TONE3000', fallback: 'Capture 42' })
+    assert.deepEqual([other.ok, other.name], [true, 'Plexi from TONE3000'])
+    const both = namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ', fallback: 'Capture 42' })
+    assert.deepEqual([both.ok, both.name], [true, 'Capture 42'])
+    assert.match(namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ' }).why, /no name/)
+    const empty = namRecord(a2({ metadata: { name: '<EMPTY>' } }), { name: ' <EMPTY> ', fallback: 'Capture 7' })
+    assert.deepEqual([empty.ok, empty.name], [true, 'Capture 7'])
+    /* The other lines of text fall back the same way. */
+    assert.equal(namRecord(a2({ metadata: { name: 'Plexi', modeled_by: 'アンプ' } }), { by: 'somebody' }).words[8], 0x656d6f73, '"some", who made it by the app’s word when the file’s keeps no letter')
+
     /* Refused in plain words, never guessed at. */
     assert.match(namRecord(a2({ lite: 1870 }), { name: 'x' }).why, /isn’t the A2 kind/)
     assert.match(namRecord(a2({ full: 12147 }), { name: 'x' }).why, /isn’t the A2 kind/)
@@ -317,7 +334,8 @@ export function run(test) {
     /* Who asks: the card, through lib/device's three calls, and nobody else in the app. */
     const device = read('mobile/src/lib/device.js')
     assert.match(device, /import \{ namRecordTravels \} from '\.\/nam-travel'/)
-    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\) return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
+    /* Over the device's own wire, or else through the computer. And a unit the wire takes no captures on is answered in the computer's own words, never the bare "unsupported". */
+    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) \{ return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\)\.catch\(\(err\) => \{ if \(err\?\.unsupported === true\) throw Object\.assign\(new Error\(CAPTURES_ONLY_A_III\), \{ status: 501 \}\) throw err \}\) \} return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
     assert.match(device, /body: JSON\.stringify\(\{ record \}\)/, 'the computer is sent more than the record, or not the record')
     const { readdirSync } = await import('node:fs')
     const walk = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.jsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []))

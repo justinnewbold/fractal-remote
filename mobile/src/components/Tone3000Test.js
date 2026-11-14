@@ -57,9 +57,28 @@ export const STEPS = Object.freeze([
   'Back here, each capture of that tone has a Send it and play it button.',
   'That button puts the capture in the Axe-Fx III’s first empty capture slot and points NAM 1 at it, so you hear it through your own rig. It takes about half a minute over Bluetooth, a second or two through the computer or by USB.'
 ])
-export const STEPS_FOOT = 'The preset you are on needs a NAM block in it. Nothing is saved until you save the preset, and a capture already on the unit is never written over.'
+export const STEPS_FOOT = 'The preset you are on needs NAM 1 in it (with only NAM 2 there, Play it in NAM 2 comes up after the send). Nothing is saved until you save the preset, and a capture already on the unit is never written over.'
 export const SEND_AND_PLAY = 'Send it and play it in NAM 1'
 export const SEND_AND_PLAY_SUB = 'Into the first empty capture slot on the Axe-Fx III'
+
+/*
+ * ONE SEND AT A TIME, WHOEVER DRAWS THE CARD. A send goes on after the card
+ * is left (half a minute over Bluetooth), and a card opened again starts
+ * with nothing busy: its buttons would be live over a send still going. The
+ * wire refuses a second one, the computer does not. So the fact is kept
+ * here, outside any one drawing of the card.
+ */
+let atWork = 0
+/*
+ * When the send in hand began, or 0. Not a plain yes: a request that never
+ * came back (nothing here is known to do that, but a relay can) would close
+ * the card until the app was restarted. A send takes under a minute over
+ * Bluetooth, so after five it is taken to be over. Each run clears only its
+ * own mark, so an old one ending late cannot open the card under a new one.
+ */
+const STILL_GOING_MS = 5 * 60 * 1000
+const goingNow = () => atWork !== 0 && Date.now() - atWork < STILL_GOING_MS
+export const STILL_GOING = 'A capture is still going to the unit. Wait for it to finish.'
 
 export default function Tone3000Test() {
   const [signedIn, setSignedIn] = useState(false)
@@ -164,14 +183,20 @@ export default function Tone3000Test() {
    */
   const sendToUnit = async (m, again = null) => {
     if (busy) return
+    if (goingNow()) {
+      setSend({ id: m.id, line: STILL_GOING })
+      return
+    }
     /* Not fetched yet: this tap asks for it (the one place a capture is fetched, `check`). What is not an A2 capture says so there and goes no further. */
     if (!texts.current[m.id]) await check(m)
-    if (!alive.current || !texts.current[m.id]) return
-    const rec = namRecord(texts.current[m.id], { name: captureLabel(m), by: tone?.user?.username })
+    if (!alive.current || !texts.current[m.id] || goingNow()) return
+    /* Named by the file's own word, else TONE3000's name for it, else its number there: a name in another script keeps none of its letters on the unit. */
+    const rec = namRecord(texts.current[m.id], { name: captureLabel(m), fallback: `Capture ${m.id}`, by: tone?.user?.username })
     if (!rec.ok) {
       setSend({ id: m.id, line: rec.why })
       return
     }
+    const mine = (atWork = Date.now())
     setBusy(`send ${m.id}`)
     setFault('')
     try {
@@ -181,7 +206,7 @@ export default function Tone3000Test() {
         const found = await namEmptySlotHere()
         if (!alive.current) return
         if (found.slot === null) {
-          setSend({ id: m.id, line: `The unit’s first ${found.heads.length} capture slots are all taken.` })
+          setSend({ id: m.id, line: `The unit’s first ${found.heads.length} capture slots are all taken. Clear one on the unit, then send again.` })
           return
         }
         slot = found.slot
@@ -201,7 +226,7 @@ export default function Tone3000Test() {
       /* Every message was taken and the slot still reads empty: the unit did not keep it. Never "done", and nothing to play. */
       if (got.name === NAM_EMPTY) {
         logDebug('tone3000', `capture ${m.id} was NOT KEPT: slot ${said} still reads ${NAM_EMPTY} after every message was taken`)
-        setSend({ id: m.id, slot, line: `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it.` })
+        setSend({ id: m.id, slot, line: `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.` })
         return
       }
       setSend({ id: m.id, slot, done: true, line: `In slot ${said}${got.name ? ` as “${got.name}”` : ''}, in ${Math.round(got.seconds)} seconds.` })
@@ -212,18 +237,26 @@ export default function Tone3000Test() {
       logDebug('tone3000', `capture ${m.id} was not sent: ${err?.message || err}`)
       if (alive.current) setSend({ id: m.id, line: err?.message || 'The capture was not sent.', again: err?.partial === true && Number.isInteger(err?.slot) ? err.slot : null })
     } finally {
+      if (atWork === mine) atWork = 0
       if (alive.current) setBusy(null)
     }
   }
 
-  /* NAM 1 or NAM 2 pointed at a slot, and what the unit said of it, on a line of its own under the send's. Never throws. */
+  /*
+   * NAM 1 or NAM 2 pointed at a slot, and what the unit said of it, on a
+   * line of its own under the send's. Never throws. A unit that names the
+   * slot <EMPTY> here has nothing in it, whatever the read after the send
+   * said (or did not say): the send is no longer "done", so its button comes
+   * back and the two Play buttons, which could only point at the same empty
+   * slot again, go.
+   */
   const point = async (block, slot) => {
     const which = `NAM ${NAM_BLOCKS.indexOf(block) + 1}`
-    const played = (line) => alive.current && setSend((was) => (was ? { ...was, played: line } : was))
+    const played = (line, more = null) => alive.current && setSend((was) => (was ? { ...was, played: line, ...more } : was))
     try {
       const got = await namPickHere(block, slot)
       logDebug('tone3000', `${which} is on slot ${namSlotSaid(slot)} now: the unit names it “${got.name}”`)
-      if (got.name === NAM_EMPTY) played(`${which} is on slot ${namSlotSaid(slot)}, and the Axe-Fx III says that slot is empty, so there is nothing to hear.`)
+      if (got.name === NAM_EMPTY) played(`${which} is on slot ${namSlotSaid(slot)}, and the Axe-Fx III says that slot is empty, so there is nothing to hear. Send it once more.`, { done: false })
       else played(`${which} is playing “${got.name}” now, through your own rig. Save the preset to keep it there.`)
     } catch (err) {
       logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)
@@ -233,10 +266,16 @@ export default function Tone3000Test() {
 
   const useIn = async (block, slot) => {
     if (busy) return
+    if (goingNow()) {
+      setSend((was) => (was ? { ...was, played: STILL_GOING } : was))
+      return
+    }
+    const mine = (atWork = Date.now())
     setBusy(`pick ${block}`)
     try {
       await point(block, slot)
     } finally {
+      if (atWork === mine) atWork = 0
       if (alive.current) setBusy(null)
     }
   }
@@ -278,7 +317,7 @@ export default function Tone3000Test() {
             <View key={m.id} style={{ gap: space.xs }}>
               <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{`${captureLabel(m)}${m.size ? ` · ${m.size}` : ''}`}</Text>
               {/* The one button: fetch it, send it, play it. Gone once the unit has it, when the two below take over. */}
-              {send?.id === m.id && send.done ? null : (
+              {(send?.id === m.id && send.done) || (checked[m.id] && !texts.current[m.id]) ? null : (
                 <Press
                   label={busy === m.id ? 'Fetching…' : busy === `send ${m.id}` ? 'Sending…' : SEND_AND_PLAY}
                   sub={SEND_AND_PLAY_SUB}

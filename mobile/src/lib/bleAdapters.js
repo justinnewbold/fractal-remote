@@ -242,7 +242,9 @@ export function pickAdapter(list, fresh = new Set(), { unit = null, units = null
 export function whyNotPicked(list, fresh = new Set(), rule = {}) {
   const { unit = null, units = null, refused = null, taken = null, letGoOf = null } = rule || {}
   const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline && !anotherUnit(d, { unit, units }))
-  if (!here.length || pickAdapter(list, fresh, rule || {})) return null
+  /* Rows listed and none of them one to choose (not connected now, or a cable named for another unit): said, where the log used to say nothing. */
+  if (!here.length) return (Array.isArray(list) ? list : []).some(isAdapter) ? { why: 'nothing listed is connected now and for the unit picked', dev: null } : null
+  if (pickAdapter(list, fresh, rule || {})) return null
   const just = here.filter((d) => fresh.has(d.id))
   if (just.length > 1) return { why: `${just.length} were just connected, so the list asks which`, dev: null }
   if (!just.length && here.length > 1) return { why: `${here.length} are here and none is new, so the list asks which`, dev: null }

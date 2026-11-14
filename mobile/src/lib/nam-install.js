@@ -157,9 +157,17 @@ export function namRecord(text, said = {}) {
     return { ok: false, why: 'This capture isn’t the A2 kind the Axe-Fx III’s NAM block plays.' }
   }
   const meta = got.metadata
-  const own = (x, other) => (typeof x === 'string' && x.trim() ? x : other)
+  /*
+   * The file's own word where it has one THAT SURVIVES: a field keeps plain
+   * ASCII only, so a name in another script came out empty and the capture
+   * could never be sent, with the app's own name for it never tried.
+   */
+  const lasts = (x) => typeof x === 'string' && field(x)[0] !== 0
+  const own = (x, other) => (lasts(x) ? x : other)
+  /* And a capture is never filed under the unit's own word for an empty slot: it would read as not kept, and be written over by the next send. */
+  const named = (x) => lasts(x) && String.fromCharCode(...field(x).filter(Boolean)) !== NAM_EMPTY
   const texts = {
-    name: own(meta.name, said.name),
+    name: [meta.name, said.name, said.fallback].find(named),
     by: own(meta.modeled_by, said.by),
     make: own(meta.gear_make, said.make),
     model: own(meta.gear_model, said.model),

@@ -793,8 +793,9 @@ export function setBluetoothUnit(key, { carry = false } = {}) {
   /* The unit left keeps the adapter it was using, for when it is picked again. */
   if (was && using && !carry) keepFor(was, using)
   const adapter = (carry || (!was && !notForFm3)) && using ? using : byUnit[key] || null
-  /* Another unit: what was let go of for the last one is no longer a question (letGoOf). */
+  /* Another unit: what was let go of for the last one is no longer a question (letGoOf), nor is a note from its search about this one (it sat under the next unit's working connection). */
   letGoOf = null
+  if (now.said) now = { ...now, said: null }
   saved = { ...saved, unit: key, adapter: adapter ? keptAdapter(adapter) : null }
   logDebug('ble', `the unit is an ${unitName(key)}`)
   if (carry && using) logDebug('ble', `${adapterName(using) || 'the adapter'} is on the ${unitName(key)}: it is the ${unitName(key)}’s adapter now`)
@@ -830,8 +831,8 @@ export function chooseAdapter(dev) {
   /* Never Apple's network session, whoever asks (bleAdapters isNetworkSession). */
   if (!isAdapter(dev)) return
   letGo.delete(dev.id)
-  /* One chosen, by the phone or by a tap, ends the memory of the one let go of (letGoOf). */
-  letGoOf = null
+  /* An adapter chosen, by the phone or by a tap, ends the memory of the one let go of (letGoOf). A USB cable chosen does not: it says nothing about which adapter is the right one. */
+  if (!isCable(dev)) letGoOf = null
   if (saved.adapter?.id === dev.id) return
   noteBeforeCable(dev)
   saved = { ...saved, adapter: keptAdapter(dev) }
@@ -1118,21 +1119,41 @@ export function letGoOfKeptAdapter() {
  * connects an adapter in Apple's screen; an Android phone finds one that is
  * plugged in and lit.
  */
-export const sameAdapterWords = (name, { os = Platform.OS, noun = deviceNoun() } = {}) =>
-  os === 'ios'
-    ? `Only ${name || 'the adapter you had'} is connected to this ${noun}${name ? ', the adapter you had' : ''}. To use another, tap Connect, tap the other adapter in Apple’s screen, and wait until it says Connected.`
-    : `Only ${name || 'the adapter you had'} was found${name ? ', the adapter you had' : ''}. To use another, check it is plugged in and lit, then tap Connect.`
+export const sameAdapterWords = (name, { os = Platform.OS, noun = deviceNoun() } = {}) => {
+  /* The adapter first ("the adapter you had" read as the iPhone's name when it came last), and the way to keep it after all: its row is under this note. */
+  const had = name ? `${name}, the adapter you had,` : 'The adapter you had'
+  const keep = `To use ${name || 'it'} after all, tap it below.`
+  return os === 'ios'
+    ? `${had} is the only one connected to this ${noun}. To use another, tap Connect, tap the other adapter in Apple’s screen, and wait until it says Connected. ${keep}`
+    : `${had} is the only one found. To use another, check it is plugged in and lit, then tap Connect. ${keep}`
+}
 
 /*
  * Nothing chosen by the phone, with something listed: the log says why
  * (bleAdapters whyNotPicked), and the page says what to do when the reason
  * is that the only one here is the one just let go of.
  */
+let sameSaid = null
 function sayWhyNotPicked(list, just) {
   const why = whyNotPicked(list, just, pickRule())
   if (!why) return
   logDebug('ble', `no adapter chosen by the ${deviceNoun()}: ${why.dev ? `${adapterName(why.dev) || 'the one here'}: ` : ''}${why.why}`)
-  if (why.letGo) noteBluetooth({ said: sameAdapterWords(adapterName(why.dev)) })
+  if (why.letGo) noteBluetooth({ said: (sameSaid = sameAdapterWords(adapterName(why.dev))) })
+}
+
+/*
+ * THAT NOTE IS TRUE OF THE LIST AT ONE MOMENT, and on an iPhone the rows
+ * under it are live. Another adapter coming into the list a few seconds
+ * later, or the one named being switched off, left "is the only one
+ * connected" over rows that said otherwise. So when the list moves, the note
+ * is taken down once it is no longer the list's own answer (only this note:
+ * any other the page has put up is left alone).
+ */
+function sameSaidStill(devices) {
+  if (!sameSaid || now.said !== sameSaid) return
+  if (whyNotPicked(Array.isArray(devices) ? devices : now.devices, new Set(), pickRule())?.letGo) return
+  sameSaid = null
+  noteBluetooth({ said: null })
 }
 
 /**
@@ -1273,6 +1294,7 @@ function listenForList() {
   listing = onAdapter('onDevices', (e) => {
     showList(e?.devices)
     tookAfterScreen(e?.devices)
+    sameSaidStill(now.devices)
   })
 }
 
@@ -1292,7 +1314,7 @@ function tookAfterScreen(devices) {
     return
   }
   const list = (Array.isArray(devices) ? devices : []).filter(isAdapter)
-  const just = new Set(list.map((d) => d.id).filter((id) => !a.before.has(id)))
+  const just = new Set(list.filter((d) => !d.offline && !a.before.has(d.id)).map((d) => d.id))
   if (!just.size) return
   const pick = pickAdapter(list, just, pickRule())
   if (!pick || !just.has(pick.id)) return
@@ -1422,7 +1444,16 @@ export async function findAdapters({ cableFirst = true } = {}) {
       else noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
       return pick
     }
-    const before = new Set(adapterDevices().map((d) => d.id))
+    /*
+     * WHAT WAS CONNECTED BEFORE APPLE'S SCREEN, by id. Only what was
+     * connected: CoreMIDI keeps an adapter it knows in its list, not
+     * connected, under the ids it had, so "an id that was not in the list"
+     * missed an adapter the phone already knew that he then connected in
+     * Apple's screen himself. It came back "not new", and where it was the
+     * one let go of (letGoOf) it was held back with a note telling him to do
+     * what he had just done.
+     */
+    const before = new Set(adapterDevices().filter((d) => !d.offline).map((d) => d.id))
     try {
       await mod.pair()
     } catch (err) {
@@ -1431,7 +1462,8 @@ export async function findAdapters({ cableFirst = true } = {}) {
       return
     }
     const list = adapterDevices()
-    fresh = new Set(list.map((d) => d.id).filter((id) => !before.has(id)))
+    /* Just connected: connected now, and not connected before the screen. */
+    fresh = new Set(list.filter((d) => !d.offline && !before.has(d.id)).map((d) => d.id))
     /*
      * Every port and the driver that owns it, in the log. Apple writes the
      * driver names down nowhere; this line is where the real ones came from
@@ -1451,7 +1483,8 @@ export async function findAdapters({ cableFirst = true } = {}) {
      */
     else {
       afterScreen = { before, until: Date.now() + AFTER_SCREEN_MS }
-      sayWhyNotPicked(list, fresh)
+      /* Only where no adapter is kept: with one kept (Look for the adapter again) it is the one used, and "nothing chosen" was untrue. */
+      if (!saved.adapter) sayWhyNotPicked(list, fresh)
     }
     return pick
   }

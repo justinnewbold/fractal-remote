@@ -617,8 +617,12 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * Bluetooth off, or with the adapter gone. A connected adapter that hears
    * nothing is as likely the wrong adapter as the wrong plugs, so the
    * button is here too, saying which case it is for, and another adapter
-   * the phone can see is offered by name (`other`, below). Not for a VP4,
-   * which never answers, nor a unit on a USB cable.
+   * the phone can see is offered by name (`other`, below), unless it is
+   * kept for another unit: that one is in Use a different adapter's list,
+   * marked as that unit's, for a tap. (His WIDI Master was on his HeadRush
+   * that day, which the app knows nothing of: the phone cannot tell an
+   * adapter on another maker's gear from one on a Fractal that is off.)
+   * Not for a VP4, which never answers, nor a unit on a USB cable.
    */
   const silentAdapter = quiet && keptAdapter && !vp4 && !footswitch
   const offerDifferent = keptAdapter && canStart && (!b.on || notThere || footswitch || silentAdapter)
@@ -690,7 +694,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     <Press key={d.id} label={CABLE_USE_HERE} sub={d.name || CABLE_ROW} tone={b.on ? 'live' : undefined} height={52} disabled={b.looking} onPress={() => useCable(d)} />
   ))
   const differentButton = offerDifferent ? (
-    <Press label="Use a different adapter" sub={silentAdapter ? `If your ${unitName(b.unit)} isn’t on ${adapterName(b.adapter) || 'this adapter'}` : b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
+    <Press label="Use a different adapter" sub={silentAdapter ? `If ${adapterName(b.adapter) || 'this adapter'} isn’t on your ${unitName(b.unit)}` : b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
   ) : null
   /*
    * RECONNECT, ON AN IPHONE WHOSE ADAPTER HAS GONE. An iPhone lets a
