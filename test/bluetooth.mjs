@@ -11310,7 +11310,7 @@ export function run(test) {
    * 128 words, 64 56 00, "a transfer is under way" said back, and a pick
    * answered with the slot over 256 and the capture's name.
    */
-  const A2 = (name, from = 1) => {
+  const A2 = (name, from = 1, hash = false) => {
     const w = (n, at) => Array.from({ length: n }, (_, i) => Math.fround((at + i) / 100000))
     return JSON.stringify({
       version: '0.7.0',
@@ -11318,7 +11318,7 @@ export function run(test) {
       config: { submodels: [{ max_value: 0.5, model: { weights: w(1871, from) } }, { max_value: 1, model: { weights: w(12146, from + 50000) } }] },
       weights: [],
       sample_rate: 48000,
-      metadata: { name, modeled_by: 'somebody', gear_type: 'amp', tone_type: 'crunch', loudness: -17.5, gain: 0.5 }
+      metadata: { name, modeled_by: 'somebody', gear_type: 'amp', tone_type: 'crunch', loudness: -17.5, gain: 0.5, ...(hash ? { weights_hash: `nam-content-v1:${'ab'.repeat(32)}` } : {}) }
     })
   }
   const capturesLine = async (options = {}) => {
@@ -11334,7 +11334,7 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, quietSlot: null, quietSlotTimes: 0, slowSlot: null, slowBy: 0, slowTimes: 0, quietPick: false, fullNamesOnly: false, keepsNothing: false, lateSlot: null, lateLooks: 0 }
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, quietSlot: null, quietSlotTimes: 0, slowSlot: null, slowBy: 0, slowTimes: 0, quietPick: false, fullNamesOnly: false, keepsNothing: false, lateSlot: null, lateLooks: 0, rule: 'xor', noHash: false }
     /* `lateSlot`, `lateLooks`: a unit slow to file. The slot it has kept still reads <EMPTY> for that many looks, and then as what it holds. */
     const headOf = (slot) => {
       if (held.has(slot) && u.lateSlot === slot && u.lateLooks > 0) {
@@ -11375,7 +11375,17 @@ export function run(test) {
          */
         const head = bytesOf(words, 68)
         /* `fullNamesOnly`: a unit whose rule for a name shorter than 31 characters is not the app's guess. Only the shape seen kept (31 characters and the check byte) is kept by it. */
-        if (u.keepsNothing || head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0 || (u.fullNamesOnly && head[30] === 0)) u.unkept.push(slot)
+        /*
+         * `rule`: which byte the unit wants in the name's 32nd place. 'xor'
+         * is the name XORed (what was believed until his unit dropped three
+         * captures sent that way); 'bits' is what the five sends are all
+         * consistent with instead, 0x60's two bits set, which Axe-Edit's own
+         * 0x60 has. `noHash`: a unit that drops a record carrying a hash.
+         * Which his unit is, is what the ways of sending find out.
+         */
+        const byteOk = u.rule === 'bits' ? (head[31] & 0x60) === 0x60 : head.slice(0, 32).reduce((x, c) => x ^ c, 0) === 0
+        const hashOk = !u.noHash || head.slice(224, 256).every((b) => b === 0)
+        if (u.keepsNothing || !byteOk || !hashOk || (u.fullNamesOnly && head[30] === 0)) u.unkept.push(slot)
         else {
           head[31] = 0
           held.set(slot, head)
@@ -11426,7 +11436,7 @@ export function run(test) {
     const asks = (path, options2 = {}) => drive(t.clock, t.wire.request(path, { capturing: true, ...options2 }))
     /* Every frame of a capture's shapes that left the phone. */
     const shaped = () => t.frames().filter((f) => nam.namShaped(f, 0x10))
-    return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said), text: (name, from) => A2(name, from) }
+    return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said), text: (name, from, hash) => A2(name, from, hash) }
   }
 
   test('a capture goes to an Axe-Fx III as Axe-Edit sends one: the first empty slot found, 130 messages each taken, and the slot read back', async () => {
@@ -11619,19 +11629,23 @@ export function run(test) {
     /* The same with its comments taken out, for what is read across more than one line of it. */
     const bare = src('mobile/src/components/Tone3000Test.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     /* The send and its second try are lib/captureSend's (run whole in the test below); the card hands it the sender and draws the lines. */
-    assert.match(card, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, fill, install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, filled: how\.filled, onProgress:/)
+    assert.match(bare, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, order: captureOrder\(Number\.isInteger\(way\) \? way : keptWay\), install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, onProgress:/)
+    /* The way the unit last kept one by is remembered while the app runs, and only a way the unit NAMED the capture after. */
+    assert.match(bare, /let keptWay = null/)
+    assert.match(bare, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\) if \(went\.got\.name && Number\.isInteger\(went\.way\)\) keptWay = went\.way \}/)
+    assert.equal((bare.match(/keptWay = /g) || []).length, 2)
     assert.equal(nam.NAM_NAME_PLACES, 31)
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: tries > 1 \? `The Axe-Fx III took the capture \$\{tries\} different ways and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered each time\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
     /* A send that stopped part-way is offered again with its name as it was going. */
-    assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, fill: err\?\.filled === true, play, back, line \} \}\)\)/)
+    assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \} \}\)\)/)
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */
-    assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.fill, halted\.play, halted\.back === true\)\} \/> : null\}/)
+    assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)\} \/> : null\}/)
     assert.match(card, /\{halted && !mine \? <Note>\{halted\.line\}<\/Note> : null\}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ playing: false, done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
-    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{twice \? ', on the second try' : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
+    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{tries > 1 \? `, on try \$\{tries\}` : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
@@ -11646,124 +11660,249 @@ export function run(test) {
     assert.ok(!/if \(atWork\)/.test(card), 'the card asks the mark itself, which never runs out')
     /* Neither button is drawn for a file that turned out not to be an A2 capture, nor for a capture this view has already put on the unit. */
     assert.match(card, /const noUse = !!checked\[m\.id\] && !texts\.current\[m\.id\]/)
-    assert.match(bare, /\{there \? \( <Text style=\{\{[^}]*\}\}>\{at\.sure \? `On the unit · slot \$\{namSlotSaid\(at\.slot\)\}` : `Sent to slot \$\{namSlotSaid\(at\.slot\)\}`\}<\/Text> \) : noUse \? null : \( <> <LineButton/)
+    assert.match(bare, /\{there \|\| noUse \? null : \( <> <LineButton/)
+    /*
+     * ON THE UNIT IS A CARD NOBODY CAN MISS. "Need better confirmation that
+     * a tone was sent. It doesn't do much after a tone does send
+     * successfully." (Justin, 14 November 2026.) "On" the unit only where
+     * the unit has named the slot as holding it; a send it took and said
+     * nothing of is "Sent to". What the block says it is playing is the
+     * card's last line; the send's own line and a pick that failed keep
+     * theirs, so nothing is said twice and nothing is lost.
+     */
+    assert.match(bare, /\{there \? <SentCard sure=\{at\.sure\} head=\{at\.sure \? ON_UNIT : SENT_TO_UNIT\} line=\{onUnitLine\(namSlotSaid\(at\.slot\), named\)\} more=\{mine && send\.playing === true \? send\.played : ''\} \/> : null\}/)
+    const words3k = await import('../mobile/src/lib/tone3000Words.js')
+    assert.deepEqual([words3k.ON_UNIT, words3k.SENT_TO_UNIT, words3k.onUnitLine('035', 'MES DRECF'), words3k.onUnitLine('035', '')], ['On your Axe-Fx III', 'Sent to your Axe-Fx III', 'Slot 035 · MES DRECF', 'Slot 035'])
+    const sentCard = src('mobile/src/components/SentCard.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    /* Green and a tick only where it is sure: a send the unit took and said nothing of is drawn plain, so it does not look like one that was confirmed. */
+    assert.match(sentCard, /export default function SentCard\(\{ head, line = '', more = '', sure = true \}\) \{ const ink = sure \? color\.ok : color\.silk/)
+    assert.match(sentCard, /borderColor: sure \? color\.ok : color\.rule/)
+    assert.match(sentCard, /backgroundColor: sure \? `\$\{color\.ok\}1f` : 'transparent'/)
+    assert.match(sentCard, /<Text style=\{\{ color: ink, fontSize: font\.body, fontWeight: '700' \}\}>\{sure \? `✓ \$\{head\}` : head\}<\/Text>/)
+    assert.match(sentCard, /accessibilityLiveRegion="polite"/)
+    /* And felt: once, when the capture is on the unit. */
+    assert.match(bare, /if \(got\.name\) thud\(\) if \(!play\) return/)
+    assert.equal((bare.match(/thud\(\)/g) || []).length, 1)
+    /* The block's line is the card's only when it is the block saying it plays the capture. */
+    assert.match(bare, /played\(line, \{ playing: true \}\)/)
+    assert.match(bare, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`, \{ playing: false \}\)/)
     /* A file that reads as A2 and that the packer refuses is not kept either: its one line says why, and it has no buttons. */
     assert.match(bare, /const rec = read\.ok && read\.a2 \? namRecord\(text, \{ name: captureLabel\(m\), fallback: `Capture \$\{m\.id\}` \}\) : null const line = rec && !rec\.ok \? rec\.why : namSaid\(read\)/)
     assert.match(card, /if \(rec\?\.ok\) texts\.current\[m\.id\] = text/)
     /* The send's line and the block's line each keep their place: one never writes over the other. */
     assert.match(card, /const mine = send\?\.id === m\.id/)
-    assert.match(card, /\{mine \? <Note>\{send\.line\}<\/Note> : null\} \{mine && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
+    assert.match(bare, /\{mine && !\(there && send\.done && at\.sure\) \? <Note>\{send\.line\}<\/Note> : null\} \{mine && send\.played && !\(there && send\.playing === true\) \? <Note>\{send\.played\}<\/Note> : null\}/)
     assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
   })
 
   /*
-   * ONE CAPTURE INTO ONE SLOT, RUN WHOLE (lib/captureSend, 1.90.62). The
-   * second try for a short name went out in 1.90.61 inside the card, where
-   * a test could only read it as text. An independent read of it the same
-   * day found a unit slow to file reported as a failure, and a second try
-   * that stopped part-way started over from the first. It is the card's no
-   * longer, and every path of it is sent to a unit here.
+   * ONE CAPTURE INTO ONE SLOT, RUN WHOLE (lib/captureSend). His unit kept
+   * two captures and dropped three (14 November 2026), and what told them
+   * apart was the 32nd byte of the name: every one kept had 0x60's two bits
+   * set. Whether that byte is Axe-Edit's own 0x60 every time, or the name
+   * XORed and the three dropped for something else, one recording cannot
+   * say. So a capture taken and not kept is sent again another way, and
+   * every way is sent here to a unit that keeps to each rule.
    */
-  test('one capture into one slot: the second try for a short name, a unit slow to file, and a second try that stopped part-way', async () => {
-    const { sendCapture, heldAlready } = await import('../mobile/src/lib/captureSend.js')
-    /* A line, a unit, and the sender the card hands over: what was asked of it, and what was logged. */
+  test('one capture into one slot: the ways it is tried, in order, until the unit keeps one; a unit slow to file; a try that stopped part-way', async () => {
+    const { sendCapture, heldAlready, CAPTURE_WAYS, captureOrder, factsSaid } = await import('../mobile/src/lib/captureSend.js')
+    const nam = await import('../mobile/src/lib/nam-install.js')
+    assert.deepEqual(
+      CAPTURE_WAYS.map((w) => [w.check, w.hash]),
+      [['axe', true], ['xor', true], ['axe', false], ['xor', false]],
+      'the byte Axe-Edit sent is not tried first, or the ways are not these four'
+    )
+    assert.deepEqual([captureOrder(), captureOrder(2), captureOrder(null), captureOrder(9), captureOrder(-1)], [[0, 1, 2, 3], [2, 0, 1, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]])
+    /* A line, a unit, and the sender the page hands over: what was asked of it, and what was logged. `hash`: the file has one. */
     const bench = async () => {
       const c = await capturesLine()
       const sent = []
       const logs = []
-      let seconds = 0
+      const nexts = []
       const send = (name, extra = {}) =>
         sendCapture({
-          text: c.text(name, 5),
+          text: c.text(name, 5, extra.hash === true),
           named: { name: 'TONE3000’s name for it', fallback: 'Capture 7' },
           slot: 3,
           install: (slot, words, how) => {
-            sent.push({ slot, ...how })
+            sent.push({ slot, ...how, byte: (words[7] >>> 24) & 0xff, hash: words.slice(56, 64).some((w) => w !== 0) })
             extra.before?.(how)
-            return c.asks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace: how.replace, filled: how.filled } })
+            return c.asks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace: how.replace } })
           },
           log: (l) => logs.push(l),
-          onSecond: () => seconds++,
+          onNext: (n) => nexts.push(n),
           ...extra.with
         })
-      return { ...c, sent, logs, send, seconds: () => seconds }
+      return { ...c, sent, logs, send, nexts }
     }
     const uploads = (b) => b.u.begun.map((x) => x.slot)
+    const xorOf = (name) => [...name].reduce((x, ch) => x ^ ch.charCodeAt(0), 0)
+    assert.ok(xorOf('Short One') !== 0x60 && (xorOf('Short One') & 0x60) !== 0x60, 'the test’s name has to XOR to a byte without 0x60’s bits')
 
-    /* A unit that keeps a short name as it is: one send, and nothing of the second try. */
-    const plain = await bench()
-    const one = await plain.send('Short One')
-    assert.deepEqual([one.ok, one.name, one.got.name, one.twice, one.late], [true, 'Short One', 'Short One', false, false])
-    assert.deepEqual(plain.sent, [{ slot: 3, replace: false, filled: false, second: false }])
-    assert.equal(plain.seconds(), 0)
-    assert.ok(!plain.logs.some((l) => /NOT KEPT/.test(l)))
+    /* A UNIT THAT WANTS 0x60'S BITS (what his five sends are consistent with): kept on the first try, Axe-Edit's own byte, and nothing more. */
+    const bits = await bench()
+    bits.u.rule = 'bits'
+    const one = await bits.send('Short One')
+    assert.deepEqual([one.ok, one.name, one.got.name, one.tries, one.way, one.late], [true, 'Short One', 'Short One', 1, 0, false])
+    assert.deepEqual(bits.sent, [{ slot: 3, replace: false, way: 0, second: false, byte: 0x60, hash: false }])
+    assert.deepEqual([bits.nexts, bits.u.unkept], [[], []])
+    assert.ok(!bits.logs.some((l) => /NOT KEPT/.test(l)))
+    assert.ok(bits.logs.some((l) => /^try 1, way 1 \(the name byte Axe-Edit sent, with the file’s hash\): name byte 0x60, without a hash; went in [\d.]+ s, the closing message answered in \d+ ms; the unit reads the slot as “Short One”: KEPT THIS WAY$/.test(l)), bits.logs.join(' | '))
+    /* The file's own notes, once, before anything is sent: what differs between a capture kept and one dropped has to be findable in the log. */
+    assert.equal(bits.logs[0], `the file says: name “Short One” (9 characters, XORs to 0x${xorOf('Short One').toString(16).padStart(2, '0')}), by “somebody”, make none, model none, gear “amp”, tone “crunch”; loudness -17.5, gain 0.5, levels in none out none; it has no hash`)
+    assert.equal(bits.logs.filter((l) => /^the file says/.test(l)).length, 1)
+    assert.equal(factsSaid(nam.namRecord(bits.text('Short One', 5, true))).endsWith('it has a hash'), true)
 
-    /* A unit that keeps only the shape seen kept: sent as it is, then filled out, into the SAME slot and over nothing. */
-    const fussy = await bench()
-    fussy.u.fullNamesOnly = true
-    const two = await fussy.send('Short One')
-    assert.deepEqual([two.name, two.got.name, two.twice, two.late], ['Short One', 'Short One', true, false], 'a short name filled out was not kept, or not said as the second try')
-    assert.deepEqual(fussy.sent, [
-      { slot: 3, replace: false, filled: false, second: false },
-      { slot: 3, replace: false, filled: true, second: true }
+    /* A UNIT THAT WANTS THE NAME XORED: the first try is taken and dropped, the second goes into the SAME slot, over nothing, and is kept. */
+    const xor = await bench()
+    const two = await xor.send('Short One')
+    assert.deepEqual([two.name, two.got.name, two.tries, two.way, two.late], ['Short One', 'Short One', 2, 1, false], 'a unit that wants the name XORed did not get it on the second try')
+    assert.deepEqual(xor.sent, [
+      { slot: 3, replace: false, way: 0, second: false, byte: 0x60, hash: false },
+      { slot: 3, replace: false, way: 1, second: true, byte: xorOf('Short One'), hash: false }
     ])
-    assert.deepEqual(uploads(fussy), [3, 3])
-    assert.deepEqual(fussy.u.unkept, [3])
-    assert.equal(fussy.seconds(), 1, 'the screen was not told the second try was going')
-    assert.ok(fussy.logs.some((l) => /^NOT KEPT with its name as it is \(9 characters\): sending it once more with the name filled out to 31 places$/.test(l)), fussy.logs.join(' | '))
-    assert.ok(fussy.logs.some((l) => /its name filled out, went in [\d.]+ s; the unit reads the slot as “Short One”: KEPT WITH THE NAME FILLED OUT, not as it was$/.test(l)), fussy.logs.join(' | '))
-    assert.ok(fussy.t.logs.some((l) => /a capture went to slot 004 .*its name 31 characters \(filled out with spaces\)/.test(l)), 'the wire was not told the name was filled out')
+    assert.deepEqual([uploads(xor), xor.u.unkept, xor.nexts], [[3, 3], [3], [2]], 'the screen was not told another way was going, or it went somewhere else')
+    assert.ok(xor.logs.some((l) => /^try 1, way 1 .*name byte 0x60, .*the unit reads the slot as “<EMPTY>”$/.test(l)), xor.logs.join(' | '))
+    assert.ok(xor.logs.some((l) => /^try 2, way 2 \(the name XORed as its byte, with the file’s hash\): name byte 0x[0-9a-f]{2}, .*“Short One”: KEPT THIS WAY, after 1 it did not keep$/.test(l)), xor.logs.join(' | '))
+
+    /* A file with no hash has two ways, not four: the no-hash ways would send the same two records again. A unit that keeps nothing gets exactly those. */
+    const deaf = await bench()
+    deaf.u.keepsNothing = true
+    const none = await deaf.send('Short One')
+    assert.deepEqual([none.got.name, none.tries, none.way, none.late, deaf.sent.map((x) => x.way)], ['<EMPTY>', 2, 1, false, [0, 1]])
+    assert.ok(deaf.logs.some((l) => /^NOT KEPT, any of the 2 ways tried: the slot still reads <EMPTY> after every message was taken$/.test(l)), deaf.logs.join(' | '))
+    /* A file WITH a hash has all four, in order, each a different record. */
+    const deafHash = await bench()
+    deafHash.u.keepsNothing = true
+    const four = await deafHash.send('Short One', { hash: true })
+    assert.deepEqual(
+      deafHash.sent.map((x) => [x.way, x.byte, x.hash, x.second]),
+      [
+        [0, 0x60, true, false],
+        [1, xorOf('Short One'), true, true],
+        [2, 0x60, false, true],
+        [3, xorOf('Short One'), false, true]
+      ]
+    )
+    assert.deepEqual([four.tries, four.way, deafHash.nexts, uploads(deafHash)], [4, 3, [2, 3, 4], [3, 3, 3, 3]])
+    assert.ok(deafHash.logs.some((l) => /^NOT KEPT, any of the 4 ways tried/.test(l)))
+    /* And a unit that drops a record with a hash in it is found on the third: the byte it wants, and no hash. */
+    const hashless = await bench()
+    hashless.u.rule = 'bits'
+    hashless.u.noHash = true
+    const third = await hashless.send('Short One', { hash: true })
+    assert.deepEqual([third.got.name, third.tries, third.way], ['Short One', 3, 2])
+    assert.ok(hashless.logs.some((l) => /^try 3, way 3 \(the name byte Axe-Edit sent, no hash\): name byte 0x60, without a hash; .*KEPT THIS WAY, after 2 it did not keep$/.test(l)), hashless.logs.join(' | '))
+    /* A name that XORs to 0x60 (Axe-Edit's own did) has one byte to try, not two. */
+    const orange = 'Orange Amp: Flat EQ, Gain 6, AK'
+    assert.equal(xorOf(orange), 0x60)
+    const same = await bench()
+    same.u.keepsNothing = true
+    const once = await same.send('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57')
+    assert.deepEqual([once.name, once.tries, same.sent.length, same.nexts], [orange, 1, 1, []], 'a name that XORs to 0x60 was sent twice with the same byte')
+    assert.ok(same.logs.some((l) => /^NOT KEPT: the slot still reads <EMPTY>/.test(l)))
+
+    /* THE WAY THE UNIT LAST KEPT ONE BY GOES FIRST (`order`): one send, not two, for every capture after the first. */
+    const known = await bench()
+    const kept = await known.send('Short One', { with: { order: captureOrder(1) } })
+    assert.deepEqual([kept.tries, kept.way, known.sent.map((x) => x.way)], [1, 1, [1]])
+
+    /*
+     * THROUGH A COMPUTER APP THAT WRITES ITS OWN BYTE IN (one older than
+     * the release that sends the byte as packed): it answers nothing of
+     * which byte went, and what went was the name XORed. So the 0x60 ways
+     * were the XOR ways, they are not sent again as if they were new, and
+     * the log says to update the computer app.
+     */
+    const olds = []
+    const oldLogs = []
+    const viaOld = await sendCapture({
+      text: known.text('Short One', 5, true),
+      named: {},
+      slot: 3,
+      install: async (slot, words, how) => {
+        olds.push([how.way, (words[7] >>> 24) & 0xff, words.slice(56, 64).some((w) => w !== 0)])
+        return { slot, name: '<EMPTY>', replaced: null, seconds: 1 }
+      },
+      log: (l) => oldLogs.push(l)
+    })
+    assert.deepEqual(olds, [[0, 0x60, true], [2, 0x60, false]], 'the name XORed was sent again through a computer app that had already put it in')
+    assert.deepEqual([viaOld.tries, viaOld.got.name], [2, '<EMPTY>'])
+    assert.ok(oldLogs.some((l) => /^try 1, way 1 .*: name byte 0x[0-9a-f]{2} \(0x60 was packed, and the computer app did not say which byte went: AN OLDER COMPUTER APP, WHICH PUTS THE NAME XORED IN\. Update the computer app, and the other byte can be tried\), with a hash; went in 1\.0 s; the unit reads/.test(l)), oldLogs.join(' | '))
+    /*
+     * And whichever way went FIRST. With the way last kept by put first
+     * (the name XORed, kept over the phone's own wire), the first answer
+     * with no byte in it already says it is an older computer app: the
+     * 0x60 way after it would be the same record over again, and is not
+     * sent. Two records, never the same one twice.
+     */
+    const oldsXorFirst = []
+    const xorFirstLogs = []
+    const xorFirst = await sendCapture({
+      text: known.text('Short One', 5, true),
+      named: {},
+      slot: 3,
+      order: captureOrder(1),
+      install: async (slot, words, how) => {
+        oldsXorFirst.push([how.way, words.slice(56, 64).some((w) => w !== 0)])
+        return { slot, name: '<EMPTY>', replaced: null, seconds: 1 }
+      },
+      log: (l) => xorFirstLogs.push(l)
+    })
+    assert.deepEqual(oldsXorFirst, [[1, true], [2, false]], 'through an older computer app the same record went twice, or a way was lost')
+    assert.equal(xorFirst.tries, 2)
+    assert.ok(xorFirstLogs.some((l) => /^try 1, way 2 .*AN OLDER COMPUTER APP/.test(l)), 'a try whose byte was the XOR anyway does not say the computer app is an older one')
+    /* And one that does say which byte went is believed, whichever it was. */
+    const told = []
+    await sendCapture({
+      text: known.text('Short One', 5),
+      named: {},
+      slot: 3,
+      install: async (slot, words, how) => {
+        told.push(how.way)
+        return { slot, name: '<EMPTY>', replaced: null, seconds: 1, nameByte: (words[7] >>> 24) & 0xff, closing: 3 }
+      }
+    })
+    assert.deepEqual(told, [0, 1])
 
     /*
      * A UNIT SLOW TO FILE. It kept the first send, and the slot read <EMPTY>
-     * at both looks after it. The second try's own first look finds the
+     * at both looks after it. The next try's own first look finds the
      * capture there: that is the first send KEPT, not a send refused. No
-     * second upload, no second copy, and the slot is said to hold it.
+     * second upload, no second copy, and the slot is said to hold it, by
+     * the way that was kept.
      */
     const slow = await bench()
+    slow.u.rule = 'bits'
     slow.u.lateSlot = 3
     slow.u.lateLooks = 2
     const late = await slow.send('Short One')
-    assert.deepEqual([late.ok, late.got.name, late.twice, late.late], [true, 'Short One', false, true], 'a first send the unit filed late was not said as kept')
+    assert.deepEqual([late.ok, late.got.name, late.tries, late.way, late.late], [true, 'Short One', 1, 0, true], 'a first send the unit filed late was not said as kept')
     assert.deepEqual(uploads(slow), [3], 'a second copy was sent to a unit that had kept the first')
     assert.equal(slow.sent.length, 2)
-    assert.ok(slow.logs.some((l) => /^KEPT AS IT WAS: the unit filed the first send after the slot had twice read <EMPTY>, and the second try found it there\. Nothing more was sent$/.test(l)), slow.logs.join(' | '))
-    assert.ok(!slow.logs.some((l) => /KEPT WITH THE NAME FILLED OUT|NOT KEPT, either way|still reads/.test(l)), slow.logs.join(' | '))
+    assert.ok(slow.logs.some((l) => /^KEPT, way 1 \(the name byte Axe-Edit sent, with the file’s hash\): the unit filed it after the slot had twice read <EMPTY>, and the next try found it there\. Nothing more was sent$/.test(l)), slow.logs.join(' | '))
+    assert.ok(!slow.logs.some((l) => /KEPT THIS WAY|NOT KEPT|still reads/.test(l)), slow.logs.join(' | '))
     assert.ok(late.got.seconds >= 0, 'the seconds of the send that was kept are not handed on')
 
-    /* Refused because the slot holds ANOTHER capture (filled from somewhere else meanwhile): that is a refusal, and it is thrown as one. */
+    /* Refused because the slot holds ANOTHER capture (filled from somewhere else meanwhile): that is a refusal, and it is thrown as one, with the way that was going. */
     const taken = await bench()
-    taken.u.fullNamesOnly = true
     await assert.rejects(
       taken.send('Short One', {
         before: (how) => {
           if (how.second) taken.u.held.set(3, taken.u.held.get(1))
         }
       }),
-      (e) => e.status === 409 && e.holds === 'Clean One' && e.filled === true
+      (e) => e.status === 409 && e.holds === 'Clean One' && e.way === 1
     )
     assert.deepEqual(uploads(taken), [3])
 
-    /* A unit that keeps nothing: both tries, and it is said not kept either way. A name that fills all 31 places has no second try to make. */
-    const deaf = await bench()
-    deaf.u.keepsNothing = true
-    const none = await deaf.send('Short One')
-    assert.deepEqual([none.got.name, none.twice, none.late, deaf.sent.length], ['<EMPTY>', true, false, 2])
-    assert.ok(deaf.logs.some((l) => /^NOT KEPT, either way: the slot still reads <EMPTY> after every message was taken$/.test(l)), deaf.logs.join(' | '))
-    const deafLong = await bench()
-    deafLong.u.keepsNothing = true
-    const full = await deafLong.send('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57')
-    assert.deepEqual([full.name.length, full.got.name, full.twice, deafLong.sent.length, deafLong.seconds()], [31, '<EMPTY>', false, 1, 0], 'a name that fills all 31 places was sent a second time')
-    assert.ok(deafLong.logs.some((l) => /^NOT KEPT: the slot still reads <EMPTY>/.test(l)))
-
     /*
-     * A SECOND TRY THAT STOPS PART-WAY says what was going (`filled`) with
-     * the slot it may have left half-filled, and sent again it goes as it
-     * was going: filled out, once, over what the stopped send left. Not the
-     * short name over again, half a minute on a shape just shown not kept.
+     * A TRY THAT STOPS PART-WAY says which way was going (`way`) with the
+     * slot it may have left half-filled, and sent again it goes that way
+     * first, over what the stopped send left: not from the first way again,
+     * half a minute over Bluetooth on one just shown not kept.
      */
     const cut = await bench()
-    cut.u.fullNamesOnly = true
     let fell = null
     await assert.rejects(
       cut.send('Short One', {
@@ -11776,28 +11915,46 @@ export function run(test) {
         return true
       }
     )
-    assert.deepEqual([fell.partial, fell.slot, fell.filled], [true, 3, true], `a second try that stopped part-way does not say what was going (${fell.message})`)
+    assert.deepEqual([fell.partial, fell.slot, fell.way], [true, 3, 1], `a try that stopped part-way does not say which way was going (${fell.message})`)
     cut.u.silentAt = null
     cut.sent.length = 0
-    const again = await cut.send('Short One', { with: { replace: true, fill: true } })
-    assert.deepEqual(cut.sent, [{ slot: 3, replace: true, filled: true, second: false }], 'a second try sent again started over from the short name')
-    assert.deepEqual([again.got.name, again.twice, again.late], ['Short One', false, false])
-    /* And a first send that stops part-way says the name was as it is. */
+    /*
+     * OVER WHAT IS THERE ON THE FIRST TRY ONLY. Sent again over a
+     * half-sent slot, a try the unit drops leaves the slot empty: the next
+     * goes as into any empty slot. Sent "over what is there" too, it would
+     * write over a capture the unit had filed late, and the refusal that
+     * says the first was kept would never be given.
+     */
+    const overs = await bench()
+    overs.u.keepsNothing = true
+    await overs.send('Short One', { with: { replace: true } })
+    assert.deepEqual(overs.sent.map((x) => [x.way, x.replace]), [[0, true], [1, false]], 'a later try was sent over what is there')
+    const overLate = await bench()
+    overLate.u.rule = 'bits'
+    overLate.u.lateSlot = 3
+    overLate.u.lateLooks = 2
+    const keptLate = await overLate.send('Short One', { with: { replace: true } })
+    assert.deepEqual([keptLate.got.name, keptLate.tries, keptLate.way, keptLate.late, uploads(overLate)], ['Short One', 1, 0, true, [3]], 'a capture filed late was written over by the next try')
+    const again = await cut.send('Short One', { with: { replace: true, order: captureOrder(fell.way) } })
+    assert.deepEqual(cut.sent.map((x) => [x.way, x.replace, x.second]), [[1, true, false]], 'a try sent again started over from the first way')
+    assert.deepEqual([again.got.name, again.tries, again.way, again.late], ['Short One', 1, 1, false])
+    /* Over the page's own half-sent slot the send writes over whatever was left, so the log does not claim to know the way from it. */
+    assert.ok(cut.logs.some((l) => /“Short One”: KEPT$/.test(l)) , cut.logs.join(' | '))
+    /* And a first try that stops part-way says the first way. */
     const cutFirst = await bench()
     cutFirst.u.silentAt = 5
-    await assert.rejects(cutFirst.send('Short One'), (e) => e.partial === true && e.slot === 3 && e.filled === false)
-
-    /* Over the card's own half-sent slot the second send writes over the first, so the log does not claim to know which of the two a unit keeps. */
-    const over = await bench()
-    over.u.fullNamesOnly = true
-    await over.send('Short One', { with: { replace: true } })
-    assert.ok(over.logs.some((l) => /“Short One”: kept on the second send$/.test(l)) && !over.logs.some((l) => /not as it was/.test(l)), over.logs.join(' | '))
+    await assert.rejects(cutFirst.send('Short One'), (e) => e.partial === true && e.slot === 3 && e.way === 0)
 
     /* A file that is no capture goes nowhere. */
     const not = await bench()
     const refused = await sendCapture({ text: '{"architecture":"WaveNet","weights":[1,2,3]}', named: { name: 'x' }, slot: 3, install: () => assert.fail('something was sent') })
     assert.deepEqual([refused.ok, typeof refused.why], [false, 'string'])
     assert.deepEqual(uploads(not), [])
+    /* An order with nothing in it that is a way is the plain order; one that names a way twice sends it once. */
+    const odd = await bench()
+    odd.u.keepsNothing = true
+    await odd.send('Short One', { with: { order: [1, 1, 7, 'x', 0] } })
+    assert.deepEqual(odd.sent.map((x) => x.way), [1, 0])
 
     /* The refusal that means "kept": by the name the wire's failure carries, or, through the computer, by the words alone. */
     assert.equal(heldAlready({ status: 409, holds: 'Short One' }, 'Short One'), true)
@@ -11808,9 +11965,19 @@ export function run(test) {
     assert.equal(heldAlready({ status: 409, message: 'capture slot 004 already holds "Short One Hundred"; nothing was sent' }, 'Short One'), false)
     assert.equal(heldAlready({ status: 409, message: 'The capture tools are already at work. Try again in a moment.' }, 'Short One'), false)
     assert.equal(heldAlready({ status: 504, holds: 'Short One' }, 'Short One'), false)
-    assert.equal(heldAlready({ status: 409, holds: '' }, ''), false)
-    /* The computer's own words for it are these (ForgeFX gen3.ts namInstall), so the phone reads them right. */
-    assert.match('capture slot 004 already holds "Short One"; nothing was sent', /^capture slot \d{3} already holds "[^"]+"; nothing was sent$/)
+
+    /* The packer says what it packed: either byte, with or without the hash, and nothing else of the record changes. */
+    const text = known.text('Short One', 5, true)
+    const asXor = nam.namRecord(text)
+    const asAxe = nam.namRecord(text, { check: 'axe' })
+    const bare = nam.namRecord(text, { check: 'axe', hash: false })
+    assert.equal(nam.NAM_NAME_BYTE_AXE, 0x60)
+    assert.deepEqual([asXor.byte, asXor.xor, asXor.hashed, asAxe.byte, asAxe.xor, asAxe.hashed, bare.byte, bare.hashed], [xorOf('Short One'), xorOf('Short One'), true, 0x60, xorOf('Short One'), true, 0x60, false])
+    assert.equal(asAxe.words[7] >>> 24, 0x60)
+    assert.deepEqual(asAxe.words.filter((w, i) => w !== asXor.words[i]).length, 1, 'more than the name’s 32nd byte differs between the two')
+    assert.ok(bare.words.slice(56, 64).every((w) => w === 0) && asAxe.words.slice(56, 64).some((w) => w !== 0))
+    assert.deepEqual(bare.words.slice(64), asAxe.words.slice(64))
+    assert.deepEqual([asXor.facts.hash, bare.facts.hash, asXor.facts.loudness, asXor.facts.levelIn, asXor.facts.by], [true, true, -17.5, null, 'somebody'])
   })
 
   test('a slot in use is never written over unless the request says so, and a NAM block is pointed at a slot by the one write', async () => {

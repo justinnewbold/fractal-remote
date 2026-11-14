@@ -6,6 +6,7 @@ import { CAPTURES_SHOWN, captureMore, captureNumber, captureSaid, capturesFound 
 import { captureHead, loadCaptures, nameCapture, useCaptures } from '../lib/captureListHere'
 import Note from './Note'
 import Press from './Press'
+import { NowPlayingCard } from './SentCard'
 import Sheet from './Sheet'
 import { Tone3000Door, Tone3000InPop, useTone3000Door } from './Tone3000Quick'
 
@@ -134,7 +135,7 @@ export default function CapturePicker({ slot, choosing = null, disabled = false,
         ) : open ? (
           <View style={{ gap: space.sm }}>
             {library.offered ? <Tone3000Door n={library.n} onPress={browse} /> : null}
-            {came ? <Note>{came}</Note> : null}
+            {came ? <NowPlayingCard line={came} /> : null}
             {reading ? <Note>{reading}</Note> : null}
             {captures.fault && !captures.loading ? <Note tone="warn">{captures.fault}</Note> : null}
             <TextInput

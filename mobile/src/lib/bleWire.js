@@ -3208,7 +3208,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* A name filled out with spaces to all 31 places (namRecord's `fill`) is said so: which shape a unit kept is the thing to know. The request says it; read off the name's last place, a long name cut at a space said it too. */
       const filledOut = body?.filled === true
       say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name ${named} characters${filledOut ? ' (filled out with spaces)' : ''}, check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}, the closing message answered in ${closing ?? '?'} ms: ${reads}`)
-      return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
+      /* `nameByte`: the 32nd byte of the name as it went (the wire sends the record as packed). `closing`: how long the unit took over the closing message, in ms. Both for the sender's log (lib/captureSend); the computer answers the same two. */
+      return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds, nameByte: (words[7] >>> 24) & 0xff, closing }
     })
   }
 

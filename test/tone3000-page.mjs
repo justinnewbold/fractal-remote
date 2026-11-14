@@ -564,7 +564,7 @@ export function run(test) {
     assert.ok(!/onPress=\{browse\}/.test(card))
     assert.match(card, /const how = \{ pick: pick !== false \} await \(outside === true \? startOutside\(how\) : t3k\.start\(how\)\)/)
     /* The browser is offered beside it only where the page inside the app exists: every copy today shows the card as it was. */
-    assert.match(card, /\{signedIn && pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true\)\} \/> : null\}/)
+    assert.match(card, /\{signedIn && T3K_CATALOG_PAGE && pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true\)\} \/> : null\}/)
     /* And before a sign-in, beside Continue, for the sign-in alone. */
     assert.match(card, /\{pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true, false\)\} \/> : null\}/)
     /* Nowhere else: the browser is never offered on a copy that has no page inside the app to stand in for. */

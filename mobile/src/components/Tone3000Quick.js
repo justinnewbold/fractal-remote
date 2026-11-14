@@ -49,12 +49,12 @@ export function useTone3000Door(block) {
 
 /**
  * The button over the block's knobs: TONE3000's name, and in a line what it
- * is for. Its words are in the live colour: over the captures on the unit
+ * is for. Both lines of its words are in the live colour: over the captures on the unit
  * it is the same size and shape as a capture's row, and in plain ink it
  * read as one more capture, called TONE3000.
  */
 export function Tone3000Door({ n, onPress }) {
-  return <Press label={T3K_QUICK} sub={quickSub(n)} tone="live" inkColor={color.live} height={56} onPress={onPress} />
+  return <Press label={T3K_QUICK} sub={quickSub(n)} tone="live" inkColor={color.live} subInk={color.live} height={56} onPress={onPress} />
 }
 
 /**

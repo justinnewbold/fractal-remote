@@ -1097,9 +1097,10 @@ what the computer sends for the same edit, and a test holds it there.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
-1.90.58, and through the computer or the Raspberry Pi since 1.90.59. ONE
-SEND HAS GONE TO HIS UNIT (14 November 2026, over Bluetooth): taken and not
-kept; 1.90.60 carries what was changed for the next.**
+1.90.58, and through the computer or the Raspberry Pi since 1.90.59. HIS UNIT HAS KEPT TWO CAPTURES
+SENT FROM THE APP AND DROPPED THREE (14 November 2026, through the Raspberry
+Pi); 1.90.70 sends one it drops again another way. IT GOES TO THE PUBLIC IN
+THE NEXT STORE VERSION, and no build until he says.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -1317,9 +1318,10 @@ the capture on the unit, which is the hard half.
     does and as his HeadRush tab's chips do. An answer to anything but the
     newest question is thrown away. The list lives while the page is up,
     so Back from a tone asks nothing; nothing is written down.
-  - *WHETHER ITS SEARCH IS OPEN TO HIS KEY IS NOT KNOWN.* Their Commercial
-    Terms keep search for apps with a commercial agreement, which he says
-    he has; nothing here could ask with his sign-in. If TONE3000 answers
+  - *ITS SEARCH IS OPEN TO HIS KEY, AND THE LIST HAS RUN ON HIS PHONE.*
+    "The search features work great in the app, so that API is working"
+    (14 November 2026). What follows is for a key it is NOT open to, which
+    is no longer his case. If TONE3000 answers
     403 the page shows its own short trending list for Trending and its
     newest for Newest (ten at most, which every key may ask for, cut down
     here to what the NAM block plays, so the note gives no number), says
@@ -1336,11 +1338,24 @@ the capture on the unit, which is the hard half.
     would put their catalog first, so the plain sign-in was chosen. NOT
     TRIED ON A PHONE: if Continue does not come back signed in, Browse
     TONE3000 (the pick-a-tone page, which his phone has run) signs in too.
-  - *Browse TONE3000 is on every signed-in view*, the list and a tone's:
-    their rule ("Always provide a clear, persistent path to browse the full
-    TONE3000 catalog via the Select flow"). It is also the only place with
-    play buttons: the app has no player, so in the app's own list a capture
-    is heard by sending it to the unit.
+  - *NO WEB PAGE OF TONE3000'S TO BROWSE ON, since 1.90.70.* "I don't want
+    it to access their web browser directly through our app. I wanna use
+    the API." (14 November 2026.) Browse TONE3000 (their pick-a-tone page)
+    and "Open TONE3000 in the browser instead" are not drawn on any
+    signed-in view, and no sentence names them (`T3K_CATALOG_PAGE` in
+    lib/tone3000Words, false). Their written rule asks for "a clear,
+    persistent path to browse the full TONE3000 catalog via the Select
+    flow"; if they hold him to it at sign-off, that one word brings the
+    button and its sentences back. THE SIGN-IN IS STILL TONE3000'S OWN
+    PAGE (an email, then a code), once: their API has no other way to sign
+    somebody in (authorization code and refresh, nothing else, in all six
+    of their examples). In the browser on every copy out today; inside the
+    app, in a sheet, from the build that carries the web view. The app has
+    no player, so a capture is heard by sending it to the unit.
+  - *WHOSE NAME IS ON THE PAGE.* "@justinnewbold" beside TONE3000 is the
+    TONE3000 account signed in on that device, his own on his phone. A
+    customer signs in to theirs and sees theirs. Nothing on his account
+    needs changing for it.
   - *A sign-in TONE3000 no longer takes* (401, to any request the page
     makes: the list, whose sign-in it is, a tone, its captures, a
     capture's file) puts the page back on its sign-in view with "Your
@@ -1359,9 +1374,10 @@ the capture on the unit, which is the hard half.
     account); the tone's picture and TONE3000's mark on the NAM block that
     plays a capture sent from it; and the splash's wording, and the plain
     sign-in in place of the pick-a-tone page, agreed with them.
-  - NOTHING OF IT HAS RUN ON A PHONE OR AGAINST TONE3000: the tests run it
-    against a stand-in. His first look is the first check, of the search,
-    the sign-in alone, the pictures and the layout.
+  - IT HAS RUN ON HIS PHONE AGAINST TONE3000 (14 November 2026, 1.90.66
+    and 1.90.67, his picture of a tone's view and his log): the sign-in,
+    the search, a tone's captures, and sends to his unit through the
+    Raspberry Pi.
   - Four readers and a skeptic each went through a frozen copy before it
     went out, and found sixteen things, none of them in what is sent to a
     unit: a More button left up after TONE3000 refused a further page,
@@ -1460,6 +1476,63 @@ the capture on the unit, which is the hard half.
     the file's own `weights_hash`. `namRecord` packs that file to the
     record Axe-Edit sent, word for word, the name's check byte included
     (below). The files are not in the repository.
+  - *TWO CAPTURES KEPT AND THREE DROPPED, AND WHAT TOLD THEM APART (14
+    November 2026, through his Raspberry Pi, his log).* THE FIRST CAPTURES
+    SENT FROM THE APP THAT HIS UNIT KEPT: "Jcm800" (slot 034, a short name,
+    as it was) and "MES DRECF RD Gain2 BAL O808 CAB" (slot 035), each
+    picked in Edit afterwards and saved in a preset. DROPPED, every
+    message "taken": "FNDR BFSR VB Edge WRM2 CAB FREE" (three times, two
+    slots), "CL Gain 1 Bright" and "CL Gain 3" (each also with its name
+    filled out). The 32nd byte of the name, which the app filled with the
+    name XORed, was 0x7C and 0x78 in the two kept and 0x02, 0x1D, 0x3D
+    and 0x1D in the dropped; Axe-Edit's own was 0x60. EVERY BYTE KEPT HAS
+    0x60'S TWO BITS SET AND NONE DROPPED HAS. So the likelier reading is
+    that the byte is no check of the name and Axe-Edit sends 0x60 every
+    time (its one recorded name happens to XOR to 0x60, which is how the
+    XOR was believed). NOT PROVEN: the other reading (the XOR is right and
+    the three were dropped for something in their files) fits too.
+    - *Since 1.90.70 a capture the unit takes and does not keep is sent
+      again another way* (lib/captureSend `CAPTURE_WAYS`, run whole by a
+      test against a unit keeping to each rule): 0x60 with the file's
+      hash, the name XORed with the hash, then each with no hash. A way
+      that would send the same record twice is left out, the way the unit
+      last kept one by goes first for the next capture (`keptWay`), and
+      the filling out of short names is gone (one was kept as it was).
+    - *The log is written to settle it in one session*: the file's own
+      notes once (its texts, loudness, gain, levels, whether it has a
+      hash), then for each try the byte that went, with or without the
+      hash, how long the unit took over the closing message, and what the
+      slot read as. READ THOSE LINES FIRST when he sends a log.
+    - *The computer no longer writes its own byte in* (ForgeFX 64c44a7,
+      the computer release that carries it): it sent the name XORed
+      whatever the phone packed, so through the Pi the phone could not
+      try 0x60. It sends what it is given and answers `nameByte` and
+      `closing`. Through an older computer app the answer has neither,
+      the phone knows the XOR went, leaves the 0x60 ways out and its log
+      says to update the computer app. HIS PI HAS TO TAKE THAT UPDATE
+      before a send through it tries 0x60.
+    - If 0x60 is kept every time, make it the only byte and drop the
+      ways. If the name XORed is what is kept, the three were dropped for
+      their files, and the facts line is where to look.
+    - *Two readers and a skeptic each went through it before it went
+      out.* Fixed, each with a test seen to fail without it (33 in all):
+      through an older computer app the same record went twice when the
+      way tried first was the name XORed (any answer with no byte in it
+      is an older computer app, whichever way went); a later try was sent
+      "over what is there", which would have written over a capture the
+      unit had filed late; a send the unit took and said nothing of was
+      drawn as a green tick with its own sentence hidden (the card is
+      green and ticked only where the unit named the slot, and the phone
+      taps only then); and a search that is not open ended in a sentence
+      with nowhere to go.
+  - *ON THE UNIT IS A GREEN CARD, since 1.90.70.* "Need better
+    confirmation that a tone was sent. It doesn't do much after a tone
+    does send successfully." A capture on the unit has a card under its
+    name (components/SentCard): a tick and "On your Axe-Fx III" in the
+    green that means done, the slot and the capture's name, and what the
+    block says it is playing; the phone taps once. The same card is over
+    the knobs, or the captures on the unit, when a Get hands them back.
+    "On" only where the unit named the slot; else "Sent to".
   - *THE FIRST SEND WAS TAKEN AND NOT KEPT, AND THE NAME HAS A CHECK BYTE
     (14 November 2026).* His first send from the card, over Bluetooth: all
     130 messages answered "taken", and then "NAM 1 is playing “<EMPTY>”
@@ -1724,21 +1797,36 @@ the capture on the unit, which is the hard half.
     own factory captures). Whether a PICK from it has been made on the
     unit he has not said. Not built: the browser's (a computer release
     nobody has asked for), and anything that renames or removes a capture.
-- **The order from here:** his first send from the card (either way); the
-  capture picker in Edit is built (above, his account); the list drawn in
-  the app is built (above, his account); then the TONE3000 screen where a
-  player meets it, from Edit's NAM block,
-  which is a store version (new for customers; its page inside the app is
-  written and waits in docs/pending, above). Only an Axe-Fx III has a NAM
-  block. A slot is only
-  ever written when it reads <EMPTY>, unless the player says to replace
-  what is there (over the device's own wire only).
-- **No build for it yet.** A build now would cut every store copy off from
-  updates until it is in the stores, so the build pair waits for the list
-  to be whole. The in-app page's native pieces are ready for it
-  (docs/pending/tone3000-in-app.patch). He has 7 iPhone and 10 Android builds left in November, by his
-  own count. The free Android APK from a side branch is where the native
-  pieces can be tried first.
+- **IT GOES TO THE PUBLIC IN THE NEXT STORE VERSION, AND NO BUILD UNTIL
+  HE SAYS.** "After you have the screenshots built, let me know and show
+  me those and then I'll let you know where to move forward and we'll do a
+  new expo build where I can test it on TestFlight and on android. ...
+  Don't push out a build until I tell you it's OK and we get it all built
+  first. This will be one that's not just for my account only either. It
+  will be one that will be released to the public when we release it
+  through Apple and Android." (14 November 2026.) Six pictures of it went
+  to him that day (drawn from the app's own screens, in the session's
+  scratchpad, not the repository): hold a NAM block, the first-time
+  sign-in, the list, a tone with Preview and Get, the confirmation, the
+  Capture screen in Edit. His word on them comes before anything else.
+  WHAT "ALL BUILT" STILL NEEDS before that build's pull request:
+  - a capture KEPT by the unit every time (below: the name byte), over
+    Bluetooth as well as through the computer;
+  - the switches keyed to that store version, as Edit over Bluetooth is
+    (`EDIT_FROM_STORE`), never an update: the two doors
+    (`TONE3000_QUICK_FOR_EVERYONE`), the capture picker
+    (`NAM_PICKER_FOR_EVERYONE`), and the wire's gate for the capture
+    tools, which answers his account alone today (`captures`,
+    lib/bluetooth);
+  - the waiting patch applied (tone3000-in-app: the sign-in inside the
+    app), the review notes, What's New, the website's words and a What's
+    new line, none of them naming a VP4 for Apple;
+  - TONE3000's sign-off on the screens (he has their approval; their
+    logo, and the catalog-page rule above, are theirs to raise).
+  Only an Axe-Fx III has a NAM block. A slot is only ever written when it
+  reads <EMPTY>, unless the player says to replace what is there (over the
+  device's own wire only). He has 7 iPhone and 10 Android builds left in
+  November, by his own count.
 
 **Two sides on a big screen: open to everyone since 9 November 2026; the
 plan is docs/two-sides/README.md.**

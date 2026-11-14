@@ -405,10 +405,23 @@ export function run(test) {
     older2.refuse(new Error('late and failed'))
     await settle()
     assert.deepEqual([list.get().tones.map((x) => x.id), list.get().fault], [[2], ''])
-    /* The sentences say where the rest is, truly (TONE3000's page is opened for the NAM block's captures alone, so not "everything"), give no number, and promise nothing. */
+    /*
+     * The sentences give no number and promise nothing. And they name no
+     * button the view does not have: TONE3000's own catalog page is not
+     * offered ("I don't want it to access their web browser directly
+     * through our app. I wanna use the API", 14 November 2026), so nothing
+     * says "Browse TONE3000, below".
+     */
+    const { T3K_CATALOG_PAGE } = await import('../mobile/src/lib/tone3000Words.js')
+    assert.equal(T3K_CATALOG_PAGE, false)
+    assert.deepEqual(
+      [TRENDING_ONLY, NEWEST_ONLY, SEARCH_NOT_OPEN],
+      ['TONE3000 hasn’t opened its search to this app yet, so this is its own short trending list.', 'TONE3000 hasn’t opened its search to this app yet, so these are from its newest tones.', 'TONE3000 hasn’t opened its search to this app yet. With the search box empty, Trending and Newest show its own short lists.']
+    )
+    assert.match(flat(code(read('mobile/src/lib/tone3000Browse.js'))), /const ELSEWHERE = T3K_CATALOG_PAGE \? ' Browse TONE3000, below, has every capture the NAM block can play\.' : ''/)
     for (const said of [TRENDING_ONLY, NEWEST_ONLY, SEARCH_NOT_OPEN]) {
       assert.match(said, /^TONE3000 hasn’t opened its search to this app yet/)
-      assert.match(said, /Browse TONE3000, below, has every capture the NAM block can play\.$/)
+      assert.ok(!/Browse TONE3000/.test(said), said)
       assert.ok(!/\b(soon|coming|beta|not yet tried|everything|ten|10)\b/i.test(said), said)
     }
     assert.match(TRENDING_ONLY, /trending/)
@@ -475,7 +488,7 @@ export function run(test) {
       assert.ok(!/AsyncStorage|SecureStore|localStorage|\.setItem\(|writeAsString/.test(body), `${name} keeps something on the device`)
     }
     /* The rules import the client's words and nothing else; the screen never reaches the client or the network itself. */
-    assert.deepEqual([...code(rules).matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./tone3000.js'])
+    assert.deepEqual([...code(rules).matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./tone3000.js', './tone3000Words.js'])
     assert.ok(!/tone3000Here|\bt3k\b|fetch\(/.test(code(view)), 'the screen asks TONE3000 by a way of its own')
     /* A sideways row is the app's own, which keeps its drags from the back gesture. */
     assert.match(src, /<SideScroll showsHorizontalScrollIndicator=\{false\}/)
@@ -517,10 +530,10 @@ export function run(test) {
     /* Neither the list nor the sign-in view is drawn before the device has said which it is. */
     assert.match(card, /const \[signedIn, setSignedIn\] = useState\(null\)/)
     assert.match(card, /\{signedIn && !tone \? <Tone3000Browser list=\{list\.current\} disabled=\{!!busy\} onOpen=\{openTone\} \/> : null\}/)
-    /* Signed in, on the list or on a tone: TONE3000's own page, with everything it has, is one tap away. */
-    assert.match(card, /\{signedIn \? <Press label=\{busy === 'open' \? 'Opening…' : 'Browse TONE3000'\} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled=\{!!busy\} onPress=\{\(\) => browse\(\)\} \/> : null\}/)
+    /* TONE3000's own catalog page is drawn only where it is offered, which it is not (lib/tone3000Words T3K_CATALOG_PAGE): everything a player browses is the app's own list. */
+    assert.match(card, /\{signedIn && T3K_CATALOG_PAGE \? <Press label=\{busy === 'open' \? 'Opening…' : 'Browse TONE3000'\} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled=\{!!busy\} onPress=\{\(\) => browse\(\)\} \/> : null\}/)
     /* A tone's own view: its picture, title, maker by picture and name, kind and format, the creator and licence, its description, and its captures. */
-    const toneView = card.slice(card.indexOf('{signedIn && tone ? ('), card.indexOf("{signedIn ? <Press label={busy === 'open'"))
+    const toneView = card.slice(card.indexOf('{signedIn && tone ? ('), card.indexOf("{signedIn && T3K_CATALOG_PAGE ? <Press label={busy === 'open'"))
     for (const piece of ['source={{ uri: picture }}', "{tone.title || 'Untitled tone'}", '<Avatar uri={creatorImage(tone)} size={16} />', "{[madeBy, gearSaid(tone.gear), 'NAM'].filter(Boolean).join(' · ')}", '{gearNamed}', '{toneCredit(tone)}', '{String(tone.description)}', '{(models || []).map((m) => {', '{where.held ? BACK_TO_LIST_HELD : BACK_TO_LIST}', '{CAPTURES_HEAD}']) {
       assert.ok(toneView.includes(piece), `a tone’s view no longer has ${piece}`)
     }
@@ -586,9 +599,9 @@ export function runPreviewAndGet(test) {
     assert.match(button, /accessibilityLabel=\{says\}/)
     assert.match(button, /minHeight: TAP/)
     /* What each does. Both put the capture in the unit's first empty slot (the one send); Preview alone then points NAM 1 at it, Get leaves what is playing alone. */
-    assert.match(card, /const sendToUnit = async \(m, again = null, fill = false, play = true, back = false\) => \{/)
+    assert.match(card, /const sendToUnit = async \(m, again = null, way = null, play = true, back = false\) => \{/)
     assert.match(card, /if \(!play\) return setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id\)/)
-    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) place\(m\.id, slot, !!went\.got\.name\)/)
+    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\)/)
     /* On the Developer page that block is NAM 1: nothing handed in, or a block that is no NAM. */
     assert.match(card, /const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\]/)
     /*
@@ -608,7 +621,7 @@ export function runPreviewAndGet(test) {
     assert.equal((card.match(/\bunplace\(/g) || []).length, 1, 'something other than an empty slot takes a capture off the list of what is on the unit')
     assert.ok(!/setOnUnit\(\{\}\)/.test(card))
     /* "On the unit" only where the unit said the slot holds it; a send it took and said nothing of is "Sent to slot", until a block pointed at it names what is there. */
-    assert.match(card, /\{at\.sure \? `On the unit · slot \$\{namSlotSaid\(at\.slot\)\}` : `Sent to slot \$\{namSlotSaid\(at\.slot\)\}`\}/)
+    assert.match(card, /<SentCard sure=\{at\.sure\} head=\{at\.sure \? ON_UNIT : SENT_TO_UNIT\} line=\{onUnitLine\(namSlotSaid\(at\.slot\), named\)\}/)
     assert.match(card, /if \(placed\.has\(String\(id\)\)\) place\(id, slot, true\)/)
     /* What a fetched file turned out to be is still said under a capture that cannot be sent, and under the one in hand. */
     assert.match(card, /\{checked\[m\.id\] && \(noUse \|\| mine\) \? \( <Text selectable style=\{\{[^}]*\}\}> \{checked\[m\.id\]\} <\/Text> \) : null\}/)

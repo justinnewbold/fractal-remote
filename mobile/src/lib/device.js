@@ -686,7 +686,7 @@ export const onCaptureSent = (fn) => {
   captureWatchers.add(fn)
   return () => captureWatchers.delete(fn)
 }
-/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken, over the device's own wire. `filled` is for the wire's log alone: the name was filled out to all 31 places (namRecord's `fill`). */
+/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds, nameByte, closing } (the last two from the device's own wire and from a computer app that sends the name byte as packed; lib/captureSend reads them). `onProgress(sent, of)` as each message is taken, over the device's own wire. `filled` is for the wire's log alone: the name was filled out to all 31 places (namRecord's `fill`). */
 export const namInstallHere = (slot, words, { replace = false, onProgress, filled = false } = {}) => {
   capturesGoing++
   return captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace, filled: filled === true }, onProgress }, () => {

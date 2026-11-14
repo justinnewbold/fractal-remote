@@ -34,6 +34,30 @@ const backPlace = (back) => (back === 'captures' ? 'the captures on the unit' : 
 /** A NAM block by its number, as the unit and the app name it. */
 export const namBlockSaid = (n) => `NAM ${n === 2 ? 2 : 1}`
 
+/**
+ * WHETHER TONE3000'S OWN CATALOG PAGE IS OFFERED from the app's list
+ * ("Browse TONE3000", which opens its website's pick-a-tone page). Off:
+ * "I don't want it to access their web browser directly through our app. I
+ * wanna use the API." (Justin, 14 November 2026.) The list, the search, a
+ * tone's captures, Preview and Get are all the app's own, over TONE3000's
+ * API. The one page of TONE3000's a player still meets is its sign-in (an
+ * email, then a code), once: its API gives an app no other way to sign
+ * somebody in.
+ *
+ * TONE3000's written Design Requirements ask for "a clear, persistent path
+ * to browse the full TONE3000 catalog via the Select flow". If they hold
+ * him to that when they sign the screens off, this is the one word to
+ * change: the button, and every sentence that names it, come back with it.
+ */
+export const T3K_CATALOG_PAGE = false
+
+/** The head of the card a capture gets once it is on the unit: said only where the unit has named the slot as holding it. */
+export const ON_UNIT = 'On your Axe-Fx III'
+/** The same where the unit took it and has not said what the slot holds. */
+export const SENT_TO_UNIT = 'Sent to your Axe-Fx III'
+/** The card's second line: which slot, and the capture's name. */
+export const onUnitLine = (slotSaid, name) => `Slot ${slotSaid}${name ? ` · ${name}` : ''}`
+
 /** What to do, in order: the page's steps, behind its ⓘ. */
 export function stepsFor({ n = 1, held = false, back = 'knobs' } = {}) {
   const nam = namBlockSaid(n)
@@ -43,7 +67,7 @@ export function stepsFor({ n = 1, held = false, back = 'knobs' } = {}) {
       ? `Each capture has two buttons. Preview puts it on the Axe-Fx III and plays it in ${nam}, so you hear it through your own rig. Get does the same and, once ${nam} is playing it, takes you back to ${backPlace(back)}.`
       : `Each capture has two buttons. Preview puts it on the Axe-Fx III and plays it in ${nam}, so you hear it through your own rig. Get puts it on the unit and leaves what you are playing alone.`,
     'Either way it goes into the unit’s first empty capture slot and stays there: the Axe-Fx III can only play a capture that is in a slot. It takes about half a minute over Bluetooth, a second or two through the computer or by USB.',
-    'Browse TONE3000 opens TONE3000’s own page, which has play buttons: what you hear there is its own demo recording, not your rig.'
+    ...(T3K_CATALOG_PAGE ? ['Browse TONE3000 opens TONE3000’s own page, which has play buttons: what you hear there is its own demo recording, not your rig.'] : [])
   ])
 }
 

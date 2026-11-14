@@ -104,6 +104,7 @@ import TempoDot from '../components/TempoDot'
 import Tile from '../components/Tile'
 import Coach from '../components/Coach'
 import Looper from '../components/Looper'
+import { NowPlayingCard } from '../components/SentCard'
 import Sheet from '../components/Sheet'
 import TempoBox from '../components/TempoBox'
 import { tempoRange } from '../lib/tempo'
@@ -2598,7 +2599,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   const libraryDoor = library.offered ? (
     <>
       <Tone3000Door n={library.n} onPress={() => setBrowsing(true)} />
-      {came ? <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 20 }}>{came}</Text> : null}
+      {came ? <NowPlayingCard line={came} /> : null}
     </>
   ) : null
   if (withKnobs) {
