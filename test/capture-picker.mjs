@@ -768,14 +768,14 @@ export function run(test) {
     assert.match(edit, /const namPicker = namOnUnit && pickerOn && Number\.isInteger\(capture\?\.slot\)/)
     assert.match(edit, /const pickerOn = useCapturePicker\(\)/)
     assert.equal((edit.match(/<CapturePicker /g) || []).length, 1)
-    assert.match(edit, /\{namPicker \? <CapturePicker slot=\{capture\.slot\} choosing=\{capturing\} disabled=\{!!restoring \|\| capturing !== null \|\| rereading\} onPick=\{pickCapture\} \/> : null\}/)
+    assert.match(edit, /\{namPicker \? <CapturePicker slot=\{capture\.slot\} choosing=\{capturing\} disabled=\{!!restoring \|\| capturing !== null \|\| rereading\} onPick=\{pickCapture\} block=\{block\} onChanged=\{captureChanged\} \/> : null\}/)
     /* First: over the knobs, as a model is over an amp's. And the line that says the unit chooses is not drawn with it. */
     assert.ok(edit.indexOf('<CapturePicker ') > 0 && edit.indexOf('<CapturePicker ') < edit.indexOf('shown.map((p) =>'), 'the capture is under the knobs')
     assert.match(edit, /\{namOnUnit && !namPicker \? <Note>\{NAM_ON_THE_UNIT\}<\/Note> : null\}/)
     /* A pick: the unit's own write for it, then the block read again, and what the read says is what the button shows. Never Edit's write for a list setting, which has no row for the capture and must not get one. */
     assert.match(
       edit,
-      /const pickCapture = async \(slot\) => \{ if \(restoring \|\| capturing !== null \|\| rereading\) return setCapturing\(slot\) const show = \(fresh\) => \{ if \(!Number\.isInteger\(fresh\?\.capture\?\.slot\)\) return false setParams\(fresh\.named \|\| \[\]\) setEnums\(fresh\.enums \|\| \[\]\) setLayout\(fresh\.layout \|\| null\) setCapture\(fresh\.capture\) return true \} let got = null try \{ got = await chooseCapture\(eid, slot\) noteEdited\(\) if \(Number\.isInteger\(got\?\.slot\)\) setCapture\(\{ slot: got\.slot \}\) show\(await blockParams\(eid\)\) if \(got\?\.listed\) onError\(captureNotAsListed\(got\.slot, got\.listed, got\.name\)\) \} catch \(err\) \{ setCapturing\(null\) setRereading\(true\) onError\(got\?\.listed \? captureNotAsListed\(got\.slot, got\.listed, got\.name\) : err\.message\) try \{ const fresh = await blockParams\(eid\) if \(show\(fresh\) && !got && err\?\.status !== 409 && fresh\.capture\.slot === slot\) noteEdited\(\) \} catch \{ \} \} finally \{ setCapturing\(null\) setRereading\(false\) \} \}/,
+      /const pickCapture = async \(slot\) => \{ if \(restoring \|\| capturing !== null \|\| rereading\) return ownPick\.current = true setCapturing\(slot\) const show = \(fresh\) => \{ if \(!Number\.isInteger\(fresh\?\.capture\?\.slot\)\) return false setParams\(fresh\.named \|\| \[\]\) setEnums\(fresh\.enums \|\| \[\]\) setLayout\(fresh\.layout \|\| null\) setCapture\(fresh\.capture\) return true \} let got = null try \{ got = await chooseCapture\(eid, slot\) noteEdited\(\) if \(Number\.isInteger\(got\?\.slot\)\) setCapture\(\{ slot: got\.slot \}\) show\(await blockParams\(eid\)\) if \(got\?\.listed\) onError\(captureNotAsListed\(got\.slot, got\.listed, got\.name\)\) \} catch \(err\) \{ setCapturing\(null\) setRereading\(true\) onError\(got\?\.listed \? captureNotAsListed\(got\.slot, got\.listed, got\.name\) : err\.message\) try \{ const fresh = await blockParams\(eid\) if \(show\(fresh\) && !got && err\?\.status !== 409 && fresh\.capture\.slot === slot\) noteEdited\(\) \} catch \{ \} \} finally \{ ownPick\.current = false setCapturing\(null\) setRereading\(false\) recapture\.current\?\.after\(\) \} \}/,
       'Edit’s pick is not what it has to be. The unit’s own write; an answered pick believed at once, whatever the read after it does; the block read again and drawn only where the read says which capture (through the computer a failed read comes back as every knob at nought, not as a failure); after a pick that FAILED too, with the button back on what is known before that read, and the preset marked changed only if the unit is then on the capture that was tapped and the pick was not one refused with nothing sent'
     )
     /* While that second read is out the picker waits. */
@@ -785,14 +785,15 @@ export function run(test) {
     /* The picker draws and asks; it writes nothing itself. */
     const picker = code(read('mobile/src/components/CapturePicker.js'))
     assert.ok(!/chooseCapture|namPickHere|setEnum|setParam|blockParams|remoteRequest|lib\/device|lib\/rig/.test(picker), 'the picker writes to the unit itself')
-    assert.match(flat(picker), /export default function CapturePicker\(\{ slot, choosing = null, disabled = false, onPick \}\)/)
+    assert.match(flat(picker), /export default function CapturePicker\(\{ slot, choosing = null, disabled = false, onPick, block = null, onChanged = null \}\)/)
+    /* The way to more captures (components/Tone3000Quick, test/tone3000-quick.mjs) is drawn here and plays by its own page: still nothing of the picker's own writes to the unit. */
     assert.match(flat(picker), /import \{ captureHead, loadCaptures, nameCapture, useCaptures \} from '\.\.\/lib\/captureListHere'/)
     /* The button says what is known of the slot the block is on, an empty one and the 257th too; the rows are the list on show, which leaves those out. */
     assert.match(flat(picker), /const here = captureHead\(at\)/)
     assert.ok(!/captures\.list\.find/.test(picker), 'the button looks its slot up in the rows: a block on an empty slot, or the 257th, would say a bare number')
     /* The name of the slot the block is on is asked by itself; the list is read when the sheet is opened, and again when asked. */
     assert.match(flat(picker), /useEffect\(\(\) => \{ if \(Number\.isInteger\(slot\)\) nameCapture\(slot\) \}, \[slot\]\)/)
-    assert.match(flat(picker), /const show = \(\) => \{ setFind\(''\) setOpen\(true\) loadCaptures\(\) \}/)
+    assert.match(flat(picker), /const show = \(\) => \{ setFind\(''\) setCame\(''\) setOpen\(true\) loadCaptures\(\) \}/)
     assert.match(flat(picker), /onPress=\{\(\) => loadCaptures\(\{ again: true \}\)\}/)
     /* No more rows at once than the model list and the cab list draw; a pick of the capture it is on asks nothing. */
     assert.match(flat(picker), /found\.slice\(0, CAPTURES_SHOWN\)\.map\(\(h\) =>/)
@@ -800,7 +801,10 @@ export function run(test) {
     /* Its words: plain, and none of the ones the app never says. */
     const words = [...read('mobile/src/components/CapturePicker.js').matchAll(/(?:label|sub|title|note|placeholder|accessibilityLabel)=(?:"([^"]+)"|\{`([^`]+)`\}|\{'([^']+)'\})|<Note[^>]*>\{?[`']?([^<{}`']+)/g)].map((m) => m[1] || m[2] || m[3] || m[4]).filter(Boolean)
     assert.ok(words.includes('Capture') && words.includes('Find a capture'), words.join(' | '))
-    for (const said of [...words, read('mobile/src/components/CapturePicker.js').match(/note="([^"]+)"/)[1]]) assert.ok(!/this phone|\bbeta\b|\bsoon\b|coming|tried|official|iPhone|Android/i.test(said), said)
+    /* The sheet's note is one of two now (the captures on the unit, or the way to more of them): both are read. */
+    const notes = [...read('mobile/src/components/CapturePicker.js').match(/note=\{[^}]*\}/)[0].matchAll(/'([^']+)'/g)].map((m) => m[1])
+    assert.deepEqual(notes, ['Captures from TONE3000. One you preview or get plays on the channel this block is on.', 'The captures on the unit. The one picked plays on the channel this block is on.'])
+    for (const said of [...words, ...notes]) assert.ok(!/this phone|\bbeta\b|\bsoon\b|coming|tried|official|iPhone|Android/i.test(said), said)
 
     /* The wiring: one list for the app, kept under one key, the device's own asker either way it is connected, and told when the card has sent a capture. */
     const here = flat(code(read('mobile/src/lib/captureListHere.js')))

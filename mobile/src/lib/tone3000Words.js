@@ -16,21 +16,31 @@
  * but only once the block has said it is playing it, which the words allow
  * for ("once NAM 2 is playing it"): a Get that fails stays on the page.
  *
+ * FROM THE CAPTURE LIST OF A NAM BLOCK IN EDIT (`held` with `back:
+ * 'captures'`): "Also want it on the capture screen when I can they see the
+ * ones they've already downloaded but then they can also click tone 3000
+ * from that and it pulls up and they can browse preview and do it that way
+ * as well" (the same day). The same two buttons; what Get goes back to is
+ * the captures on the unit, with the new one among them.
+ *
  * Either way the capture goes into one of the unit's capture slots and
  * stays there: an Axe-Fx III plays nothing else. No sentence here says a
  * preview is not kept.
  */
 
+/** Where Get goes back to from a held page: the block's knobs (Play's pop-up), or the list of captures on the unit (Edit's). */
+const backPlace = (back) => (back === 'captures' ? 'the captures on the unit' : 'its knobs')
+
 /** A NAM block by its number, as the unit and the app name it. */
 export const namBlockSaid = (n) => `NAM ${n === 2 ? 2 : 1}`
 
 /** What to do, in order: the page's steps, behind its ⓘ. */
-export function stepsFor({ n = 1, held = false } = {}) {
+export function stepsFor({ n = 1, held = false, back = 'knobs' } = {}) {
   const nam = namBlockSaid(n)
   return Object.freeze([
     'Search here, or pick an order and a kind of gear. Only tones the Axe-Fx III’s NAM block can play are listed. Tap one to see its captures.',
     held
-      ? `Each capture has two buttons. Preview puts it on the Axe-Fx III and plays it in ${nam}, so you hear it through your own rig. Get does the same and, once ${nam} is playing it, takes you back to its knobs.`
+      ? `Each capture has two buttons. Preview puts it on the Axe-Fx III and plays it in ${nam}, so you hear it through your own rig. Get does the same and, once ${nam} is playing it, takes you back to ${backPlace(back)}.`
       : `Each capture has two buttons. Preview puts it on the Axe-Fx III and plays it in ${nam}, so you hear it through your own rig. Get puts it on the unit and leaves what you are playing alone.`,
     'Either way it goes into the unit’s first empty capture slot and stays there: the Axe-Fx III can only play a capture that is in a slot. It takes about half a minute over Bluetooth, a second or two through the computer or by USB.',
     'Browse TONE3000 opens TONE3000’s own page, which has play buttons: what you hear there is its own demo recording, not your rig.'
@@ -44,16 +54,16 @@ export const stepsFoot = ({ n = 1, held = false } = {}) =>
     : 'For Preview, the preset you are on needs NAM 1 in it (with only NAM 2 there, Play it in NAM 2 is under the capture once it is on the unit). Which NAM block plays a capture is not saved until you save the preset, and a capture already on the unit is never written over.'
 
 /** On the view itself, over a tone's captures: on this unit a preview is kept. */
-export const capturesNote = ({ n = 1, held = false } = {}) =>
+export const capturesNote = ({ n = 1, held = false, back = 'knobs' } = {}) =>
   held
-    ? `Preview puts the capture in an empty slot on the unit and plays it in ${namBlockSaid(n)}. Get does the same and, once ${namBlockSaid(n)} is playing it, takes you back to its knobs. Either way it stays on the unit.`
+    ? `Preview puts the capture in an empty slot on the unit and plays it in ${namBlockSaid(n)}. Get does the same and, once ${namBlockSaid(n)} is playing it, takes you back to ${backPlace(back)}. Either way it stays on the unit.`
     : `Preview and Get both put the capture in an empty slot on the unit, and it stays there. Preview also plays it in ${namBlockSaid(n)}.`
 
 /** What a screen reader says of Preview on a capture's line. */
 export const previewSays = (name, n = 1) => `Preview ${name}: puts it on the Axe-Fx III and plays it in ${namBlockSaid(n)}`
 
 /** And of Get. */
-export const getSays = (name, { n = 1, held = false } = {}) => (held ? `Get ${name}: puts it on the Axe-Fx III, plays it in ${namBlockSaid(n)} and goes back to its knobs` : `Get ${name}: puts it on the Axe-Fx III`)
+export const getSays = (name, { n = 1, held = false, back = 'knobs' } = {}) => (held ? `Get ${name}: puts it on the Axe-Fx III, plays it in ${namBlockSaid(n)} and goes back to ${backPlace(back)}` : `Get ${name}: puts it on the Axe-Fx III`)
 
 /*
  * THE WAY IN FROM A HELD NAM BLOCK, and the way back.
@@ -61,8 +71,9 @@ export const getSays = (name, { n = 1, held = false } = {}) => (held ? `Get ${na
 /** The button over the block's knobs. TONE3000's name as it writes it (its rule for a way in). */
 export const T3K_QUICK = 'TONE3000'
 export const quickSub = (n) => `Browse captures, preview them, and get one for ${namBlockSaid(n)}`
-/** Over the page, while it is up in the block's pop-up. */
+/** Over the page, while it is up in the block's pop-up, or in the capture list's sheet. */
 export const backToKnobs = (n) => `‹ Back to ${namBlockSaid(n)}’s knobs`
+export const BACK_TO_CAPTURES = '‹ Back to the captures on the unit'
 /** Under a capture that is already on the unit, there: hear it again, or take it and go back. */
 export const USE_AND_BACK = 'Use it and go back'
-export const useAndBackSub = (n) => `Plays it in ${namBlockSaid(n)} and returns to its knobs`
+export const useAndBackSub = (n, back = 'knobs') => `Plays it in ${namBlockSaid(n)} and returns to ${backPlace(back)}`

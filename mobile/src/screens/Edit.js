@@ -94,6 +94,7 @@ import { useEditSettings } from '../lib/useEditSettings'
 import { useCapturePicker } from '../lib/useCapturePicker'
 import { captureNotAsListed } from '../lib/captureList'
 import { chooseCapture } from '../lib/captureListHere'
+import { captureReread } from '../lib/captureReread'
 import { fieldNumber, fieldSelection, fieldSelectionMoved, fieldTyped, openField } from '../lib/value-field'
 import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
@@ -956,6 +957,13 @@ export function BlockPanel({
   const [capturing, setCapturing] = useState(null)
   /* The block is being read again after a pick that failed: the picker waits, and the button already says what is known. */
   const [rereading, setRereading] = useState(false)
+  /* For `captureChanged`, which is called from closures older than this drawing: what is so NOW, never what was when they were made. */
+  const captureNow = useRef(null)
+  captureNow.current = capture
+  const captureEnds = useRef(null)
+  const recapture = useRef(null)
+  /* A pick of this panel's own is under way, its read after a failure included: said in a ref, since the states that say it are a drawing behind. */
+  const ownPick = useRef(false)
   const pickerOn = useCapturePicker()
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
@@ -1120,6 +1128,7 @@ export function BlockPanel({
    */
   const pickCapture = async (slot) => {
     if (restoring || capturing !== null || rereading) return
+    ownPick.current = true
     setCapturing(slot)
     /*
      * What a read of the block says, drawn whole: but only a read that says
@@ -1156,9 +1165,54 @@ export function BlockPanel({
         /* The read failed too: the button stays on what is known. */
       }
     } finally {
+      ownPick.current = false
       setCapturing(null)
       setRereading(false)
+      /* A change told from outside while this pick was out (below) stood back for it: the block is read once more now, since this pick's read may have left before it. */
+      recapture.current?.after()
     }
+  }
+
+  /*
+   * The block's capture may have been changed from outside this panel's own
+   * pick: the picker's way to more captures plays one in this block by
+   * itself (components/CapturePicker `onChanged`). So the block is read
+   * again, and drawn only where the read says which capture it is on (a
+   * read that failed through the computer comes back with every knob at
+   * nought). On another capture than before, the preset has been changed.
+   *
+   * `pointedAt` is the slot the unit itself said the block was pointed at
+   * there, where it said one. A read that fails or says no capture then
+   * leaves the button on THAT slot, as a pick of this panel's own is
+   * believed whatever the read after it does: the page has already told
+   * the player the block is playing it and to save the preset.
+   *
+   * It is called from closures made at an earlier drawing (a Get's, half a
+   * minute old over Bluetooth), and one that comes while a read is out is
+   * not dropped: lib/captureReread has the rule, and is handed what is so
+   * NOW (`captureEnds`) each time it asks.
+   */
+  captureEnds.current = {
+    read: () => blockParams(eid),
+    held: () => !!restoring || ownPick.current,
+    now: () => captureNow.current?.slot,
+    show: (fresh) => {
+      setParams(fresh.named || [])
+      setEnums(fresh.enums || [])
+      setLayout(fresh.layout || null)
+      setCapture(fresh.capture)
+      captureNow.current = fresh.capture
+    },
+    point: (slot) => {
+      setCapture({ slot })
+      captureNow.current = { slot }
+    },
+    edited: noteEdited,
+    busy: setRereading
+  }
+  const captureChanged = (pointedAt = null) => {
+    if (!recapture.current) recapture.current = captureReread(() => captureEnds.current)
+    return recapture.current(pointedAt)
   }
 
   /*
@@ -1696,7 +1750,7 @@ export function BlockPanel({
       {block.turns === true && answered && !loading && !params.length ? <Note>{OWN_KNOBS_NEED_COMPUTER}</Note> : null}
 
       {/* A NAM block's capture, first: it is the block's sound, as a model is an amp's. */}
-      {namPicker ? <CapturePicker slot={capture.slot} choosing={capturing} disabled={!!restoring || capturing !== null || rereading} onPick={pickCapture} /> : null}
+      {namPicker ? <CapturePicker slot={capture.slot} choosing={capturing} disabled={!!restoring || capturing !== null || rereading} onPick={pickCapture} block={block} onChanged={captureChanged} /> : null}
 
       {/* ------------------------------------------------------------ knobs */}
       {/*
