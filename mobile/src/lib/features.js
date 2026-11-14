@@ -312,6 +312,30 @@ export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false
 export const EDIT_SETTINGS_FOR_EVERYONE = false
 
 /**
+ * WHICH CAPTURE A NAM BLOCK PLAYS, CHOSEN IN EDIT (lib/captureList,
+ * components/CapturePicker): a button with the capture the block is on, its
+ * number and name as the unit and Axe-Edit say them, and a list of the
+ * captures on the unit to choose another from. Edit said "The capture is
+ * chosen on the unit itself."
+ *
+ * It was the next thing on the list after the captures themselves ("then a
+ * capture picker in Edit", CLAUDE.md), and it stands on what his unit has
+ * already done: the unit's list was read by Axe-Edit's own questions in his
+ * recording, and his first pick from the TONE3000 card was answered with the
+ * slot it asked for (14 November 2026). An Axe-Fx III only, over Bluetooth,
+ * its USB cable, or through a computer app that has the list.
+ *
+ * His account first, as every new thing is. NO LIST HAS BEEN READ FROM THE
+ * APP, and no pick made from Edit: his first is the first check. Off, it is
+ * his account only (lib/useCapturePicker), and everybody else's NAM block
+ * says what it said. It opens to everyone when he says so, with its What's
+ * new line in that pull request. The capture tools on the device's own wire
+ * answer his account alone as well (lib/bluetooth `captures`), so opening
+ * this opens those, for reads and the pick, in the same pull request.
+ */
+export const NAM_PICKER_FOR_EVERYONE = false
+
+/**
  * SAVING FROM THE APP OVER BLUETOOTH OR THE UNIT'S USB CABLE (lib/bleSave,
  * bleWire storePreset): Edit's Save, and Play's, write the unit's edit
  * buffer over the preset it is on, with no computer.

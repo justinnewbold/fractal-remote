@@ -91,11 +91,15 @@ import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
 import { blockSettings, settingsByPage } from '../lib/editSettings'
 import { useEditSettings } from '../lib/useEditSettings'
+import { useCapturePicker } from '../lib/useCapturePicker'
+import { captureNotAsListed } from '../lib/captureList'
+import { chooseCapture } from '../lib/captureListHere'
 import { fieldNumber, fieldSelection, fieldSelectionMoved, fieldTyped, openField } from '../lib/value-field'
 import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
 import Sheet from '../components/Sheet'
 import BlockSettings from '../components/BlockSettings'
+import CapturePicker from '../components/CapturePicker'
 import searchIcon from '../../assets/icons/search.png'
 import moreIcon from '../../assets/icons/more.png'
 import moreAndroidIcon from '../../assets/icons/more-vertical.png'
@@ -941,6 +945,18 @@ export function BlockPanel({
   const [enums, setEnums] = useState([])
   const [choosing, setChoosing] = useState({})
   const settingsOn = useEditSettings()
+  /*
+   * A NAM BLOCK'S CAPTURE (lib/captureList): the slot its channel is on, as
+   * the block's read says it (`capture`, which only a NAM block's read has,
+   * and only from a wire or a computer app that says it), and the slot just
+   * picked while the pick is out. Drawn as a picker for the accounts
+   * lib/useCapturePicker opens it to.
+   */
+  const [capture, setCapture] = useState(null)
+  const [capturing, setCapturing] = useState(null)
+  /* The block is being read again after a pick that failed: the picker waits, and the button already says what is known. */
+  const [rereading, setRereading] = useState(false)
+  const pickerOn = useCapturePicker()
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
   /* One checked write per control at a time — see commit. */
@@ -1005,6 +1021,7 @@ export function BlockPanel({
         if (stop) return
         setParams(p?.named || [])
         setEnums(p?.enums || [])
+        setCapture(p?.capture ?? null)
         setAnswered(true)
         setLayout(p?.layout || null)
         setModels(t || [])
@@ -1088,6 +1105,59 @@ export function BlockPanel({
         delete copy[setting.id]
         return copy
       })
+    }
+  }
+
+  /*
+   * A capture picked: the block is pointed at the slot by the unit's own
+   * write for it (lib/captureListHere chooseCapture, which the unit answers
+   * with the slot and the capture's name), and the block is read again,
+   * since what the read says is what the button shows. After a pick that
+   * FAILED too: its answer may have been lost with the pick taken, and then
+   * the unit is on the new capture whatever the app was told. A pick the
+   * unit ANSWERED is believed even if the read after it fails. Nothing is
+   * saved on the unit by it.
+   */
+  const pickCapture = async (slot) => {
+    if (restoring || capturing !== null || rereading) return
+    setCapturing(slot)
+    /*
+     * What a read of the block says, drawn whole: but only a read that says
+     * which capture the block is on. Through the computer a read that failed
+     * is not a failure: it comes back with every knob at nought, no settings
+     * and no capture, and drawn it would blank the knobs.
+     */
+    const show = (fresh) => {
+      if (!Number.isInteger(fresh?.capture?.slot)) return false
+      setParams(fresh.named || [])
+      setEnums(fresh.enums || [])
+      setLayout(fresh.layout || null)
+      setCapture(fresh.capture)
+      return true
+    }
+    /* The pick's own answer, once there is one: the unit has said where the block is, whatever the read after it does. */
+    let got = null
+    try {
+      got = await chooseCapture(eid, slot)
+      noteEdited()
+      if (Number.isInteger(got?.slot)) setCapture({ slot: got.slot })
+      show(await blockParams(eid))
+      if (got?.listed) onError(captureNotAsListed(got.slot, got.listed, got.name))
+    } catch (err) {
+      /* The button named the tapped capture only while the pick was out: it goes back to what is known at once, not after the read below. */
+      setCapturing(null)
+      setRereading(true)
+      onError(got?.listed ? captureNotAsListed(got.slot, got.listed, got.name) : err.message)
+      try {
+        const fresh = await blockParams(eid)
+        /* A pick that failed with no answer may still have landed: the unit on the tapped capture now is a preset that was changed. Not one refused before anything was sent (409: the capture tools at work, a capture being sent). */
+        if (show(fresh) && !got && err?.status !== 409 && fresh.capture.slot === slot) noteEdited()
+      } catch {
+        /* The read failed too: the button stays on what is known. */
+      }
+    } finally {
+      setCapturing(null)
+      setRereading(false)
     }
   }
 
@@ -1431,6 +1501,8 @@ export function BlockPanel({
   const flip = () => writeBlockBypass(eid, engaged)
   /* A NAM whose knobs the wire does have (an Axe-Fx III over Bluetooth, for an account lib/features NAM_KNOBS_FOR_EVERYONE opens them to): it opens like any block, with NAM_ON_THE_UNIT under its knobs for what is left to the unit. Not in the hold pop-up, which is the knobs only. */
   const namOnUnit = block.slug === 'nam' && !knobless && !bare
+  /* And where the read says which capture the block is on, and the picker is open to this account, the picker in that sentence's place: the capture is chosen here. */
+  const namPicker = namOnUnit && pickerOn && Number.isInteger(capture?.slot)
   /* The model picker in that row (a panel wide enough): then it is not under the knobs. */
   const modelUp = tidy && headShape(wide).model && models.length > 0
   /* The i beside the model, for a kind Amp & pedal names has a page for (lib/editMore gearStart): only the Edit screen hands onModelInfo over. */
@@ -1623,6 +1695,9 @@ export function BlockPanel({
       {/* One the computer answers the knobs of (lib/ownBlocks `turns`), on a computer app from before it could: its read came back with none. */}
       {block.turns === true && answered && !loading && !params.length ? <Note>{OWN_KNOBS_NEED_COMPUTER}</Note> : null}
 
+      {/* A NAM block's capture, first: it is the block's sound, as a model is an amp's. */}
+      {namPicker ? <CapturePicker slot={capture.slot} choosing={capturing} disabled={!!restoring || capturing !== null || rereading} onPick={pickCapture} /> : null}
+
       {/* ------------------------------------------------------------ knobs */}
       {/*
         One tab per page. An amp has ten, more than a phone is wide, so the
@@ -1737,7 +1812,7 @@ export function BlockPanel({
       {/* The page's list settings, under its knobs and its Level (lib/editSettings; "Menu style B"). */}
       {pageSettings.length ? <BlockSettings settings={pageSettings} choosing={choosing} disabled={!!restoring} onPick={pickSetting} /> : null}
 
-      {namOnUnit ? <Note>{NAM_ON_THE_UNIT}</Note> : null}
+      {namOnUnit && !namPicker ? <Note>{NAM_ON_THE_UNIT}</Note> : null}
 
       {/*
         UNDER THE KNOBS: copying the channel, on and off, and the model.

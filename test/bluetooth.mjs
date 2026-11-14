@@ -5699,6 +5699,137 @@ export function run(test) {
   })
 
   /*
+   * THE LIST OF CAPTURES GOES THE SAME TWO WAYS (the picker in Edit,
+   * lib/captureListHere). Through the computer it is a route of its own,
+   * from the release that carries it; an older computer app has no such
+   * route, and that is said as what to do about the picker, not about
+   * sending a capture. And a capture sent from the card tells whoever keeps
+   * the list that it is out of date.
+   */
+  test('the list of captures is asked through the computer or on the wire, an older computer app is said so, and a capture sent says the list has changed', async () => {
+    const { device, sw, relay, done } = await deviceOnABench()
+    try {
+      sw.setSwitch({ on: false })
+      relay.asked.length = 0
+      relay.bodies.length = 0
+      await device.namHeadsHere(0, 32)
+      await device.namHeadsHere(224, 32)
+      /* Numbers in the path, never a query: the relay drops what follows a question mark. A GET with no body. */
+      assert.deepEqual(relay.asked, ['GET /nam/heads/0/32', 'GET /nam/heads/224/32'])
+      assert.deepEqual(relay.bodies, [null, null])
+      /* A computer app from before the route: said as what it means for choosing a capture, with its number kept. */
+      relay.hooks.fail = () => Object.assign(new Error('Route not found'), { status: 404 })
+      await assert.rejects(device.namHeadsHere(0, 32), (e) => e.message === device.CAPTURE_LIST_NEEDS_COMPUTER && e.status === 404)
+      assert.notEqual(device.CAPTURE_LIST_NEEDS_COMPUTER, device.CAPTURES_NEED_COMPUTER)
+      assert.ok(!/this phone|beta|tried|official|soon/i.test(device.CAPTURE_LIST_NEEDS_COMPUTER))
+      /* The send's own calls still say the send's sentence. */
+      await assert.rejects(device.namEmptySlotHere(), (e) => e.message === device.CAPTURES_NEED_COMPUTER)
+      /* The capture tools at work on the computer: its own words and number, which the list waits out. */
+      relay.hooks.fail = () => Object.assign(new Error('the capture tools are already at work; try again in a moment'), { status: 409 })
+      await assert.rejects(device.namHeadsHere(0, 32), (e) => e.status === 409 && /already at work/.test(e.message))
+      /* A unit that is not an Axe-Fx III: said in words, and remembered, so the rest of the list is not asked of it slot after slot (the device's own memory of what a unit has refused, numbers out of the path). */
+      relay.hooks.fail = () => Object.assign(new Error('only an Axe-Fx III has NAM captures'), { status: 501 })
+      await assert.rejects(device.namHeadsHere(0, 32), (e) => e.message === device.CAPTURES_ONLY_A_III && e.status === 501)
+      relay.asked.length = 0
+      await assert.rejects(device.namHeadsHere(32, 32), (e) => e.message === device.CAPTURES_ONLY_A_III && e.status === 501)
+      assert.deepEqual(relay.asked, [], 'a unit that has said it has no captures was asked for the next piece of the list')
+      relay.hooks.fail = null
+
+      /* On the wire: the same path, marked as the captures', and the computer hears nothing. */
+      relay.asked.length = 0
+      const heard = []
+      sw.setSwitch({ on: true, wire: { request: async (path, options = {}) => (heard.push([path, options]), { from: 8, heads: [] }) } })
+      assert.deepEqual(await device.namHeadsHere(8, 8), { from: 8, heads: [] })
+      assert.deepEqual(heard.map(([path, o]) => [path, o.capturing, o.method ?? 'GET']), [['/nam/heads/8/8', true, 'GET']])
+      assert.deepEqual(relay.asked, [])
+
+      /* A capture sent: everybody who asked to be told is, once, after the send and not before; a send that fails tells nobody; and one of them throwing takes nothing from the send or the rest. */
+      const told = []
+      const off = device.onCaptureSent(() => told.push('first'))
+      device.onCaptureSent(() => {
+        throw new Error('a watcher that breaks')
+      })
+      device.onCaptureSent(() => told.push('third'))
+      const words = new Uint32Array(16384)
+      words[0] = 0x6e61724f
+      let sending = false
+      sw.setSwitch({ on: true, wire: { request: async () => ((sending = true), assert.deepEqual(told, []), { slot: 30, name: 'x', seconds: 1 }) } })
+      assert.deepEqual(await device.namInstallHere(30, words), { slot: 30, name: 'x', seconds: 1 })
+      assert.ok(sending)
+      assert.deepEqual(told, ['first', 'third'])
+      sw.setSwitch({ on: true, wire: { request: async () => { throw Object.assign(new Error('stopped'), { status: 504 }) } } })
+      await assert.rejects(device.namInstallHere(30, words), /stopped/)
+      assert.deepEqual(told, ['first', 'third'], 'a send that failed said the list had changed')
+      /* No longer asking: no longer told. A pick and a list read tell nobody: they put nothing on the unit. */
+      off()
+      sw.setSwitch({ on: true, wire: { request: async () => ({ slot: 30, name: 'x', seconds: 1 }) } })
+      await device.namInstallHere(30, words)
+      await device.namPickHere(206, 30)
+      await device.namHeadsHere(0, 8)
+      assert.deepEqual(told, ['first', 'third', 'third'])
+
+      /*
+       * ONE CAPTURE JOB AT A TIME FROM THIS DEVICE. The capture tools refuse
+       * a second job while one is going, and the list is read a piece at a
+       * time in the background: a send asked while a piece was out was
+       * refused, and the list gave up during a send. Every capture request
+       * waits for the one before it, in the order asked, whoever asks.
+       */
+      let open = 0
+      let most = 0
+      const went = []
+      sw.setSwitch({
+        on: true,
+        wire: {
+          request: (path) =>
+            new Promise((resolve, reject) => {
+              open++
+              most = Math.max(most, open)
+              went.push(path)
+              setTimeout(() => {
+                open--
+                if (path === '/nam/heads/8/8') reject(Object.assign(new Error('The Axe-Fx III didn’t answer.'), { status: 504 }))
+                else resolve({ from: 0, heads: [], slot: 30, name: 'x', seconds: 1 })
+              }, 3)
+            })
+        }
+      })
+      const all = await Promise.allSettled([device.namHeadsHere(0, 8), device.namPickHere(207, 1), device.namEmptySlotHere(), device.namInstallHere(30, words), device.namHeadsHere(8, 8), device.namPickHere(206, 30), device.namHeadsHere(16, 8)])
+      assert.equal(most, 1, 'two capture requests were out at once')
+      /* A pick behind a piece of the list waits its turn (about a second). */
+      assert.deepEqual(went, ['/nam/heads/0/8', '/nam/blocks/207/slot', '/nam/empty', '/nam/slots/30', '/nam/heads/8/8', '/nam/heads/16/8'])
+      /* One that fails is its asker's failure, and the ones behind it still go. */
+      assert.deepEqual(all.map((r) => r.status), ['fulfilled', 'fulfilled', 'fulfilled', 'fulfilled', 'rejected', 'rejected', 'fulfilled'])
+      /*
+       * BUT A PICK ASKED WHILE A CAPTURE IS BEING SENT IS REFUSED AT ONCE, in
+       * words, and never sent late: a send takes half a minute over a
+       * Bluetooth adapter, and a pick that waited it out would move the block
+       * long after the tap, with Edit's picker stuck on "choosing" meanwhile.
+       */
+      assert.equal(all[5].reason.message, device.CAPTURE_BEING_SENT)
+      assert.equal(all[5].reason.status, 409)
+      assert.ok(!/this phone|beta|tried|official|soon/i.test(device.CAPTURE_BEING_SENT))
+      /* The send over, a pick goes again: also after a send that failed. */
+      await device.namPickHere(206, 30)
+      assert.equal(went.at(-1), '/nam/blocks/206/slot')
+      sw.setSwitch({ on: true, wire: { request: async (path) => { if (path.startsWith('/nam/slots/')) throw Object.assign(new Error('stopped'), { status: 504 }); return { block: 206, slot: 3, name: 'x' } } } })
+      const failing = device.namInstallHere(30, words)
+      await assert.rejects(device.namPickHere(206, 3), (e) => e.message === device.CAPTURE_BEING_SENT)
+      await assert.rejects(failing, /stopped/)
+      assert.deepEqual(await device.namPickHere(206, 3), { block: 206, slot: 3, name: 'x' })
+      /* Through the computer the same line: what is refused before anything is asked (no record) does not hold it either. */
+      sw.setSwitch({ on: false })
+      relay.asked.length = 0
+      const mixed = await Promise.allSettled([device.namInstallHere(30, new Uint32Array(10)), device.namEmptySlotHere()])
+      assert.deepEqual(mixed.map((r) => r.status), ['rejected', 'fulfilled'])
+      await device.namPickHere(207, 2)
+      assert.deepEqual(relay.asked, ['GET /nam/empty', 'POST /nam/blocks/207/slot'])
+    } finally {
+      done()
+    }
+  })
+
+  /*
    * A VP4 OVER BLUETOOTH, THROUGH DEVICE.JS, as Play reaches it: device.js
    * takes it for a VP4 (isVp4 of its check), and every VP4 rule holds as over
    * the computer. The player's Scene Select number and channel go with each
@@ -11203,7 +11334,7 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, fullNamesOnly: false, keepsNothing: false, lateSlot: null, lateLooks: 0 }
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, quietSlot: null, quietSlotTimes: 0, slowSlot: null, slowBy: 0, slowTimes: 0, quietPick: false, fullNamesOnly: false, keepsNothing: false, lateSlot: null, lateLooks: 0 }
     /* `lateSlot`, `lateLooks`: a unit slow to file. The slot it has kept still reads <EMPTY> for that many looks, and then as what it holds. */
     const headOf = (slot) => {
       if (held.has(slot) && u.lateSlot === slot && u.lateLooks > 0) {
@@ -11261,6 +11392,18 @@ export function run(test) {
           u.quietHeads--
           return
         }
+        /* And one slot of its own may say nothing, so many times (`quietSlot`, `quietSlotTimes`). */
+        if (u.quietSlot === sx.fromSeptets32(b, 12) && u.quietSlotTimes > 0) {
+          u.quietSlotTimes--
+          return
+        }
+        /* Or answer LATE, that long after it was asked (`slowSlot`, `slowBy`, `slowTimes`): after the phone has stopped waiting for it. */
+        if (u.slowSlot === sx.fromSeptets32(b, 12) && u.slowTimes > 0) {
+          u.slowTimes--
+          const answer = [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(u.slowSlot))]
+          t.clock.setTimeout(() => said(b, answer), u.slowBy)
+          return
+        }
         return said(b, [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(sx.fromSeptets32(b, 12)))])
       }
       if (sub === 0x09 && eid === 1 && pid === 114) {
@@ -11271,6 +11414,11 @@ export function run(test) {
       if (sub === 0x09 && (eid === 206 || eid === 207) && pid === 0) {
         const slot = sx.bitsFloat(sx.fromSeptets32(b, 12))
         u.picked.push([eid, slot])
+        /* Where the unit's settings are held (a bench with Edit open), the pick lands in them, on the channel the block is on. `quietPick`: it lands and the answer is lost. */
+        const chunk = t.unit.state.settings.get(eid)
+        const placed = t.unit.state.blocks.find((x) => x.eid === eid)
+        if (chunk && placed) chunk.values[placed.channel * (chunk.count / 4)] = slot
+        if (u.quietPick) return
         return said(b, [...sx.floatSeptets(slot / 256), 0, 0, ...sx.encode14(32), ...sx.packMsb(headOf(slot).slice(0, 32))])
       }
       return hear(b)
@@ -11739,12 +11887,166 @@ export function run(test) {
     assert.match(fell.message, /That was after 50 of 130 messages\. Slot 004 may hold part of a capture now: send it again to the same slot\./)
   })
 
+  /*
+   * THE LIST OF CAPTURES, FOR THE PICKER IN EDIT (lib/captureList, whose own
+   * rules are test/capture-picker.mjs). "then a capture picker in Edit (the
+   * list of all 257, read once and kept, and the same typed write)". The
+   * wire answers a piece of it: some slots' heads, in order, each asked as
+   * Axe-Edit asks it and with nothing else sent.
+   */
+  test('the list of captures over the wire: a piece of the slots’ heads in order, one question a slot and nothing else, a silent slot ends the piece there, and a pick gets its turn between two', async () => {
+    const { t, u, nam, asks, shaped } = await capturesLine()
+    t.sent.length = 0
+    const got = await asks('/nam/heads/0/8')
+    assert.equal(got.from, 0)
+    assert.ok(!('stopped' in got))
+    assert.deepEqual(got.heads.map((h) => [h.slot, h.name, h.empty]), [[0, 'Brit Crunch', false], [1, 'Clean One', false], [2, 'High Gain Three', false], [3, '<EMPTY>', true], [4, '<EMPTY>', true], [5, '<EMPTY>', true], [6, '<EMPTY>', true], [7, '<EMPTY>', true]])
+    /* What a row is drawn from: who made it and of what, where the capture says. */
+    assert.deepEqual(Object.keys(got.heads[0]), ['slot', 'name', 'by', 'make', 'model', 'gearType', 'toneType', 'empty'])
+    assert.deepEqual([got.heads[0].by, got.heads[0].gearType, got.heads[0].toneType], ['somebody', 'amp', 'crunch'])
+    /* Eight questions, one a slot, in order: and NOTHING ELSE of a capture's shapes. Never "a transfer is under way": a list read holds nothing back. */
+    assert.deepEqual(shaped().map(hex), Array.from({ length: 8 }, (_, i) => hex(nam.namSlotQuery(0x10, i))))
+    assert.deepEqual(u.busy, [])
+    assert.deepEqual([u.begun, u.picked], [[], []])
+
+    /* From anywhere, as many as asked; the last piece stops at the last slot, whatever was asked. */
+    assert.deepEqual((await asks('/nam/heads/2/2')).heads.map((h) => h.slot), [2, 3])
+    assert.deepEqual((await asks(`/nam/heads/250/${nam.NAM_HEADS_MOST}`)).heads.map((h) => h.slot), [250, 251, 252, 253, 254, 255, 256])
+    assert.deepEqual((await asks('/nam/heads/256/1')).heads.map((h) => [h.slot, h.empty]), [[256, true]])
+    /* What is no slot, and more than a piece, are refused with nothing sent. */
+    t.sent.length = 0
+    for (const path of ['/nam/heads/257/1', '/nam/heads/0/0', `/nam/heads/0/${nam.NAM_HEADS_MOST + 1}`, '/nam/heads/0/999']) await assert.rejects(asks(path), (e) => e.status === 400, path)
+    for (const path of ['/nam/heads/-1/8', '/nam/heads/a/8', '/nam/heads/0/1.5', '/nam/heads/0', '/nam/heads/0/8/9']) await assert.rejects(asks(path), (e) => e.unsupported === true || e.status === 400 || e.status === 404, path)
+    assert.deepEqual(shaped(), [])
+    /* Only asked for: the list is a GET. A POST there is no route. */
+    await assert.rejects(asks('/nam/heads/0/8', { method: 'POST', body: {} }), (e) => e.unsupported === true || e.status === 404 || e.status === 405)
+    assert.deepEqual(shaped(), [])
+
+    /*
+     * A SLOT THAT SAYS NOTHING ENDS THE PIECE THERE. A slot's answer does
+     * not say which slot it is, so after one not answered in time the next
+     * question could be handed the answer that came late: what was read
+     * before it is handed back with `stopped`, and nothing past it is asked.
+     */
+    u.quietSlot = 2
+    u.quietSlotTimes = 1
+    t.sent.length = 0
+    const cut = await asks('/nam/heads/0/8')
+    assert.deepEqual([cut.from, cut.heads.map((h) => h.slot), cut.stopped], [0, [0, 1], 2])
+    assert.deepEqual(shaped().map(hex), [0, 1, 2].map((i) => hex(nam.namSlotQuery(0x10, i))), 'a slot past the silent one was asked')
+    /* Asked again from that slot, it answers: the list goes on from there. */
+    assert.deepEqual((await asks('/nam/heads/2/6')).heads.map((h) => h.slot), [2, 3, 4, 5, 6, 7])
+    /* The first slot of a piece silent: nothing read, and said where. */
+    u.quietSlot = 8
+    u.quietSlotTimes = 1
+    assert.deepEqual(await asks('/nam/heads/8/8'), { from: 8, heads: [], stopped: 8 })
+
+    /*
+     * AND ITS ANSWER MAY ONLY BE LATE. Slot 002 ("Clean One") answers half a
+     * second after the phone stopped waiting. Whatever slot is asked next, by
+     * the list, for a block's button or by the search for an empty slot,
+     * must not be handed it: no slot is asked until it can no longer come.
+     */
+    t.clock.set(t.clock.now() + 10000)
+    u.slowSlot = 1
+    u.slowBy = 3000
+    u.slowTimes = 1
+    const slowAt = t.clock.now()
+    assert.deepEqual(await asks('/nam/heads/1/1'), { from: 1, heads: [], stopped: 1 })
+    t.sent.length = 0
+    const next = await asks('/nam/heads/2/2')
+    assert.deepEqual(next.heads.map((h) => [h.slot, h.name]), [[2, 'High Gain Three'], [3, '<EMPTY>']], 'a slot was handed the late answer of the one asked before it')
+    assert.ok(t.clock.now() - slowAt >= 2500 + 2000, `the next slot was asked ${t.clock.now() - slowAt} ms after the silent one was: inside the time its answer could still come`)
+    /* The same for the search for an empty slot (the card's send starts with it). */
+    t.clock.set(t.clock.now() + 10000)
+    u.slowSlot = 5
+    u.slowTimes = 1
+    assert.equal((await asks('/nam/heads/5/1')).stopped, 5)
+    const found = await asks('/nam/empty')
+    assert.deepEqual([found.slot, found.heads.map((h) => h.name)], [3, ['Brit Crunch', 'Clean One', 'High Gain Three', '<EMPTY>']], 'the search for an empty slot was handed a late answer')
+    u.slowSlot = null
+    t.clock.set(t.clock.now() + 10000)
+
+    /*
+     * AND AN UPLOAD ASKED DURING THAT QUIET WAITS IT OUT BEFORE IT TAKES ITS
+     * HOLD. Nothing is going to the unit meanwhile, so a scene tapped then is
+     * not refused as if a capture were going; "a transfer is under way" is
+     * said only once the quiet is over.
+     */
+    u.quietSlot = 6
+    u.quietSlotTimes = 1
+    assert.equal((await asks('/nam/heads/6/1')).stopped, 6)
+    const quietFrom = t.clock.now()
+    u.busy.length = 0
+    const sending = t.wire.request('/nam/slots/4', { capturing: true, method: 'POST', body: { words: nam.namRecord(A2('Sent After A Quiet')).words } })
+    const tap = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ scene: 2 }) })
+    await drive(t.clock, tap.then(() => null, (e) => assert.ok(!/is taking a capture/.test(e.message), 'a tap was refused for a capture that had not begun: the hold was taken before the quiet was over')))
+    const sent = await drive(t.clock, sending)
+    assert.equal(sent.name, 'Sent After A Quiet')
+    assert.ok(t.clock.now() - quietFrom >= 2000, 'the upload did not wait out the quiet')
+    assert.deepEqual(u.busy, [1, 0])
+    t.clock.set(t.clock.now() + 10000)
+
+    /* ONE THING AT A TIME: while a piece is being read the capture tools are at work, and a pick asked then is refused, not sent beside it. */
+    t.sent.length = 0
+    const piece = t.wire.request('/nam/heads/0/8', { capturing: true })
+    const beside = t.wire.request('/nam/blocks/206/slot', { capturing: true, method: 'POST', body: { slot: 1 } })
+    await assert.rejects(drive(t.clock, beside), (e) => e.status === 409 && /already at work/.test(e.message))
+    assert.equal((await drive(t.clock, piece)).heads.length, 8)
+    assert.deepEqual(u.picked, [], 'a pick went beside a piece of the list')
+    /* And between two pieces it goes: the picker asks for the list a piece at a time for exactly this. */
+    assert.deepEqual(await asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 1 } }), { block: 206, slot: 1, name: 'Clean One' })
+    assert.equal((await asks('/nam/heads/8/8')).heads.length, 8)
+    assert.deepEqual(u.picked, [[206, 1]])
+    /* A list read holds nothing else back: a scene picked while a piece is out is not refused (only an upload does that). */
+    const reading = t.wire.request('/nam/heads/16/8', { capturing: true })
+    const scene = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ scene: 2 }) })
+    await drive(t.clock, Promise.all([reading, scene.catch((e) => assert.ok(e.status !== 409, `a scene was refused during a list read: ${e.message}`))]))
+  })
+
+  /*
+   * A PICK, AND THEN EDIT'S READ OF THE BLOCK. Edit reads the block again
+   * after a capture is picked and shows what that read says. The wire keeps
+   * a block's read for a few seconds, so a pick has to make it forget that
+   * one, or the button would go back to the capture the block was on.
+   */
+  test('a capture picked from Edit: the block’s next read is the unit’s own and says the new capture, also when the pick’s answer was lost', async () => {
+    const { t, u, asks } = await capturesLine({ edit: () => true, namKnobs: () => true, settings: namSettings() })
+    const edit = (path) => drive(t.clock, t.wire.request(path, { editing: true }))
+    /* NAM 1 is on channel B, on the capture in slot 029 (28 as the unit counts). */
+    assert.deepEqual((await edit('/preset/blocks/206/params')).capture, { slot: 28 })
+    assert.deepEqual(await asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 1 } }), { block: 206, slot: 1, name: 'Clean One' })
+    /* At once, well inside the time a read is kept: the unit is asked again, and says slot 002. */
+    t.sent.length = 0
+    const after = await edit('/preset/blocks/206/params')
+    assert.deepEqual(after.capture, { slot: 1 })
+    assert.ok(t.frames().some((f) => f[5] === 0x1f && t.sx.decode14(f[6], f[7]) === 206), 'the block was not read again after a pick: the answer was the one kept from before it')
+    /* Its knobs are what they were: a pick moves the capture and nothing else of the channel. */
+    assert.deepEqual(after.named.map((p) => p.value), [-10, 0, 10, 2, 7, 10, -10, 10])
+    /* The other NAM block, and the other channels of this one, were not touched. */
+    assert.deepEqual((await edit('/preset/blocks/207/params')).capture, { slot: 0 })
+    const now = t.unit.state.settings.get(206).values
+    assert.deepEqual([now[0], now[18], now[36], now[54]], [0, 1, 0, 0])
+
+    /* The pick lands and its answer is lost: said as "may not have changed", and the next read is still the unit's, which says where the block is. */
+    u.quietPick = true
+    await edit('/preset/blocks/206/params')
+    await assert.rejects(asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 2 } }), (e) => e.status === 504 && /NAM 1 may not have changed/.test(e.message))
+    assert.deepEqual((await edit('/preset/blocks/206/params')).capture, { slot: 2 }, 'after a pick with no answer, Edit was shown the read kept from before it')
+    u.quietPick = false
+    /* A pick of what is no slot is refused with nothing sent, and the kept read stands. */
+    t.sent.length = 0
+    await assert.rejects(asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 257 } }), (e) => e.status === 400)
+    assert.deepEqual(u.picked.at(-1), [206, 2])
+  })
+
   test('the captures are his account’s alone, an Axe-Fx III’s alone, and only for a request that says it is theirs; and the way out passes nothing else of their shapes', async () => {
     const nam = await import('../mobile/src/lib/nam-install.js')
     for (const options of [{ captures: () => false }, { captures: undefined }]) {
       const { t, asks, shaped, record } = await capturesLine(options)
       t.sent.length = 0
       await assert.rejects(asks('/nam/empty'), (e) => e.unsupported === true)
+      await assert.rejects(asks('/nam/heads/0/8'), (e) => e.unsupported === true)
       await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: record('x').words } }), (e) => e.unsupported === true)
       await assert.rejects(asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 1 } }), (e) => e.unsupported === true)
       assert.deepEqual(shaped(), [], 'something of a capture went for an account the captures are not open to')
@@ -11754,10 +12056,13 @@ export function run(test) {
     mine.t.sent.length = 0
     await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/empty')), (e) => e.unsupported === true)
     await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/empty', { reading: true })), (e) => e.unsupported === true)
+    await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/heads/0/8')), (e) => e.unsupported === true)
+    await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/heads/0/8', { editing: true })), (e) => e.unsupported === true)
     assert.deepEqual(mine.shaped(), [])
     /* An FM3 has no NAM block: no such route, whoever asks. */
     const fm3 = await onTheLine('fm3', { captures: () => true })
     await assert.rejects(drive(fm3.clock, fm3.wire.request('/nam/empty', { capturing: true })), (e) => e.unsupported === true)
+    await assert.rejects(drive(fm3.clock, fm3.wire.request('/nam/heads/0/8', { capturing: true })), (e) => e.unsupported === true)
 
     /* The way out, on its own: each shape goes only as the very thing being done. */
     const { gen3Sender } = await import(WIRE)
@@ -12509,9 +12814,27 @@ export function run(test) {
     assert.deepEqual([two.block, two.slug, two.type], ['NAM', 'nam', null])
     assert.deepEqual(two.enums.map((s) => [s.id, s.options[s.value].label]), [[3, 'THRU'], [6, 'NORMAL'], [7, 'OFF'], [8, 'POST'], [9, 'ACTIVE'], [13, 'SUM L+R']])
     assert.ok(t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel A$/.test(l)), t.logs.join(' | '))
+    /* And which capture the channel is on: setting 0 as the unit holds it, a slot counted from nought (Axe-Edit's 001). It is in no list of knobs or switches; the picker in Edit reads it from here. */
+    assert.deepEqual(two.capture, { slot: 0 })
+    assert.ok(!two.named.some((p) => p.id === 0) && !two.enums.some((p) => p.id === 0), 'the capture came back as a knob or a switch: Edit would write it its own way')
     /* NAM 1 is on channel B: the second 18 values. */
     const one = await ask('/preset/blocks/206/params')
     assert.deepEqual(one.named.map((p) => p.value), [-10, 0, 10, 2, 7, 10, -10, 10])
+    assert.deepEqual(one.capture, { slot: 28 }, 'the capture was read off another channel')
+    /* The last slot, and a number that is no slot: said as it is, and as not known (the picker is not drawn on a number it cannot name). */
+    const held = t.unit.state.settings.get(206).values
+    const later = () => t.clock.set(t.clock.now() + 6000)
+    held[18] = 256
+    /* A block's read is kept a moment: within it the answer is the one just given, and past it the unit is asked. */
+    assert.deepEqual((await ask('/preset/blocks/206/params')).capture, { slot: 28 })
+    later()
+    assert.deepEqual((await ask('/preset/blocks/206/params')).capture, { slot: 256 })
+    held[18] = 257
+    later()
+    assert.deepEqual((await ask('/preset/blocks/206/params')).capture, { slot: null })
+    held[18] = 28
+    later()
+    assert.deepEqual((await ask('/preset/blocks/206/params')).capture, { slot: 28 })
     assert.equal(one.enums.find((s) => s.id === NAM_SWITCH).options[one.enums.find((s) => s.id === NAM_SWITCH).value].label, 'PLEXI')
 
     /* Each knob turned: the one frame, 52 00 at the NAM's own id and the setting's number, and the unit holds it on the channel the block is on. */
@@ -13082,7 +13405,9 @@ export function run(test) {
     assert.notEqual(NAM_ON_THE_UNIT, NO_KNOBS_YET)
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const namOnUnit = block\.slug === 'nam' && !knobless && !bare/)
-    assert.match(edit, /\{namOnUnit \? <Note>\{NAM_ON_THE_UNIT\}<\/Note> : null\}/)
+    /* Where the picker is drawn (lib/captureList: his account's, on a read that says which capture the block is on) the capture IS chosen here, so the line is not. */
+    assert.match(edit, /const namPicker = namOnUnit && pickerOn && Number\.isInteger\(capture\?\.slot\)/)
+    assert.match(edit, /\{namOnUnit && !namPicker \? <Note>\{NAM_ON_THE_UNIT\}<\/Note> : null\}/)
     assert.equal((edit.match(/\{NAM_ON_THE_UNIT\}/g) || []).length, 1)
     assert.ok(edit.indexOf('shown.map((p) =>') < edit.indexOf('{NAM_ON_THE_UNIT}'), 'the line is over the knobs')
     assert.ok(edit.indexOf('{NAM_ON_THE_UNIT}') < edit.indexOf('onPress={() => writeBlockBypass(eid, engaged)}'), 'the line is not with the knobs')

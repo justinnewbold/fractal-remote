@@ -76,7 +76,13 @@
  *   0  Type, the NAM capture. A list of 257 slots whose names are whatever
  *      is loaded on that unit, so the app has no list to offer. With no
  *      model setting here (`typeId: null`) the block has no model picker and
- *      no model write, as a Mixer or a Looper has none.
+ *      no model write, as a Mixer or a Looper has none. STILL NO ROW, and
+ *      never one: a row is what the sender's guard passes a write on, and
+ *      the capture is written by the pick alone (lib/nam-install
+ *      namPickFrame, which the unit answers with the capture's name), under
+ *      the captures' own guard. `captureId: 0` only says where a read finds
+ *      the slot a channel is on, for the picker in Edit (gen3-edit
+ *      blockParamsOf `capture`).
  *   4  the block's own bypass: Play's on and off does that, by the
  *      published message, as for every block.
  *   7  a switch that reads OFF or ON, whose name nobody knows. It is not
@@ -279,6 +285,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   NAM: {
     stride: 18,
     typeId: null,
+    captureId: 0,
     typedKnobs: false,
     knobs: [
       [1, 'Level', -80, 20, 0, 'dB'],

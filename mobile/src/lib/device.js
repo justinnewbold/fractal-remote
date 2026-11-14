@@ -632,13 +632,36 @@ const CAPTURING = Object.freeze({ capturing: true })
 export const CAPTURES_NEED_A_UNIT = 'Sending a capture needs an Axe-Fx III, through a computer, an adapter or its USB cable.'
 export const CAPTURES_NEED_COMPUTER = 'Update the computer app to send a capture through it.'
 export const CAPTURES_ONLY_A_III = 'Only an Axe-Fx III takes captures.'
+/* The picker's own words for a computer app from before the list of captures (lib/captureList): it sends nothing, so "send a capture" would be the wrong thing to say. */
+export const CAPTURE_LIST_NEEDS_COMPUTER = 'Update the computer app to choose a capture from here.'
 /* A computer app from before the routes answers 404 to the read and 403 to the writes; a unit that is not a III, 501. */
-const captureSaid = (err) => {
-  if (err?.status === 404 || (err?.status === 403 && err?.remoteBlocked)) throw Object.assign(new Error(CAPTURES_NEED_COMPUTER), { status: err.status })
+const captureSaid = (needsComputer) => (err) => {
+  if (err?.status === 404 || (err?.status === 403 && err?.remoteBlocked)) throw Object.assign(new Error(needsComputer), { status: err.status })
   if (err?.status === 501) throw Object.assign(new Error(CAPTURES_ONLY_A_III), { status: 501 })
   throw err
 }
-const captureAsks = async (path, onWire = {}, throughComputer = undefined) => {
+/*
+ * ONE CAPTURE JOB AT A TIME FROM THIS DEVICE. The capture tools take one job
+ * and refuse a second ("already at work"), and since the picker in Edit
+ * (lib/captureList) the device has two askers: the list, read a piece at a
+ * time in the background, and the Developer card's send. Asked together, a
+ * send was refused whenever a piece of the list was out, and the list gave
+ * up during a send. So every capture request waits here for the one before
+ * it: a send waits for one piece of the list at most (about a second), and
+ * the list's pieces wait out a send.
+ */
+let captureLane = Promise.resolve()
+const inCaptureLane = (run) => {
+  const job = captureLane.then(run, run)
+  captureLane = job.then(
+    () => {},
+    () => {}
+  )
+  return job
+}
+const captureAsks = (path, onWire = {}, throughComputer = undefined, needsComputer = CAPTURES_NEED_COMPUTER) =>
+  inCaptureLane(() => captureAsksNow(path, onWire, throughComputer, needsComputer))
+const captureAsksNow = async (path, onWire, throughComputer, needsComputer) => {
   if (demoDevice() || onVp4) throw Object.assign(new Error(CAPTURES_NEED_A_UNIT), { status: 501 })
   const ble = bluetoothWire()
   /* A unit that is not an Axe-Fx III (or an account the captures are not open to) is answered "unsupported" by the wire, which is no sentence: the computer's own words for it. */
@@ -648,21 +671,64 @@ const captureAsks = async (path, onWire = {}, throughComputer = undefined) => {
       throw err
     })
   }
-  return remoteRequest(path, typeof throughComputer === 'function' ? throughComputer() : undefined).catch(captureSaid)
+  return remoteRequest(path, typeof throughComputer === 'function' ? throughComputer() : undefined).catch(captureSaid(needsComputer))
 }
 /** Whether a capture sent now goes through the computer (one message, no count as it goes) and not the device's own wire. */
 export const capturesThroughComputer = () => !demoDevice() && !onVp4 && !bluetoothWire()
 /** The first empty capture slot: { slot, heads: [{ slot, name, empty }] }, slot null where the first 128 are all taken. */
 export const namEmptySlotHere = () => captureAsks('/nam/empty')
+/* Whoever keeps a list of the unit's captures (lib/captureListHere) is told when one has been sent: its list is out of date. */
+const captureWatchers = new Set()
+/* How many sends of a capture are waiting or going from this device (the card sends one at a time). */
+let capturesGoing = 0
+/** Be told when the app has put a capture on the unit. Returns the way to stop being told. */
+export const onCaptureSent = (fn) => {
+  captureWatchers.add(fn)
+  return () => captureWatchers.delete(fn)
+}
 /** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken, over the device's own wire. `filled` is for the wire's log alone: the name was filled out to all 31 places (namRecord's `fill`). */
-export const namInstallHere = (slot, words, { replace = false, onProgress, filled = false } = {}) =>
-  captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace, filled: filled === true }, onProgress }, () => {
+export const namInstallHere = (slot, words, { replace = false, onProgress, filled = false } = {}) => {
+  capturesGoing++
+  return captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace, filled: filled === true }, onProgress }, () => {
     const record = namRecordTravels(words)
     if (!record) throw new Error('That is not a capture’s record.')
     return { method: 'POST', body: JSON.stringify({ record }) }
   })
-/** NAM 1 (206) or NAM 2 (207) pointed at a slot: { block, slot, name }. */
-export const namPickHere = (block, slot) => captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } }, () => ({ method: 'POST', body: JSON.stringify({ slot }) }))
+    .finally(() => {
+      capturesGoing--
+    })
+    .then((got) => {
+      for (const fn of [...captureWatchers]) {
+        try {
+          fn(got)
+        } catch {
+          // A listener that fails is its own trouble, never the send's.
+        }
+      }
+      return got
+    })
+}
+/** What a pick asked while a capture is being sent is told: a send can take half a minute, and a pick that waited it out would land long after the tap. */
+export const CAPTURE_BEING_SENT = 'A capture is being sent to the unit. Try again when it has finished.'
+/**
+ * NAM 1 (206) or NAM 2 (207) pointed at a slot: { block, slot, name }.
+ * Refused at once while a capture is being sent from this device (the one
+ * job the line above would make it wait half a minute for); behind a piece
+ * of the list it waits its turn, about a second.
+ */
+export const namPickHere = (block, slot) => {
+  if (capturesGoing > 0) return Promise.reject(Object.assign(new Error(CAPTURE_BEING_SENT), { status: 409 }))
+  return captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } }, () => ({ method: 'POST', body: JSON.stringify({ slot }) }))
+}
+/**
+ * Some of the unit's capture slots' heads, in order from `from`, for the
+ * picker in Edit (lib/captureList): { from, heads: [{ slot, name, by, make,
+ * model, gearType, toneType, empty }], stopped? }. `stopped` is the slot
+ * that said nothing, where one did. Reads only, the same either way the
+ * device is connected: the wire's, or the computer's from the release that
+ * has the list.
+ */
+export const namHeadsHere = (from, count) => captureAsks(`/nam/heads/${from}/${count}`, {}, undefined, CAPTURE_LIST_NEEDS_COMPUTER)
 
 /** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
 export const fcModel = () => remoteRequest('/fc/model')

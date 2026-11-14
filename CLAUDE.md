@@ -786,7 +786,10 @@ what the computer sends for the same edit, and a test holds it there.
     no model write, `typeId: null`); the block's own bypass (4), which
     Play's on and off does; and values 16 and 17 of each channel, which
     follow the capture and are never written. Edit says the
-    capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`).
+    capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`),
+    except where the capture picker is drawn (his account, below, under
+    TONE3000): the capture still has no row in Edit's list, and is picked
+    by the captures' own write, never Edit's.
   - *The same list and the same switch carry the III's other own blocks
     since 1.90.49* ("Want to get it all done", 13 November 2026): the IR
     Player, the Vocoder, the Crossover, Tone Match and Dynamic Distortion,
@@ -940,8 +943,8 @@ what the computer sends for the same edit, and a test holds it there.
     enum and Blocks Guide, not on a unit. The RTA (174) has no on and off,
     so it is in `NOT_BLOCKS` and never drawn. On the III they have knobs
     for his account since 1.90.49 (above); for everybody else, and on an
-    FM9, Edit gives each its on and off. The switches Edit draws for no
-    block and the NAM capture picker are the work left, in that order.
+    FM9, Edit gives each its on and off. The switches (1.90.52) and the
+    NAM capture picker (1.90.63) are both built since, his account only.
     Which of the Crossover's four levels and four pans is which was
     settled by the codec's mined table (above), not by a read.
   - *Through the computer the phone names them itself, HIS ACCOUNT ONLY*
@@ -1298,9 +1301,136 @@ the capture on the unit, which is the hard half.
     COMPUTER_NEEDED did not move. namCaptures.ts and nam-install.js ARE
     CHANGED TOGETHER. NOTHING HAS BEEN SENT TO A REAL UNIT THROUGH THE
     COMPUTER: his Raspberry Pi is the first check.
-- **The order from here:** his first send from the card (either way); then
-  a capture picker in Edit (the list of all 257, read once and kept, and
-  the same typed write); then the TONE3000 screen where a player meets it,
+- **The capture picker in Edit: built 14 November 2026 (1.90.63), HIS
+  ACCOUNT ONLY.** On a NAM block, first, over the knobs: a button, Capture,
+  with the slot's number as the unit and Axe-Edit count it and the
+  capture's name ("029 Orange Amp…"). A tap opens the captures on the unit
+  with a box to find one; a pick points the block's channel at it and the
+  block is read again, and what that read says is what the button shows
+  (mobile/src/components/CapturePicker.js, lib/captureList.js for the
+  list's rules, lib/captureListHere.js for the device's, screens/Edit
+  `pickCapture`). Nothing is saved by a pick; the preset is saved the
+  usual way.
+  - *The switch* is `NAM_PICKER_FOR_EVERYONE` in features.js, false
+    (lib/useCapturePicker). OPENING IT IS MORE THAN THE SWITCH: the list
+    and the pick go through the captures' routes, which the wire answers
+    only for his account (`captures`, lib/bluetooth), and that same gate
+    is the sender's. To open the picker and keep the sender his, the wire
+    needs a gate of its own for the list and the pick. Its What's new line
+    goes in then.
+  - *The pick is the captures' own write* (`namPickHere`, the typed write
+    of setting 0 the card's Play it in NAM 1 sends), held by their guard.
+    The capture has no row in Edit's list and must not get one: Edit's
+    write for a list setting would be a second way to send it.
+  - *The list is read as Axe-Edit reads it*, one question a slot, IN
+    PIECES (`GET /nam/heads/<from>/<count>`, 32 slots at most a request:
+    8 a piece on the device's own wire with a moment between two, 32
+    through the computer), shown as it comes, and KEPT: in memory, and on
+    the device under `fractal.captures`. About half a minute over a
+    Bluetooth adapter the first time, a few seconds through a computer,
+    and simply there after that. It is read again on Read the list again,
+    after a capture is sent from the card (`onCaptureSent`), and when the
+    slot a block is on reads as something other than the list has for it
+    (that slot is asked by itself, fresh, each time a NAM block is opened,
+    so the button never says a name the unit no longer has there).
+  - *A slot that says nothing ends the piece* (`stopped`), AND NO SLOT IS
+    ASKED UNTIL ITS ANSWER CAN NO LONGER COME. A slot's answer does not say
+    which slot it is, so the next question asked, of any slot and by
+    anyone (the list, a block's button, the card's search for an empty
+    slot, an upload's own looks), would be handed the late one and file a
+    name under the wrong slot. Both senders hold it themselves (bleWire
+    `namQuietUntil`, two seconds as after a stored name on an AM4; ForgeFX
+    `#namQuietUntil`, `NAM_LATE_MS`), and the list waits 2.5 seconds on
+    top before any of its own slot questions (`again`). The list's wait is
+    taken OUTSIDE its lane, so a pick tapped meanwhile goes straight in
+    (it is no slot question), and an upload waits the quiet out BEFORE it
+    takes its hold on the line, so a tap is not refused for a capture that
+    has not begun. On the computer the wait is taken before a question
+    joins the queue, and two lists can be read at once there (two phones,
+    a request the relay sent twice), so a slot's answer is believed only
+    if no slot went unanswered between its asking and its answer
+    (`#namSilences`), and a quiet begun again while a question waits is
+    waited out to its end. No wait is ever longer than the quiet itself,
+    whatever the clock does.
+  - *When the list gives up.* A slot that says nothing is asked once more;
+    twice silent, it is left out. A unit that has NEVER answered a slot (a
+    firmware older than the NAM block) is said so after two questions, not
+    257 (`NO_CAPTURE_LIST`). One that has answered and then stops (its
+    MIDI cable pulled, with the adapter still there) is said so when two
+    slots running have each said nothing twice (`CAPTURES_STOPPED`, four
+    questions). One slot of its own that will not say, with a lost answer
+    from the one after it, is not that: the read goes on. "Has answered"
+    is of the last ten minutes, not for ever: there is one list for the
+    app, and nothing says when another unit is on the line.
+  - *A read that fails leaves the list as it was*: nothing is taken out,
+    nothing is written down, and the next open reads again. A slot is
+    taken out only when the read has ended whole, and not if it has
+    answered since (asked by itself, for a block's button). The first
+    version asked every slot left twice (some twenty minutes of it), called
+    the read whole, and wrote the cut-down list over the good one.
+  - *One capture job at a time from the device* (lib/device
+    `inCaptureLane`): the list's pieces, a pick and the card's send each
+    wait for the one before, since the capture tools refuse a second job.
+    Before, a send asked while a piece of the list was out was refused,
+    and the list gave up during a send. EXCEPT A PICK DURING A SEND, which
+    is refused at once in words (`CAPTURE_BEING_SENT`): a send takes half
+    a minute over Bluetooth, and a pick that waited it out would move the
+    block long after the tap.
+  - *After a pick, the block is read again, and after a pick that FAILED
+    too*: its answer may have been lost with the pick taken. A pick the
+    unit ANSWERED is believed at once, whatever the read after it does.
+    The read is drawn only where it says which capture the block is on:
+    THROUGH THE COMPUTER A READ THAT FAILED IS NOT A FAILURE, it comes
+    back with every knob at nought and no capture, and drawn it would
+    blank the knobs. And where the unit says the slot holds something
+    other than the row that was tapped (`captureNotAsListed`), Edit says
+    so and the list is read again the next time it is opened.
+  - *The button says what is known of its slot* (`captureHead`), an empty
+    one ("041 (empty)") and the 257th too; the rows leave those out.
+  - ALL OF THE ABOVE FROM "A slot that says nothing" DOWN IS WHAT TWO
+    INDEPENDENT READS FOUND before it went out: five readers and a skeptic
+    for each on a frozen copy of the first version, then three more on the
+    fixes, which had six smaller faults of their own (the quiet taken with
+    the lane in hand, so a pick waited it out; a slot left out counted
+    toward "the unit has stopped"; the computer's wait only at the queue's
+    door; a failed read drawn as noughts), and a third, shorter read of
+    those fixes found five small ones more (the quiet has to begin with
+    the lane still in hand, since the lane starts its next job before the
+    asker hears the answer; a test that did not fail without what it was
+    for). test/capture-picker.mjs and test/bluetooth.mjs hold each, and
+    every one of the last round's is a test that was run with its fix
+    taken out and seen to fail. FIXES GET READ TOO, and a test is not a
+    guard until it has been seen to fail.
+  - *Slots 001 to 256 are listed; the 257th is not offered.* In the
+    recording the last slot listed the same capture as the one just
+    loaded, so it may be no slot of its own. A block that is on it still
+    says so.
+  - *Drawn only where the block's read says which capture it is on*
+    (`capture: { slot }` beside the knobs in the block's params read: the
+    wire's own since 1.90.63, the computer's from the release that carries
+    ForgeFX d44528e). Through a computer app from before that, Edit says
+    "The capture is chosen on the unit itself." as it always did, so
+    COMPUTER_NEEDED did not move. ForgeFX's half (`namHeads`, the route,
+    `capture` in `blockParams`) and the phone's (bleWire `namHeads`,
+    gen3-edit `captureId`) ARE CHANGED TOGETHER.
+  - *One thing at a time.* The pieces, the one-slot question and a pick go
+    one after another through the list's own lane (`turn`), so the capture
+    tools, which take one job at a time and refuse a second, are never
+    asked for two; a pick asked while the list is being read goes between
+    two pieces. A list read holds nothing else back (only an upload does).
+  - *The wire keeps a block's read for five seconds*, so a pick makes it
+    forget that block's, answered or not: Edit's read after a pick is the
+    unit's.
+  - *A unit that is not a III is asked once.* The device remembers a
+    refusal ("unsupported") by the kind of request, numbers out of the
+    path, so the rest of the list is not asked of it slot after slot.
+  - NOTHING HAS BEEN PICKED FROM EDIT ON A UNIT, and the list has not been
+    read from one by the app: his first look is the first check, either
+    way he is connected. Not built: the browser's (a computer release
+    nobody has asked for), and anything that renames or removes a capture.
+- **The order from here:** his first send from the card (either way); the
+  capture picker in Edit is built (above, his account); then the TONE3000
+  screen where a player meets it,
   which is a store version (new for customers, and its in-app browser and
   preview are native). Only an Axe-Fx III has a NAM block. A slot is only
   ever written when it reads <EMPTY>, unless the player says to replace

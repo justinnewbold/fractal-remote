@@ -285,7 +285,7 @@ export function run(test) {
    * to the same recorded frames by its own test). What is held here is what
    * travels, and what a device may ask a computer for.
    */
-  test('a record travels to the computer as base64 of its words, and a device may ask a computer for exactly the three capture requests', async () => {
+  test('a record travels to the computer as base64 of its words, and a device may ask a computer for exactly the capture requests: the empty slot, the list, a send and a pick', async () => {
     const { namRecordTravels, base64Of, NAM_TRAVEL_WORDS_LEAST } = await import('../mobile/src/lib/nam-travel.js')
     const { NAM_RECORD_WORDS, NAM_HEAD_WORDS } = await lib()
     assert.equal(NAM_TRAVEL_WORDS_LEAST, NAM_HEAD_WORDS, 'the fewest words that travel is not a record’s head')
@@ -323,6 +323,12 @@ export function run(test) {
     assert.equal(rules.hostAllows('GET', '/nam/empty'), true)
     assert.equal(rules.hostAllows('POST', '/nam/slots/30'), true)
     assert.equal(rules.hostAllows('POST', '/nam/blocks/206/slot'), true)
+    /* And the list the picker in Edit shows, in pieces: a read, so it travels as any read does, is given the long wait, and may be asked again where an answer was lost. */
+    assert.equal(rules.hostAllows('GET', '/nam/heads/0/32'), true)
+    assert.equal(rules.hostAllows('GET', '/nam/heads/224/32'), true)
+    for (const method of ['POST', 'PUT', 'DELETE']) assert.equal(rules.hostAllows(method, '/nam/heads/0/32'), false, `the list of captures can be written to (${method})`)
+    assert.equal(rules.timeoutFor('GET', '/nam/heads/0/32'), 45000)
+    assert.equal(rules.repeatable('/nam/heads/0/32'), true)
     for (const [method, path] of [['PUT', '/nam/slots/30'], ['DELETE', '/nam/slots/30'], ['POST', '/nam/slots'], ['POST', '/nam/slots/30/replace'], ['POST', '/nam/slots/x'], ['POST', '/nam/blocks/206'], ['POST', '/nam/blocks/206/slot/1'], ['POST', '/nam/empty'], ['POST', '/nam']]) {
       assert.equal(rules.hostAllows(method, path), false, `a device may ask ${method} ${path}`)
     }
@@ -335,12 +341,21 @@ export function run(test) {
     const device = read('mobile/src/lib/device.js')
     assert.match(device, /import \{ namRecordTravels \} from '\.\/nam-travel'/)
     /* Over the device's own wire, or else through the computer. And a unit the wire takes no captures on is answered in the computer's own words, never the bare "unsupported". */
-    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) \{ return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\)\.catch\(\(err\) => \{ if \(err\?\.unsupported === true\) throw Object\.assign\(new Error\(CAPTURES_ONLY_A_III\), \{ status: 501 \}\) throw err \}\) \} return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
+    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) \{ return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\)\.catch\(\(err\) => \{ if \(err\?\.unsupported === true\) throw Object\.assign\(new Error\(CAPTURES_ONLY_A_III\), \{ status: 501 \}\) throw err \}\) \} return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\(needsComputer\)\)/)
+    /* The words for a computer app from before a route are the asker's: the card's "send a capture", or the picker's own. */
+    /* Every capture request waits for the one before it: the list's pieces and the card's send are never asked of the capture tools together. */
+    assert.match(device.replace(/\s+/g, ' '), /const captureAsks = \(path, onWire = \{\}, throughComputer = undefined, needsComputer = CAPTURES_NEED_COMPUTER\) => inCaptureLane\(\(\) => captureAsksNow\(path, onWire, throughComputer, needsComputer\)\)/)
+    assert.match(device.replace(/\s+/g, ' '), /const inCaptureLane = \(run\) => \{ const job = captureLane\.then\(run, run\) captureLane = job\.then\( \(\) => \{\}, \(\) => \{\} \) return job \}/)
+    assert.match(device, /export const namHeadsHere = \(from, count\) => captureAsks\(`\/nam\/heads\/\$\{from\}\/\$\{count\}`, \{\}, undefined, CAPTURE_LIST_NEEDS_COMPUTER\)/)
     assert.match(device, /body: JSON\.stringify\(\{ record \}\)/, 'the computer is sent more than the record, or not the record')
     const { readdirSync } = await import('node:fs')
     const walk = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.jsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []))
-    const askers = [...walk('mobile/src'), 'mobile/App.js', ...walk('src')].filter((f) => /namEmptySlotHere|namInstallHere|namPickHere|\/nam\/(empty|slots|blocks)/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')))
-    assert.deepEqual(askers.sort(), ['mobile/src/components/Tone3000Test.js', 'mobile/src/lib/device.js'], 'something else asks for a capture to be sent')
+    const askers = [...walk('mobile/src'), 'mobile/App.js', ...walk('src')].filter((f) => /namEmptySlotHere|namInstallHere|namPickHere|namHeadsHere|\/nam\/(empty|slots|blocks|heads)/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')))
+    /* The card, lib/device, and since the picker in Edit the list's own wiring (lib/captureListHere): that one reads the list and points a block at a slot, and sends no capture. */
+    assert.deepEqual(askers.sort(), ['mobile/src/components/Tone3000Test.js', 'mobile/src/lib/captureListHere.js', 'mobile/src/lib/device.js'], 'something else asks for the captures')
+    const wiring = read('mobile/src/lib/captureListHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.match(wiring, /import \{ capturesThroughComputer, namHeadsHere, namPickHere, onCaptureSent \} from '\.\/device'/)
+    assert.ok(!/namInstallHere|namEmptySlotHere|namRecord|nam-travel/.test(wiring), 'the list’s wiring can send a capture')
     /* Nothing a customer needs: the red update line stays where it was. */
     const lock = JSON.parse(read('desktop/forgefx.lock.json'))
     assert.match(lock.forgefx.tag, /\+namcaptures(\+|$)/)
