@@ -443,6 +443,10 @@ export function run(test) {
     assert.equal(b.toneLine({ gear: 'amp' }), 'Amp Head · NAM')
     assert.deepEqual([0, 7, 999, 1000, 44988, 1234567, -5, 'x', null, 12.9].map(b.grouped), ['0', '7', '999', '1,000', '44,988', '1,234,567', '0', '0', '0', '12'])
     assert.equal(b.creatorOf({ user: {} }), '')
+    /* The gear a tone is a capture of, by TONE3000's own names for it. */
+    assert.equal(b.makesOf({ makes: [{ name: 'Two-Rock SSS 100W' }] }), 'Two-Rock SSS 100W')
+    assert.equal(b.makesOf({ makes: [{ name: 'Mesa Boogie Dual Rectifier' }, 'Mesa 4x12', { name: '  ' }, { id: 3 }, null, 7] }), 'Mesa Boogie Dual Rectifier, Mesa 4x12')
+    for (const none of [{ makes: [] }, { makes: 'Fender' }, {}, null]) assert.equal(b.makesOf(none), '', JSON.stringify(none))
     /* Pictures: the first of a tone's, the creator's, and nothing that is not an https address. */
     assert.equal(b.toneImage({ images: ['https://www.tone3000.com/i/1.jpg', 'https://x/2.jpg'] }), 'https://www.tone3000.com/i/1.jpg')
     for (const bad of [{ images: [] }, { images: ['http://plain/1.jpg'] }, { images: ['javascript:alert(1)'] }, { images: [{ url: 'https://x' }] }, { images: 'https://x' }, {}, null]) assert.equal(b.toneImage(bad), null, JSON.stringify(bad))
@@ -517,7 +521,7 @@ export function run(test) {
     assert.match(card, /\{signedIn \? <Press label=\{busy === 'open' \? 'Opening…' : 'Browse TONE3000'\} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled=\{!!busy\} onPress=\{\(\) => browse\(\)\} \/> : null\}/)
     /* A tone's own view: its picture, title, maker by picture and name, kind and format, the creator and licence, its description, and its captures. */
     const toneView = card.slice(card.indexOf('{signedIn && tone ? ('), card.indexOf("{signedIn ? <Press label={busy === 'open'"))
-    for (const piece of ['source={{ uri: picture }}', "{tone.title || 'Untitled tone'}", '<Avatar uri={creatorImage(tone)} size={16} />', "{[madeBy, gearSaid(tone.gear), 'NAM'].filter(Boolean).join(' · ')}", '{toneCredit(tone)}', '{String(tone.description)}', '{(models || []).map((m) => (', '{BACK_TO_LIST}']) {
+    for (const piece of ['source={{ uri: picture }}', "{tone.title || 'Untitled tone'}", '<Avatar uri={creatorImage(tone)} size={16} />', "{[madeBy, gearSaid(tone.gear), 'NAM'].filter(Boolean).join(' · ')}", '{gearNamed}', '{toneCredit(tone)}', '{String(tone.description)}', '{(models || []).map((m) => {', '{BACK_TO_LIST}', '{CAPTURES_HEAD}']) {
       assert.ok(toneView.includes(piece), `a tone’s view no longer has ${piece}`)
     }
     /* A sign-in TONE3000 no longer takes goes back to the sign-in view with a reason, in place of a list that can only fail. */
@@ -541,7 +545,7 @@ export function run(test) {
     /* A tone picked on TONE3000's own page opens here, but never over a capture that is going to the unit. */
     assert.match(card, /if \(!done\.toneId\) return if \(goingNow\(\)\) setSaid\(PICK_AFTER_SEND\) else load\(done\.toneId\)/)
     /* The words on the screen: no browser by name, nothing promised, nothing called a beta. */
-    for (const said of [words.PARTNER, words.SIGN_IN_AGAIN, words.BACK_TO_LIST, words.HOW_IT_WORKS, words.PICK_AFTER_SEND, ...words.STEPS, words.STEPS_FOOT]) {
+    for (const said of [words.PARTNER, words.SIGN_IN_AGAIN, words.BACK_TO_LIST, words.HOW_IT_WORKS, words.PICK_AFTER_SEND, words.PREVIEW, words.GET, words.CAPTURES_HEAD, words.CAPTURES_NOTE, ...words.STEPS, words.STEPS_FOOT]) {
       assert.ok(!/\b(Safari|Chrome|beta|soon|coming|official|this phone|this device)\b/i.test(said), said)
     }
     /* What names the device in hand is read when it is shown, by the device's own word. */
@@ -550,6 +554,80 @@ export function run(test) {
     /* A sign-in that could not be finished names no button: before a sign-in the one on screen is Continue, after one it is Browse TONE3000. */
     assert.match(card, /setFault\(`The sign-in to TONE3000 couldn’t be finished on this \$\{deviceNoun\(\)\}\. Try again\.`\)/)
     assert.ok(!/Tap Browse TONE3000 again/.test(card))
+  })
+}
+
+export function runPreviewAndGet(test) {
+  test('tone3000 list: a tone is laid out as the HeadRush app’s, and each capture has Preview and Get, which say truly what they do on an Axe-Fx III', async () => {
+    const card = flat(code(read('mobile/src/components/Tone3000Test.js')))
+    const words = await wordsOf()
+    assert.deepEqual([words.PREVIEW, words.GET, words.BACK_TO_LIST], ['Preview', 'Get', '‹ Back'])
+    /* The title with Back beside it, on one line. */
+    assert.match(card, /<View style=\{\{ flexDirection: 'row', alignItems: 'center', gap: space\.md \}\}> <Text accessibilityRole="header" numberOfLines=\{2\} style=\{\{[^}]*\}\}> \{tone\.title \|\| 'Untitled tone'\} <\/Text> <Pressable accessibilityRole="button" accessibilityLabel="Back to the list"/)
+    /* A line a capture: its name, then the two buttons, each with a picture AND its word (never a picture alone). */
+    assert.match(card, /<LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{`\$\{PREVIEW\} \$\{named\}: puts it on the Axe-Fx III and plays it in NAM 1`\} disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, true\)\} \/>/)
+    assert.match(card, /<LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{`\$\{GET\} \$\{named\}: puts it on the Axe-Fx III`\} lit disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, false\)\} \/>/)
+    const button = card.slice(card.indexOf('function LineButton('), card.indexOf('export default function Tone3000Test()'))
+    assert.match(button, /<Image source=\{icon\} accessible=\{false\}[^>]*\/> <Text maxFontSizeMultiplier=\{1\.4\} style=\{\{[^}]*\}\}> \{label\} <\/Text>/)
+    /* Get is the lit one, as in his picture: dark ink on a light ground. */
+    assert.match(button, /const ink = lit \? color\.chassis : color\.silk/)
+    assert.match(button, /backgroundColor: lit \? color\.silk :/)
+    /* The word on the button that was tapped says what it is doing, and only that one. */
+    assert.match(card, /setTapped\(play \? 'play' : 'keep'\)/)
+    assert.match(card, /const word = \(which, said\) => \(working && tapped === which \? \(busy === m\.id \? 'Fetching…' : 'Sending…'\) : said\)/)
+    /* The name keeps room of its own, and at the largest text sizes the buttons drop under it. */
+    assert.match(card, /<View style=\{\{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space\.sm \}\}> <Text numberOfLines=\{2\} style=\{\{ flex: 1, minWidth: 96,/)
+    assert.match(button, /accessibilityLabel=\{says\}/)
+    assert.match(button, /minHeight: TAP/)
+    /* What each does. Both put the capture in the unit's first empty slot (the one send); Preview alone then points NAM 1 at it, Get leaves what is playing alone. */
+    assert.match(card, /const sendToUnit = async \(m, again = null, fill = false, play = true\) => \{/)
+    assert.match(card, /place\(m\.id, slot, !!got\.name\) if \(!play\) return setBusy\(`pick \$\{NAM_BLOCKS\[0\]\}`\) await point\(NAM_BLOCKS\[0\], slot, m\.id\)/)
+    /*
+     * A capture the app has put on the unit is never sent a second time into
+     * another slot: not by a second tap, and not after Back and the same tone
+     * again. So what is on the unit is kept for as long as the app runs,
+     * outside any one drawing of the page, and forgotten only when the unit
+     * names the slot empty. Nothing that clears the view clears it.
+     */
+    assert.match(card, /if \(again === null && placed\.has\(String\(m\.id\)\)\) return/)
+    assert.equal((card.match(/const placed = new Map\(\)/g) || []).length, 1)
+    assert.ok(card.indexOf('const placed = new Map()') < card.indexOf('export default function Tone3000Test()'), 'what is on the unit is forgotten with each drawing of the page')
+    assert.match(card, /const \[onUnit, setOnUnit\] = useState\(placedNow\)/)
+    assert.deepEqual(card.match(/placed\.(set|delete|clear)\(/g), ['placed.set(', 'placed.delete('])
+    assert.match(card, /const place = \(id, slot, sure\) => \{ placed\.set\(String\(id\), \{ slot, sure \}\) if \(alive\.current\) setOnUnit\(placedNow\(\)\) \}/)
+    assert.match(card, /const unplace = \(id\) => \{ placed\.delete\(String\(id\)\) if \(alive\.current\) setOnUnit\(placedNow\(\)\) \}/)
+    assert.equal((card.match(/\bunplace\(/g) || []).length, 1, 'something other than an empty slot takes a capture off the list of what is on the unit')
+    assert.ok(!/setOnUnit\(\{\}\)/.test(card))
+    /* "On the unit" only where the unit said the slot holds it; a send it took and said nothing of is "Sent to slot", until a block pointed at it names what is there. */
+    assert.match(card, /\{at\.sure \? `On the unit · slot \$\{namSlotSaid\(at\.slot\)\}` : `Sent to slot \$\{namSlotSaid\(at\.slot\)\}`\}/)
+    assert.match(card, /if \(placed\.has\(String\(id\)\)\) place\(id, slot, true\)/)
+    /* What a fetched file turned out to be is still said under a capture that cannot be sent, and under the one in hand. */
+    assert.match(card, /\{checked\[m\.id\] && \(noUse \|\| mine\) \? \( <Text selectable style=\{\{[^}]*\}\}> \{checked\[m\.id\]\} <\/Text> \) : null\}/)
+    /* Once on the unit, which NAM block plays it is one tap, whichever button put it there, and what the block says lands under THAT capture. */
+    assert.match(card, /\{there \? NAM_BLOCKS\.map\(\(block, i\) => \( <Press key=\{block\} label=\{busy === `pick \$\{block\}` && mine \? 'Changing…' : `Play it in NAM \$\{i \+ 1\}`\} sub="In the preset the unit is on" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(block, at\.slot, m\.id\)\} \/> \)\) : null\}/)
+    assert.match(card, /const useIn = async \(block, slot, id\) => \{ if \(busy\) return setSend\(\(was\) => \(was\?\.id === id \? was : \{ id, slot, done: true, line: `In slot \$\{namSlotSaid\(slot\)\}\.` \}\)\)/)
+    /* A send that stopped part-way belongs to the view: forgotten with the tone, the list and the sign-in, and when that capture is sent again. */
+    assert.equal((card.match(/setChecked\(\{\}\) setStopped\(\{\}\)/g) || []).length, 4)
+    assert.equal((card.match(/setChecked\(\{\}\)/g) || []).length, 4)
+    assert.match(card, /setStopped\(\(was\) => Object\.fromEntries\(Object\.entries\(was\)\.filter\(\(\[key\]\) => key !== String\(m\.id\)\)\)\) let slot = again/)
+    /* The steps say what the two do, and that a preview stays in a slot: on this unit there is no hearing a capture without keeping it, and no sentence says there is. */
+    const steps = words.STEPS.join(' ')
+    assert.match(steps, /Preview puts it on the Axe-Fx III and plays it in NAM 1, so you hear it through your own rig\. Get puts it on the unit and leaves what you are playing alone\./)
+    assert.match(steps, /Either way it goes into the unit’s first empty capture slot and stays there: the Axe-Fx III can only play a capture that is in a slot\./)
+    /* And the view itself says it, where he is looking when he taps: not only the steps behind the ⓘ. */
+    assert.equal(words.CAPTURES_NOTE, 'Preview and Get both put the capture in an empty slot on the unit, and it stays there. Preview also plays it in NAM 1.')
+    assert.match(card, /<Text style=\{\{[^}]*\}\}>\{CAPTURES_HEAD\}<\/Text> <Text style=\{\{[^}]*\}\}>\{CAPTURES_NOTE\}<\/Text>/)
+    /* No words of the usual kinds say a preview is not kept, in anything this view can show or read aloud. (A list of words: it catches these, not every way of saying it.) */
+    const shown = `${steps} ${words.STEPS_FOOT} ${words.CAPTURES_HEAD} ${words.CAPTURES_NOTE} ${[...card.matchAll(/says=\{`([^`]*)`\}/g)].map((m) => m[1]).join(' ')}`
+    assert.ok(!/without keeping|try before|temporar|not (be )?kept|isn’t kept|isn't kept|removed after|goes away|quick listen|just listen/i.test(shown), shown)
+    assert.equal((shown.match(/puts it on the Axe-Fx III/g) || []).length >= 3, true)
+    /* What waits for a preset save is which block plays it, not the capture, which is in its slot already. */
+    assert.match(words.STEPS_FOOT, /Which NAM block plays a capture is not saved until you save the preset, and a capture already on the unit is never written over\.$/)
+    assert.ok(!/Nothing is saved/.test(words.STEPS_FOOT))
+    /* The old single button and the file check are gone from the line: two buttons, as in the picture. */
+    assert.ok(!/SEND_AND_PLAY|Check the file only/.test(card))
+    /* And the pictures are ones the app already carries: nothing new for a build. */
+    assert.match(card, /import playIcon from '\.\.\/\.\.\/assets\/icons\/play\.png' import saveIcon from '\.\.\/\.\.\/assets\/icons\/save\.png'/)
   })
 }
 
@@ -565,6 +643,10 @@ async function wordsOf() {
   return {
     PARTNER: one('PARTNER'),
     PICK_AFTER_SEND: one('PICK_AFTER_SEND'),
+    PREVIEW: one('PREVIEW'),
+    GET: one('GET'),
+    CAPTURES_HEAD: one('CAPTURES_HEAD'),
+    CAPTURES_NOTE: one('CAPTURES_NOTE'),
     CONTINUE: one('CONTINUE'),
     BACK_TO_LIST: one('BACK_TO_LIST'),
     HOW_IT_WORKS: one('HOW_IT_WORKS'),

@@ -1160,12 +1160,62 @@ the capture on the unit, which is the hard half.
     the kind of gear (All, Amps, Amp + Cab, Pedals); a row a tone with its
     picture, its title, and "maker · kind · NAM · 44,988 downloads" with
     the maker's picture; More under the last. A tap on a tone shows it on
-    the same page (‹ Back to the list, its picture, maker, licence,
-    description) over its captures, each with the card's Send it and play
-    it in NAM 1. The steps are behind the ⓘ, as on his HeadRush tab.
+    the same page, laid out as his HeadRush tone view is (1.90.66, below):
+    the title with ‹ Back beside it, its picture with the maker, the gear,
+    the description and the licence, then a line a capture with Preview
+    and Get. The steps are behind the ⓘ, as on his HeadRush tab.
     components/Tone3000Browser draws the list, lib/tone3000Browse holds
     what is asked and when, lib/tone3000 `search`, `feed` and `me` do the
     asking, components/Tone3000Test is the page.
+  - *PREVIEW AND GET ON EACH CAPTURE (1.90.66).* "And then, after clicking
+    on one, it has a preview and a get button" (the same day, with a
+    picture of the HeadRush app's tone view: title and Back, picture,
+    "amalgamaudio · amp-cab", the gear, the description, "A2 models", and
+    a capture's name with Preview and Get beside it). The look is copied.
+    WHAT THE BUTTONS DO IS NOT THE HEADRUSH'S, and the steps behind the ⓘ
+    say so: that board is on the internet and plays a capture without
+    keeping it; an AX3 plays only what is in one of its capture slots. So
+    BOTH put the capture in the unit's first empty slot (the one send
+    there has always been). **Preview** then points NAM 1 at it, so it is
+    heard through his rig; **Get** leaves what is playing alone. The view
+    says so itself, under the heading, not only behind the ⓘ ("Preview and
+    Get both put the capture in an empty slot on the unit, and it stays
+    there. Preview also plays it in NAM 1."). The old single button (Send
+    it and play it in NAM 1) and Check the file only are gone. NEVER A
+    SENTENCE THAT SAYS A PREVIEW IS NOT KEPT (a test scans what the view
+    shows and reads aloud for the usual ways of saying it).
+  - *What the app has put on the unit is remembered for as long as the app
+    runs* (`placed`, outside the component, by TONE3000's capture id): the
+    line says "On the unit · slot 030", has Play it in NAM 1 / NAM 2 under
+    it, and has no Preview or Get, on this view and after Back and the
+    same tone again. A second copy would take a second slot, which
+    nothing in the app can give back. "On the unit" only where the unit
+    said the slot holds it; a send it took and said nothing of is "Sent
+    to slot 030" until a NAM block pointed at it names what is there. It
+    is forgotten only when the unit names the slot <EMPTY> (and when the
+    app is closed: the unit is not asked what it holds when a tone opens).
+  - *Two readers and a skeptic each went through it before it went out.*
+    What they found, each fixed with a test seen to fail without the fix
+    (15): Back and the same tone again offered both buttons on a capture
+    already sent; a tone picked on TONE3000's page while a capture's FILE
+    was still coming opened over it, and the capture then went to the
+    unit, and into NAM 1, with no line on the screen (the "a send is
+    going" mark went up after the fetch; it goes up before it now); "On
+    the unit" over a slot the unit had not named; a Play under one capture
+    took away another's Send it again (a stopped send is kept by capture
+    now); a file that read as A2 and that the packer refuses kept its
+    buttons under two lines that contradicted each other; nothing on the
+    view said a preview stays in its slot.
+  - *A PREVIEW THAT DOES NOT FILL A SLOT IS NOT BUILT, AND CANNOT BE FROM
+    WHAT IS KNOWN.* Ten previews are ten slots. Reusing one slot means
+    writing over a capture or clearing one, and the only upload ever
+    recorded went into an EMPTY slot: what Axe-Edit sends to replace or
+    remove a capture is not known, and a byte Axe-Edit has not been seen
+    to send is not sent (the name's check byte was that lesson). A MIDI
+    Monitor recording of Axe-Edit III removing one capture, and of it
+    loading one over a slot in use, is what would settle it. And no send
+    from the app has been KEPT by his unit yet at all (above): that comes
+    first.
   - *TONE3000 IS ASKED ONLY WHEN THE LIST OPENS, ON SEARCH, ON A CHIP AND
     FOR MORE.* Never on a keystroke or a clock: its search is "heavily
     rate-limited by default". A test fails on a clock in either file and
@@ -1216,9 +1266,7 @@ the capture on the unit, which is the hard half.
     (Edit's NAM block, beside the capture picker) rather than a Developer
     page; the tone's picture and TONE3000's mark on the NAM block that
     plays a capture sent from it; and the splash's wording, and the plain
-    sign-in in place of the pick-a-tone page, agreed with them. Each send still takes
-    a new empty slot on the unit, so auditioning ten captures fills ten
-    slots: a slot kept for trying captures in was thought of and not built.
+    sign-in in place of the pick-a-tone page, agreed with them.
   - NOTHING OF IT HAS RUN ON A PHONE OR AGAINST TONE3000: the tests run it
     against a stand-in. His first look is the first check, of the search,
     the sign-in alone, the pictures and the layout.

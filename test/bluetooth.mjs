@@ -11616,29 +11616,43 @@ export function run(test) {
 
     /* The card: a slot that reads empty after a send is "did not keep it", with no Play button; and a block pointed at an empty slot says so. */
     const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
+    /* The same with its comments taken out, for what is read across more than one line of it. */
+    const bare = src('mobile/src/components/Tone3000Test.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     /* The send and its second try are lib/captureSend's (run whole in the test below); the card hands it the sender and draws the lines. */
     assert.match(card, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, fill, install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, filled: how\.filled, onProgress:/)
     assert.equal(nam.NAM_NAME_PLACES, 31)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
     /* A send that stopped part-way is offered again with its name as it was going. */
-    assert.match(card, /again: err\?\.partial === true && Number\.isInteger\(err\?\.slot\) \? err\.slot : null, fill: err\?\.filled === true \}\)/)
-    assert.match(card, /onPress=\{\(\) => sendToUnit\(m, send\.again, send\.fill === true\)\}/)
-    /* And a pick that names the slot <EMPTY> takes the send back from "done": its button returns, and the two Play buttons, which could only point at the same empty slot, go. */
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
+    assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, fill: err\?\.filled === true, play, line \} \}\)\)/)
+    /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */
+    assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.fill, halted\.play\)\} \/> : null\}/)
+    assert.match(card, /\{halted && !mine \? <Note>\{halted\.line\}<\/Note> : null\}/)
+    /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
+    assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) \} else \{/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
     assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{twice \? ', on the second try' : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
-    assert.match(card, /const mine = \(atWork = Date\.now\(\)\) setBusy\(`send \$\{m\.id\}`\)/)
+    /* Up before the fetch, not after it: a tone picked on TONE3000's page while the file was coming opened over this one, and the capture then went to the unit with no line on the screen. */
+    assert.match(bare, /const mine = \(atWork = Date\.now\(\)\) try \{ if \(!texts\.current\[m\.id\]\) await check\(m\) if \(!alive\.current \|\| !texts\.current\[m\.id\]\) return/)
+    assert.equal((bare.match(/atWork = Date\.now\(\)/g) || []).length, 2, 'the mark is set somewhere other than the send and the Play buttons')
+    /* And a TONE3000 return asks that mark before it opens another tone. */
+    assert.match(bare, /if \(goingNow\(\)\) setSaid\(PICK_AFTER_SEND\) else load\(done\.toneId\)/)
     assert.match(card, /\} finally \{ if \(atWork === mine\) atWork = 0 if \(alive\.current\) setBusy\(null\) \} \}/)
     /* And never for good: a request that never came back does not close the card until the app is restarted. */
     assert.match(card, /const goingNow = \(\) => atWork !== 0 && Date\.now\(\) - atWork < STILL_GOING_MS/)
     assert.ok(!/if \(atWork\)/.test(card), 'the card asks the mark itself, which never runs out')
-    /* The one button is not drawn for a file that turned out not to be an A2 capture. */
-    assert.match(card, /\{\(send\?\.id === m\.id && send\.done\) \|\| \(checked\[m\.id\] && !texts\.current\[m\.id\]\) \? null : \(/)
+    /* Neither button is drawn for a file that turned out not to be an A2 capture, nor for a capture this view has already put on the unit. */
+    assert.match(card, /const noUse = !!checked\[m\.id\] && !texts\.current\[m\.id\]/)
+    assert.match(bare, /\{there \? \( <Text style=\{\{[^}]*\}\}>\{at\.sure \? `On the unit · slot \$\{namSlotSaid\(at\.slot\)\}` : `Sent to slot \$\{namSlotSaid\(at\.slot\)\}`\}<\/Text> \) : noUse \? null : \( <> <LineButton/)
+    /* A file that reads as A2 and that the packer refuses is not kept either: its one line says why, and it has no buttons. */
+    assert.match(bare, /const rec = read\.ok && read\.a2 \? namRecord\(text, \{ name: captureLabel\(m\), fallback: `Capture \$\{m\.id\}` \}\) : null const line = rec && !rec\.ok \? rec\.why : namSaid\(read\)/)
+    assert.match(card, /if \(rec\?\.ok\) texts\.current\[m\.id\] = text/)
     /* The send's line and the block's line each keep their place: one never writes over the other. */
-    assert.match(card, /\{send\?\.id === m\.id \? <Note>\{send\.line\}<\/Note> : null\} \{send\?\.id === m\.id && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
+    assert.match(card, /const mine = send\?\.id === m\.id/)
+    assert.match(card, /\{mine \? <Note>\{send\.line\}<\/Note> : null\} \{mine && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
     assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
   })
 
