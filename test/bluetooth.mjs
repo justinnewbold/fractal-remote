@@ -11203,7 +11203,7 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0 }
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false, quietHeads: 0, fullNamesOnly: false }
     const headOf = (slot) => held.get(slot) || empty()
     const said = (b, payload) => t.say(sx.frame(0x10, 0x01, [...b.slice(6, 12), ...payload]))
     const hear = t.unit.hear
@@ -11236,7 +11236,8 @@ export function run(test) {
          * check byte was.
          */
         const head = bytesOf(words, 68)
-        if (head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0) u.unkept.push(slot)
+        /* `fullNamesOnly`: a unit whose rule for a name shorter than 31 characters is not the app's guess. Only the shape seen kept (31 characters and the check byte) is kept by it. */
+        if (head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0 || (u.fullNamesOnly && head[30] === 0)) u.unkept.push(slot)
         else {
           head[31] = 0
           held.set(slot, head)
@@ -11270,7 +11271,7 @@ export function run(test) {
     const asks = (path, options2 = {}) => drive(t.clock, t.wire.request(path, { capturing: true, ...options2 }))
     /* Every frame of a capture's shapes that left the phone. */
     const shaped = () => t.frames().filter((f) => nam.namShaped(f, 0x10))
-    return { t, u, nam, asks, shaped, record: (name, from) => nam.namRecord(A2(name, from)) }
+    return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said) }
   }
 
   test('a capture goes to an Axe-Fx III as Axe-Edit sends one: the first empty slot found, 130 messages each taken, and the slot read back', async () => {
@@ -11335,7 +11336,39 @@ export function run(test) {
     assert.equal(to - from - 1, 130, 'something else was sent between "a transfer is under way" and "it is over"')
     assert.ok(all.slice(from + 1, to).every((f) => nam.namShaped(f, 0x10)), 'a message that is not the capture’s went to the unit in the middle of it')
     assert.ok(all.slice(to + 1).some((f) => f[5] === 0x0d), 'what was asked during the capture was never sent once it was over')
-    await drive(t.clock, Promise.resolve())
+    /*
+     * AND THE FIRST THING THE UNIT HEARS AFTER "IT IS OVER" IS THE SLOT'S
+     * QUESTION, as it was Axe-Edit's (a third of a second on, with nothing
+     * sent in between): what was held goes after that, not into the quiet.
+     */
+    assert.ok(t.sx.sameBytes(all[to + 1], nam.namSlotQuery(0x10, 3)), 'something went to the unit between "it is over" and the slot read back')
+    /* And nothing goes between the slot's own first read and the start either. */
+    assert.ok(t.sx.sameBytes(all[from - 1], nam.namSlotQuery(0x10, 3)), 'something went between the slot’s question and the start of the transfer')
+    /*
+     * THE RESTS ARE AXE-EDIT'S, by the clock: the opening message no
+     * sooner after "a transfer is under way" than it sent it, "it is over"
+     * no sooner after the last message, the slot's question no sooner
+     * after that.
+     */
+    const { NAM_REST } = await import('../mobile/src/lib/bleWire.js')
+    assert.deepEqual({ ...NAM_REST }, { begin: 30, over: 150, read: 350, again: 1000 })
+    const when = (i) => t.sent[i].at
+    assert.equal(t.sent.length, all.length)
+    assert.equal(all[from + 1][5], 0x54)
+    assert.ok(when(from + 1) - when(from) >= NAM_REST.begin && when(from + 1) - when(from) < NAM_REST.begin + 200, `the opening message went ${when(from + 1) - when(from)} ms after "a transfer is under way"`)
+    assert.equal(all[to - 1][5], 0x56)
+    assert.ok(when(to) - when(to - 1) >= NAM_REST.over && when(to) - when(to - 1) < NAM_REST.over + 200, `"it is over" went ${when(to) - when(to - 1)} ms after the closing message`)
+    assert.ok(when(to + 1) - when(to) >= NAM_REST.read, `the slot was read back ${when(to + 1) - when(to)} ms after "it is over"`)
+    /*
+     * AND NO LATER THAN THAT BY MUCH. The preset asked for at message 60
+     * opened a Play run that the capture then held; the slot's read back,
+     * asked the way Edit asks, waited out Play's whole ten seconds behind
+     * it. A capture's own messages do not wait for Play while it holds
+     * everything else.
+     */
+    assert.ok(when(to + 1) - when(to) < NAM_REST.read + 200, `the slot was read back ${when(to + 1) - when(to)} ms after "it is over": the unit was left silent`)
+    assert.ok(when(from) - when(from - 1) < 500, `the start went ${when(from) - when(from - 1)} ms after the slot’s own read`)
+    await advance(t.clock, 3000)
     assert.equal(asked.length, 1, 'what was asked during the capture was never answered')
     assert.ok(asked[0] && !(asked[0] instanceof Error), `the preset asked for during the capture failed: ${asked[0]?.message}`)
     /* The scene pressed meanwhile: refused in words, and the unit's scene is what it was. */
@@ -11371,7 +11404,7 @@ export function run(test) {
     const kept = await asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } })
     assert.deepEqual([kept.slot, kept.name], [3, 'Mesa Recto Red Modern Classic'])
     assert.deepEqual(u.unkept, [])
-    assert.ok(t.logs.some((l) => /a capture went to slot 004 in [\d.]+ s, 130 messages, its name 29 characters, check byte 0x[0-9a-f]{2}: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
+    assert.ok(t.logs.some((l) => /a capture went to slot 004 in [\d.]+ s, 130 messages, its name 29 characters, check byte 0x[0-9a-f]{2}, the closing message answered in \d+ ms: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
 
     /* The record as the first build sent it, a NUL where the check byte goes: taken at every message, and not kept. */
     const old = rec.words.slice()
@@ -11387,13 +11420,50 @@ export function run(test) {
     /* The slot is still the first empty one, so the next send goes back into it and litters nothing. */
     assert.equal((await asks('/nam/empty')).slot, 4)
 
+    /*
+     * A SHORT NAME, AND A UNIT WHOSE RULE FOR ONE IS NOT THE APP'S GUESS.
+     * The recording proves the check byte for a name that fills all 31
+     * places; a shorter one is the same rule on trust. Filled out with
+     * spaces (namRecord's `fill`), a short name is that proven shape: the
+     * unit that dropped it as it was keeps it, and it reads back without
+     * the spaces.
+     */
+    u.fullNamesOnly = true
+    u.unkept.length = 0
+    const asItIs = await asks('/nam/slots/4', { method: 'POST', body: { words: rec.words } })
+    assert.deepEqual([asItIs.name, u.unkept], ['<EMPTY>', [4]], 'the stand-in unit kept a short name it should have dropped')
+    const full = record('Mesa Recto Red Modern Classic', 5, { fill: true })
+    assert.deepEqual([full.ok, full.filled, full.name], [true, true, 'Mesa Recto Red Modern Classic'], 'the name is not what it was without its spaces')
+    const fullName = []
+    for (let i = 0; i < 8; i++) fullName.push(full.words[i] & 0xff, (full.words[i] >>> 8) & 0xff, (full.words[i] >>> 16) & 0xff, full.words[i] >>> 24)
+    assert.equal(String.fromCharCode(...fullName.slice(0, 31)), 'Mesa Recto Red Modern Classic  ', 'the name is not filled out to 31 places with spaces')
+    assert.equal(fullName[31], nam.namCheck(fullName))
+    assert.equal(fullName.reduce((x, c) => x ^ c, 0), 0, 'the filled-out name does not XOR to nought')
+    /* Nothing but the name's own 32 bytes differs from the record as it was. */
+    assert.deepEqual(full.words.slice(8), rec.words.slice(8))
+    const filledKept = await asks('/nam/slots/4', { method: 'POST', body: { words: full.words } })
+    assert.deepEqual([filledKept.slot, filledKept.name, u.unkept], [4, 'Mesa Recto Red Modern Classic', [4]], 'a name filled out was not kept, or came back with its spaces')
+    assert.ok(t.logs.some((l) => /a capture went to slot 005 in [\d.]+ s, 130 messages, its name 31 characters \(filled out with spaces\), check byte 0x[0-9a-f]{2}, the closing message answered in \d+ ms: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
+    /* A name that already fills all 31 places has nothing to fill: the same record, and it says so. */
+    const long = record('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57', 5)
+    const longFilled = record('Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57', 5, { fill: true })
+    assert.deepEqual([long.name.length, longFilled.filled], [31, false])
+    assert.deepEqual(longFilled.words, long.words)
+    u.fullNamesOnly = false
+
     /* The card: a slot that reads empty after a send is "did not keep it", with no Play button; and a block pointed at an empty slot says so. */
     const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT: [^`]*`\) setSend\(\{ id: m\.id, slot, line: `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    /* A short-named capture the unit did not keep is sent once more with its name filled out, in the same slot, before anything is called not kept. */
+    assert.match(card, /let got = await goes\(rec\.words\)/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY && rec\.name\.length < NAM_NAME_PLACES\) \{ const full = namRecord\(texts\.current\[m\.id\], \{ \.\.\.named, fill: true \}\) if \(full\.ok && full\.filled\) \{ twice = true/)
+    assert.match(card, /got = await goes\(full\.words, true\)/)
+    assert.match(card, /KEPT WITH THE NAME FILLED OUT, not as it was/)
+    assert.equal(nam.NAM_NAME_PLACES, 31)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT\$\{twice \? ', either way' : ''\}: [^`]*`\) setSend\(\{ id: m\.id, slot, line: twice \? `The Axe-Fx III took the capture twice and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered both times\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done": its button returns, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
-    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
+    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{twice \? ', on the second try' : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
@@ -11476,6 +11546,25 @@ export function run(test) {
     assert.deepEqual([said.slot, said.name], [5, 'Slow To File'], 'a slot that said nothing once after the send was not asked again')
     /* And the seconds are the send's own: up to the unit's answer to the last message, without the rests and the read-back after it. */
     assert.ok(said.seconds >= 0 && said.seconds < 2.5, `the time a send took counts the wait for a slot that said nothing (${said.seconds} s)`)
+    /* The line itself going part-way (the adapter dropped, Bluetooth switched off): said with how far it got and the slot it may have left half-filled, so the card offers that same slot again. */
+    const cut = await capturesLine()
+    const cutRec = cut.record('Line Went', 6)
+    let fell = null
+    await assert.rejects(
+      cut.asks('/nam/slots/3', {
+        method: 'POST',
+        body: { words: cutRec.words },
+        onProgress: (sent) => {
+          if (sent === 50) cut.t.wire.close()
+        }
+      }),
+      (e) => {
+        fell = e
+        return true
+      }
+    )
+    assert.ok(fell.partial === true && fell.slot === 3, `a send cut off by the line going does not say which slot it left half-filled (${fell.message})`)
+    assert.match(fell.message, /That was after 50 of 130 messages\. Slot 004 may hold part of a capture now: send it again to the same slot\./)
   })
 
   test('the captures are his account’s alone, an Axe-Fx III’s alone, and only for a request that says it is theirs; and the way out passes nothing else of their shapes', async () => {

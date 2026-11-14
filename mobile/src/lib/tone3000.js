@@ -139,6 +139,19 @@ export function readCallback(url, redirect = T3K_REDIRECT) {
 /** A failure with words for the screen and, where there is one, the status the server gave. */
 const failure = (message, status = null) => Object.assign(new Error(message), { status })
 
+/*
+ * HOW LONG TONE3000 IS WAITED FOR: one request and the reading of its answer
+ * together, in milliseconds. A capture's file is the long one (a few hundred
+ * thousand characters on a phone's signal). Before 1.90.61 nothing ended a
+ * request that had stalled: a file that stopped half-way left the card on
+ * "Fetching" for good, and a renewal that stalled held every request after
+ * it, since one renewal is shared, until the app was closed.
+ */
+export const T3K_WAIT_MS = 30000
+export const T3K_FILE_WAIT_MS = 60000
+/** What is said when it took too long. `what` is the thing asked for ("That capture"), or nothing for the sign-in's own exchanges. */
+export const tookTooLong = (what) => `${what ? `${what} took too long to come from TONE3000` : 'TONE3000 took too long to answer'}. Check the internet and try again.`
+
 /** What a licence code is called. Shown beside the creator's name, never left out (their terms). */
 export const T3K_LICENSES = Object.freeze({
   t3k: 'TONE3000 licence',
@@ -160,8 +173,39 @@ export const toneCredit = (tone) => `by ${tone?.user?.username || 'an unnamed cr
  * as strings), `open` (opens a web address), `now` and `random` are handed
  * in; lib/tone3000Here gives it the phone's.
  */
-export function tone3000({ fetch, store, open, now = () => Date.now(), random = randomBytes, key = T3K_KEY, redirect = T3K_REDIRECT }) {
+export function tone3000({ fetch, store, open, now = () => Date.now(), random = randomBytes, key = T3K_KEY, redirect = T3K_REDIRECT, timer = { set: (f, ms) => setTimeout(f, ms), clear: (id) => clearTimeout(id) } }) {
   let refreshing = null
+
+  /**
+   * One exchange with TONE3000 under a time limit: the request AND the
+   * reading of its answer (`read(res)`, where a stalled body would otherwise
+   * wait for ever with the headers long in). `{ ok, status, body }`. When
+   * the time is up the request is let go (where the device can) and the
+   * failure says so in words (status 408).
+   */
+  const exchange = async (address, init, what, read, wait = T3K_WAIT_MS) => {
+    const stop = typeof AbortController === 'function' ? new AbortController() : null
+    let id = null
+    const late = new Promise((_, reject) => {
+      id = timer.set(() => {
+        try {
+          stop?.abort()
+        } catch {
+          /* nothing to let go of */
+        }
+        reject(failure(tookTooLong(what), 408))
+      }, wait)
+    })
+    const run = (async () => {
+      const res = await fetch(address, stop ? { ...init, signal: stop.signal } : init)
+      return { ok: res.ok, status: res.status, body: read ? await read(res) : null }
+    })()
+    try {
+      return await Promise.race([run, late])
+    } finally {
+      timer.clear(id)
+    }
+  }
 
   const kept = async (name) => {
     try {
@@ -182,14 +226,18 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
     }
   }
 
-  const tokenPost = async (pairs) => {
-    const res = await fetch(`${T3K_ORIGIN}/api/v1/oauth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: queryOf(pairs)
-    })
-    return res
-  }
+  /** The sign-in's own exchange: `{ ok, status, body }`, the body what TONE3000 said (null where it was not JSON). */
+  const tokenPost = (pairs) =>
+    exchange(
+      `${T3K_ORIGIN}/api/v1/oauth/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: queryOf(pairs)
+      },
+      null,
+      (res) => res.json().catch(() => null)
+    )
 
   /** Whether a pass is kept on this device. */
   const signedIn = async () => !!(await kept(T3K_TOKENS_KEY))?.access
@@ -248,11 +296,10 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
       return { ok: false, why: 'TONE3000 couldn’t be reached to finish signing in. Check the internet and start again.' }
     }
     if (!res.ok) {
-      const said = await res.json().catch(() => ({}))
-      return { ok: false, why: `TONE3000 refused the sign-in (${said?.error || res.status}). Start again.` }
+      return { ok: false, why: `TONE3000 refused the sign-in (${res.body?.error || res.status}). Start again.` }
     }
     try {
-      await keep(T3K_TOKENS_KEY, tokensFrom(await res.json()))
+      await keep(T3K_TOKENS_KEY, tokensFrom(res.body))
     } catch (err) {
       return { ok: false, why: err?.message || 'TONE3000 answered without a pass.' }
     }
@@ -284,7 +331,7 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
           }
           throw failure('TONE3000 couldn’t renew the sign-in just now. Try again.', res.status)
         }
-        const fresh = tokensFrom(await res.json())
+        const fresh = tokensFrom(res.body)
         /* A renewal that sends no new renewing word keeps the old one. */
         if (!fresh.refresh) fresh.refresh = tokens.refresh
         await keep(T3K_TOKENS_KEY, fresh)
@@ -296,27 +343,33 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
     return refreshing
   }
 
-  /** One request with the pass; on a 401, once more with a renewed one. `at` is a path, or a whole address on TONE3000's own site. */
-  async function ask(at, what) {
+  /**
+   * One request with the pass; on a 401, once more with a renewed one. `at`
+   * is a path, or a whole address on TONE3000's own site. What comes back is
+   * the answer as `read` reads it (`(res) => res.json()`), read inside the
+   * same time limit as the request.
+   */
+  async function ask(at, what, read, wait = T3K_WAIT_MS) {
     const address = /^https?:\/\//.test(at) ? at : `${T3K_ORIGIN}${at}`
     /* The pass goes to TONE3000 and nowhere else, whatever address a model says it is at. */
     if (address !== T3K_ORIGIN && !address.startsWith(`${T3K_ORIGIN}/`)) throw failure(`${what} is not at TONE3000, so it wasn’t asked for.`)
-    let res = await fetch(address, { headers: { Authorization: `Bearer ${await pass()}` } })
-    if (res.status === 401) res = await fetch(address, { headers: { Authorization: `Bearer ${await pass({ force: true })}` } })
+    const get = async (force) => exchange(address, { headers: { Authorization: `Bearer ${await pass({ force })}` } }, what, (r) => (r.ok ? read(r) : null), wait)
+    let res = await get(false)
+    if (res.status === 401) res = await get(true)
     if (!res.ok) {
       if (res.status === 429) throw failure('TONE3000 says that’s too many requests for now. Wait a minute.', 429)
       if (res.status === 404) throw failure(`${what} isn’t on TONE3000 any more, or isn’t yours to open.`, 404)
       throw failure(`TONE3000 couldn’t answer for ${what} (${res.status}).`, res.status)
     }
-    return res
+    return res.body
   }
 
   /** A tone, by the id the pick came back with. */
-  const tone = async (id) => (await ask(`/api/v1/tones/${encodeURIComponent(String(id))}?architecture=2`, 'That tone')).json()
+  const tone = (id) => ask(`/api/v1/tones/${encodeURIComponent(String(id))}?architecture=2`, 'That tone', (r) => r.json())
 
   /** A tone's A2 captures: `[{ id, name, size, model_url, architecture_version }]`. */
   async function models(toneId) {
-    const got = await (await ask(`/api/v1/models?${queryOf([['tone_id', toneId], ['architecture', '2'], ['page_size', 100]])}`, 'That tone’s captures')).json()
+    const got = await ask(`/api/v1/models?${queryOf([['tone_id', toneId], ['architecture', '2'], ['page_size', 100]])}`, 'That tone’s captures', (r) => r.json())
     return Array.isArray(got?.data) ? got.data.filter((m) => m && m.id != null && typeof m.model_url === 'string') : []
   }
 
@@ -326,7 +379,7 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
    * address; as in TONE3000's own client, its path is asked of TONE3000's
    * site, so the pass never goes to whatever host an address names.
    */
-  const modelText = async (model) => (await ask(String(model?.model_url || '').replace(/^https?:\/\/[^/]+/, ''), 'That capture')).text()
+  const modelText = (model) => ask(String(model?.model_url || '').replace(/^https?:\/\/[^/]+/, ''), 'That capture', (r) => r.text(), T3K_FILE_WAIT_MS)
 
   return { start, finish, signedIn, signOut, tone, models, modelText }
 }

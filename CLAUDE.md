@@ -1212,11 +1212,38 @@ the capture on the unit, which is the hard half.
     a half-minute upload nine times in ten). A read asked meanwhile waits
     and goes after; anything that would change the unit is refused up
     front (`request`), since a route that reads before it writes would
-    otherwise write half a minute late. Round the end the phone rests as
-    Axe-Edit did (`NAM_REST`), and a slot that reads <EMPTY> is read once
-    more before it is called not kept. THE COMPUTER'S PATH DOES NOT HOLD
-    OTHER REQUESTS YET (ForgeFX queues each of the 130 on its own): that
-    is the next ForgeFX change, with a pin and a computer release.
+    otherwise write half a minute late. The hold runs from the slot's own
+    first read to the slot read back after "it is over" (1.90.61), and the
+    rests are Axe-Edit's (`NAM_REST`: 30 ms before the opening message,
+    150 before "it is over", 350 of quiet before the slot is read back,
+    each held by the clock in a test); a slot that reads <EMPTY> is read
+    once more before it is called not kept. THE COMPUTER HOLDS THEM TOO,
+    from the release that carries ForgeFX 14e2c4f (1.90.61): the whole send
+    is one turn on its queue (`Transport.exclusive`), with the same rests
+    and second look, and it puts the name's check byte into a record that
+    came without it. A computer app from before that lets other requests
+    in between a capture's messages: update the computer (or the Pi)
+    before a send through it is judged.
+  - *The log says how long the unit took over the closing message* (both
+    senders, 1.90.61). In the recording: under 3 ms on average for every
+    message before it, 272 ms for the last, most likely the unit filing
+    the capture. A closing message answered as fast as the rest, and a
+    slot that reads <EMPTY>, says the unit judged the record and dropped
+    it; a slow one that still reads <EMPTY> says the trouble is later.
+  - *A SHORT NAME IS SENT AS IT IS, THEN FILLED OUT IF THE UNIT DROPS IT*
+    (1.90.61, the card and `namRecord`'s `fill`). The check byte is proven
+    only for a name that fills all 31 places; for a shorter one its place
+    is a guess. A short-named capture taken and not kept is sent once more
+    into the same slot with its name filled out to 31 places with spaces
+    (the proven shape), and names are read back without the spaces. The
+    log says which was kept ("KEPT WITH THE NAME FILLED OUT, not as it
+    was"). Kept as it is: the fill is never used. Only the filled one
+    kept: fill every name until the short rule is understood. Neither
+    kept: the check byte was not the reason.
+  - *Axe-Edit sends no "store it" message* (checked 14 November 2026,
+    docs/nam-install.md): the 30 messages it sent between the unit's last
+    answer and "it is over" are its own screen refreshing, the same reads
+    it sent thousands of times before the upload. Not a missing step.
   - *One send at a time, whoever draws the card* (`atWork` in the card):
     a send goes on after the card is left, and the computer refuses no
     second one. A capture is named by the file's own word where any of it
@@ -1224,6 +1251,13 @@ the capture on the unit, which is the hard half.
     and never "<EMPTY>". What the card says a send takes is the record's
     real size (`RECORD_SEND` in lib/nam-file, 83,227 bytes, held to the
     130 messages by a test), not the old estimate.
+  - *TONE3000 is waited for only so long* (1.90.61, lib/tone3000
+    `exchange`): 30 seconds for an answer, 60 for a capture's file, the
+    request and the reading of its body together. Before, a file that
+    stopped half-way left the card on "Fetching" for good, and a renewal
+    of the sign-in that stalled held every request after it until the app
+    was closed. Every request the client makes goes through that one
+    place (a test counts them).
   - *The recording is not in the repository* (a creator's capture, and the
     names of Fractal's own). He has it as NAM.mmon. Never ask for his
     Fractal-Bot backup either: it holds Fractal's own captures.

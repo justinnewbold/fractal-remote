@@ -273,6 +273,105 @@ export function run(test) {
     assert.equal(w3.kept.size, 0)
   })
 
+  /*
+   * A STALLED REQUEST IS GIVEN UP ON (1.90.61). Nothing ended one before: a
+   * capture's file that stopped half-way left the card on "Fetching" for
+   * good, and a renewal that stalled held every request after it (one
+   * renewal is shared) until the app was closed. The request and the
+   * reading of its answer are under one limit now, said in words.
+   */
+  test('tone3000: a request that stalls, or an answer that stops half-way, is given up on in words, and nothing after it is held', async () => {
+    const t = await lib()
+    /** The world's clockwork, by hand: every limit set, and whether it was taken down. */
+    const clockwork = () => {
+      const set = []
+      return { set, timer: { set: (f, ms) => set.push({ f, ms, cleared: false }) - 1, clear: (id) => { if (set[id]) set[id].cleared = true } } }
+    }
+    const signedIn = async (extra = {}) => {
+      const w = world({ expires: 600 })
+      const k = clockwork()
+      const c = t.tone3000({ ...w, timer: k.timer, ...extra(w) })
+      const q = queryOfUrl(await c.start())
+      await c.finish(`fractalremote://tone3000?code=C&state=${q.state}&tone_id=42`)
+      return { w, k, c }
+    }
+    const file = { model_url: 'https://www.tone3000.com/api/v1/models/7/file' }
+
+    /* An ordinary request: under a limit, the limit taken down when the answer has been read, the file given longer. */
+    const plain = await signedIn(() => ({}))
+    await plain.c.tone(42)
+    assert.equal(await plain.c.modelText(file), '{"architecture":"WaveNet","weights":[1,2,3]}')
+    assert.ok(plain.k.set.length >= 3 && plain.k.set.every((x) => x.cleared), 'a limit was left running after its answer came')
+    assert.deepEqual(plain.k.set.slice(-2).map((x) => x.ms), [t.T3K_WAIT_MS, t.T3K_FILE_WAIT_MS])
+    assert.ok(t.T3K_FILE_WAIT_MS > t.T3K_WAIT_MS && t.T3K_WAIT_MS >= 15000)
+
+    /* The file never answers: given up on when the limit runs out, the request let go of. */
+    const signals = []
+    const stalled = await signedIn((w) => ({
+      fetch: (url, init = {}) => {
+        if (url === file.model_url) {
+          signals.push(init.signal)
+          return new Promise(() => {})
+        }
+        return w.fetch(url, init)
+      }
+    }))
+    const waiting = stalled.c.modelText(file)
+    const settled = waiting.then(() => 'came', (e) => e)
+    await new Promise((r) => setImmediate(r))
+    const limit = stalled.k.set[stalled.k.set.length - 1]
+    assert.equal(limit.ms, t.T3K_FILE_WAIT_MS)
+    assert.equal(limit.cleared, false, 'the limit was taken down while the file was still awaited')
+    limit.f()
+    const err = await settled
+    assert.equal(err.message, 'That capture took too long to come from TONE3000. Check the internet and try again.')
+    assert.equal(err.status, 408)
+    assert.equal(signals.length, 1)
+    assert.equal(signals[0]?.aborted, true, 'the stalled request was not let go of')
+
+    /* The headers came and the body stopped: the same, since the reading is inside the limit. */
+    const half = await signedIn((w) => ({
+      fetch: async (url, init = {}) => (url === file.model_url ? { ok: true, status: 200, json: () => new Promise(() => {}), text: () => new Promise(() => {}) } : w.fetch(url, init))
+    }))
+    const halfSettled = half.c.modelText(file).then(() => 'came', (e) => e)
+    await new Promise((r) => setImmediate(r))
+    half.k.set[half.k.set.length - 1].f()
+    assert.match((await halfSettled).message, /^That capture took too long to come from TONE3000\./)
+
+    /* A renewal that stalls is given up on too, and the next request renews afresh: nothing is held behind it. */
+    let stall = true
+    const renew = await signedIn((w) => ({
+      fetch: (url, init = {}) => (stall && url === 'https://www.tone3000.com/api/v1/oauth/token' && String(init.body).includes('grant_type=refresh_token') ? new Promise(() => {}) : w.fetch(url, init))
+    }))
+    renew.w.tick(600_000)
+    const both = Promise.all([renew.c.tone(42).then(() => 'came', (e) => e), renew.c.models(42).then(() => 'came', (e) => e)])
+    await new Promise((r) => setImmediate(r))
+    const open = renew.k.set.filter((x) => !x.cleared)
+    assert.equal(open.length, 1, 'two requests at once did not share one renewal')
+    open[0].f()
+    const [one, two] = await both
+    assert.equal(one.message, 'TONE3000 took too long to answer. Check the internet and try again.')
+    assert.equal(two.message, one.message)
+    assert.equal(await renew.c.signedIn(), true, 'a renewal that took too long ended the sign-in')
+    stall = false
+    assert.equal((await renew.c.tone(42)).title, 'Plexi Crunch')
+
+    /* Finishing a sign-in that stalls: said as the sign-in's own failure, not left waiting. */
+    const w4 = world()
+    const k4 = clockwork()
+    const c4 = t.tone3000({ ...w4, timer: k4.timer, fetch: () => new Promise(() => {}) })
+    const q4 = queryOfUrl(await c4.start())
+    const fin = c4.finish(`fractalremote://tone3000?code=C&state=${q4.state}`)
+    await new Promise((r) => setImmediate(r))
+    k4.set[k4.set.length - 1].f()
+    assert.deepEqual(await fin, { ok: false, why: 'TONE3000 couldn’t be reached to finish signing in. Check the internet and start again.' })
+
+    /* And nothing in the client asks TONE3000 anything outside the limit. */
+    const src = readFileSync(new URL('../mobile/src/lib/tone3000.js', import.meta.url), 'utf8')
+    assert.equal((src.match(/\bfetch\(/g) || []).length, 1, 'a request is made outside exchange()')
+    assert.match(src, /const res = await fetch\(address, stop \? \{ \.\.\.init, signal: stop\.signal \} : init\)\s+return \{ ok: res\.ok, status: res\.status, body: read \? await read\(res\) : null \}/)
+  })
+
   test('tone3000: a .nam file is read and counted, an A2 capture is told from the older kind, and the sizes are an estimate that says so', async () => {
     const n = await nam()
     const a2 = JSON.stringify({

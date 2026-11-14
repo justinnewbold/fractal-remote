@@ -266,7 +266,7 @@ export function run(test) {
 
     /* Who reaches this file: the wire, which sends; the card, which packs and names a slot; and nothing else. */
     assert.match(read('mobile/src/lib/bleWire.js'), /from '\.\/nam-install\.js'/)
-    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
+    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, NAM_EMPTY, NAM_NAME_PLACES, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
     for (const f of ['mobile/src/lib/device.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/lib/bluetooth.js']) assert.ok(!/nam-install['.]/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')), `${f} builds capture messages of its own`)
     /* The card sends through the three calls and no other way, and only the wire's own switch opens them: his account's. */
     const card = read('mobile/src/components/Tone3000Test.js')
@@ -343,7 +343,7 @@ export function run(test) {
     assert.deepEqual(askers.sort(), ['mobile/src/components/Tone3000Test.js', 'mobile/src/lib/device.js'], 'something else asks for a capture to be sent')
     /* Nothing a customer needs: the red update line stays where it was. */
     const lock = JSON.parse(read('desktop/forgefx.lock.json'))
-    assert.match(lock.forgefx.tag, /\+namcaptures$/)
+    assert.match(lock.forgefx.tag, /\+namcaptures(\+|$)/)
     const doc = read('docs/nam-install.md')
     for (const said of [/Through the computer/, /\/nam\/empty/, /\/nam\/slots\/<n>/, /\/nam\/blocks\/<id>\/slot/, /no\s+replace/, /base64/, /namCaptures\.ts/]) assert.match(doc, said)
   })

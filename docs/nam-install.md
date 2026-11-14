@@ -90,10 +90,48 @@ kept by a unit, treat it as likely and not proven. For a name shorter than
 so it is the name's own characters XORed); only a 31-character name has
 been seen.
 
+**A short name is sent as it is first, and filled out only if the unit
+drops that** (1.90.61). The unit's own list shows short names with nothing
+after them, so Axe-Edit does not pad them, and neither does the app on its
+first try. But where the check byte goes for a short name has not been
+seen. So when a short-named capture is taken and not kept, the card sends
+it once more into the same slot with the name filled out to all 31 places
+with spaces (`namRecord`'s `fill`): the one shape proven kept, whatever the
+rule for a short name is. A name is read from the unit without those spaces
+(both senders). The log says which of the two a unit kept ("KEPT WITH THE
+NAME FILLED OUT, not as it was"), and that settles it: if a short name is
+kept as it is, the fill is never used; if only the filled one is kept, the
+short rule is not this one, and `namRecord` fills every name until it is
+understood. If neither is kept, the check byte was not the reason.
+
 What the app does now so that the next try says why, whichever way it goes:
 after a send it reads the slot back, and a slot that still reads `<EMPTY>`
 is said as "took it and did not keep it", with no Play button; the log
 carries the slot's name as the unit said it, and the pick's answer.
+
+And the log says how long the unit took over the closing message (`0x56`).
+In the recording it answered every message before it in under 3 ms on
+average (never over 28), and took 272 ms over the last: most likely the
+time it spent filing the capture, though that is not proven. So a closing
+message answered as fast as the rest, with a slot that then reads
+`<EMPTY>`, says the unit judged the record and dropped it (the name's check
+byte, or something else in the record); one that took a quarter of a second
+and still reads `<EMPTY>` says it filed something and the trouble is later.
+
+## What else Axe-Edit sent round the upload, and why none of it is a step
+
+Checked on 14 November 2026, because a missing "store it" message would
+explain a capture taken and not kept as well as the check byte does. There
+is none. Between "a transfer is under way" and the unit's answer to the
+closing message Axe-Edit sent the 130 messages and nothing else. After that
+answer, and before "it is over", it sent 30 reads: `01 2E` once, `01 01`
+for each block of the preset (17), `01 04 01` (5) and `01 39` for NAM 1's
+settings (7). Every one of those is its screen refreshing: the same four
+kinds were sent 89, 2,261, 2,709 and 315 times in the minutes before the
+upload, the same ones were sent just before "a transfer is under way", and
+the `01 39` answers come back as they went. None writes anything.
+The app sends none of them. After "it is over" Axe-Edit sent nothing for
+335 ms and then read its list of slots.
 
 ## The sender
 
@@ -118,10 +156,14 @@ While a capture goes, nothing but its own messages leaves the phone
 way" and the unit's answer to the last message, and the first build let
 reads through (the rig's half-minute "which preset are you on?" among them).
 A read asked meanwhile waits and goes after; anything that would change the
-unit is refused. Round the end the phone rests as Axe-Edit did (`NAM_REST`:
-150 ms before "it is over", 350 ms before the slot is read back), and a
-slot that reads `<EMPTY>` is read once more a second later before it is
-called not kept. Slot 257 (the last) listed the same head as slot 029 in
+unit is refused. The hold is from the slot's own first read to the slot
+read back after "it is over" (1.90.61), so that read back is the first
+thing the unit hears after the quiet, as it was Axe-Edit's. The rests are
+Axe-Edit's (`NAM_REST`: 30 ms between the unit's answer to "a transfer is
+under way" and the opening message, 150 ms before "it is over", 350 ms
+before the slot is read back; a test holds each by the clock), and a slot
+that reads `<EMPTY>` is read once more a second later before it is called
+not kept. Slot 257 (the last) listed the same head as slot 029 in
 the recording, so it may not be a slot of its own: it is never a target,
 and is not offered as a pick until it is understood.
 
@@ -157,6 +199,23 @@ The Developer card's buttons are the same; lib/device sends by whichever way
 the device is connected. An older computer app is answered "Update the
 computer app to send a capture through it." **Nothing has been sent to a
 real unit through the computer yet.**
+
+**The computer sends it as one piece, from the release that carries ForgeFX
+14e2c4f (1.90.61).** Each of the 130 messages used to be its own turn on the
+computer's queue, so another request (a device asking which preset the unit
+is on, the computer's own window) could go between two of them. The whole
+send, from the slot's own read to the slot read back, is one turn now
+(`Transport.exclusive`, on both of ForgeFX's transports), and what is asked
+meanwhile goes after it. The rests are the phone's numbers (`NAM_REST`),
+"it is over" is said even when the start went unanswered, a slot that reads
+`<EMPTY>` is asked once more, and the computer's log has the same line as
+the phone's, the closing message's time in it. And the computer puts the
+name's check byte into a record that came without it (`namNameChecked`):
+the one thing it ever does to a record, so that a copy of the phone app from
+before 1.90.60 cannot send one the unit drops. A computer app from before
+that release lets other requests in between a capture's messages, so the
+computer (or the Raspberry Pi) is updated before a send through it is
+judged.
 
 ## The list of slots
 
