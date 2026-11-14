@@ -985,8 +985,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const messages = job.opts.messages ? job.out : [job.out]
     lastSent = { messages: [], at: job.started }
     for (const m of messages) {
-      const result = sendFrame(m)
+      /*
+       * A THROW ON THE WAY OUT IS A SEND THAT FAILED. Nothing caught one
+       * here, so the request would reject with the raw error and `current`
+       * would stay this job for good: no timer, no end, and every request
+       * after it waiting for ever. And a send the adapter would not take
+       * wrote nothing in the log, so it read like a unit that said nothing.
+       */
+      let result
+      try {
+        result = sendFrame(m)
+      } catch (err) {
+        result = 'failed'
+        say(`sending ${job.opts.what || 'a message'} threw: ${err?.message || err}`)
+      }
       if (result !== 'sent') {
+        if (result === 'failed') say(`the adapter would not take ${job.opts.what || 'a message'}: not sent`)
         return end(job, null, result === 'refused' ? failure('That message is never sent to the AM4.', 500, { refused: true }) : notConnected())
       }
       lastSent.messages.push(m)

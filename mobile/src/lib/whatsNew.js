@@ -21,6 +21,10 @@ export const WHATS_NEW = [
       {
         "text": "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
         "only": null
+      },
+      {
+        "text": "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had.",
+        "only": null
       }
     ]
   },

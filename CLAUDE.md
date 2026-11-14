@@ -2054,6 +2054,49 @@ as a refusal. And on an iPhone whose adapter has gone, the waiting screen
 offers Look for the adapter again from the first try that misses it
 (lib/bluetooth `useAdapterGone`), not after fifteen seconds.
 
+**The adapter kept for a unit is not always the adapter it is on today.**
+Justin, 14 November 2026: "For some reason I can't get the aX3 to connect
+over Bluetooth, I restarted the Bluetooth device and I turned Bluetooth on
+and off on my phone, and I forced close the app and restarted it." His log
+said, again and again, "nothing at all has come back from WIDI Master
+Bluetooth since it connected (0 bytes)". The phone kept the WIDI Master for
+the Axe-Fx III from the day before; the Axe-Fx III was on the WIDI Uhost
+that day, and the WIDI Master was powered and connected to the phone, on
+nothing that answered. Six minutes later he reached the WIDI Uhost and the
+unit answered in 47 ms. Nothing in the wire was wrong (checked both ways
+against 1.90.48, the version it last worked on: the same bytes out, and
+every byte in is counted before anything looks at it). What was wrong was
+what the page offered:
+
+- **Zero bytes on a connected adapter means "is this the right adapter?"
+  as much as "check the plugs".** With Bluetooth on, Use a different
+  adapter was drawn only when the adapter was gone; connected and silent,
+  the way to another one was Stop first. Now it is drawn there too
+  (screens/Bluetooth `silentAdapter`), saying "If your Axe-Fx III isn't on
+  WIDI Master Bluetooth", and on an iPhone another adapter connected to it
+  is offered by name (the list is only read; never a search on Android
+  under a live connection). Never for a VP4, which never answers.
+- **Use a different adapter never goes straight back to the one let go
+  of.** Apple's screen closed with the WIDI Master still the only one
+  connected, and the phone chose it again as "the only one here". The pick
+  now leaves it in the list for a tap (bleAdapters `pickAdapter`
+  `letGoOf`, lib/bluetooth `letGoOf`, in memory until an adapter is chosen
+  or another unit picked) and the page says how to get the other one
+  (`sameAdapterWords`). One he connects in Apple's screen himself is still
+  taken.
+- **The log says why the phone chose nothing** (`whyNotPicked`): his first
+  two Connects that day ended with an adapter listed and nothing chosen,
+  and nothing said why (the page was on another unit, and the adapter was
+  one kept for the Axe-Fx III).
+- **A throw in the wire's send step is a failed send**, said in the log,
+  and no longer leaves every later request waiting for ever (bleWire
+  `pump`).
+
+On an iPhone "connected" means CoreMIDI took the port, and "sent" that it
+took the bytes: neither says a byte left the phone or reached a unit. When
+a report shows 0 bytes, ask which adapter is on the unit before anything
+else.
+
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by
 `npm run sync:rules` and a test fails if it is stale. Never hand-edit the

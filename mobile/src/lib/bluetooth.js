@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bl
 import { createJoiner } from './fractal-sysex.mjs'
 import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
-import { BLUETOOTH_DRIVER, cablesFirst, cablesFor, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
+import { BLUETOOTH_DRIVER, cablesFirst, cablesFor, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords, whyNotPicked } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -793,6 +793,8 @@ export function setBluetoothUnit(key, { carry = false } = {}) {
   /* The unit left keeps the adapter it was using, for when it is picked again. */
   if (was && using && !carry) keepFor(was, using)
   const adapter = (carry || (!was && !notForFm3)) && using ? using : byUnit[key] || null
+  /* Another unit: what was let go of for the last one is no longer a question (letGoOf). */
+  letGoOf = null
   saved = { ...saved, unit: key, adapter: adapter ? keptAdapter(adapter) : null }
   logDebug('ble', `the unit is an ${unitName(key)}`)
   if (carry && using) logDebug('ble', `${adapterName(using) || 'the adapter'} is on the ${unitName(key)}: it is the ${unitName(key)}’s adapter now`)
@@ -828,6 +830,8 @@ export function chooseAdapter(dev) {
   /* Never Apple's network session, whoever asks (bleAdapters isNetworkSession). */
   if (!isAdapter(dev)) return
   letGo.delete(dev.id)
+  /* One chosen, by the phone or by a tap, ends the memory of the one let go of (letGoOf). */
+  letGoOf = null
   if (saved.adapter?.id === dev.id) return
   noteBeforeCable(dev)
   saved = { ...saved, adapter: keptAdapter(dev) }
@@ -982,6 +986,14 @@ export function cablesHere() {
   }
 }
 
+/*
+ * THE ADAPTER JUST LET GO OF BY USE A DIFFERENT ADAPTER, by its id, or null:
+ * the phone's own pick never takes it back by itself (bleAdapters
+ * pickAdapter `letGoOf`). Until an adapter is chosen, by the phone or by a
+ * tap, or another unit is picked. In memory only: a fresh launch starts with
+ * nothing kept, and Connect's only one found is then the one.
+ */
+let letGoOf = null
 /* What Connect's cable rule is told: the unit picked, the units there are, and the cables let go of by hand (bleAdapters cablesFirst). */
 const cableRule = () => ({ unit: saved.unit, units: BLE_UNITS, skip: letGo })
 /*
@@ -991,7 +1003,7 @@ const cableRule = () => ({ unit: saved.unit, units: BLE_UNITS, skip: letGo })
  * found, Apple's screen's one just connected, or the iPhone's list.
  */
 /* Never picked by itself: a footswitch (notAnAdapter), on any unit, and on an FM3 the adapters never offered for one. Either is still listed, for a tap. */
-const pickRule = () => ({ ...cableRule(), refused: (n) => notAnAdapter(n) || (saved.unit === 'fm3' && neverOnFm3(n)), taken: takenIds() })
+const pickRule = () => ({ ...cableRule(), refused: (n) => notAnAdapter(n) || (saved.unit === 'fm3' && neverOnFm3(n)), taken: takenIds(), letGoOf })
 
 /** The cables a tap on Connect would take straight away now, from a list already read (bleAdapters cablesFirst): the page's hint says the same as Connect does. */
 export const cablesConnectTakes = (list) => cablesFirst(list, cableRule())
@@ -1092,7 +1104,35 @@ export function letGoOfKeptAdapter() {
   if (saved.on) setBluetooth(false)
   logDebug('ble', `a different adapter is wanted: ${adapterName(a) || 'the adapter from last time'} is let go of`)
   forgetAdapter()
+  /* And never taken straight back as "the only one here" (pickAdapter): he has just said it is the wrong one. */
+  letGoOf = a.id
   return true
+}
+
+/**
+ * WHAT THE PAGE SAYS WHEN THE ONLY ADAPTER HERE IS THE ONE JUST LET GO OF.
+ * On 14 November 2026 Use a different adapter opened Apple's screen, it
+ * closed with the WIDI Master still the only one connected, and the phone
+ * chose the WIDI Master again without a word. Now it is left in the list
+ * for a tap, and this says what to do to get the other one. An iPhone
+ * connects an adapter in Apple's screen; an Android phone finds one that is
+ * plugged in and lit.
+ */
+export const sameAdapterWords = (name, { os = Platform.OS, noun = deviceNoun() } = {}) =>
+  os === 'ios'
+    ? `Only ${name || 'the adapter you had'} is connected to this ${noun}${name ? ', the adapter you had' : ''}. To use another, tap Connect, tap the other adapter in Apple’s screen, and wait until it says Connected.`
+    : `Only ${name || 'the adapter you had'} was found${name ? ', the adapter you had' : ''}. To use another, check it is plugged in and lit, then tap Connect.`
+
+/*
+ * Nothing chosen by the phone, with something listed: the log says why
+ * (bleAdapters whyNotPicked), and the page says what to do when the reason
+ * is that the only one here is the one just let go of.
+ */
+function sayWhyNotPicked(list, just) {
+  const why = whyNotPicked(list, just, pickRule())
+  if (!why) return
+  logDebug('ble', `no adapter chosen by the ${deviceNoun()}: ${why.dev ? `${adapterName(why.dev) || 'the one here'}: ` : ''}${why.why}`)
+  if (why.letGo) noteBluetooth({ said: sameAdapterWords(adapterName(why.dev)) })
 }
 
 /**
@@ -1409,7 +1449,10 @@ export async function findAdapters({ cableFirst = true } = {}) {
      * the list again then), so for a few seconds a port that turns up new
      * is taken as if it had been there at Done (tookAfterScreen).
      */
-    else afterScreen = { before, until: Date.now() + AFTER_SCREEN_MS }
+    else {
+      afterScreen = { before, until: Date.now() + AFTER_SCREEN_MS }
+      sayWhyNotPicked(list, fresh)
+    }
     return pick
   }
 
@@ -1465,6 +1508,7 @@ function look() {
     /* One adapter found and none chosen yet: that is the one. Two is a question, and the list asks it. */
     const pick = saved.adapter ? null : pickAdapter(now.devices, new Set(), pickRule())
     if (pick) chooseAdapter(pick)
+    else if (!saved.adapter) sayWhyNotPicked(now.devices, new Set())
     /* Nothing at all: said, rather than a search that ends in silence. */
     if (!saved.adapter && !now.devices.length) {
       noteBluetooth({
@@ -1934,7 +1978,8 @@ export async function lookForAdapterAgain(poke) {
 
 /**
  * ANOTHER ADAPTER THE PHONE CAN SEE, while the link is trying the one kept
- * and it is not there (bleLink's notThere), or null: for the Bluetooth page
+ * and it is not there (bleLink's notThere), or is connected to it and the
+ * unit says nothing through it, or null: for the Bluetooth page
  * to offer by name ("WIDI Master isn't answering. WIDI Jack Bluetooth is
  * here."), never to take by itself (bleAdapters otherAdapterHere). `list` is
  * what the module lists (adapterDevices), as the page has it. For an FM3,
@@ -1980,8 +2025,9 @@ export function otherAdapterWords(kept, other) {
 
 /*
  * ONE SHORT LOOK AROUND, while the link is trying an adapter that is not
- * there (a try has missed it: notThere) and the page is open
- * (otherAdapterNow needs something to see).
+ * there (a try has missed it: notThere), or, on an iPhone, is connected to
+ * one the unit says nothing through, and the page is open (otherAdapterNow
+ * needs something to see).
  *
  * An iPhone's list is CoreMIDI's, always as it is now, so it is only read,
  * and its changes heard: nothing is asked of iOS. Android's list is its
@@ -1996,10 +2042,25 @@ export function otherAdapterWords(kept, other) {
  */
 export const GLANCE_SECONDS = 4
 let glancedAt = 0
-export async function glanceForAdapters() {
+export async function glanceForAdapters({ silent = false } = {}) {
   const mod = ble()
   const a = saved.adapter
-  if (!mod || !saved.on || !a || isCable(a) || now.phase !== 'connecting' || !now.notThere) return false
+  if (!mod || !saved.on || !a || isCable(a)) return false
+  /*
+   * AND WHILE THE ADAPTER IS CONNECTED AND THE UNIT SAYS NOTHING THROUGH IT
+   * (`silent`: the page's silentAdapter, 14 November 2026), on an iPhone:
+   * its list is CoreMIDI's as it is now, so it is only read, which asks
+   * nothing of iOS and disturbs nothing. Never on Android, where a look is a
+   * search, and a search is not started under a live connection for
+   * something nobody tapped; Use a different adapter is there for that.
+   */
+  if (silent === true && now.phase === 'connected') {
+    if (Platform.OS !== 'ios') return false
+    listenForList()
+    showList(adapterDevices())
+    return true
+  }
+  if (now.phase !== 'connecting' || !now.notThere) return false
   listenForList()
   if (Platform.OS === 'ios') {
     showList(adapterDevices())
