@@ -1,20 +1,3 @@
-diff --git a/mobile/app.json b/mobile/app.json
-index dff82541..e9990fa8 100644
---- a/mobile/app.json
-+++ b/mobile/app.json
-@@ -79,6 +79,12 @@
-     },
-     "plugins": [
-       "expo-status-bar",
-+      [
-+        "expo-secure-store",
-+        {
-+          "faceIDPermission": false
-+        }
-+      ],
-       [
-         "expo-image-picker",
-         {
 diff --git a/mobile/package-lock.json b/mobile/package-lock.json
 index 89c69a65..9128e57e 100644
 --- a/mobile/package-lock.json

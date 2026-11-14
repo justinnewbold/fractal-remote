@@ -36,8 +36,8 @@ export const T3K_PAGE_CLOSE = 'Close'
 
 /** A page that would not load. */
 export const PAGE_UNREACHED = 'TONE3000 couldn’t be reached. Check the internet and try again.'
-/** TONE3000 answered the sign-in with an error page. */
-export const pageRefused = (status) => `TONE3000 turned the sign-in down (${status}). Tap Browse TONE3000 again.`
+/** TONE3000 answered the sign-in with an error page. The number it answered with is for the log, not the screen. */
+export const PAGE_REFUSED = 'TONE3000 turned the sign-in down. Tap Browse TONE3000 again.'
 
 /** The origins the web view may load itself: the web, and the scheme TONE3000 sends the player back by. */
 export const pageOrigins = (redirect = T3K_REDIRECT) => ['https://*', 'http://*', `${String(redirect).split(':')[0]}://*`]
@@ -50,14 +50,15 @@ const signInAddress = (url) => typeof url === 'string' && url.startsWith(`${T3K_
 
 /**
  * One showing of the page. `onReturn(url)`, `onClosed()` and
- * `onFault(words)`: exactly one of them is called, once.
+ * `onFault(words, status)`: exactly one of them is called, once. `status`
+ * is the number TONE3000 answered with, where there was one.
  */
 export function pageFlow({ onReturn, onClosed, onFault, redirect = T3K_REDIRECT }) {
   let over = false
-  const end = (tell, what) => {
+  const end = (tell, what, more) => {
     if (over) return
     over = true
-    tell?.(what)
+    tell?.(what, more)
   }
   return {
     /** May the web view load this address? Never the return (which ends the page), and nothing once the page is over. */
@@ -73,7 +74,7 @@ export function pageFlow({ onReturn, onClosed, onFault, redirect = T3K_REDIRECT 
     httpError(status, url) {
       const n = Number(status)
       if (!(n >= 400) || pageReturn(url, redirect) || !signInAddress(url)) return
-      end(onFault, pageRefused(n))
+      end(onFault, PAGE_REFUSED, n)
     },
     /** A page did not load at all. */
     loadError(url) {

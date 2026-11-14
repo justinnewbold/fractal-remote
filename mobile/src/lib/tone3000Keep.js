@@ -91,26 +91,32 @@ export function movingStore({ secure = null, plain, log = () => {} }) {
           await secure.set(key, value)
         } catch (err) {
           once('the secure storage would not take TONE3000’s sign-in, so it stays in the ordinary storage', err)
+          /*
+           * Into the ordinary storage FIRST: stopped between these two lines,
+           * the newer value is kept and is the one read. The other way round
+           * there would be a moment with nothing kept at all.
+           */
+          await plain.set(key, value)
           /* What the secure storage holds is older than this now. If it will not let go either, the ordinary storage is read first anyway. */
           try {
             await secure.remove(key)
           } catch {
             /* nothing more to do about it here */
           }
-          await plain.set(key, value)
         }
       }),
     remove: (key) =>
       inTurn(key, async () => {
-        let failed = null
-        try {
-          await secure.remove(key)
-        } catch (err) {
-          failed = err
-        }
+        /*
+         * The secure storage first, and nothing else if it will not let go:
+         * the pass is then still on the device, so this says so (never
+         * "signed out"), and the ordinary storage is left as it is. It may be
+         * holding a NEWER value than the secure one (a write the secure
+         * storage refused); taking that out would leave the older one to be
+         * read from here on.
+         */
+        await secure.remove(key)
         await plain.remove(key)
-        /* A pass that could not be taken out of the secure storage is still there: say so, never "signed out". */
-        if (failed) throw failed
       })
   }
 }

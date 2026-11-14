@@ -1131,9 +1131,15 @@ the capture on the unit, which is the hard half.
   from the platform's random numbers. Their ios/README.md says why a web
   view and not the phone's sign-in sheet: "That avoids the system "Wants to
   Use … to Sign In" prompt, and the TONE3000 session persists so later
-  flows skip sign-in." The page's own players do the previewing ("the
-  hosted catalog's preview players"); the native C++ player in those
-  examples is for their other demos, and nothing here needs it. READ THE
+  flows skip sign-in." TWO DIFFERENT PLAYERS, not to be mixed up: the
+  players on TONE3000's own page ("the hosted catalog's preview players",
+  `preview=true`) are for listening BEFORE a tone is picked, and are all
+  this app uses; and every one of their demos, the pick-a-tone one
+  included, ALSO previews the picked tone's captures afterwards with a
+  native C++ player (the open NAM engine run on the phone). This app has
+  no such player: after the pick, hearing a capture means sending it to
+  the unit. Whether a player on the phone is wanted is a decision still to
+  make, and it would be a native piece of its own (another build). READ THE
   PHONE EXAMPLES BEFORE CHOOSING A NATIVE PIECE: on 14 November 2026 the
   phone's in-app browser (expo-web-browser) had been mapped in full, with
   its three unknowns that only a device could settle, before their
@@ -1153,11 +1159,23 @@ the capture on the unit, which is the hard half.
   don't have to go to Safari?" It had not been, and a web view is native.
   So it is in two halves, and the half that is code is already merged:
   - *The patch*, docs/pending/tone3000-in-app.patch: react-native-webview
-    13.16.1, expo-secure-store ~57.0.4 (its plugin with
-    `faceIDPermission: false`, so the iPhone app gets no Face ID sentence
-    it has no use for) and expo-crypto ~57.0.4. Three packages and one
-    setting, nothing of the app's own. It moves the android and ios
-    lines, so it is a build pair he has to say yes to.
+    13.16.1, expo-secure-store ~57.0.4 and expo-crypto ~57.0.4. Three
+    packages and nothing else: nothing in app.json, nothing of the app's
+    own. It moves the android and ios lines, so it is a build pair he has
+    to say yes to.
+  - *THE SECURE STORAGE'S PLUGIN IS NEVER LISTED IN app.json.* The first
+    cut listed it (with its Face ID sentence switched off) and called its
+    Android half good practice. Its Android half is two backup rule files
+    that name the app's settings file to include, and once a rule names
+    something Android backs up ONLY that: the app's own sign-in, setlists
+    and settings, which are in a database, would have stopped going to a
+    customer's new phone, for every Android customer, from a patch meant
+    for one Developer card. A reviewer read the two files; a build would
+    have shipped it. So: A PACKAGE'S PLUGIN IS READ BEFORE IT IS LISTED,
+    down to the files it puts in the app, and what it does to an app that
+    listed nothing before is asked for the whole app, not for the
+    feature. The package works without its plugin. A test fails on the
+    plugin and on any backup rule in app.json.
   - *The code*, in the tree and doing nothing new on any copy out today:
     lib/tone3000Parts asks for each package with `require` inside a `try`
     of its own and gives `null` for one that is not there (Expo's bundler
@@ -1813,9 +1831,10 @@ asked for once, when he says the list is whole. Waiting there now:
   patch caught it before a build was spent.
 - **tone3000-in-app** (14 November 2026): TONE3000's page inside the app
   instead of in the browser. "Have you built out the built-in tone 3000
-  into our app so you don't have to go to Safari?" Three packages and one
-  setting and none of the app's own code, which is already in the tree and
-  waits for them (the TONE3000 notes above have what each piece is for).
+  into our app so you don't have to go to Safari?" Three packages and
+  none of the app's own code, which is already in the tree and waits for
+  them (the TONE3000 notes above have what each piece is for, and why the
+  secure storage's plugin is never listed).
   It moves the android and ios lines. His account only, as the card is.
 - **Not in, by his word:** a second screen and home-screen widgets ("go
   ahead and skip the second screen and the widgets for now").

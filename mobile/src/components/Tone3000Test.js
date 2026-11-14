@@ -145,8 +145,10 @@ export default function Tone3000Test() {
     try {
       done = await t3k.finish(url)
     } catch (err) {
-      /* The device would not let go of what it kept for the sign-in (lib/tone3000 says everything else in words of its own). */
+      /* The device would not read or let go of what it kept for the sign-in (lib/tone3000 says everything else in words of its own). */
       logDebug('tone3000', `the return was not finished: ${err?.message || err}`)
+      /* Not taken up after all: the same return may be handed over again. */
+      lastReturn.current = null
       if (alive.current) setFault('The sign-in to TONE3000 couldn’t be finished on this device. Tap Browse TONE3000 again.')
       return
     } finally {
@@ -438,8 +440,8 @@ export default function Tone3000Test() {
         url={page}
         onReturn={returned}
         onClosed={() => alive.current && setPage(null)}
-        onFault={(why) => {
-          logDebug('tone3000', `TONE3000’s page was closed: ${why}`)
+        onFault={(why, status) => {
+          logDebug('tone3000', `TONE3000’s page was closed: ${why}${status ? ` It answered ${status}.` : ''}`)
           if (!alive.current) return
           setPage(null)
           setFault(why)

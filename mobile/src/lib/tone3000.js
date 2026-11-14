@@ -280,7 +280,20 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
   async function finish(url) {
     const back = readCallback(url, redirect)
     if (!back) return null
-    const pending = await kept(T3K_PENDING_KEY)
+    /*
+     * Read straight from the device, not through `kept`: a read the device
+     * REFUSES is thrown to whoever asked, never taken for "no sign-in
+     * waiting". That answer shows nothing on the screen, so a return whose
+     * one-time word could not be read just then would vanish without a word
+     * (the phone's secure storage can refuse a read for a moment).
+     */
+    const raw = await store.get(T3K_PENDING_KEY)
+    let pending = null
+    try {
+      pending = raw ? JSON.parse(raw) : null
+    } catch {
+      pending = null
+    }
     if (!pending) return null
     await store.remove(T3K_PENDING_KEY)
     if (now() - (Number(pending.at) || 0) > T3K_PENDING_MS) return { ok: false, why: 'That sign-in was started too long ago. Start again.' }

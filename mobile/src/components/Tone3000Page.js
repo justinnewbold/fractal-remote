@@ -38,8 +38,8 @@ const ORIGINS = pageOrigins()
 /**
  * `url` is TONE3000's page to show, or null for none. Exactly one of
  * `onReturn(url)` (TONE3000 sent the player back), `onClosed()` and
- * `onFault(words)` is called for each page shown, once; whoever is told
- * takes `url` away.
+ * `onFault(words, status)` is called for each page shown, once; whoever is
+ * told takes `url` away.
  */
 export default function Tone3000Page({ url, onReturn, onClosed, onFault }) {
   const web = useRef(null)
@@ -52,7 +52,7 @@ export default function Tone3000Page({ url, onReturn, onClosed, onFault }) {
       pageFlow({
         onReturn: (back) => told.current.onReturn?.(back),
         onClosed: () => told.current.onClosed?.(),
-        onFault: (why) => told.current.onFault?.(why)
+        onFault: (why, status) => told.current.onFault?.(why, status)
       }),
     [url]
   )

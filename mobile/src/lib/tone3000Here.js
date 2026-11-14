@@ -13,10 +13,13 @@
  *     browser is still one tap away on the card, for a sign-in that will
  *     not work inside the app.
  *   - THE PASS. With the secure storage, it is kept in the Keychain or the
- *     Android Keystore, on this device only (never in a backup or carried
- *     to a new phone), and a pass already in the app's ordinary storage
- *     moves there the first time it is read (lib/tone3000Keep). Without it,
- *     the ordinary storage, where the app's own sign-in is kept.
+ *     Android Keystore, readable on this device only (an iPhone does not
+ *     carry it to a backup or a new phone; an Android backup may carry the
+ *     locked file, which no other phone can open, and the app then reads
+ *     nothing kept and asks for a sign-in). A pass already in the app's
+ *     ordinary storage moves there the first time it is read
+ *     (lib/tone3000Keep). Without it, the ordinary storage, where the app's
+ *     own sign-in is kept.
  *   - THE ONE-TIME WORD. With the secure random numbers, from those.
  *     Without them, as before (lib/tone3000 `randomBytes`).
  *
@@ -37,7 +40,7 @@ const plain = {
   remove: (key) => AsyncStorage.removeItem(key)
 }
 
-/* On this device only. An iPhone has the word for it; an Android Keystore key never leaves the phone it was made on, and the patch keeps its file out of Android's backups. */
+/* On this device only. An iPhone has the word for it. Android has none and needs none: what it keeps is locked with a Keystore key that never leaves the phone it was made on. */
 const KEPT = SecureStore && SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY != null ? { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY } : {}
 const secure = SecureStore
   ? {

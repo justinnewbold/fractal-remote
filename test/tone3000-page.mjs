@@ -73,7 +73,7 @@ function box(name, calls, { failSet = () => false, failRemove = () => false, fai
 
 export function run(test) {
   test('tone3000 in the app: the page loads the web, never TONE3000’s return, and is over once', async () => {
-    const { pageFlow, pageOrigins, pageReturn, pageRefused, PAGE_UNREACHED, T3K_PAGE_TITLE, T3K_PAGE_CLOSE } = await page()
+    const { pageFlow, pageOrigins, pageReturn, PAGE_REFUSED, PAGE_UNREACHED, T3K_PAGE_TITLE, T3K_PAGE_CLOSE } = await page()
     const { T3K_REDIRECT } = await lib()
     /* Their terms: TONE3000's own page, under its name. */
     assert.equal(T3K_PAGE_TITLE, 'TONE3000')
@@ -93,7 +93,7 @@ export function run(test) {
     for (const odd of [undefined, null, 42, {}, '']) assert.equal(pageReturn(odd), false)
 
     const told = []
-    const flow = (over = {}) => pageFlow({ onReturn: (u) => told.push(['return', u]), onClosed: () => told.push(['closed']), onFault: (w) => told.push(['fault', w]), ...over })
+    const flow = (over = {}) => pageFlow({ onReturn: (u) => told.push(['return', u]), onClosed: () => told.push(['closed']), onFault: (w, status) => told.push(status === undefined ? ['fault', w] : ['fault', w, status]), ...over })
 
     /* A return: not loaded, told once, and nothing loads after it. */
     let f = flow()
@@ -131,8 +131,10 @@ export function run(test) {
     assert.deepEqual(told, [])
     assert.equal(f.over(), false)
     f.httpError(400, 'https://www.tone3000.com/api/v1/oauth/authorize?client_id=x')
-    assert.deepEqual(told, [['fault', pageRefused(400)]])
-    assert.equal(pageRefused(400), 'TONE3000 turned the sign-in down (400). Tap Browse TONE3000 again.')
+    /* In words, and the number TONE3000 answered with beside them for the log: never on the screen. */
+    assert.deepEqual(told, [['fault', PAGE_REFUSED, 400]])
+    assert.equal(PAGE_REFUSED, 'TONE3000 turned the sign-in down. Tap Browse TONE3000 again.')
+    assert.ok(!/\d/.test(PAGE_REFUSED.replaceAll('TONE3000', '')) && !/\d/.test(PAGE_UNREACHED.replaceAll('TONE3000', '')), 'a web error number is in words the card shows')
     assert.equal(f.mayLoad('https://www.tone3000.com/'), false)
 
     /* A page that would not load ends it; a failed load OF the return is the return (their iPhone example). */
@@ -224,6 +226,12 @@ export function run(test) {
     /* What is read is the newer one: the ordinary storage is read first, because whatever is there is the newest. */
     assert.equal(await store.get('k'), 'newer')
     assert.equal(await store.get('k'), 'newer')
+    /* The write went to the ordinary storage BEFORE the secure one was asked to let go: stopped between the two, the newer pass is kept, never nothing. */
+    assert.deepEqual(calls.slice(0, 4), ['plain.remove k', 'secure.set k=newer', 'plain.set k=newer', 'secure.remove k'])
+    /* Signing out over a storage that will not let go fails, AND leaves the newer pass where it is: taking it out would leave the older one to be read from here on. */
+    await assert.rejects(store.remove('k'), /secure would not let go of k/)
+    assert.equal(plain.kept.get('k'), 'newer', 'a refused sign-out threw away the newest pass and left the older one')
+    assert.equal(await store.get('k'), 'newer')
     /* Said once, with the storage's own words and never the pass. */
     assert.equal(said.length, 1)
     assert.match(said[0], /^the secure storage would not take TONE3000’s sign-in, so it stays in the ordinary storage: secure would not take k$/)
@@ -234,6 +242,24 @@ export function run(test) {
     assert.equal(await store.get('k'), 'newer')
     assert.equal(secure.kept.get('k'), 'newer')
     assert.equal(plain.kept.has('k'), false)
+
+    /* A secure storage that refuses the write but will let go: the older pass is taken out of it, so it holds nothing stale. */
+    const callsB = []
+    const plainB = box('plain', callsB)
+    const secureB = box('secure', callsB, { failSet: () => true })
+    const storeB = movingStore({ secure: secureB, plain: plainB })
+    secureB.kept.set('k', 'older')
+    await storeB.set('k', 'newer')
+    assert.equal(secureB.kept.has('k'), false, 'the older pass was left in the secure storage under a newer one')
+    assert.equal(plainB.kept.get('k'), 'newer')
+    assert.equal(await storeB.get('k'), 'newer')
+    /* And when the ordinary storage will not take it either, the write fails with the older pass still kept: never with nothing. */
+    const plainC = box('plain', [], { failSet: () => true })
+    const secureC = box('secure', [], { failSet: () => true })
+    const storeC = movingStore({ secure: secureC, plain: plainC })
+    secureC.kept.set('k', 'older')
+    await assert.rejects(storeC.set('k', 'newer'), /plain would not take k/)
+    assert.equal(secureC.kept.get('k'), 'older', 'a write that failed everywhere left nothing kept at all')
 
     /* A pass that came from before the build and will not move stays where it is, readable, every time. */
     const calls2 = []
@@ -250,14 +276,17 @@ export function run(test) {
     const store3 = movingStore({ secure: secure3, plain: box('plain', []) })
     await assert.rejects(store3.get('k'), /secure would not read k/)
 
-    /* Signing out over a secure storage that will not let go says so: never "signed out" with the pass still there. And the ordinary one is still cleared. */
-    const plain4 = box('plain', [])
-    const secure4 = box('secure', [], { failRemove: () => true })
+    /* Signing out over a secure storage that will not let go says so: never "signed out" with the pass still there. The ordinary one is not touched, so what is read afterwards is what was read before. */
+    const calls4 = []
+    const plain4 = box('plain', calls4)
+    const secure4 = box('secure', calls4, { failRemove: () => true })
     const store4 = movingStore({ secure: secure4, plain: plain4 })
     plain4.kept.set('k', 'x')
     secure4.kept.set('k', 'y')
     await assert.rejects(store4.remove('k'), /secure would not let go of k/)
-    assert.equal(plain4.kept.has('k'), false)
+    assert.deepEqual(calls4, ['secure.remove k'])
+    assert.equal(plain4.kept.get('k'), 'x')
+    assert.equal(await store4.get('k'), 'x')
 
     /* An ordinary storage that will not let go, at the start of a write, fails the write with nothing changed. */
     const plain5 = box('plain', [], { failRemove: () => true })
@@ -396,6 +425,31 @@ export function run(test) {
     await t3k.signOut()
     assert.equal(secure.kept.size, 0)
     assert.equal(await t3k.signedIn(), false)
+
+    /*
+     * A return that comes in while the device will not read what it kept
+     * for the sign-in is a FAILURE, thrown to the card, which says so. It
+     * used to read as "no sign-in waiting", which shows nothing at all: the
+     * page closed, and no tone, no fault. What was kept is still there, so
+     * the same return finishes once the device reads again.
+     */
+    let refuseRead = false
+    const secure2 = box('secure', [], { failGet: (k) => refuseRead && k === T3K_PENDING_KEY })
+    const t3k2 = tone3000({ fetch, store: movingStore({ secure: secure2, plain: box('plain', []) }), open: async () => {}, now: () => 1_000_000, random: (count) => Array.from({ length: count }, (_, i) => (i * 13 + 5) & 0xff) })
+    const url2 = await t3k2.start()
+    const back2 = `fractalremote://tone3000?code=c&state=${new URL(url2).searchParams.get('state')}&tone_id=7`
+    refuseRead = true
+    await assert.rejects(t3k2.finish(back2), /secure would not read fractal\.tone3000\.pending/)
+    assert.ok(secure2.kept.has(T3K_PENDING_KEY), 'a return that could not be read used up the sign-in')
+    refuseRead = false
+    assert.deepEqual(await t3k2.finish(back2), { ok: true, toneId: '7', canceled: false })
+    /* A link that is not TONE3000's is still nobody's business, read or no read. */
+    refuseRead = true
+    assert.equal(await t3k2.finish('fractalremote://next'), null)
+    /* Whether a pass is kept still reads a refused read as "not signed in" for now, and does not throw at the card when it is first drawn. */
+    const secure3b = box('secure', [], { failGet: () => true })
+    const t3k3 = tone3000({ fetch, store: movingStore({ secure: secure3b, plain: box('plain', []) }), open: async () => {} })
+    assert.equal(await t3k3.signedIn(), false)
   })
 
   test('tone3000 in the app: the three native packages are asked for in one file, each inside a try of its own, and nowhere else', () => {
@@ -444,8 +498,16 @@ export function run(test) {
     assert.match(here, /export const pageInApp = \(\) => !!WebView/)
     assert.match(here, /export function hostPage\(show\) \{ host = show return \(\) => \{ if \(host === show\) host = null \} \}/)
     assert.match(here, /export async function startOutside\(\) \{ outside = true try \{ return await t3k\.start\(\) \} finally \{ outside = false \} \}/)
-    /* The secure storage's keys allow letters, digits, ".", "-" and "_" only: the two names kept are that. */
-    for (const key of ['fractal.tone3000.pending', 'fractal.tone3000.tokens']) assert.match(key, /^[\w.-]+$/)
+  })
+
+  test('tone3000 in the app: the two names the sign-in is kept under are names the secure storage takes', async () => {
+    /* It takes letters, digits, ".", "-" and "_" and throws "Invalid key" at anything else (expo-secure-store, isValidKey): a name with a ":" or a "/" in it would fail every read and write on a copy that has the package. The app's own two, as it has them. */
+    const { T3K_PENDING_KEY, T3K_TOKENS_KEY } = await lib()
+    for (const key of [T3K_PENDING_KEY, T3K_TOKENS_KEY]) assert.match(key, /^[\w.-]+$/, `${key} is not a name the secure storage takes`)
+    assert.notEqual(T3K_PENDING_KEY, T3K_TOKENS_KEY)
+    /* And the bindings hand the secure storage the name as it is, with nothing put in front of it. */
+    const here = flat(code(read('mobile/src/lib/tone3000Here.js')))
+    assert.match(here, /get: \(key\) => SecureStore\.getItemAsync\(key, KEPT\)/)
   })
 
   test('tone3000 in the app: the page is TONE3000’s example’s web view, draws nothing without the piece, and runs nothing of the app’s inside TONE3000’s page', () => {
@@ -486,7 +548,12 @@ export function run(test) {
     /* One return is finished once, whichever way it came, and the page closes for it either way. */
     assert.match(card, /const returned = async \(url\) => \{ if \(!readCallback\(url\) \|\| url === lastReturn\.current\) return lastReturn\.current = url if \(!alive\.current\) return setPage\(null\)/)
     assert.match(card, /const stop = onTone3000Return\(returned\)/)
+    /* A return that could not be finished on the device may be handed over again, and says so on the card. */
+    assert.match(card, /catch \(err\) \{ logDebug\('tone3000', `the return was not finished: \$\{err\?\.message \|\| err\}`\) lastReturn\.current = null if \(alive\.current\) setFault\(/)
     assert.match(card, /<Tone3000Page url=\{page\} onReturn=\{returned\}/)
+    /* The number TONE3000 answered with is written to the log, and only there. */
+    assert.match(card, /onFault=\{\(why, status\) => \{ logDebug\('tone3000', `TONE3000’s page was closed: \$\{why\}\$\{status \? ` It answered \$\{status\}\.` : ''\}`\)/)
+    assert.match(src, /onFault: \(why, status\) => told\.current\.onFault\?\.\(why, status\)/)
     /* Browse is never handed the tap itself, which would read as "in the browser". */
     assert.match(card, /onPress=\{\(\) => browse\(\)\}/)
     assert.ok(!/onPress=\{browse\}/.test(card))
@@ -507,7 +574,6 @@ export function run(test) {
     const pkg = JSON.parse(read('mobile/package.json'))
     const lock = JSON.parse(read('mobile/package-lock.json'))
     const plugins = JSON.parse(read('mobile/app.json')).expo.plugins
-    const entry = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-secure-store')
 
     for (const [name, range] of Object.entries(PARTS)) {
       if (expected) {
@@ -519,10 +585,25 @@ export function run(test) {
         assert.equal(lock.packages[`node_modules/${name}`], undefined)
       }
     }
-    /* The secure storage's plugin, when it is there, is told the app has no use for Face ID: listed bare, it writes a Face ID sentence into the iPhone app. */
-    assert.ok(!plugins.includes('expo-secure-store'), 'expo-secure-store is listed bare in app.json, which gives the iPhone app a Face ID sentence it has no use for')
-    if (expected) assert.deepEqual(entry, ['expo-secure-store', { faceIDPermission: false }])
-    else assert.equal(entry, undefined)
+    /*
+     * THE SECURE STORAGE'S PLUGIN IS NEVER LISTED IN app.json, with the
+     * patch or without. The package works without it. Listed, it does two
+     * things by default, and both are wrong for this app:
+     *   - it writes a Face ID sentence into the iPhone app, which never asks
+     *     for Face ID (a question from App Review);
+     *   - it gives the Android app backup rules that back up the app's
+     *     settings file and NOTHING ELSE. Android backs up everything unless
+     *     a rule names something to include, and from then on only what is
+     *     named. The app's own sign-in, setlists and settings are kept in a
+     *     database, which those rules do not name: every Android customer
+     *     moving to a new phone would have lost them.
+     * The first cut of the patch listed it, with the Face ID half switched
+     * off. A reviewer read the plugin's rule files (14 November 2026).
+     */
+    const listed = plugins.filter((p) => p === 'expo-secure-store' || (Array.isArray(p) && p[0] === 'expo-secure-store'))
+    assert.deepEqual(listed, [], 'expo-secure-store’s plugin is listed in app.json: by default it stops Android backing up the app’s sign-in, setlists and settings, and gives the iPhone app a Face ID sentence')
+    /* And nothing else gives the Android app backup rules of its own: it backs up everything, as it always has. */
+    assert.ok(!/allowBackup|fullBackupContent|dataExtractionRules/.test(read('mobile/app.json')))
     /* Never the phone's in-app browser or its sign-in sheet, patch or no patch: TONE3000's examples use a web view, and say why. */
     for (const name of ['expo-web-browser', 'expo-auth-session']) assert.equal(pkg.dependencies[name], undefined)
 
@@ -535,13 +616,14 @@ export function run(test) {
     }
   })
 
-  test('tone3000 in the app: the waiting patch is three packages and one setting, written so phone-turns and it can both be in', () => {
+  test('tone3000 in the app: the waiting patch is three packages and nothing else, written so phone-turns and it can both be in', () => {
     if (!there(PATCH)) return
     const patch = read(PATCH)
     /* Nothing of the app's own code: that is in the tree already, so the patch never has to be remade because the card changed. */
+    /* And nothing in app.json: no plugin, no setting, no permission (the test above has why the secure storage's plugin stays out). */
     assert.deepEqual(
       (patch.match(/^diff --git a\/(\S+) /gm) || []).map((l) => l.slice(13, -1)),
-      ['mobile/app.json', 'mobile/package-lock.json', 'mobile/package.json']
+      ['mobile/package-lock.json', 'mobile/package.json']
     )
     const added = (patch.match(/^\+(?!\+\+).*$/gm) || []).map((l) => l.slice(1))
     const removed = (patch.match(/^-(?!--).*$/gm) || []).map((l) => l.slice(1))
@@ -554,8 +636,6 @@ export function run(test) {
     /* All it takes out is the comma-less last line of each list, put back with its comma. */
     assert.deepEqual(removed.map((l) => l.trim()), ['"react-native-url-polyfill": "^4.0.0"', '"react-native-url-polyfill": "^4.0.0"'])
     assert.equal(added.filter((l) => l.trim() === '"react-native-url-polyfill": "^4.0.0",').length, 2)
-    /* The setting. */
-    assert.match(patch, /\+ {6}\[\n\+ {8}"expo-secure-store",\n\+ {8}\{\n\+ {10}"faceIDPermission": false\n\+ {8}\}\n\+ {6}\],\n/)
     /* No install script comes with any of the three: what npm runs at install is still only this app's own patch-package. */
     assert.ok(!added.some((l) => /"hasInstallScript"/.test(l)), 'the patch adds a hasInstallScript line: phone-turns adds the same one to the same place, and the two then cannot both apply')
     /*
@@ -575,9 +655,6 @@ export function run(test) {
     assert.ok(!patch.includes('"node_modules/expo-server"'), 'a hunk touches expo-server’s block in the lock file: that is inside phone-turns’ own lines')
     assert.equal((patch.match(/^\+\s+"expo-crypto": "~57\.0\.4",\n\+\s+"expo-secure-store": "~57\.0\.4",$/gm) || []).length, 2)
     assert.match(patch, /^\+ {4}"node_modules\/expo-crypto": \{\n(\+[^\n]*\n){7}\+ {4}\},\n\+ {4}"node_modules\/expo-secure-store": \{$/m)
-    /* And no hunk of app.json's is beside the app's version, which moves with every change (the lock's "version" lines are packages', which do not). */
-    const appJson = patch.slice(patch.indexOf('diff --git a/mobile/app.json'), patch.indexOf('diff --git a/mobile/package-lock.json'))
-    assert.ok(appJson.includes('"expo-secure-store"') && !/"version"/.test(appJson), 'app.json’s hunk quotes the app’s version line, and stops applying at the next version')
 
     /* The README says what it is and what it moves: both phones, so a build pair. */
     const readme = read('docs/pending/README.md')

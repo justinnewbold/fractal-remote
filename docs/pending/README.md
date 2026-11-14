@@ -9,6 +9,7 @@ When the build is agreed:
 
     git apply docs/pending/<name>.patch      # in the order of the table below
     (cd mobile && npm install)                # when a patch adds a package
+    npm run notices                           # when a patch adds a package: NOTICES.md and public/notices.txt list every package the app ships
     npm run sync:rules
     npm run fingerprint -- --write
     npm test
@@ -798,20 +799,35 @@ made from the platform's random numbers. So the phone's in-app browser and
 its sign-in sheet (expo-web-browser, expo-auth-session) are NOT how this is
 done, and a test keeps both out of the app.
 
-**What the patch does: three packages and one setting, and none of the
-app's own code.**
+**What the patch does: three packages, and nothing else.** Nothing in
+app.json, and none of the app's own code.
 
 - `react-native-webview` 13.16.1, the version Expo 57 pairs with and the
   one in TONE3000's example: the page.
-- `expo-secure-store` ~57.0.4: the Keychain, or the Android Keystore. Its
-  plugin goes into app.json with `faceIDPermission: false`. With the
-  plugin, the build keeps the secure storage's file out of Android's
-  backups (a restored copy could not be read anyway: the key never leaves
-  the phone it was made on). With `false`, the iPhone app does NOT get the
-  Face ID sentence the plugin writes by default: the app never asks for
-  Face ID, and a sentence for something an app does not do is a question
-  from App Review. Listed bare, the plugin writes it; a test fails on that.
+- `expo-secure-store` ~57.0.4: the Keychain, or the Android Keystore.
 - `expo-crypto` ~57.0.4: secure random numbers.
+
+**The secure storage's plugin is NOT listed in app.json, and must not
+be.** The package works without it, and listed it does two things by
+default that are both wrong here. It writes a Face ID sentence into the
+iPhone app, which never asks for Face ID (a sentence for something an app
+does not do is a question from App Review). And it gives the Android app
+backup rules that say "back up the app's settings file", and from the
+moment a rule names something to include, Android backs up ONLY what is
+named. This app keeps its own sign-in, its setlists and its settings in a
+database, which those rules do not name: every Android customer moving to
+a new phone, or restoring one, would have opened the app signed out and
+empty. The first cut of this patch listed the plugin, with the Face ID
+half switched off and the backup half described here as a good thing. One
+of the four reviewers of the change read the plugin's two rule files and
+found it, before a build was spent (14 November 2026). TONE3000's own
+example lists the plugin bare; that is its app's business. So Android
+backs up everything, as it always has. The secure storage's file may ride
+in a backup, locked with a key that never leaves the phone it was made on;
+another phone cannot open it, the package answers "nothing kept" and
+throws the entry away, and the app asks for a sign-in to TONE3000 again.
+test/tone3000-page.mjs fails if the plugin, or any backup rule, is in
+app.json.
 
 **Everything that uses them is already in the tree**, merged with this
 patch by update (1.90.64), and does on every copy built without them
@@ -829,12 +845,12 @@ secure one the first time it is read, so the build signs nobody out, and
 makes the one-time word. So this patch does not have to be remade because
 the card changed, and the build needs no code with it.
 
-**What it moves, and what that costs.** mobile/package.json,
-mobile/package-lock.json and mobile/app.json. `npm run fingerprint` with
-the patch applied and the packages installed moves the android and ios
-lines and not the watch's (checked 14 November 2026: android 27d15e4d to
-645944db, ios c16f1c0d to f740fd00, the watch the same). So it is a build
-pair: one iPhone slot and one Android slot.
+**What it moves, and what that costs.** mobile/package.json and
+mobile/package-lock.json. `npm run fingerprint` with the patch applied and
+the packages installed moves the android and ios lines and not the watch's
+(checked 14 November 2026: android 27d15e4d to a8ad2a25, ios c16f1c0d to
+e0f97f60, the watch the same). So it is a build pair: one iPhone slot and
+one Android slot.
 
 **How the patch is written, for whoever remakes it.** Two things were
 done by hand, and test/tone3000-page.mjs fails on each if it is undone:
@@ -893,11 +909,19 @@ file installs clean, and the app still starts with them in.
   app's others do.
 
 **What goes with it in the build pull request, outside the patch:**
-nothing has to. It stays on the Developer card, his account's, until the
-TONE3000 screen is built where a player meets it. That screen, and the
-privacy page and App Store notes that go with showing another company's
-page and keeping a sign-in to it, are a store version's work and not this
-patch's.
+`npm run notices`, after the packages are installed. The app ships a list
+of every package in it with its licence (NOTICES.md, and
+public/notices.txt, which the apps link to), made from what is installed,
+and react-native-webview's licence asks that its notice travel with it.
+Nothing regenerates that list by itself and no test compares it with
+mobile/package.json, so a build made without this step would carry three
+packages its notices do not name. (phone-turns adds a package too, and
+needs the same step; it is in the steps at the top of this file now.)
+Nothing else has to go with it. It stays on the Developer card, his
+account's, until the TONE3000 screen is built where a player meets it.
+That screen, and the privacy page and App Store notes that go with showing
+another company's page and keeping a sign-in to it, are a store version's
+work and not this patch's.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it
