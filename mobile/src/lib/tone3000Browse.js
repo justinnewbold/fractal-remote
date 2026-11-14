@@ -73,6 +73,13 @@ export const toneImage = (tone) => {
   return typeof first === 'string' && /^https:\/\//.test(first) ? first : null
 }
 
+/** The gear a tone is a capture of, as TONE3000 names it ("Two-Rock SSS 100W"), or ''. */
+export const makesOf = (tone) =>
+  (Array.isArray(tone?.makes) ? tone.makes : [])
+    .map((m) => (typeof m === 'string' ? m : m?.name))
+    .filter((name) => typeof name === 'string' && name.trim())
+    .join(', ')
+
 /** A creator's picture, or null. */
 export const creatorImage = (tone) => {
   const at = tone?.user?.avatar_url
