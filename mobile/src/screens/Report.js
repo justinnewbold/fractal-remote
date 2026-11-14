@@ -160,6 +160,13 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
    * left and Send on the right; Back with something written, or a picture or
    * video added, and not yet sent asks first. Straight back when there is
    * nothing to lose (nothing typed, or it has gone).
+   *
+   * AND DONE ONCE IT HAS GONE. "Can we have this say done instead of back?"
+   * (Justin, 14 November 2026, a picture of the screen after sending: "Sent
+   * to the developer — thank you." under a button that said Back.) Both hold:
+   * while it is being written the button is Back, since Done there sounds
+   * like Send; once it is sent there is nothing left to send or lose, and the
+   * same button says Done. It does what it always did.
    */
   const unsent = !sent && (!!message.trim() || !!contact.trim() || shots.length > 0 || !!video)
   const back = () => {
@@ -217,7 +224,7 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
         contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-          <Press label="Back" height={40} onPress={back} />
+          <Press label={sent ? 'Done' : 'Back'} height={40} onPress={back} />
           {sent ? null : (
             <Press label={busy ? sending : 'Send'} tone="signal" height={40} on={!busy && somethingToSend} disabled={busy || !somethingToSend} onPress={send} />
           )}
@@ -228,7 +235,7 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
         </Text>
 
         {sent ? (
-          /* Said, and nothing more: "Remove 'send another'" (Justin, 29 October 2026). Back is the way on. */
+          /* Said, and nothing more: "Remove 'send another'" (Justin, 29 October 2026). The button over it, Done by now, is the way on. */
           <Note tone="hint" strong size={font.body}>{`${SENT_WORDS}${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
         ) : (
           <>

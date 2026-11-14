@@ -8,6 +8,10 @@
         {
           "text": "On an iPhone or iPad on iOS 27, Apple’s Bluetooth screen shows no Done button, so the app now says how to close it: swipe that screen down.",
           "only": "ios"
+        },
+        {
+          "text": "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
+          "only": null
         }
       ]
     },

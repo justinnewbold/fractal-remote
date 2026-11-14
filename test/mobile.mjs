@@ -15273,7 +15273,9 @@ export function run(test) {
     assert.ok(once(own.report), 'the report screen’s back listener is added again after a render')
     assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/, 'Android back on the report screen does not ask back()')
     assert.match(form, /const backNow = useRef\(back\) backNow\.current = back /, 'Android back on the report screen asks a back() from a render ago')
-    assert.match(form, /<Press label="Back" height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back()')
+    /* Back while it is being written (Done there sounds like Send), Done once it has gone: one button, one back() ("Can we have this say done instead of back?", 14 November 2026, of the screen after sending). */
+    assert.match(form, /<Press label=\{sent \? 'Done' : 'Back'\} height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back(), or does not say Done once the report is sent')
+    assert.match(form, /const unsent = !sent && /, 'a report that has been sent still asks before Done leaves')
     assert.match(form, /const back = \(\) => \{ if \(!unsent \|\| busy\) return onBack\?\.\(\) Alert\.alert\('Not sent yet', 'What you wrote has not been sent\. Leave without sending it\?'/, 'back() on the report screen no longer asks before what was written is lost')
     assert.match(form, /import EdgeBack from '\.\.\/components\/EdgeBack'/)
     let root = null
