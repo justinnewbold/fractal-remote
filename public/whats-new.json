@@ -3,8 +3,12 @@
     {
       "date": "2026-11-15",
       "day": "15 November 2026",
-      "version": "1.90.76",
+      "version": "1.90.78",
       "lines": [
+        {
+          "text": "In the chain editor, Add now answers under the block you tapped: where the new block went, or that its row is full and what to do instead. Before, a full row was said at the top of the chain, off the screen, and nothing seemed to happen.",
+          "only": null
+        },
         {
           "text": "On an AM4, the chain editor shows each block in its real slot, and adding or taking one out changes the right slot. It was one slot along.",
           "only": null
