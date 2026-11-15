@@ -759,7 +759,8 @@ export function run(test) {
     assert.match(qb, /import \{ blockCatalog, clearCell, gridCells, placeBlock, setCable \} from '\.\.\/lib\/device'/)
     assert.match(qb, /runPlan\(plan\.steps, wire\(plan, n, gone\)\)/, 'the build runs the plan through split-chain’s runPlan')
     assert.match(qb, /beginChainWrite\(\)[\s\S]*runPlan\(plan\.steps[\s\S]*endChainWrite\(\{ refresh: false \}\)[\s\S]*refreshBlocks\(\{ quiet: true \}\)[\s\S]*gridCells\(\)[\s\S]*whatLanded\(/, 'guarded, read back, then said')
-    assert.match(qb, /ofNumber\(\) !== d\.n[\s\S]*UNDO_STALE/, 'an Undo on another preset is refused')
+    assert.match(qb, /const before = await where\(d\.n\)[\s\S]*text: before === 'moved' \? UNDO_STALE : READ_FAILED/, 'an Undo on another preset is refused')
+    assert.match(qb, /shown !== d\.n\) \|\| undoStale\(d\.plan, now, d\.ran\)\) \{[\s\S]*UNDO_STALE/)
   })
 
   test('the door: the account’s switch, never a VP4, the unit’s own gridEdit, this preset’s chain; Edit, Play and Settings all ask it', async () => {

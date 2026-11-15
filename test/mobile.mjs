@@ -2159,7 +2159,12 @@ export function run(test) {
     assert.match(qb, /setSaid\(tried === 0 \? PRESET_MOVED_BEFORE : gone\.moved \|\| !res\.ok \? PRESET_MOVED : PRESET_MOVED_AFTER\) return \}/)
     assert.match(qb, /setUndoSaid\(\{ bad: true, text: gone\.moved \|\| !res\.ok \? PRESET_MOVED : UNDO_MOVED_AFTER \}\) return \}/)
     /* Would not say, and not one step went: nothing was built, and no result card is drawn for it. */
-    assert.match(qb, /if \(on !== 'same' && tried === 0\) \{ followPresetAfterChainWrite\(\) logDebug\([^)]*\) if \(!alive\.current\) return setBusy\(null\) setSaid\(UNIT_QUIET_BEFORE\) return \}/)
+    assert.match(qb, /if \(tried === 0\) \{ if \(on !== 'same'\) followPresetAfterChainWrite\(\) logDebug\([^)]*\) if \(!alive\.current\) return setBusy\(null\) setSaid\(UNIT_QUIET_BEFORE\) return \}/, 'a build of which nothing was sent is drawn as "Sent, but not read back"')
+    /* The same of an Undo: nothing taken out, so the Undo stays to be tapped again. */
+    assert.match(qb, /if \(!res\.ok && res\.done === 0 && gone\.unsent\) \{ if \(on !== 'same'\) followPresetAfterChainWrite\(\) logDebug\([^)]*\) if \(!alive\.current\) return setBusy\(null\) setUndoSaid\(\{ bad: true, text: UNIT_QUIET_BEFORE \}\) return \}/, 'an Undo of which nothing was sent is thrown away')
+    /* And the screen's -1 is not "the chain has changed since" either. */
+    assert.match(qb, /const shown = ofNumber\(\) if \(\(Number\.isInteger\(shown\) && shown >= 0 && shown !== d\.n\) \|\| undoStale\(d\.plan, now, d\.ran\)\) \{/)
+    assert.ok(!/ofNumber\(\) !== d\.n/.test(qb))
     /* What stopped a run: the app's own reason once, as it is, where the app stopped the step itself; and "read again" only where the chain was. */
     assert.match(qb, /const stoppedWords = \(res, gone, read\) => \(res\.ok \? null : gone\.unsent \? res\.error : stoppedLine\(res\.failed, res\.error, read\)\)/)
     assert.match(qb, /stopped: stoppedWords\(res, gone, after !== null\),/)

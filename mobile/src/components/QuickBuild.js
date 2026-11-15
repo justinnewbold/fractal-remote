@@ -487,9 +487,9 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       setSaid(tried === 0 ? PRESET_MOVED_BEFORE : gone.moved || !res.ok ? PRESET_MOVED : PRESET_MOVED_AFTER)
       return
     }
-    /* Would not say which preset it is on, and not one step went: nothing was built, and no result is drawn for it. */
-    if (on !== 'same' && tried === 0) {
-      followPresetAfterChainWrite()
+    /* Not one step went (a run with no move that sent nothing can only have been stopped by a unit that would not say which preset it is on): nothing was built, and no result is drawn for it, whatever the unit says now. */
+    if (tried === 0) {
+      if (on !== 'same') followPresetAfterChainWrite()
       logDebug('chain', 'quick build', 'the unit did not say which preset it is on; nothing sent')
       if (!alive.current) return
       setBusy(null)
@@ -557,7 +557,9 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       setUndoSaid({ bad: true, text: err?.status === 409 && err?.message ? err.message : READ_FAILED })
       return
     }
-    if (ofNumber() !== d.n || undoStale(d.plan, now, d.ran)) {
+    /* The screen's number by the same rule as `where`: a -1 there (a unit gone quiet) is not another preset, and the unit itself has just said it is on this one. */
+    const shown = ofNumber()
+    if ((Number.isInteger(shown) && shown >= 0 && shown !== d.n) || undoStale(d.plan, now, d.ran)) {
       logDebug('chain', 'quick build undo', 'the chain has changed since; not run')
       if (!alive.current) return
       setBusy(null)
@@ -583,6 +585,15 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       setBusy(null)
       setDone({ ...d, undo: null })
       setUndoSaid({ bad: true, text: gone.moved || !res.ok ? PRESET_MOVED : UNDO_MOVED_AFTER })
+      return
+    }
+    /* Not one step of the Undo went: nothing was taken out, the build is still in the preset, and the Undo stays to be tapped again. */
+    if (!res.ok && res.done === 0 && gone.unsent) {
+      if (on !== 'same') followPresetAfterChainWrite()
+      logDebug('chain', 'quick build undo', 'the unit did not say which preset it is on; nothing sent')
+      if (!alive.current) return
+      setBusy(null)
+      setUndoSaid({ bad: true, text: UNIT_QUIET_BEFORE })
       return
     }
     /* Null when the unit did not answer, or would not say which preset it is on: then nothing is said to be out. */
