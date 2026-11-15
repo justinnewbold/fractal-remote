@@ -121,9 +121,9 @@ export function capturesFound(list, text) {
 }
 
 const text = (x) => (typeof x === 'string' ? x : '')
-/* A head as the list keeps it: what the row needs, and nothing the unit did not say. */
 /* What stands for "this slot had never answered" among the slots a read left out. */
 const UNHEARD = Object.freeze({ unheard: true })
+/* A head as the list keeps it: what the row needs, and nothing the unit did not say. */
 const headOf = (h) => ({ slot: h.slot, name: text(h.name), by: text(h.by), make: text(h.make), model: text(h.model), gearType: text(h.gearType), toneType: text(h.toneType), empty: h.empty === true })
 
 /**
@@ -251,14 +251,14 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
    * is stamped with when it was sent, whatever else is known.
    */
   const stamped = (next, had) => {
-    if (next.empty) return next
     const sent = arrived.get(next.slot)
-    if (sent !== undefined) {
-      arrived.delete(next.slot)
-      return { ...next, added: sent }
-    }
+    /* Either way the send has had its answer. A slot that reads empty after one did not keep it (his unit has dropped three): left standing, the send's time went to whatever was loaded there later, under captures sent before it. */
+    arrived.delete(next.slot)
+    if (next.empty) return next
+    if (sent !== undefined) return { ...next, added: sent }
     if (had === UNHEARD) return next
-    if (had && had.name === next.name) return Number.isFinite(had.added) ? { ...next, added: had.added } : next
+    /* The same name, however it was spaced: one way in trims what the unit said and another does not. */
+    if (had && had.name.trim() === next.name.trim()) return Number.isFinite(had.added) ? { ...next, added: had.added } : next
     return done ? { ...next, added: now() } : next
   }
   /* What a slot is judged against when it answers: what the list has for it, else what it held when a read left it out. An answer ends its being left out. */
@@ -464,16 +464,25 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     if (!same) publish()
   }
 
-  /** The unit's captures may have changed (one was sent from the app): what is here stays on show, and the next open reads again. */
+  /** The unit's captures may have changed: what is here stays on show, and the next open reads again. `markStale(slot, name)` is a capture the app itself sent: the slot it went into, and what the unit said that slot holds afterwards. */
   const outOfDate = () => {
     changes++
     stale = true
   }
-  function markStale(slot) {
+  function markStale(slot, name) {
     const was = stale
     outOfDate()
     /* The slot the app sent a capture into, where the send says: that capture is the newest there is. */
     if (Number.isInteger(slot)) arrived.set(slot, now())
+    /*
+     * AND WHAT THE UNIT SAID THE SLOT HOLDS, where the send's answer has it
+     * (the slot read back after the last message): the capture is in the
+     * list from that moment, on top. Without it the list that came back
+     * from TONE3000's page did not have the capture just sent until the
+     * read reached its slot, seconds later, and then it went in over the
+     * rows on show. A slot that read back empty is said too: not kept.
+     */
+    if (typeof name === 'string' && name.trim()) note(slot, name)
     /* Written down too, where there is a list to write: kept only in memory, a capture sent and the app closed straight after was not in the list the next launch showed, and nothing said to read again. */
     if (done && Number.isFinite(at)) keep(written())
     if (!was) publish()

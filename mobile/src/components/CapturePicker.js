@@ -140,7 +140,7 @@ export default function CapturePicker({ slot, choosing = null, disabled = false,
             onBack={(line) => {
               setCame(line)
               setBrowsing(false)
-              /* The list comes up again in the page's place: its order is settled afresh, so a capture just sent is on top. */
+              /* The list comes up again in the page's place: its order is settled afresh. A capture just sent is in it already (the send names its slot to the list), on top. */
               setNewest(captures.done)
               /* A capture sent from there is not in the list yet (read again only if one was), and the block may be on another capture than this panel last read. */
               loadCaptures()

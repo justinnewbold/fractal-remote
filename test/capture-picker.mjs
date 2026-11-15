@@ -355,11 +355,75 @@ export function run(test) {
     s.clock.t = 8500
     assert.deepEqual(order(await s.list.load())[0], [0, 8000])
     /* And a send that says no slot (an older computer app) marks the list out of date and nothing more. */
-    const quiet = mk({ 0: 'Brit Crunch' })
-    for (const none of [undefined, null, '3', 2.5]) quiet.list.stale(none)
-    assert.deepEqual(order(await quiet.list.load()), [[0, undefined]])
+    const quiet = mk({ 0: 'Brit Crunch', 2: 'Two', 3: 'Three' })
+    for (const none of [undefined, null, '3', 2.5, '2']) quiet.list.stale(none, 'A Name With No Slot')
+    assert.deepEqual(order(await quiet.list.load()), [[3, undefined], [2, undefined], [0, undefined]])
+    assert.equal(quiet.list.get().list.some((h) => h.name === 'A Name With No Slot'), false)
+    /* Nor does an answer with no name in it put a nameless row in the list. */
+    quiet.list.stale(6, '  ')
+    assert.equal(quiet.list.head(6).empty, true)
+    assert.equal(quiet.list.get().list.some((h) => h.slot === 6), false)
 
-    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot\)\)/)
+    /*
+     * A SEND THE UNIT DID NOT KEEP (it has dropped three of his): the slot
+     * reads empty afterwards, and that ends the send. Left standing, its
+     * time went to whatever was loaded into that slot later, which then sat
+     * UNDER a capture sent before it.
+     */
+    const dropped = mk({ 0: 'Brit Crunch', 1: 'Factory' })
+    await dropped.list.load()
+    dropped.clock.t = 2000
+    dropped.list.stale(5)
+    await dropped.list.load()
+    dropped.u.held[7] = 'Sent Later'
+    dropped.clock.t = 3000
+    dropped.list.stale(7)
+    await dropped.list.load()
+    dropped.u.held[5] = 'Loaded With The Editor'
+    assert.deepEqual(order(await dropped.again(9000)).slice(0, 2), [[5, 9000], [7, 3000]], 'a capture loaded later took the time of a send the unit had dropped')
+    /* The same where the send's own answer says the slot is still empty. */
+    const said = mk({ 0: 'Brit Crunch' })
+    await said.list.load()
+    said.clock.t = 2000
+    said.list.stale(5, '<EMPTY>')
+    assert.equal(said.list.head(5).empty, true)
+    said.u.held[5] = 'Loaded With The Editor'
+    assert.deepEqual(order(await said.again(9000))[0], [5, 9000])
+
+    /*
+     * AND THE CAPTURE IS IN THE LIST AS THE SEND ENDS, where its answer says
+     * what the slot holds: on top at once, before anything is read again.
+     * The list that came back from TONE3000's page did not have it until
+     * the read reached its slot, seconds later, and then it went in over the
+     * rows on show. The read that follows finds the same capture there and
+     * moves nothing.
+     */
+    const got = mk({ 0: 'Brit Crunch', 29: 'Factory 29' })
+    await got.list.load()
+    got.u.held[30] = 'Sent From TONE3000'
+    got.clock.t = 4000
+    got.list.stale(30, 'Sent From TONE3000 ')
+    assert.deepEqual(order(got.list.get()), [[30, 4000], [29, undefined], [0, undefined]], 'a capture just sent is not in the list until it is read again')
+    assert.equal(got.list.get().stale, true)
+    assert.deepEqual(got.kept.at(-1).heads.find((h) => h.slot === 30), { slot: 30, name: 'Sent From TONE3000', by: '', make: '', model: '', added: 4000 })
+    assert.equal(got.kept.at(-1).stale, true)
+    got.clock.t = 5000
+    assert.deepEqual(order(await got.list.load()), [[30, 4000], [29, undefined], [0, undefined]])
+    /* The same capture is the same however its name was spaced: one way in trims what the unit said, the list's own read does not. */
+    got.u.held[8] = 'Spaced Out '
+    got.clock.t = 6000
+    got.list.note(8, 'Spaced Out ')
+    assert.equal(got.list.head(8).added, 6000)
+    assert.equal((await got.again(7000)).list.find((h) => h.slot === 8).added, 6000, 'a capture arrived a second time for a space after its name')
+    /* On a first read too: named by its send, stamped by it, and the read keeps both. */
+    const early = mk({ 0: 'Brit Crunch', 40: 'Factory 40' }, 1234)
+    early.u.held[20] = 'Sent From TONE3000'
+    early.list.stale(20, 'Sent From TONE3000')
+    assert.deepEqual(order(early.list.get()), [[20, 1234]])
+    early.clock.t = 5000
+    assert.deepEqual(order(await early.list.load()), [[20, 1234], [40, undefined], [0, undefined]])
+
+    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot, got\?\.name\)\)/)
   })
 
   test('capture picker: the list is read in pieces, shown as it comes, and holds the captures of slots 001 to 256 and no empty one', async () => {
@@ -1050,7 +1114,7 @@ export function run(test) {
     assert.match(here, /heads: \(from, count\) => namHeadsHere\(from, count\)/)
     assert.match(here, /piece: \(\) => \(capturesThroughComputer\(\) \? NAM_HEADS_MOST : 8\)/)
     assert.match(here, /rest: \(\) => \(capturesThroughComputer\(\) \? 0 : 150\)/)
-    assert.match(here, /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot\)\)/)
+    assert.match(here, /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot, got\?\.name\)\)/)
     assert.match(here, /export const nameCapture = \(slot\) => list\.ensure\(slot, \{ fresh: true \}\)/)
     assert.match(here, /export const captureHead = \(slot\) => list\.head\(slot\)/)
     /* A pick: in the list's own lane, the unit's answer noted as that slot's name, and a name that is not the one the row had says the list is out of date, with the name that was tapped handed back for Edit to say. */

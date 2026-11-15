@@ -225,7 +225,7 @@ export function run(test) {
      * is closed from the page; and the page is not what is up the next time.
      */
     assert.match(picker, /const close = \(\) => \{ setOpen\(false\) setFind\(''\) if \(browsing\) leave\(\) setBrowsing\(false\) setCame\(''\) \}/)
-    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot\)\)/)
+    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot, got\?\.name\)\)/)
     /* The picker still writes nothing to the unit itself, and Edit's own file still holds nothing of TONE3000's. */
     assert.ok(!/chooseCapture|namPickHere|setEnum|setParam|blockParams|lib\/device|Tone3000Test|tone3000Here/.test(picker))
     assert.ok(!/tone3000|t3k/i.test(code(read('mobile/src/screens/Edit.js'))))

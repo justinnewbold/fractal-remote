@@ -2166,7 +2166,19 @@ the capture on the unit, which is the hard half.
     COMES UP (when the sheet opens, and when the list comes back from
     TONE3000's page), never while it is on show: a list never read whole
     comes up in slot order with the old note, and newest first every time
-    after.
+    after. A SECOND READ, OF THOSE FIXES, found two more, fixed the same
+    way: a send the unit did not keep (it has dropped three of his) left
+    its time standing, and whatever was loaded into that slot later took
+    it and sat under captures sent before it (any answer from the slot,
+    an empty one too, ends the send now); and the list that came back
+    from TONE3000's page did not have the capture just sent until the
+    read reached its slot, seconds later, when it went in over the rows
+    on show (the send's answer says what the slot holds, and that is in
+    the list at once: `list.stale(slot, name)`). A capture changed on the
+    unit by other means still goes to the top when a read finds it, with
+    the list on show: that is what the read was asked for. AND THE
+    BREAK-IT SCRIPT SAID "ALL CAUGHT" OVER A TEST THAT WAS ALREADY
+    FAILING: a runner that proves guards fail checks first that they pass.
   - *Slots 001 to 256 are listed; the 257th is not offered.* In the
     recording the last slot listed the same capture as the one just
     loaded, so it may be no slot of its own. A block that is on it still
