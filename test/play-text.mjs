@@ -746,6 +746,21 @@ export function run(test) {
       if (l.unchecked) continue
       assert.deepEqual(problems(l), [], `store/google-play/${lang} would be refused`)
     }
+    /*
+     * THE FM3'S LINE, as the app says it, and never the "never" it replaced
+     * (15 November 2026: "Yes replace 'this never use a C2MIDI Pro or WIDI
+     * Master on an FM3' with the updated wording"). Held here because the
+     * job writes this file to Play whole: an old read of Play copied back in
+     * would put "Never plug the C2MIDI Pro or a WIDI Master into an FM3" on
+     * the store again with every other test green.
+     */
+    if (!repo['en-US'].unchecked) {
+      const { FM3_SHORT } = await import('../shared/bluetooth-gear.mjs')
+      const full = repo['en-US'].fullDescription
+      assert.equal(full.split(FM3_SHORT).length, 2, 'the Play description does not carry the app’s FM3 line, once')
+      assert.doesNotMatch(full, /\bnever\b[^.\n]*(C2MIDI|WIDI Master)|(C2MIDI|WIDI Master)[^.\n]*\bnever\b/i, 'the Play description says never of an adapter again')
+      assert.equal(repo['en-US'].shortDescription, 'By Bluetooth or through a computer. Not made or supported by Fractal Audio.', 'the short description is not the one read from Play on 15 November 2026')
+    }
 
     /* While en-US is the seed, it is the 1.89.0 Description word for word, and the docs say what it is and what clears it. */
     const section = store.slice(store.indexOf('### Google Play from GitHub (play-text)'), store.indexOf('### URLs'))

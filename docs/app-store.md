@@ -286,9 +286,9 @@ own remote for your Fractal. Since 18 October 2026 it says whose app it is
 not instead, cut to fit, in ordinary letters. It opened "Requires a computer
 and our desktop app" until 30 October 2026, when Bluetooth made that untrue:
 then the two ways. This block said "Through a computer, or by Bluetooth"
-(the computer first), which never went onto Play: the line below is Play's
-own, Justin's with his listing of 4 November 2026, read from Play on 15
-November 2026, Bluetooth first, 75 of 80. Play changes it any time: Play
+(the computer first), which is not what Play had on 15 November 2026: the
+line below is Play's own, as it was read that day (with Justin's listing of
+4 November 2026, as far as this file knows), Bluetooth first, 75 of 80. Play changes it any time: Play
 Console → Grow users → Store presence → Store listings → Short description.
 
 ```
@@ -367,12 +367,16 @@ Write it refused. On 15 November the listing was read from Play (play-text
 run 43769734883, Write it unticked) and copied in: the title was the same,
 the short description was Justin's own "By Bluetooth or through a
 computer…" (the block above changed with it), and the full description was
-his listing of 4 November 2026, nothing like the seed. The marker went in
-that pull request, and test/play-text.mjs holds the copy to every rule
-above from then on.
+his listing of 4 November 2026, largely rewritten from the seed (11 of its
+24 lines were the seed's). The marker went in that pull request, and
+test/play-text.mjs holds the copy to every rule above from then on, and to
+the FM3's line below.
 
-Two things were changed in the copy that day, and written to Play with
-Write it once merged, and nothing else:
+Two things were changed in the copy that day and nothing else, checked by
+a second rebuild of Play's text from the same run's log. They go to Play
+by a play-text run with Write it once that pull request is merged, and are
+live once Google has passed them (usually within a day); a run without
+Write it says "already says this" for all three texts when they are:
 
 - **The FM3's sentence.** "Never plug the C2MIDI Pro or a WIDI Master into
   an FM3: both got very hot on one." became the app's own one line
@@ -3265,11 +3269,11 @@ Control your Fractal rig from your iPhone over Bluetooth or a computer bridge. S
 Google Play's alone now: the App Store went with Justin's own (above).
 Started from the live Google Play Description (updated 4 November 2026),
 which is Justin's own text and already the two ways, Bluetooth first, with
-the trial in it. Five changes from the live Play text and nothing else, so
-he is not surprised by any: "free" taken out before "Fractal Remote desktop app" and before
-"desktop app" (CLAUDE.md: never call the computer app free; that one went
-onto Play on 15 November 2026 with the FM3's sentence, which is the app's
-one line here too since that day: *Google Play from GitHub*); "and per
+the trial in it. Five differences from store/google-play/en-US as it stands since 15
+November 2026 and nothing else, so he is not surprised by any (that copy
+already has "free" off the desktop app, twice, and the FM3's one line,
+which this block has too: *Google Play from GitHub*): "(get it at
+fractal.newbold.cloud/downloads)" out of the first paragraph, to fit; "and per
 device" on the trial; WHAT IT DOES's knob line; the BLUETOOTH section's
 "No editing or saving" sentence made what Edit does there; and a USB CABLE
 section after it. Fractal Audio's sentence and the trademark line stay the

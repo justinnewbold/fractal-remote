@@ -421,11 +421,16 @@ test first, and under these rules:
   steps for the WIDI Master or the C2MIDI Pro on an FM3, which did not
   work. Still never a sentence that says an adapter stays cool or works on
   an FM3 but the U2MIDI Pro. The setup email and the Google Play
-  description said never too, and since that day both carry `FM3_SHORT`
-  word for word: "Yes replace 'this never use a C2MIDI Pro or WIDI Master
-  on an FM3' with the updated wording". The email's (a test holds it to
-  `FM3_SHORT`) is the server's, and any change to its words still needs
-  his yes and a redeploy.
+  description said never too, and on his word that day ("Yes replace 'this
+  never use a C2MIDI Pro or WIDI Master on an FM3' with the updated
+  wording") both were given `FM3_SHORT` word for word, each held to it by a
+  test. The email's is the server's: it went with a redeploy
+  (supabase/README.md has the version), and any other change to its words
+  still needs his yes and a redeploy. Play's goes by the play-text job with
+  Write it, which writes store/google-play/en-US WHOLE, so that folder is
+  Play's own text, read from Play, and nothing is changed in it that he has
+  not asked for (docs/app-store.md, *Google Play from GitHub*, has what was
+  changed and what Play still says that the app has outgrown).
 - **Setup and Troubleshooting are by unit and by adapter, in tabs.** "With
   tabs so we don't have to sort through so much information not relevant
   to the unit and device they are using" (15 November 2026). How to connect

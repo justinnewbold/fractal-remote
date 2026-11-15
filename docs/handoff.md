@@ -65,8 +65,10 @@ over-the-air updates: no Expo build was started today.
   6 (open to customers: `SIDES_FOR_EVERYONE`). Steps 3 (the tuner in a
   side, 1.90.10) and 4 (Derek's block panel, 1.90.15) are in.
 - Play listing: store/google-play is Play's own text since 15 November
-  2026 (read from Play, UNCHECKED gone, the FM3's line and two "free"s
-  changed and written). Still Justin's to say: Play's description says "No
+  2026 (read from Play, UNCHECKED gone), with the FM3's line and two
+  "free"s changed. They go to Play by a play-text run with Write it after
+  that merge: a run without it says "already says this" three times once
+  Google has passed them. Still Justin's to say: Play's description says "No
   editing or saving" over Bluetooth and that the app "gets nothing" from
   its Amazon links, both untrue now; *Google Play Description, from 1.90.0*
   in docs/app-store.md is ready for the first.

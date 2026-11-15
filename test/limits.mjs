@@ -3041,7 +3041,7 @@ export function run(test) {
     /* Sentence case on Play alone: its help for this field says "Do not use
        capitalization for emphasis", and its metadata policy calls ALL CAPS
        outside a brand name a violation. */
-    /* The two ways, as Play has had them since Justin's own listing of 4 November 2026 (read from Play on 15 November: "By Bluetooth or through a computer"). It said "Through a computer, or by Bluetooth" in this file until then, which never went onto Play. */
+    /* The two ways, as Play had them when it was read on 15 November 2026: "By Bluetooth or through a computer". This file said "Through a computer, or by Bluetooth" until then, which was not what Play had that day. */
     assert.match(short, /^By Bluetooth or through a computer\./, 'the Play summary does not open on the two ways')
     assert.ok(!/requires a computer/i.test(short), 'the Play summary still says a computer is required, and Bluetooth needs none')
     assert.ok(!/\b[A-Z]{4,}\b/.test(short), 'the Play summary shouts, which Google asks it not to')

@@ -243,7 +243,8 @@ on his word: "Yes replace 'this never use a C2MIDI Pro or WIDI Master on an
 FM3' with the updated wording". The email's is held to `FM3_SHORT` by
 test/server.mjs and goes out with a redeploy; Play's goes by the play-text
 job (docs/app-store.md, *Google Play from GitHub*). The App Store's
-Description never had the sentence.
+Description as it went with 1.90.0 does not carry it (the 1.89.0 block
+did, and what is live there is Justin's own to set and to read).
 
 Sources: CME C2MIDI Pro manual v03
 (https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),
