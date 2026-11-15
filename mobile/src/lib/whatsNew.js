@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-15",
+    "day": "15 November 2026",
+    "version": "1.90.73",
+    "lines": [
+      {
+        "text": "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion blocks now have their own colors on Play instead of gray. On an FM9, the Vocoder and Tone Match do too.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-14",
     "day": "14 November 2026",
     "version": "1.90.72",

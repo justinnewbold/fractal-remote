@@ -907,6 +907,35 @@ export function run(test) {
     ]
     c.setColourUnit('axefxii')
     for (const name of LEARNED_SINCE) assert.deepEqual(c.blockColor(name), c.NEUTRAL, `${name} has a colour in Fractal Remote that it never had`)
+    /*
+     * AND THE BLOCKS PLAY HAS LEARNED TO SHOW SINCE HAVE THEIR COLOURS HERE
+     * TOO. "We need to build out those block colors because the new ones you
+     * added are just all gray" (Justin, 14 November 2026: an Axe-Fx III's
+     * NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion, six grey
+     * tiles in a row of eleven). Each is the colour Axe-Edit III draws it
+     * in, the one Match my unit already had for it, by the spelling Play's
+     * own name comes with, on whichever unit; white letters that read.
+     */
+    assert.deepEqual([...c.LEARNED_ON_PLAY], ['nam', 'irplayer', 'vocoder', 'tonematch', 'dynadist'])
+    for (const unit of ['axefxiii', 'fm9', 'fm3']) {
+      c.setColourUnit(unit)
+      for (const family of c.LEARNED_ON_PLAY) {
+        const got = c.blockColor(family)
+        assert.notDeepEqual(got, c.NEUTRAL, `${unit}: ${family} is the unknown block’s grey in Fractal Remote`)
+        assert.deepEqual(got, { fill: c.PALETTES.gen3[family], ink: '#ffffff' }, `${unit}: ${family} is not the editor’s colour`)
+        assert.ok(c.contrast('#ffffff', got.fill) >= 4.5, `${family}: white letters at ${c.contrast('#ffffff', got.fill).toFixed(2)}:1`)
+        /* Told apart from the unknown block at a glance, not by a shade. */
+        assert.ok(c.deltaE(got.fill, c.NEUTRAL.fill) > 12, `${family} is ${c.deltaE(got.fill, c.NEUTRAL.fill).toFixed(1)} from the unknown block’s grey`)
+      }
+      /* As Play names them: numbered, where a unit has more than one. */
+      assert.equal(c.blockColor('NAM 2').fill, c.PALETTES.gen3.nam)
+      assert.equal(c.blockColor('IR Player 3').fill, c.PALETTES.gen3.irplayer)
+    }
+    /* The values themselves, so a change to the gen-3 table is seen to move these too. */
+    assert.deepEqual(Object.fromEntries(c.LEARNED_ON_PLAY.map((f) => [f, c.FRACTAL_REMOTE[f].fill])), { nam: '#7742e0', irplayer: '#61745a', vocoder: '#07827b', tonematch: '#2b7254', dynadist: '#95553b' })
+    /* And nothing the old table knew moved to make room: these five are all that is new in it. */
+    assert.deepEqual(Object.keys(c.FRACTAL_REMOTE).filter((k) => !(k in BEFORE)).sort(), [...c.LEARNED_ON_PLAY].sort())
+    c.setColourUnit('axefxii')
     /* Every spelling the old table did know is exactly as it was, in whatever shape it comes. */
     for (const [name, slug] of [['Plex Delay', 'plex'], ['Ten-Tap', 'tentap'], ['Vol/Pan', 'volpan'], ['delay2', 'delay'], ['Compressor 2', 'compressor'], ['eq', 'eq']]) {
       assert.deepEqual(c.blockColor(name), { fill: BEFORE[slug], ink: '#ffffff' }, `${name} is not the colour it always was`)

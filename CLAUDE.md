@@ -988,6 +988,25 @@ what the computer sends for the same edit, and a test holds it there.
     (`ownBlocksOpenTo(link.account?.id)`). It is inside the computer app,
     so it came with a computer release, and a change to the list is one
     too: KEEP IT IN STEP WITH mobile/src/lib/gen3Catalog.js `OWN`.
+  - *AND THEY HAVE COLOURS IN THE DEFAULT LOOK, since 1.90.73.* "We need
+    to build out those block colors because the new ones you added are
+    just all gray" (14 November 2026, Play on his Axe-Fx III: DYN, TON,
+    NAM, NAM 2, VOC and IRP grey in a row of eleven). Match my unit had
+    always had a colour for each, read from Axe-Edit III's own block
+    pictures (src/lib/blockPalettes.js `PALETTES.gen3`, which says where
+    each came from); the Fractal Remote look, which is the default and
+    the one he wears, is the old table kept as it was, and anything it
+    never knew was the unknown block's grey. `LEARNED_ON_PLAY` in that
+    file gives the five the gen-3 colour there too, one source for both
+    looks, by the spelling Play's own names come with (an Axe-Fx II's
+    "NAM Player" is still unknown in that look, like every other name
+    learned since). HE ASKED FOR "the screenshot I sent that shows all
+    the blocks from the quick edit screen off the Axe-edit": IT IS NOT
+    IN THIS CONVERSATION (every picture in the record was looked at; the
+    only Axe-Edit one is the NAM tile crop of 14 November). The colours
+    used are the ones already on file from the editor's pictures. If he
+    sends it again, check the five against it and move the gen-3 values,
+    which moves both looks.
   - *THE NAM BLOCK HAS ITS OWN PICTURE, since 1.90.72: a small neural
     network in a rainbow.* "Make the NAM block look similar to this. but
     with the same aesthetics that we use in our app now. But like with the
