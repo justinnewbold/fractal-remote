@@ -3104,7 +3104,9 @@ export function run(test) {
 
     /* One button per kind, the next one not in the chain. */
     const edit = read('mobile/src/screens/Edit.js')
-    assert.match(edit, /: nextOfEachKind\(palette \|\| \[\], used\)/, 'the phone lists every block instead of one of each kind')
+    /* The list is a menu that opens since 15 November 2026 (components/BlockMenu, test/block-menu.mjs); what it lists with nothing typed is still this. */
+    assert.match(edit, /const kinds = nextOfEachKind\(palette \|\| \[\], used\)/, 'the phone lists every block instead of one of each kind')
+    assert.match(edit, /<BlockMenu palette=\{palette\} kinds=\{kinds\} /, 'the menu is not handed one of each kind')
 
     /* Save in the phone's bar, only with something to save, asked first. */
     const bar = read('mobile/src/components/TopBar.js')

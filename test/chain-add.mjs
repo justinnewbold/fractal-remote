@@ -148,7 +148,7 @@ export function run(test) {
     /* NO ROOM: the words in the list's place. The list of blocks is drawn only where a tapped one has somewhere to go, and its line says where. */
     assert.match(
       editor,
-      /adding=\{ addAfter !== `\$\{lane\.row\}:\$\{item\.col\}` \? null : freeAfter\(lane, item\.col\) === null \? \( <Note tone="warn">\{noRoomAfter\(\{ name: item\.block\.name, linear, more: removableAfter\(lane, item\.col\), elsewhere: roomAnywhere\(lanes\) \}\)\}<\/Note> \) : \( paletteBox\( \(b\) => addAfterCard\(lane, item\.col, b\.page, item\.block\.name\), addHint\(\{ name: item\.block\.name, at: where\(lane\.row, freeAfter\(lane, item\.col\)\), col: item\.col, free: freeAfter\(lane, item\.col\) \}\) \) \) \}/
+      /adding=\{ addAfter !== `\$\{lane\.row\}:\$\{item\.col\}` \? null : freeAfter\(lane, item\.col\) === null \? \( <Note tone="warn">\{noRoomAfter\(\{ name: item\.block\.name, linear, more: removableAfter\(lane, item\.col\), elsewhere: roomAnywhere\(lanes\) \}\)\}<\/Note> \) : \( blockMenu\( \(b\) => addAfterCard\(lane, item\.col, b\.page, item\.block\.name\), addHint\(\{ name: item\.block\.name, at: where\(lane\.row, freeAfter\(lane, item\.col\)\), col: item\.col, free: freeAfter\(lane, item\.col\) \}\), \{ title: `Add after \$\{item\.block\.name\}`, up: listUp, onUp: setListUp \} \) \) \}/
     )
     assert.doesNotMatch(editor, /put it right after \$\{/, 'the list still says "right after" wherever the block goes')
     assert.doesNotMatch(editor, /No free space after/, 'the old line, said only over the chain, is still there')

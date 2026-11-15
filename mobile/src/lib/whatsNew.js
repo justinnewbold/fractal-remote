@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-15",
     "day": "15 November 2026",
-    "version": "1.90.79",
+    "version": "1.90.80",
     "lines": [
+      {
+        "text": "In the chain editor, the blocks you can add are now a menu instead of a wall of buttons. Tap Block to add and the list comes up over the page, in order by name, with the find box staying at the top while you scroll.",
+        "only": null
+      },
       {
         "text": "Bluetooth setup and troubleshooting are now by unit and by adapter. Pick your unit, then tap your adapter’s tab, and you see only the parts, steps and fixes for that pair instead of one long list for all of them. The Yamaha MD-BT01 has its own tab on an FM3, FM9 and Axe-Fx III.",
         "only": null
@@ -23,11 +27,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "In the chain editor, Add now answers under the block you tapped: where the new block went, or that its row is full and what to do instead. Before, a full row was said at the top of the chain, off the screen, and nothing seemed to happen.",
-        "only": null
-      },
-      {
-        "text": "On an AM4, the chain editor shows each block in its real slot, and adding or taking one out changes the right slot. It was one slot along.",
+        "text": "In the chain editor, Add now answers under the block you tapped: where the new block went, or that its row is full and what to do instead. On an AM4, each block is shown in its real slot, and adding or taking one out changes the right slot. It was one slot along.",
         "only": null
       },
       {

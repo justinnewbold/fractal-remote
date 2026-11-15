@@ -102,6 +102,7 @@ import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
 import Sheet from '../components/Sheet'
 import BlockSettings from '../components/BlockSettings'
+import BlockMenu from '../components/BlockMenu'
 import CapturePicker from '../components/CapturePicker'
 import QuickBuild from '../components/QuickBuild'
 import { quickBuildHere } from '../lib/quickBuild'
@@ -2078,6 +2079,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
   const [acting, setActing] = useState(null)
   /* Add: the card whose next free space a picked block goes into. */
   const [addAfter, setAddAfter] = useState(null)
+  /* And whether that card's list of blocks is up over the page (components/BlockMenu): brought up by the tap on Add, never by the card being drawn. */
+  const [listUp, setListUp] = useState(false)
   /* Which block a tapped gap would receive, by its own type code. */
   const [choice, setChoice] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -2091,7 +2094,6 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    * What an Add or a Remove did is said under its own card as well.
    */
   const [told, setTold] = useState(null)
-  const [hunt, setHunt] = useState('')
   /*
    * A block being dragged: which lane, which item, how far the finger has
    * gone, and where that puts it. Measured heights per lane item, because a
@@ -2408,14 +2410,33 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    * already in, and no Drive button once both are. A search still shows every
    * block that matches, numbers and all.
    */
-  const needle = hunt.trim().toLowerCase()
   const used = new Set((blocks || []).map((b) => idOf(b)).filter(Number.isInteger))
-  const offered = needle
-    ? (palette || []).filter((b) => (b.name || '').toLowerCase().includes(needle)).slice(0, 40)
-    : nextOfEachKind(palette || [], used)
+  const kinds = nextOfEachKind(palette || [], used)
   const picked = (palette || []).find((b) => b.page === Number(choice))
 
-  const paletteBox = (onPick, hint) => (
+  /*
+   * THE LIST, AS A MENU THAT OPENS AND SCROLLS (components/BlockMenu, and
+   * lib/blockMenu for why). It was a find box over a button for every kind
+   * of block, drawn into the page: on an Axe-Fx III two screens of buttons
+   * under whichever card's Add was tapped. "In edit, make picking blocks to
+   * add a drop down scroll menu" (Justin, 15 November 2026). One button now,
+   * and the list comes up over the page with the find box at its top.
+   */
+  /*
+   * The find box's look. Drawn here, where it always was, and handed to the
+   * menu: the Classic look is held to what main drew by this place
+   * (test/glass-classic), so the box is the same field in both looks.
+   */
+  const findLook = {
+    minHeight: TAP,
+    paddingHorizontal: space.md,
+    borderWidth: 1,
+    /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+    ...glassField(),
+    color: color.silk,
+    fontSize: font.body
+  }
+  const blockMenu = (onPick, hint, { title, note = hint, chosen = null, up = false, onUp = null }) => (
     <View style={{ gap: space.sm }}>
       {palette === null ? (
         <Note>Asking your unit what it can add…</Note>
@@ -2423,38 +2444,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         <Note tone="warn">Couldn’t read the list of blocks from your unit.</Note>
       ) : (
         <>
-          <TextInput
-            value={hunt}
-            onChangeText={setHunt}
-            placeholder="Find a block"
-            placeholderTextColor={color.silkFaint}
-            autoCorrect={false}
-            autoCapitalize="none"
-            accessibilityLabel="Find a block to add"
-            style={{
-              minHeight: TAP,
-              paddingHorizontal: space.md,
-              borderWidth: 1,
-              /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
-              ...glassField(),
-              color: color.silk,
-              fontSize: font.body
-            }}
-          />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-            {offered.map((b) => (
-              <Press
-                key={b.page}
-                label={b.name}
-                tone="signal"
-                on={b.page === Number(choice)}
-                height={44}
-                disabled={busy}
-                style={{ paddingHorizontal: space.md }}
-                onPress={() => onPick(b)}
-              />
-            ))}
-          </View>
+          <BlockMenu palette={palette} kinds={kinds} chosen={chosen} title={title} note={note} fieldLook={findLook} disabled={busy} up={up} onUp={onUp} onPick={onPick} />
           <Text style={{ color: color.silkDim, fontSize: font.micro }}>{hint}</Text>
         </>
       )}
@@ -2581,6 +2571,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                         if (opening && freeAfter(lane, item.col) === null) logDebug('chain', `Add after ${item.block?.name} at ${where(lane.row, item.col)}`, NOT_SENT)
                         setTold(null)
                         setAddAfter(opening ? `${lane.row}:${item.col}` : null)
+                        /* The list comes up with the tap, where there is room for a block: a row with none has the words in its place. */
+                        setListUp(opening && freeAfter(lane, item.col) !== null)
                       }}
                       note={told && told.at === `${lane.row}:${item.col}` ? told : null}
                       onNoteDismiss={() => setTold(null)}
@@ -2593,9 +2585,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                           /* Nowhere to put one: the words, in the list's place, so no tap lands on a block that would not be added. */
                           <Note tone="warn">{noRoomAfter({ name: item.block.name, linear, more: removableAfter(lane, item.col), elsewhere: roomAnywhere(lanes) })}</Note>
                         ) : (
-                          paletteBox(
+                          /* Add was the tap that asked for the list, so that tap brings it up (listUp, set in onAdd); shut without a pick, its button stays under the card. */
+                          blockMenu(
                             (b) => addAfterCard(lane, item.col, b.page, item.block.name),
-                            addHint({ name: item.block.name, at: where(lane.row, freeAfter(lane, item.col)), col: item.col, free: freeAfter(lane, item.col) })
+                            addHint({ name: item.block.name, at: where(lane.row, freeAfter(lane, item.col)), col: item.col, free: freeAfter(lane, item.col) }),
+                            { title: `Add after ${item.block.name}`, up: listUp, onUp: setListUp }
                           )
                         )
                       }
@@ -2635,9 +2629,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       {/* ---------------------------------------------------- what to place */}
       <View style={{ gap: space.sm }}>
         <Label>{EMPTY_SPACE}</Label>
-        {paletteBox(
+        {blockMenu(
+          /* A tap on the one already picked puts it down again, as it always did. */
           (b) => setChoice(b.page === Number(choice) ? null : b.page),
-          picked ? `Now tap an empty space to put ${picked.name} in it.` : 'Pick a block, then tap an empty space.'
+          picked ? `Now tap an empty space to put ${picked.name} in it.` : 'Pick a block, then tap an empty space.',
+          { title: 'Pick a block', note: 'Then tap an empty space to put it there.', chosen: choice }
         )}
       </View>
     </View>
