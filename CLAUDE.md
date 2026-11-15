@@ -3273,8 +3273,9 @@ wrong, fixed in 1.90.74:
 - **The hint named a cable the customer did not have.** "Check both MIDI
   plugs: the white one goes in MIDI OUT" is the C2MIDI Pro's colours. A
   WIDI Master's line names its own two plugs now (shared/bluetooth-gear
-  `notAnsweringLine`, `isWidiMaster` by the adapter's name; never an FM3,
-  which is not offered one), and the chain card in Settings the same
+  `notAnsweringLine`, `isWidiMaster` by the adapter's name; on every unit,
+  the FM3 too since 15 November 2026, when no adapter was ruled out for one
+  any more), and the chain card in Settings the same
   (shared/link-chain).
 - **Play said "Connected over Bluetooth, through WIDI Master Bluetooth."
   the whole time.** The note under the pill, where Connect again is, said

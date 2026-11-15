@@ -902,7 +902,7 @@ const thruOff = (name) => `On the ${name}, open Setup → MIDI/Remote and set MI
 const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. It has no other way to be powered.`
 const jackPower = (name) => `It takes its power from the ${name}’s MIDI OUT. If its light stays off, plug a phone charger or power bank into the Jack’s USB-C socket.`
 /* Yamaha's manual: "Turn on the instrument. The lamp of the MD-BT01 flashes", and "Power: MIDI OUT". */
-const mdPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its lamp flashes. It has no other way to be powered.`
+const mdPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its lamp flashes. If the lamp stays off, swap the two plugs. It has no other way to be powered.`
 const swapIfQuiet = 'If the unit doesn’t answer, swap the two plugs.'
 
 export function waysFor(unit, noun = 'phone') {
@@ -911,6 +911,8 @@ export function waysFor(unit, noun = 'phone') {
   const uhost = (parts, more = {}) => ({ key: 'uhost', tab: ADAPTER_TABS.uhost, title: 'WIDI Uhost and a cable', parts, before: FIRST_TIME, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), ...more })
   if (unit === 'am4' || unit === 'vp4') {
     const vp4 = unit === 'vp4'
+    /* A VP4 sends nothing back over Bluetooth, so "doesn't answer" is not something its owner can see: the words Troubleshooting uses (troubleFor). */
+    const swap = vp4 ? 'If presets don’t change on the VP4, swap the two plugs.' : swapIfQuiet
     return mark(unit, [
       {
         key: 'master',
@@ -921,7 +923,7 @@ export function waysFor(unit, noun = 'phone') {
         before: FIRST_TIME_ADAPTER,
         steps: [
           `Push one 3.5 mm adapter into the ${name}’s MIDI IN, and the other into its MIDI OUT.`,
-          `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swapIfQuiet}`,
+          `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swap}`,
           masterPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
@@ -935,7 +937,7 @@ export function waysFor(unit, noun = 'phone') {
         before: FIRST_TIME_ADAPTER,
         steps: [
           'Set the switch on the WIDI Jack to Type A.',
-          `Plug its two cables into the Jack, then their 3.5 mm plugs into the ${name}’s MIDI IN and MIDI OUT, as the labels say. ${swapIfQuiet}`,
+          `Plug its two cables into the Jack, then their 3.5 mm plugs into the ${name}’s MIDI IN and MIDI OUT, as the labels say. ${swap}`,
           jackPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
@@ -973,7 +975,8 @@ export function waysFor(unit, noun = 'phone') {
     title: 'Yamaha MD-BT01',
     parts: ['mdbt01'],
     before: null,
-    steps: [`Plug the MD-BT01’s two plugs into the ${name}’s MIDI IN and ${out}, matching the arrows on its plugs. ${swapIfQuiet}`, mdPower(name), settings],
+    /* No "if the unit doesn't answer, swap": a swap moves the plug that powers it out of MIDI OUT, so its lamp is what says the plugs are swapped (mdPower). */
+    steps: [`Plug the MD-BT01’s two plugs into the ${name}’s MIDI IN and ${out}, matching the arrows on its plugs.`, mdPower(name), settings],
     powerAt: 1
   }
   if (unit === 'fm3') {
@@ -1085,7 +1088,8 @@ export function troubleFor(unit, kind, noun = 'phone') {
   if (kind === 'master') {
     return {
       lit: `${fromOut('WIDI Master')} It has no other way to be powered.`,
-      plugs: `${masterBoth(unit)} ${quiet}, swap the two plugs.`,
+      /* No swap after it: the line has just said which plug goes where, and the larger one in MIDI OUT is its only power. */
+      plugs: masterBoth(unit),
       typeA: small ? TYPE_A : null,
       before: FIRST_TIME_ADAPTER
     }
@@ -1101,7 +1105,8 @@ export function troubleFor(unit, kind, noun = 'phone') {
   if (kind === 'mdbt01') {
     return {
       lit: `Check the MD-BT01’s lamp. It flashes once the ${name} is on, and stays lit once this ${noun} has connected to it. It takes its power from the ${name}’s MIDI OUT and has no other way to be powered.`,
-      plugs: `Its two plugs go in the ${name}’s ${jacks}, matching the arrows on them. ${quiet}, swap the two plugs.`,
+      /* Its lamp is the test: it lights only from MIDI OUT, so dark with the unit on means the plugs are swapped. */
+      plugs: `Its two plugs go in the ${name}’s ${jacks}, matching the arrows on them. If the lamp stays off with the ${name} on, swap the two plugs.`,
       typeA: small ? TYPE_A : null,
       before: null
     }
@@ -1232,8 +1237,36 @@ export function notAnsweringLine(unit, adapter = null) {
   if (isWidiMaster(adapter)) {
     return `WIDI Master connected, but the ${name} isn’t answering. ${masterBoth(unit)}${unit === 'axefx3' ? '' : ' And check that MIDI Thru is off.'}`
   }
-  if (unit === 'axefx3') return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
+  /*
+   * "The white one" is the Uhost's cable's (the C2MIDI Pro's, the U2MIDI
+   * Pro's): said only to a Uhost, by its name. A WIDI Jack's cables and
+   * Yamaha's MD-BT01, a way on the page since 15 November 2026, have no
+   * white plug, nor has an adapter the app has no name for.
+   */
+  if (unit === 'axefx3') {
+    return adapterKind(adapter) === 'uhost'
+      ? `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
+      : `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: one in MIDI IN and one in MIDI OUT, not THRU.`
+  }
   return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`
+}
+
+/**
+ * PHONE & COMPUTER'S UNIT CARD, the adapter connected and the unit silent.
+ * shared/link-chain, which the computer app draws from too, has two lines
+ * for it: a WIDI Master's own, and "the black plug is in its MIDI IN and the
+ * white in MIDI OUT", which is the Uhost's cable. Any other adapter (a WIDI
+ * Jack, Yamaha's MD-BT01, one the app has no name for) has neither color,
+ * so the phone says this in its place (screens/Settings). Null where
+ * link-chain's own line is the right one.
+ *
+ * @param {string|null} unitName  the unit's name as the card writes it
+ * @param {string|null} adapter   the adapter's name
+ */
+export const quietCardLine = (unitName, adapter) => {
+  const kind = adapterKind(adapter)
+  if (kind === 'uhost' || kind === 'master') return null
+  return `${unitName || 'Your unit'} isn’t answering through the adapter. Check it is on, and that both of the adapter’s MIDI plugs are in: one in MIDI IN and one in MIDI OUT.`
 }
 
 /*

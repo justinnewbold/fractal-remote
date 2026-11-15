@@ -18,8 +18,9 @@ import Press from './Press'
  * page has always been (it draws through this now). They wrap onto a second
  * line rather than scroll sideways: five units fit a phone in two lines, and
  * a tab off the edge of the screen is one nobody knows is there. Words, never
- * a picture alone. Each says "tab" and whether it is the one picked to a
- * screen reader.
+ * a picture alone. Each says "tab" to a screen reader, and Press says
+ * whether it is the one picked (its `on` is the selected state): the label
+ * does not say "selected" too, which was read out twice.
  *
  * @param {{ key: string, label: string }[]} items
  * @param {string|null} picked   the key of the one showing
@@ -39,7 +40,7 @@ export default function Tabs({ items, picked, onPick, disabled = false, name = '
           disabled={disabled}
           height={44}
           style={{ paddingHorizontal: space.md }}
-          accessibilityLabel={`${it.label}, tab${it.key === picked ? ', selected' : ''}`}
+          accessibilityLabel={`${it.label}, tab`}
           onPress={() => onPick(it.key)}
         />
       ))}

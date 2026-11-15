@@ -159,11 +159,37 @@ export function run(test) {
     assert.match(g.troubleFor('vp4', 'other').plugs, /^The adapter has to reach the VP4’s MIDI IN: the app only sends to a VP4/)
     assert.ok(!g.troubleFor('vp4', 'other').plugs.includes('both ways'), 'a VP4’s owner is told the adapter has to carry MIDI both ways')
     /* The device in hand, wherever it is named. */
+    /*
+     * A WIDI MASTER AND AN MD-BT01 TAKE THEIR POWER FROM THE PLUG IN MIDI
+     * OUT, so "if the unit doesn't answer, swap the two plugs" after a right
+     * fit takes it away. The WIDI Master's line says which plug goes where
+     * and stops; the MD-BT01's is told by its lamp. On How to connect as in
+     * Troubleshooting, so the two pages do not disagree.
+     */
+    for (const unit of UNITS) {
+      assert.ok(!/swap/.test(g.troubleFor(unit, 'master').plugs), `${unit}: a WIDI Master’s owner is told where each plug goes, then to swap them`)
+      assert.match(g.troubleFor(unit, 'master').plugs, /^A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT/)
+      assert.match(g.troubleFor(unit, 'mdbt01').plugs, /If the lamp stays off with the [A-Za-z0-9 -]+ on, swap the two plugs\.$/, unit)
+    }
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const md = g.waysFor(unit).find((w) => w.key === 'mdbt01')
+      assert.ok(!/answer/.test(md.steps.join(' ')), `${unit}: the MD-BT01’s steps swap its plugs on the unit not answering`)
+      assert.match(md.steps[1], /its lamp flashes\. If the lamp stays off, swap the two plugs\./, unit)
+    }
+    /* A VP4 is only ever sent to: How to connect says what its owner can see, in the words Troubleshooting uses, for every adapter. */
+    for (const way of g.waysFor('vp4', 'iPad')) {
+      const said = [way.title, way.sub, way.before, ...way.steps].filter(Boolean).join(' ')
+      assert.ok(!/doesn’t answer|isn’t answering/.test(said), `VP4, ${way.title}: its owner is told to wait for an answer that never comes`)
+    }
+    for (const key of ['master', 'jack']) {
+      assert.match(g.waysFor('vp4').find((w) => w.key === key).steps.join(' '), /If presets don’t change on the VP4, swap the two plugs\./, key)
+      assert.match(g.waysFor('am4').find((w) => w.key === key).steps.join(' '), /If the unit doesn’t answer, swap the two plugs\./, key)
+    }
     assert.match(g.troubleFor('fm9', 'mdbt01', 'tablet').lit, /stays lit once this tablet has connected to it/)
     assert.match(g.troubleFor('fm9', 'mdbt01').lit, /stays lit once this phone has connected to it/)
     /* Yamaha's own words for it (its manual): the lamp flashes with the instrument on, MIDI OUT is its only power, the plugs go by their arrows. */
     assert.equal(g.troubleFor('fm9', 'mdbt01').lit, 'Check the MD-BT01’s lamp. It flashes once the FM9 is on, and stays lit once this phone has connected to it. It takes its power from the FM9’s MIDI OUT and has no other way to be powered.')
-    assert.equal(g.troubleFor('fm9', 'mdbt01').plugs, 'Its two plugs go in the FM9’s MIDI IN and MIDI OUT/THRU, matching the arrows on them. If the FM9 doesn’t answer, swap the two plugs.')
+    assert.equal(g.troubleFor('fm9', 'mdbt01').plugs, 'Its two plugs go in the FM9’s MIDI IN and MIDI OUT/THRU, matching the arrows on them. If the lamp stays off with the FM9 on, swap the two plugs.')
     /* No unit picked yet: what is true of any adapter, and "the unit". */
     assert.deepEqual(g.troubleFor(null, 'other'), {
       lit: 'Check the adapter is lit, and has the power it needs.',
@@ -233,9 +259,58 @@ export function run(test) {
     const tabs = flat(code(read('mobile/src/components/Tabs.js')))
     assert.match(tabs, /export default function Tabs\(\{ items, picked, onPick, disabled = false, name = '' \}\)/)
     assert.match(tabs, /<View accessibilityRole="tablist" accessibilityLabel=\{name \|\| undefined\} style=\{\{ flexDirection: 'row', flexWrap: 'wrap', gap: space\.sm \}\}>/)
-    assert.match(tabs, /<Press key=\{it\.key\} label=\{it\.label\} tone="signal" on=\{it\.key === picked\} disabled=\{disabled\} height=\{44\} style=\{\{ paddingHorizontal: space\.md \}\} accessibilityLabel=\{`\$\{it\.label\}, tab\$\{it\.key === picked \? ', selected' : ''\}`\} onPress=\{\(\) => onPick\(it\.key\)\} \/>/)
+    assert.match(tabs, /<Press key=\{it\.key\} label=\{it\.label\} tone="signal" on=\{it\.key === picked\} disabled=\{disabled\} height=\{44\} style=\{\{ paddingHorizontal: space\.md \}\} accessibilityLabel=\{`\$\{it\.label\}, tab`\} onPress=\{\(\) => onPick\(it\.key\)\} \/>/)
+    /*
+     * WHICH ONE IS PICKED is said once, by Press: its `on` is the selected
+     * state a screen reader reads out. The label said ", selected" as well,
+     * and the picked tab was heard as "FM3, tab, selected, selected".
+     */
+    assert.ok(!/selected/.test(tabs), 'the tab’s label says selected as well as its state')
+    assert.match(flat(code(read('mobile/src/components/Press.js'))), /accessibilityState=\{\{ selected: on, disabled, busy \}\}/)
     /* Words, never a picture alone; a Press, so it is in the tap log; and never scrolled off the edge of the screen. */
     assert.ok(!/icon=|Pressable|ScrollView|horizontal/.test(tabs))
+  })
+
+  test('Bluetooth tabs: a silent unit is told of black and white plugs only on the adapter that has them, on Play’s line and on Phone & computer’s card', async () => {
+    const g = await gearFile()
+    /*
+     * "The black plug is in its MIDI IN and the white in MIDI OUT" is the
+     * Uhost's cable (the C2MIDI Pro, the U2MIDI Pro). It was said to every
+     * adapter but a WIDI Master. With Yamaha's MD-BT01 a way on the page,
+     * somebody who bought it there would be told of a plug it has not got
+     * at the moment nothing answers; a WIDI Jack's owner already was.
+     */
+    const NAME = 'Axe-Fx III'
+    for (const uhost of ['WIDI Uhost', 'WIDI Uhost Bluetooth', 'widi uhost']) assert.equal(g.quietCardLine(NAME, uhost), null, `${uhost}: link-chain’s own line is the Uhost’s`)
+    for (const master of ['WIDI Master', 'WIDI Master Bluetooth']) assert.equal(g.quietCardLine(NAME, master), null, `${master}: link-chain has the WIDI Master’s own line`)
+    for (const other of ['MD-BT01', 'WIDI Jack Bluetooth', 'WIDI Core', 'Bluetooth MIDI', '', null, undefined]) {
+      const line = g.quietCardLine(NAME, other)
+      assert.equal(line, 'Axe-Fx III isn’t answering through the adapter. Check it is on, and that both of the adapter’s MIDI plugs are in: one in MIDI IN and one in MIDI OUT.', String(other))
+      assert.ok(!/white|black|tried|WIDI|Uhost/i.test(line), String(other))
+    }
+    assert.match(g.quietCardLine(null, 'MD-BT01'), /^Your unit isn’t answering through the adapter\./)
+    /* The card it replaces is link-chain's, which the computer app draws from too and so is left as it is: these are still its two lines. */
+    const { linkChain } = await import('../shared/link-chain.mjs')
+    const unitCard = (adapter) => linkChain({ here: 'phone', via: 'bluetooth', unit: { name: NAME, state: 'missing' }, adapter: { name: adapter, link: 'connected' }, phone: {} }).find((c) => c.key === 'unit')
+    assert.match(unitCard('WIDI Uhost').body, /the black plug is in its MIDI IN and the white in MIDI OUT\.$/)
+    assert.match(unitCard('MD-BT01').body, /the black plug is in its MIDI IN and the white in MIDI OUT\.$/, 'link-chain changed: the phone’s own line for an adapter with no white plug may no longer be needed')
+    assert.match(unitCard('WIDI Master').body, /both of the WIDI Master’s plugs are in/)
+    /* The phone puts its own line on that card, and only then: over Bluetooth, no cable, the adapter connected, the unit missing. */
+    const settings = flat(code(read('mobile/src/screens/Settings.js')))
+    assert.match(settings, /const quietLine = throughAdapter && !cable && link === 'connected' && unitState === 'missing' \? quietCardLine\(deviceName, macName\) : null/)
+    assert.match(settings, /: quietLine \? cards\.map\(\(c\) => \(c\.key === 'unit' \? \{ \.\.\.c, body: quietLine \} : c\)\) : cards/)
+    /* The same cards come back otherwise: only the unit's words change, never its tone, its wire or another card. */
+    const cards = linkChain({ here: 'phone', via: 'bluetooth', unit: { name: NAME, state: 'missing' }, adapter: { name: 'MD-BT01', link: 'connected' }, phone: {} })
+    const line = g.quietCardLine(NAME, 'MD-BT01')
+    const mapped = cards.map((c) => (c.key === 'unit' ? { ...c, body: line } : c))
+    assert.deepEqual(mapped.map((c) => c.key), cards.map((c) => c.key))
+    assert.equal(mapped.find((c) => c.key === 'unit').tone, 'bad')
+    assert.deepEqual(mapped.filter((c) => c.key !== 'unit'), cards.filter((c) => c.key !== 'unit'))
+    /* Play's line under the pill: the white plug to a Uhost on an Axe-Fx III, and to nobody else. */
+    assert.match(g.notAnsweringLine('axefx3', 'WIDI Uhost'), /the white one goes in MIDI OUT, not THRU\.$/)
+    for (const other of ['MD-BT01', 'WIDI Jack', 'Bluetooth MIDI', null]) {
+      assert.equal(g.notAnsweringLine('axefx3', other), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: one in MIDI IN and one in MIDI OUT, not THRU.', String(other))
+    }
   })
 
   test('Bluetooth tabs: an FM3’s adapters are the one that stays cool, then the two a customer runs, each said plainly, under the red warning', async () => {

@@ -80,7 +80,7 @@ import WatchTunerStays from '../components/WatchTunerStays'
 import { useWatchPages } from '../lib/watchPages'
 import { appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
-import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH, quietCardLine } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import BlockReader from '../components/BlockReader'
@@ -611,7 +611,18 @@ export default function Settings({
     ? bluetoothWord
     : pairLine({ demo, demoName: DEMO_UNITS.find((u) => u.key === unit)?.name, link, unitState, unit: deviceName })
   /* Phone & computer's cards on a USB cable: the unit and this device, with the cable between them, and no adapter (lib/cableWords cableChain). */
-  const onTheCable = (cards) => (throughAdapter && cable ? cableChain(cards, { link, unitState, unit: deviceName, jacks }) : cards)
+  /*
+   * Over Bluetooth with the adapter connected and the unit silent, the card's
+   * line (shared/link-chain, the computer's too) names the black and white
+   * plugs of the Uhost's cable. A WIDI Jack, a Yamaha MD-BT01 or an adapter
+   * the app has no name for has neither, so its card says the plugs with no
+   * color (shared/bluetooth-gear quietCardLine; null for a Uhost or a WIDI
+   * Master, whose lines link-chain has right). Over Bluetooth macName is the
+   * adapter's name.
+   */
+  const quietLine = throughAdapter && !cable && link === 'connected' && unitState === 'missing' ? quietCardLine(deviceName, macName) : null
+  const onTheCable = (cards) =>
+    throughAdapter && cable ? cableChain(cards, { link, unitState, unit: deviceName, jacks }) : quietLine ? cards.map((c) => (c.key === 'unit' ? { ...c, body: quietLine } : c)) : cards
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.

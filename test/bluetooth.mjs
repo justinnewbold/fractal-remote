@@ -6505,7 +6505,7 @@ export function run(test) {
      */
     /* On a USB cable, the cable (lib/cableWords CABLE_ROW_ON). */
     assert.match(one, /status=\{cable \? CABLE_ROW_ON : bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say what Bluetooth is for and what it costs')
-    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH \} from '\.\.\/lib\/bluetooth-gear'/)
+    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH, quietCardLine \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
@@ -8510,6 +8510,8 @@ export function run(test) {
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
     assert.match(flat('mobile/src/components/Tabs.js'), /on=\{it\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
     assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 3, 'a unit chip somewhere can be changed while connected')
+    /* And there is no other row of them: one drawn without disabled={b.on} would not be in the count above, and would pass it. */
+    assert.equal((page.match(/<UnitChips /g) || []).length, 3, 'a row of unit chips that this test does not know, maybe one that can be changed while connected')
     /*
      * CHANGED ON PURPOSE, 24 October 2026: "It would be cool if, like, a
      * five-year-old could connect it." The units used to stay on the page
@@ -8606,7 +8608,18 @@ export function run(test) {
     assert.match(page, /if \(unitState === 'missing' \|\| unitState === 'silent'\) return \{ line: notAnsweringLine\(b\.unit, b\.adapter\?\.name\), tone: 'fault' \}/)
     const gearWords = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gearWords.notAnsweringLine('fm9'), 'Adapter connected, but the FM9 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.')
-    assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
+    /*
+     * "The white one" is the Uhost's cable's, so it is said to a Uhost, by
+     * its name, and to nobody else since 15 November 2026: a WIDI Jack's
+     * cables and Yamaha's MD-BT01 (a way on the page from that day) have no
+     * white plug, nor has an adapter the app has no name for.
+     */
+    assert.equal(gearWords.notAnsweringLine('axefx3', 'WIDI Uhost Bluetooth'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
+    assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: one in MIDI IN and one in MIDI OUT, not THRU.')
+    for (const noWhitePlug of ['MD-BT01', 'WIDI Jack Bluetooth', 'WIDI Core', 'Bluetooth MIDI', '', null, undefined]) {
+      for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) assert.ok(!/white|black/i.test(gearWords.notAnsweringLine(unit, noWhitePlug)), `${unit}, ${noWhitePlug}: told of a plug by a color its adapter has not got`)
+      assert.match(gearWords.notAnsweringLine('axefx3', noWhitePlug), /not THRU\.$/, `${noWhitePlug}: the Axe-Fx III’s THRU jack is not said`)
+    }
     /*
      * A WIDI MASTER HAS NO WHITE PLUG, AND ITS SMALL ONE IS EASY TO LEAVE
      * OUT. A customer's report (14 November 2026: an Axe-Fx III, an iPhone,
@@ -8633,7 +8646,8 @@ export function run(test) {
     for (const spelt of ['WIDI Master', 'widi master bluetooth', 'WIDIMaster', 'My WIDI Master 2']) assert.equal(gearWords.isWidiMaster(spelt), true, spelt)
     for (const other of ['WIDI Uhost', 'WIDI Jack Bluetooth', 'WIDI Core', 'WIDI Bud Pro', 'C2MIDI', '', null, undefined]) {
       assert.equal(gearWords.isWidiMaster(other), false, String(other))
-      assert.equal(gearWords.notAnsweringLine('axefx3', other), gearWords.notAnsweringLine('axefx3'), String(other))
+      assert.ok(gearWords.notAnsweringLine('axefx3', other).startsWith('Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: '), String(other))
+      assert.ok(!/WIDI Master|larger one/.test(gearWords.notAnsweringLine('axefx3', other)), `${other} is given the WIDI Master’s plugs`)
     }
     assert.equal(
       gearWords.notAnsweringLine('fm3', master),
@@ -9826,10 +9840,15 @@ export function run(test) {
       }
     }
     assert.deepEqual(gear.ADAPTER_TABS, { master: 'WIDI Master', jack: 'WIDI Jack', uhost: 'WIDI Uhost', mdbt01: 'Yamaha MD-BT01', other: 'Another adapter' })
-    /* Yamaha's own words for it: its plugs matched by their arrows, its lamp flashing once the unit is on, MIDI OUT its only power. */
+    /*
+     * Yamaha's own words for it: its plugs matched by their arrows, its lamp
+     * flashing once the unit is on, MIDI OUT its only power. And so its lamp
+     * is what says the plugs are swapped: never "if the unit doesn't answer,
+     * swap", which after a right fit takes its power away.
+     */
     assert.deepEqual(gear.waysFor('fm9').find((w) => w.key === 'mdbt01').steps.slice(0, 2), [
-      'Plug the MD-BT01’s two plugs into the FM9’s MIDI IN and its MIDI OUT/THRU jack, matching the arrows on its plugs. If the unit doesn’t answer, swap the two plugs.',
-      'It takes its power from the FM9’s MIDI OUT: with the FM9 on, its lamp flashes. It has no other way to be powered.'
+      'Plug the MD-BT01’s two plugs into the FM9’s MIDI IN and its MIDI OUT/THRU jack, matching the arrows on its plugs.',
+      'It takes its power from the FM9’s MIDI OUT: with the FM9 on, its lamp flashes. If the lamp stays off, swap the two plugs. It has no other way to be powered.'
     ])
     assert.match(gear.waysFor('axefx3').find((w) => w.key === 'mdbt01').steps[0], /MIDI IN and its MIDI OUT \(not THRU: the phone would only hear itself there\)/)
     /* Tried: the AM4 through the WIDI Master, the WIDI Jack and the Uhost; the FM3 through the Uhost and the U2MIDI Pro, and, a customer's, the MD-BT01 and the WIDI Jack (Justin, 15 November 2026). Nothing else says it has run. */
@@ -16982,7 +17001,7 @@ export function run(test) {
     assert.equal(cableChain(linkChain(args('off', 'unknown')), { link: 'off', unit: 'AM4' })[0].body, 'Reached by USB cable')
     /* Mapped on the phone alone, and only for a cable: the browser draws link-chain's as it was. */
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.match(settings, /const onTheCable = \(cards\) => \(throughAdapter && cable \? cableChain\(cards, \{ link, unitState, unit: deviceName, jacks \}\) : cards\)/)
+    assert.match(settings, /const onTheCable = \(cards\) => throughAdapter && cable \? cableChain\(cards, \{ link, unitState, unit: deviceName, jacks \}\) : quietLine \? cards\.map\(\(c\) => \(c\.key === 'unit' \? \{ \.\.\.c, body: quietLine \} : c\)\) : cards/)
     assert.match(settings, /const jacks = useMidiJacks\(\)/)
   })
 

@@ -1211,8 +1211,8 @@ export function takeCable(dev, unit, { byHand = false } = {}) {
  * through Apple's screen, by luck: it was the one port left after it.
  *
  * So every cable plugged in now that could be the unit picked's (bleAdapters
- * cablesFor: not one named for another unit; for an FM3 never the C2MIDI
- * Pro), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
+ * cablesFor: not one named for another unit; none is refused by its name
+ * since 15 November 2026), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
  * (onMidiJacks: named for no unit) kept for another unit is offered too: the
  * same U2MIDI Pro moves from the AM4's jacks to the FM3's, Connect itself
  * would take it (cablesFirst has no such rule), and the tap moves it to the
@@ -1356,8 +1356,9 @@ export function pairScreenShut() {
  *
  * When only one adapter could be meant it is chosen here (pickAdapter), and
  * on an iPhone the promise resolves to it; otherwise to nothing, and the list
- * on the page asks. For an FM3, never one of the adapters never offered for
- * it (pickRule): that one is listed, for a tap.
+ * on the page asks. Never a footswitch (pickRule): that is listed, for a
+ * tap. Until 15 November 2026 the same held, for an FM3, of the adapters
+ * then ruled out for one by name.
  */
 export async function findAdapters({ cableFirst = true } = {}) {
   const mod = ble()
