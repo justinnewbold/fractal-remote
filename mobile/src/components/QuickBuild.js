@@ -65,6 +65,7 @@ import {
   UNDO_NOT_READ,
   planBuild,
   resolveChain,
+  rowAsRead,
   stillIn,
   stoppedLine,
   undoMissedLine,
@@ -511,7 +512,10 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       logDebug('chain', 'quick build', 'the unit did not say which preset it is on; nothing read back')
     }
     const landed = whatLanded(plan, after, tried)
-    logDebug('chain', 'quick build landed', landed.unread ? 'not read' : `${landed.landed.length} in, ${landed.missing.length} not${landed.missing.length ? `: ${landed.missing.map((p) => p.name).join(', ')}` : ''}`)
+    logDebug('chain', 'quick build landed', landed.unread ? 'not read' : `${landed.landed.length} in, ${landed.missing.length} not${landed.missing.length ? `: ${landed.missing.map((p) => p.name).join(', ')}` : ''}${plan.joined ? (landed.joined ? '; connected from the input to the output' : `; NOT connected${Number.isInteger(landed.stops) ? `, stops at column ${landed.stops + 1}` : ''}`) : ''}`)
+    /* The whole row as the unit read it back, not only where it first stops: which cables took is what tells a dropped message from a wrong one. */
+    const read = rowAsRead(plan, after)
+    if (read) logDebug('chain', 'quick build', read)
     const undo = undoSteps(plan, tried)
     if (!alive.current) return
     setBusy(null)

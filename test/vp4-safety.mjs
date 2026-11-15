@@ -1664,7 +1664,8 @@ export function run(test) {
     /* The phone: the search box only off a VP4, the hint only off a VP4, the knobs' words once. */
     /* A real VP4, or the demo's, which shows only what a real one gives (vp4Bench, test 'the demo’s VP4'). */
     /* Behind the magnifier since 10 November 2026 (test/edit-more.mjs): neither the magnifier nor the box on a VP4. */
-    assert.match(edit, /\{vp4Bench\(\) \? null : \( <RoundButton icon=\{searchIcon\}/, 'the phone’s Edit offers a VP4 the control search')
+    /* Never on a VP4; and on any unit it steps aside while a save is asked about on a narrow row (`tucked`, lib/editHead). The VP4 comes first in the rule, so no width and no save can bring it back. */
+    assert.match(edit, /\{vp4Bench\(\) \|\| tucked \? null : \( <RoundButton icon=\{searchIcon\}/, 'the phone’s Edit offers a VP4 the control search')
     assert.match(edit, /\{finding && !vp4Bench\(\) \? \( <FindControl /, 'the phone’s Edit offers a VP4 the control search')
     assert.equal((edit.match(/<FindControl /g) || []).length, 1, 'the phone’s Edit has another way to the control search')
     assert.match(edit, /\) : !toolShown && blocks\.length && !chainNow\.elsewhere && !vp4Bench\(\) \? \( <Note>Tap a block to open its controls\.<\/Note> \) : null\}/, 'the phone’s Edit tells a VP4 to tap a block for its controls')

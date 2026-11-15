@@ -100,6 +100,7 @@ import { captureReread } from '../lib/captureReread'
 import { fieldNumber, fieldSelection, fieldSelectionMoved, fieldTyped, openField } from '../lib/value-field'
 import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
+import { headTucked } from '../lib/editHead'
 import Sheet from '../components/Sheet'
 import BlockSettings from '../components/BlockSettings'
 import BlockMenu from '../components/BlockMenu'
@@ -289,11 +290,15 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
    */
   const [finding, setFinding] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  /* How wide the head of the page is, once it has been laid out: what `headTucked` goes by (lib/editHead). The page's width, not its contents', so nothing drawn in it can move it. */
+  const [headWide, setHeadWide] = useState(null)
   const [tool, setTool] = useState(null)
   const [modStart, setModStart] = useState(null)
   /* SAVE, and it asks twice. The same piece the naming section in Setup
      uses; see components/SaveToSlot. */
   const saveTo = useSaveToSlot()
+  /* The magnifier and More step aside while a save is asked about or going, where the row is too narrow for them beside it (lib/editHead): Done stays where it is and Confirm changes where Save was. */
+  const tucked = headTucked(headWide, pending && (saveTo.armed || saveTo.saving))
   /*
    * Search hands over by naming a control, not by editing one. Tapping a result
    * opens the block that holds it and puts your eyes on it — so there stays
@@ -480,8 +485,18 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
        * that, with the lock above, is what keeps a knob drag off the page.
        */
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-        <View style={{ flexShrink: 1 }}>
+      {/*
+        THE TITLE KEEPS ITS WORDS, AND DONE KEEPS ITS PLACE. "Edit (Beta)" came
+        out one letter to a line (15 November 2026, a 375-point window with
+        Confirm changes showing): the buttons took what they needed and the
+        title got the seven points left over. lib/editHead has the three
+        rules and why they are in that order; `headTucked` is the first.
+      */}
+      <View
+        onLayout={(e) => setHeadWide(Math.round(e.nativeEvent.layout.width))}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}
+      >
+        <View style={HEAD_TITLE}>
           {/*
             (BETA), because it is. "I don't feel like the edit screen is ready
             yet can we add to the screen that it's a beta feature. Next to edit
@@ -526,6 +541,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             accessibilityRole={renameHere ? 'button' : undefined}
             accessibilityHint={renameHere ? 'Rename the preset and its scenes' : undefined}
             onPress={() => openTool('rename')}
+            style={HEAD_NAMES}
           >
           {/* Not beside Play in the tidier Edit (`nameOnPlay`, above): Play says both. */}
           {nameOnPlay ? null : (
@@ -548,7 +564,9 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
           )}
           </Pressable>
         </View>
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
+        {/* The right side: the buttons that may wrap among themselves, and then Done, in a column of its own that none of them can enter (lib/editHead, rule 1). */}
+        <View style={HEAD_SIDE}>
+        <View style={HEAD_BUTTONS}>
           {/*
             ONLY WHEN THERE IS SOMETHING TO SAVE.
 
@@ -570,13 +588,16 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             Not disabled-but-visible: a greyed button still has to be read and
             ruled out. Absent is read at a glance.
           */}
-          {/* Find a control and More, beside Done (lib/editMore). Not the magnifier on a VP4, whose knobs the app cannot read. */}
-          {vp4Bench() ? null : (
+          {/* Find a control and More, beside Done (lib/editMore). Not the magnifier on a VP4, whose knobs the app cannot read. Neither while a save is asked about or going on a narrow row (`tucked`, lib/editHead): Done must not move. */}
+          {vp4Bench() || tucked ? null : (
             <RoundButton icon={searchIcon} label={FIND_LABEL} on={finding} onPress={() => setFinding((was) => !was)} />
           )}
-          <RoundButton icon={Platform.OS === 'android' ? moreAndroidIcon : moreIcon} label={MORE_LABEL} on={moreOpen} onPress={() => setMoreOpen(true)} />
+          {tucked ? null : (
+            <RoundButton icon={Platform.OS === 'android' ? moreAndroidIcon : moreIcon} label={MORE_LABEL} on={moreOpen} onPress={() => setMoreOpen(true)} />
+          )}
           {pending ? <SaveButton s={saveTo} waiting /> : null}
-          <Press label="Done" height={40} onPress={onBack} />
+        </View>
+        <Press label="Done" height={40} onPress={onBack} />
         </View>
       </View>
 
@@ -3285,6 +3306,28 @@ const KNOB_HELP = new Map()
 /* THE TIDIER EDIT'S ONE ROW FOR THE OPEN BLOCK (lib/tidyEdit): the name takes what the rest leaves, and the rest keep their own widths. */
 const TIDY_HEAD = { flexDirection: 'row', alignItems: 'center', gap: space.sm }
 const TIDY_NAME = { flex: 1, minWidth: 0, borderLeftWidth: 4, paddingLeft: space.sm, minHeight: HEAD_TALL, justifyContent: 'center' }
+/*
+ * The head of the page (lib/editHead has the rules). The title's side takes
+ * whatever the right side leaves (`flex: 1`, so the buttons are never
+ * squeezed while it has room), but never less than a width "Edit" and
+ * "(Beta)" each fit in at the standard text size. NOT two shrink factors: the buttons' share of a
+ * shared shrink is a point or two, and a point is enough to wrap a button
+ * on a phone where everything fitted.
+ *
+ * THE RIGHT SIDE IS TWO THINGS, AND DONE IS NOT IN THE ONE THAT WRAPS.
+ * `HEAD_BUTTONS` holds the magnifier, More and the Save button, and gives
+ * way by wrapping among themselves (upwards: the Save button, the last,
+ * takes the upper line and the magnifier and More the lower, with Done
+ * centred beside the two). Done stands after them in `HEAD_SIDE`,
+ * which does not wrap: whatever those three do, at whatever width and text
+ * size, none of them can come to stand where Done is.
+ */
+const HEAD_TITLE_MIN = 72
+const HEAD_TITLE = { flex: 1, minWidth: HEAD_TITLE_MIN }
+const HEAD_SIDE = { flexDirection: 'row', alignItems: 'center', flexShrink: 1, gap: space.sm }
+const HEAD_BUTTONS = { flexDirection: 'row', flexWrap: 'wrap-reverse', justifyContent: 'flex-end', flexShrink: 1, gap: space.sm }
+/* The names under the title are a button no wider than their own words: the title's side now reaches the buttons, and the gap between is not a place to tap. */
+const HEAD_NAMES = { alignSelf: 'flex-start', maxWidth: '100%' }
 /* The channels, close together so they read as one control. */
 const TIDY_CHANNELS = { flexDirection: 'row', gap: space.xs }
 /* A channel's letter, or On / Off: as wide as a thumb with little round the word. */

@@ -1133,7 +1133,8 @@ what the computer sends for the same edit, and a test holds it there.
   put into an empty row, NAM 1 (block 206) and NAM 2 (207) each put into
   preset 386 and found there on the read after, the preset saved each
   time, and NAM 1 switched off from Play. docs/ax3-readings.md has the
-  lines. Quick build and the starter chains are not in that log.
+  lines. Quick build and the starter chains are not in that log (they are
+  in the next one, the same day: below).
 - **Quick build and starter chains: built 15 November 2026 (1.90.76),
   HIS ACCOUNT ONLY.** "Let's also look into building out a way to build a
   preset quickly from an empty preset. Maybe a "quick build" to build what
@@ -1262,15 +1263,66 @@ what the computer sends for the same edit, and a test holds it there.
     where an Add went over the block already in that slot. The browser's
     zeroBasedChain moves the column only: check it for the same lane the
     next time the browser's chain editor is opened (a computer release).
-  - *NOT PROVEN ON A UNIT:* nobody has built a chain this way on a real
-    unit yet, nor run its Undo; on a six-row unit (FM9, Axe-Fx III) with
-    the Input on the top row it builds there but lays no cables (that row's
-    cable is a case nobody has decoded) and says so; and whether the unit
-    keeps a bare wire's joins under a block placed over it is not known, so
-    the plan joins every cell it places into again. His first build is the
-    first check: the result card names what the unit did not take.
-  - *Next:* the browser's half (its Starter chain is still its fixed
-    five), and the chain EDITOR over Bluetooth.
+  - *HIS FIRST TWO BUILDS, 15 NOVEMBER 2026: EVERY BLOCK IN, AND THE
+    SECOND KNOWN TO BE NOT JOINED.* "I'm confused by the built but not
+    joined? Can't build an auto joined rig? Or make sure the user selects
+    what's needed to build a playable starter rig?" His Axe-Fx III through
+    the Raspberry Pi (computer app 1.90.63): two empty presets (388, then
+    389), the app put an Input, the picks and an Output on ROW 2 and sent
+    the cables, every message was taken, and BOTH were read back with
+    every block in ("6 in, 0 not", "4 in, 0 not": that line is only
+    written from a read back). 389's showed the first cable not there, by
+    the card he saw (whether the others took, it did not say). Whether
+    388's row read as joined is NOT KNOWN: the log line did not yet say,
+    and its card is not in the log. One row seen not joined, then, not
+    two. The player had nothing more to
+    pick: the app adds the Input and Output and joins the row itself. THE
+    MESSAGE THAT JOINS TWO CELLS WAS WRONG for a six-row unit's row 2
+    ("The chain over Bluetooth", below, has the whole of it;
+    docs/ax3-readings.md has his log and the bytes). Since 1.90.82:
+    - *A six-row chain goes on the THIRD row* where the preset has no
+      Input or Output to say (`homeRow` in shared/starter-chains.mjs; an
+      FM3 keeps the second, and a preset that has an end keeps its row).
+      Along rows 3 and 4 the old message and the corrected one are the
+      same bytes, so that row does not depend on which computer app is
+      sending. THAT A UNIT JOINS IT HAS NOT BEEN SEEN: it rests on the old
+      message being right where the two agree. Do not move it back to row
+      2 while computer apps older than 1.90.82 are about.
+    - *The log says the whole row as the unit read it back*
+      (`rowAsRead`: "row 3 as read: column 1 Input 1, column 2 Drive 1
+      (fed from row 3), …") and whether it read as connected. The card
+      says only where the row FIRST stops, and his log could not tell one
+      cable lost from three. READ THAT LINE FIRST in his next log.
+    - The card's words are as they were. Preset 389 was saved unjoined
+      (and 388's build was never saved): no sound path, build again on
+      another empty preset.
+  - *STILL NOT PROVEN ON A UNIT:* a row that reads back joined (his next
+    build on an empty preset, on row 3, is the check, through the Pi as it
+    is); the Undo; on a six-row unit with the Input on the top row it
+    builds there but lays no cables (that row's cable from an even column
+    is still refused) and says so; and whether the unit keeps a bare
+    wire's joins under a block placed over it is not known, so the plan
+    joins every cell it places into again.
+  - *The browser's Starter chain* (src/components/GridEditor.jsx, every
+    account, its fixed five) is another piece of code, with its own row
+    rule since 1.90.82 (`starterRow`): on a six-row unit, the row the
+    preset's own Input is on, else its Output's, and the third where it
+    has neither; on every other unit row index 1, wherever the ends are,
+    as it always was. An independent read found the first cut of it sent
+    every six-row preset that HAD an end to row index 1, so a preset with
+    its ends on the third row (which Quick build and this button now
+    make) got a second Input and Output beside them. IT STILL DOES NOT
+    READ THE ROW BACK: it says "Built a starter chain" on the unit's
+    not refusing, so through a computer app older than 1.90.82, on a
+    six-row preset whose ends are on row 2, it reports a row built that
+    is not joined, as it always has. Two more things it does not mend: a
+    six-row preset with its ends on the TOP row is built there, where
+    every other cable is refused (it says how many, afterwards), and one
+    with its Input and Output on DIFFERENT rows is built on the Input's
+    with an Output asked for there too, where the phone's Quick build
+    refuses in words.
+  - *Next:* the browser's half of Quick build, and the chain EDITOR over
+    Bluetooth.
 - **Saving over Bluetooth is built, HIS ACCOUNT ONLY, since 1.90.52 (13
   November 2026).** He had thought it existed ("I think we can actually
   save on Bluetooth now", 12 November, and was told it did not), and then
@@ -1398,10 +1450,56 @@ where the chain is open).
   cable into the next column (01 35 00, joined or parted). On an AM4,
   mobile/src/lib/am4-chain.js: the block's code written to one of its four
   slots. scripts/grid-frames.mjs walks every cell, a spread of block ids
-  and every cable through the PINNED codec and writes the digests
-  (test/gen3-grid-codec.json); test/gen3-grid.mjs walks the phone's
-  builders the same way and holds them to it. A NEW CODEC PIN MEANS
-  RUNNING THAT SCRIPT ON IT, as the knob tables' scripts.
+  and every cable WHOSE BYTES ARE THE CODEC'S through the PINNED codec and
+  writes the digests (test/gen3-grid-codec.json); test/gen3-grid.mjs walks
+  the phone's builders the same way and holds them to it. A NEW CODEC PIN
+  MEANS RUNNING THAT SCRIPT ON IT, as the knob tables' scripts.
+- **WHERE A SIX-ROW CABLE GOES IS NOT THE CODEC'S, SINCE 1.90.82: THE
+  CODEC'S WAS WRONG.** The last three bytes of a cable say which two
+  cells. On an FM3 the codec's rule, which FM3-Edit's own messages bear
+  out, is the two cells' numbers packed seven bits to a byte. For six rows
+  (FM9, Axe-Fx III) the codec has a fitted "law" instead, and it is that
+  packing only for a cable into row 3 or 4, or out of an odd column into
+  row 1, 5 or 6 (270 of the 432 it builds on a unit). For the other 162
+  its bytes name ANOTHER CELL: into row 2 from any column, row 6 of the
+  source's own column; out of an even column into row 1, row 3 of the
+  source's own column; out of an even column into row 5 or 6, row 1 or 2
+  of the next column. His Quick build of 15 November sent three of those
+  along row 2, and the read back showed the row not joined at its first
+  cable. The codec's notes hold no recording for any of the 162, and two
+  of its row-2 examples are an FM3's bytes.
+  - *So a six-row cable is the packing at both ends*: the computer app
+    builds it itself (ForgeFX 07bc01a, server/src/gridCable.ts, over the
+    codec's own frame, so the codec still says what is a cable at all),
+    and the phone's Bluetooth builder is the same (`cableWhere`). The two
+    are held to the same three frames by each side's own test, and
+    scripts/grid-frames.mjs stops if a later codec builds the packing
+    itself (then both can go back to the codec's bytes). gridCable.ts AND
+    gen3-grid.js ARE CHANGED TOGETHER.
+  - *NOT SEEN ON A UNIT in the 162 that changed.* The packing is an
+    inference (the FM3's proven rule, every six-row case the law gets
+    right, the row that failed), not a recording. Three independent reads
+    found nothing against it and no other cause for his unjoined row. A
+    MIDI Monitor recording of Axe-Edit III drawing one cable into row 2
+    would settle it; so will a row-2 build read back.
+  - *AN OLDER COMPUTER APP STILL SENDS THE LAW'S BYTES*, for every
+    customer feature that joins cells on an FM9 or an Axe-Fx III (the rows
+    editor, the looper at the end, putting a block back, the browser's
+    Starter chain): another cell named for a cable into row 2 (row 6 of
+    the source's own column), out of an even column into row 1 (row 3 of
+    the source's own column), and out of an even column into row 5 or 6 a
+    real cable into the wrong row (row 1 or 2 of the next column).
+    `cableAsTheLaw` (gen3-grid.js; nothing in the app asks it yet) says
+    for which cables such a computer's bytes name the cells asked for.
+    Nothing tells a player to update for it, and COMPUTER_NEEDED did not
+    move: Quick build goes where the two sets of bytes are the same WHEN
+    THE PRESET HAS NO INPUT OR OUTPUT of its own. A preset whose ends are
+    on row 2 (389 as he saved it is one), or on row 5 or 6, is built on
+    that row with whatever bytes the computer app sends, so through one
+    older than 1.90.82 it is not joined (every cable along row 2; the
+    cables out of even columns along rows 5 and 6). If a
+    customer reports a silent row on an FM9 or a III, the computer app's
+    version is the first thing to ask.
 - **Every frame is held at the way out to the one job in hand** (gen3Sender
   `gridShaped`/`gridAllowed`, am4Sender `am4SlotAllowed`): a frame of the
   grid's shapes goes only if it is, byte for byte, one the wire is sending
@@ -1412,10 +1510,17 @@ where the chain is open).
   never a second copy of a block. The AM4's own notes said placing blocks
   was "deliberately NOT here, ever, over Bluetooth"; this is that, opened
   on his word, as tightly as anything it is sent.
-- **One cable nobody has decoded: out of a six-row grid's TOP row from an
-  even column** (FM9, Axe-Fx III). The codec refuses to build it and so
-  does the phone (`cableKnown`), in words. So a chain is built on the
-  second row, where factory presets keep theirs.
+- **One cable is still refused: out of a six-row grid's TOP row from an
+  even column** (FM9, Axe-Fx III). The codec calls it "not decoded" and
+  refuses to build it, the computer app still goes by that, and so does
+  the phone (`cableKnown`), in words. It is very likely just the packing
+  (out of an even column the law is wrong into four of the six rows, so
+  recordings of those cables could not have been made to fit it), and
+  the rows editor looks for a free row for a parallel path from the top
+  row down (`freeRowFor`), so on a six-row unit its paths are the ones
+  that meet this refusal. OPEN IT, at both ends and in Quick build's
+  `top` and `unmakeable` rules together, once a row-2 build has been seen
+  to join; not before.
 - **An FM3 is held to its own twelve columns**, which the codec is not (it
   lets an FM3 ask for columns 13 and 14).
 - **A refusal is answered, not thrown** ({ok: false, refused}), as the
@@ -1475,7 +1580,10 @@ where the chain is open).
   cable into an EMPTY cell makes the unit carry the signal across it (the
   browser's Starter chain has always assumed so; the read back after a
   build is what will show it). His AM4, FM3 and Axe-Fx III are the first
-  checks, each one's first build.
+  checks, each one's first build. (Through the COMPUTER his Axe-Fx III has
+  taken blocks from Quick build and from the chain editor, 15 November
+  2026; of the cables sent along its row 2 that day, the first was not
+  there on the read back, above.)
 - **Not built:** the chain EDITOR (move, add or remove one block) over
   Bluetooth. It draws from the blocks read, which over Bluetooth still
   has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
@@ -3165,6 +3273,51 @@ rather than while the file was read — which put one of them past the point
 growing, and a structural check fails on any `test(` registered inside
 another test's callback. If the count ever disagrees with itself across two
 Node versions again, that is the shape of the bug to look for.
+
+**A row of buttons that wraps can put the dangerous one where the safe one
+was.** Edit's title came out one letter to a line on a 375-point window
+with Confirm changes showing (15 November 2026), and the first fix let the
+four buttons wrap. An independent read found what that did: a wrapped row
+fills from the left, so on a small phone "Confirm changes" took the top
+right corner, where Done had been the moment before, and a thumb going for
+Done would have written over the preset. The second fix wrapped them
+upwards, so Done kept the corner, and a second read found the same thing
+by another road: at a larger system text size the wrapped block, centred
+in its row, brought Confirm changes up under Done's old place. THE LESSON
+IS THE THIRD FIX: it is not left to arithmetic. Done is not in the group
+that wraps at all (Edit.js `HEAD_SIDE` holds that group, and then Done, in
+a row that does not wrap), so no width, text size or state can stand
+anything else where Done is. The other two rules, in
+mobile/src/lib/editHead.js: while a save is asked about or going, on a row
+measured and found narrow, the magnifier and More step aside
+(`headTucked`), so Confirm changes grows leftwards from where Save stood;
+and the title's side never has less than 72 points, which its two words
+need at the standard text size (NOT at large ones: see below). Laid out in
+Yoga itself (the engine React Native uses) at sixteen widths, nine text
+sizes and seven title heights, every move a save makes left only Done, or
+nothing, where Done had been. Before a button is let move, ask what the
+thumb that was aimed at its old place now lands on, and prefer a
+structure that cannot get it wrong to a number that usually gets it
+right. And a share of a shared flex shrink is a point or two: enough to
+wrap a button on a phone where everything fitted, which is why the
+title's side is `flex: 1` with a floor and not a shrink factor.
+
+What the third read found that is NOT mended, because every mend of it
+is a trade and none is unsafe: a row cannot hold the title, Confirm
+changes and Done at a large system text size (a 375-point iPhone from
+about the second size up from standard), or on a 320-point window at any.
+Then the button's label is cut short ("Confirm chan…", the warning line
+under the head still whole) and the title keeps its 72 points, which
+"(Beta)" no longer fits from about one and a half times the text size.
+`HEAD_ROOM` does not look at the text size either, so on an iPad at
+those sizes the magnifier and More stay and the group wraps. And while a
+save is asked about the magnifier and More are away for as long as it is
+(until it is confirmed, or the warning is put down): a search box that
+was open stays open with nothing to close it but picking a result. The
+real answer at large text is a head of two lines (title over buttons),
+which is his to see first. The author's own model of the head gave every
+button a fixed width, which is how it missed the cut label: MODEL A
+BUTTON WITH A MEASURED WORD IN IT.
 
 **`test/structure.mjs` reads App.jsx as text, not as code.** It finds screens
 by searching for the literal conditional that opens them and takes the first
