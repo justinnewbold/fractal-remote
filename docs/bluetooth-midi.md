@@ -308,6 +308,80 @@ tried yet)"), and said nowhere a player reads ("we just need to keep track
 of it ourselves in the developer menu", Justin). Only the FM3 has a heat
 warning.
 
+## What the app's own notes say (read 15 November 2026)
+
+> "We have the data to tell what units have been used recently and what
+> Bluetooth devices have been connected correct? Can we go through the logs
+> to find what has worked with what devices so far and update our list?"
+
+Yes: What works (`public.gear_reports`, 20261026_gear_reports.sql). One row
+is one anonymous note from a phone whose owner said yes to sharing: the
+unit, the way (computer, bluetooth, usb), the adapter's or cable's name, or
+the computer's system, whether the unit answered, and the kind of phone. No
+account and no install number, so a note cannot say whose rig it was, and
+many of these are Justin's own. Read as counts only:
+
+```sql
+select via, unit, coalesce(adapter, '') as adapter, outcome, phone_os, count(*)
+from public.gear_reports where via in ('bluetooth', 'usb')
+group by 1, 2, 3, 4, 5 order by unit, via, adapter, outcome, phone_os;
+```
+
+65 notes, 29 October to 14 November 2026. None is from a VP4, and none
+names a Yamaha MD-BT01.
+
+**Over Bluetooth (18 notes)**
+
+| Unit | Adapter, as the phone named it | Phone | Answered | Not answering |
+| --- | --- | --- | --- | --- |
+| AM4 | WIDI Jack | Android | 2 | 1 |
+| AM4 | WIDI Jack Bluetooth | iPhone | 1 | |
+| AM4 | WIDI Uhost Bluetooth | iPhone | | 1 |
+| FM3 | WIDI Uhost Bluetooth | iPhone | 2 | 1 |
+| FM3 | WIDI Jack Bluetooth | iPhone | | 1 |
+| FM3 | Rețea Session 1 | iPhone | | 1 |
+| FM9 | WIDI Master Bluetooth | iPhone | 1 | 1 |
+| Axe-Fx III | WIDI Uhost Bluetooth | iPhone | 2 | 1 |
+| Axe-Fx III | WIDI Master Bluetooth | iPhone | | 1 |
+| Axe-Fx III | Quad Cortex Bluetooth | iPhone | 2 | |
+
+**By USB cable into the phone (6 notes)**
+
+| Unit | Cable | Phone | Answered | Not answering |
+| --- | --- | --- | --- | --- |
+| AM4 | its own USB port | iPhone | 1 | |
+| AM4 | its own USB port | Android | 1 | |
+| FM3 | U2MIDI Pro on its MIDI jacks | iPhone | 2 | 2 |
+
+**Through a computer (41 notes, every one answered)**
+
+| Unit (firmware) | Computers | Phones |
+| --- | --- | --- |
+| AM4 (2.1) | Raspberry Pi 3 and 5 | iPhone, Android |
+| FM3 (13.0) | Raspberry Pi 3 and 5, macOS 27.0 | iPhone, Android |
+| FM9 (12.0) | macOS 27.2, Windows 10 and 11 | iPhone, Android |
+| Axe-Fx III (33.1, 33.2) | Raspberry Pi 3 and 5 | iPhone |
+
+**How to read it**
+
+- "Not answering" is one try. Most sit beside an "answered" from the same
+  day, which is somebody getting it going, so a pair is a yes. Alone it is
+  a question, not a no: the FM3 with a WIDI Jack has one such note (7
+  November), and a customer of his says theirs works and gets hot.
+- "Rețea Session 1" is an iPhone's own Wi-Fi MIDI port in Romanian, taken
+  for an adapter before 1.89.x learned its name. Not an adapter.
+- "Quad Cortex Bluetooth" answered for an Axe-Fx III twice, eleven days
+  apart. A Neural DSP Quad Cortex has Bluetooth, so this reads as one
+  passing MIDI on to the III; nobody has told us that is what it was. It is
+  in the note for the III and is not a way on the page.
+- The Axe-Fx III with a WIDI Master not answering (14 November) is the
+  report of that day: the small plug.
+- A note has the adapter's name, never the cable on a Uhost.
+
+**What it changed in the record** (`TRIED_WAYS`, `TRIED_NOTES`): an FM9
+through a WIDI Master and an Axe-Fx III through a WIDI Uhost, each from an
+iPhone, are marked. The rest was already there, or is in the notes.
+
 ## Dongles
 
 - **CME WIDI Master** (Justin's).

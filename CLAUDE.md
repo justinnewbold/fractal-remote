@@ -379,6 +379,23 @@ test first, and under these rules:
   and works", 1 November 2026, phone and adapter not said). Not the VP4.
   Still never
   a sentence that says it works on a unit it has not run on.
+
+  **And the app's own notes can be read for it.** "We have the data to tell
+  what units have been used recently and what Bluetooth devices have been
+  connected correct? Can we go through the logs to find what has worked
+  with what devices so far and update our list?" (15 November 2026.) What
+  works (public.gear_reports) is anonymous notes from the people who said
+  yes: the unit, through a computer, Bluetooth or a USB cable, the
+  adapter's or the cable's name, whether the unit answered, the kind of
+  phone. When he asks, read it as counts only (group by unit, way, adapter,
+  outcome and phone; docs/bluetooth-midi.md has the query and the count of
+  15 November) and update `TRIED_WAYS` and `TRIED_NOTES` from it. That read
+  added an FM9 through a WIDI Master and an Axe-Fx III through a WIDI
+  Uhost, each from an iPhone. Mind what a note is not: it has no name on
+  it, so many are his own rig; it has the adapter's name and never the
+  cable on a Uhost; and "not answering" is one try, often the same person
+  a minute before it answered. He sees the same notes on Developer → What
+  works.
 - **The FM3 is the only unit with a heat warning.** "The FM three is the
   only one that ever has overheating issues so we don't need to worry
   about it for any other devices" (31 October 2026). So no heat check for
@@ -1108,6 +1125,15 @@ what the computer sends for the same edit, and a test holds it there.
     FIRST NUL (gen3-describe decodeDescribe), on purpose unlike the pinned
     codec, which has the same blind spot. What still is not text is
     printed as it came, never a bare "?".
+- **The chain editor through the computer, on his Axe-Fx III: it works,
+  NAM blocks included.** "Chain editing and adding a NAM block to empty
+  preset works." (15 November 2026, the phone on 1.90.76 through the
+  Raspberry Pi 5 on computer app 1.90.63, with his log.) What the log
+  shows: two blocks swapped in a row and landed (Cab 1 and NAM 2), Chorus 1
+  put into an empty row, NAM 1 (block 206) and NAM 2 (207) each put into
+  preset 386 and found there on the read after, the preset saved each
+  time, and NAM 1 switched off from Play. docs/ax3-readings.md has the
+  lines. Quick build and the starter chains are not in that log.
 - **Quick build and starter chains: built 15 November 2026 (1.90.76),
   HIS ACCOUNT ONLY.** "Let's also look into building out a way to build a
   preset quickly from an empty preset. Maybe a "quick build" to build what
