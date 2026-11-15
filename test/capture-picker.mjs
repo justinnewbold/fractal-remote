@@ -409,6 +409,21 @@ export function run(test) {
     assert.equal(got.kept.at(-1).stale, true)
     got.clock.t = 5000
     assert.deepEqual(order(await got.list.load()), [[30, 4000], [29, undefined], [0, undefined]])
+    /*
+     * ANOTHER capture sent into a slot the list had under an old one (he
+     * cleared the slot on the unit, as the card says to when the first ones
+     * are full): its row does not wear the old capture's maker and gear.
+     * The same capture named again keeps them.
+     */
+    const over = unit({ 0: 'Brit Crunch' })
+    const worn = c.captureList({ heads: async (from, count) => ({ heads: (await over.heads(from, count)).heads.map((h) => (h.slot === 0 ? { ...h, by: 'Somebody', make: 'Marshall', model: 'JCM800' } : h)) }), pause: async () => {}, now: () => 2000, rest: () => 0 })
+    await worn.load()
+    assert.equal(c.captureMore(worn.head(0)), 'by Somebody · Marshall JCM800')
+    worn.note(0, 'Brit Crunch')
+    assert.equal(c.captureMore(worn.head(0)), 'by Somebody · Marshall JCM800', 'the same capture lost who made it when a block was pointed at it')
+    worn.stale(0, 'Fender Twin')
+    assert.equal(worn.head(0).name, 'Fender Twin')
+    assert.equal(c.captureMore(worn.head(0)), '', 'a capture just sent wears the maker and gear of the one that was in its slot')
     /* The same capture is the same however its name was spaced: one way in trims what the unit said, the list's own read does not. */
     got.u.held[8] = 'Spaced Out '
     got.clock.t = 6000

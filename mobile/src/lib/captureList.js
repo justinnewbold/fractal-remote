@@ -459,7 +459,9 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     const had = bySlot.get(slot)
     const said = name.trim()
     const same = !!had && had.name === said && had.empty === (said === '<EMPTY>')
-    bySlot.set(slot, stamped(headOf({ ...(had || {}), slot, name: said, empty: said === '<EMPTY>' }), before(slot)))
+    /* Who made it and on what gear are carried over only for the SAME capture: another name in the slot is another capture, and under it the old one's maker and gear were shown (and written down) until a read reached the slot. */
+    const its = had && !had.empty && had.name.trim() === said ? had : {}
+    bySlot.set(slot, stamped(headOf({ ...its, slot, name: said, empty: said === '<EMPTY>' }), before(slot)))
     heardNow()
     if (!same) publish()
   }

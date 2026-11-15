@@ -2179,6 +2179,13 @@ the capture on the unit, which is the hard half.
     the list on show: that is what the read was asked for. AND THE
     BREAK-IT SCRIPT SAID "ALL CAUGHT" OVER A TEST THAT WAS ALREADY
     FAILING: a runner that proves guards fail checks first that they pass.
+    A THIRD, of those: a capture sent into a slot the list had under an
+    old one (cleared on the unit first) wore the old capture's maker and
+    gear until a read reached it (`note` carries those over only for the
+    same capture now). Left as it is, knowingly: a capture the unit files
+    LATE, after reading back empty, on a list never read whole, is in
+    slot order and not on top (one install's first read, his unit's
+    occasional habit, and nothing lost).
   - *Slots 001 to 256 are listed; the 257th is not offered.* In the
     recording the last slot listed the same capture as the one just
     loaded, so it may be no slot of its own. A block that is on it still
