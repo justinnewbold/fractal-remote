@@ -145,7 +145,7 @@ export const cableConnectingLine = (name) => `Connecting to ${name || 'the unit'
  * THE FM3: NOT BY ITS OWN USB PORT, BUT BY A USB MIDI CABLE ON ITS MIDI
  * PORTS. Its USB is the computer's kind (serial ports for FM3-Edit), not
  * MIDI, so no phone lists it. A USB MIDI cable on its MIDI jacks is MIDI,
- * and the U2MIDI Pro, the FM3's own cable (shared/bluetooth-gear FM3_NEVER),
+ * and the U2MIDI Pro, the FM3's own cable (shared/bluetooth-gear FM3_WARNING),
  * plugs straight into the device in hand: "Lots of issues connecting FM3
  * with U2midi pro. Finally did connect though" (Justin, 9 November 2026,
  * iPad), after this line had said only the computer or Bluetooth. Said
@@ -162,9 +162,9 @@ export const cableConnectingLine = (name) => `Connecting to ${name || 'the unit'
  * it is not drawn, Connect takes the cable itself. So the line names that
  * button first, and Connect for when it is not there.
  *
- * ONLY THE U2MIDI PRO, never "any USB MIDI cable": Troubleshooting draws the
- * line without the red FM3_NEVER beside it, and the C2MIDI Pro, a USB MIDI
- * cable too, got very hot on an FM3.
+ * ONLY THE U2MIDI PRO, never "any USB MIDI cable": it is the one that runs
+ * on USB power alone and stays cool, and the C2MIDI Pro, a USB MIDI cable
+ * too, got very hot on an FM3 (shared/bluetooth-gear FM3_WARNING).
  */
 export const fm3CableLine = (noun) =>
   `The FM3’s own USB port can’t plug into this ${noun}, but the U2MIDI Pro on its MIDI ports can. Plug it straight in, then tap ${CABLE_USE_HERE} (or Connect, when that button isn’t there), or use Bluetooth with an adapter.`

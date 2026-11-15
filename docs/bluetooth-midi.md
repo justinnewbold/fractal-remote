@@ -177,7 +177,7 @@ MIDI Out/Thru, with the Uhost powered from USB as on the AM4.
   likeliest reading.
 
 **What it means:**
-- Every adapter that feeds from MIDI Out runs hot on an FM3: CME's WIDI Master
+- Adapters that feed from MIDI Out run hot on an FM3: CME's WIDI Master
   and WIDI Jack, Yamaha's MD-BT01 (its only power is MIDI Out; FM3 owners
   report it hot about as often as not), and the C2MIDI Pro.
 - The fix owners report, 2021 to 2026, including on an FM3 Turbo: a short
@@ -195,10 +195,49 @@ MIDI Out/Thru, with the Uhost powered from USB as on the AM4.
   C2MIDI Pro that got hot may be: check it on USB power with both MIDI plugs
   touching nothing before it goes back on the AM4.
 
-The website's guide and the app's Bluetooth page list the Uhost and the
-U2MIDI Pro for an FM3, with the warning red and in front of them
-(shared/bluetooth-gear.mjs FM3_WARNING, FM3_NEVER): use the U2MIDI Pro, never
-the WIDI Master or the C2MIDI Pro, which got very hot and did not work.
+### A warning, not a never (15 November 2026)
+
+> "In addition to what we already confirmed works, I have now confirmed that
+> from a user that The Yamaha B101 works also in addition to the WIDIJack
+> that works but gets hot. So On the FM3 Instead of saying NEVER use a
+> different Bluetooth device, just have a warning that devices on the FM3 may
+> overheat and to use at their own risk."
+
+"B101" is read as Yamaha's MD-BT01, the one Bluetooth MIDI adapter Yamaha
+makes for 5-pin MIDI jacks, and both reports as being on an FM3 (the sentence
+is about the FM3; which phone was not said). Until that day the app and the
+guide said "never" for an FM3 and the app acted on it: a WIDI Master, C2MIDI
+Pro, WIDI Jack or MD-BT01 was never chosen, offered or switched to for an
+FM3, and Switch to FM3 was not offered on any adapter but a WIDI Uhost.
+
+Now:
+
+- **One warning, red, wherever an FM3 is picked** (shared/bluetooth-gear.mjs
+  `FM3_WARNING`; `FM3_SHORT` on the website's /bluetooth page and at the end
+  of the purchase page's line): a Bluetooth adapter may overheat on an FM3,
+  use one at your own risk, unplug it if it gets hot; the Uhost with the
+  U2MIDI Pro runs on USB power only and stays cool; the WIDI Master and the
+  C2MIDI Pro got very hot and did not work.
+- **Nothing is refused for an FM3 by its name.** An FM3 is like any unit: the
+  only adapter found is chosen, another one seen is offered, Switch to FM3
+  carries the adapter. A C2MIDI Pro plugged into the phone as a USB cable is
+  offered for one too. The choice is the owner's, under the warning.
+- **The FM3's adapters on How to connect:** the Uhost with the U2MIDI Pro
+  first ("Stays cool on an FM3"), then the Yamaha MD-BT01 and the WIDI Jack
+  on its 5-pin cable, each with a yellow line to feel it in the first few
+  minutes (`FM3_FEEL`, `FM3_JACK_HOT`). Not the WIDI Master, nor the Uhost
+  with the C2MIDI Pro: both got very hot on his FM3 and neither worked, so
+  there are no steps to give for them. Their fixes are under Another adapter
+  in Troubleshooting.
+- **The MD-BT01 on an FM9 and Axe-Fx III too** (5-pin jacks; FracPad's own
+  record with it). Not on an AM4 or VP4, whose jacks are 3.5 mm. No Amazon
+  link has been checked for it, so its button opens Yamaha's page.
+- The record is ours (`TRIED_WAYS.fm3`, `TRIED_NOTES.fm3`): no screen says
+  either adapter was tried or works.
+
+The setup email's FM3 sentence ("never the C2MIDI Pro or a WIDI Master") is
+the server's (supabase/functions/setup-reminder) and changes only with
+Justin's yes and a redeploy.
 
 Sources: CME C2MIDI Pro manual v03
 (https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),
@@ -286,9 +325,15 @@ warning.
     first.
 - **CME WIDI Jack** (about $60): plugs into both In and Out, can run from
   USB-C, and has cable bundles for TRS (AM4/VP4). On an FM3 it runs hot even
-  on USB power, unless a 220-ohm adapter is fitted (see above).
+  on USB power, unless a 220-ohm adapter is fitted (see above); a customer's
+  works on an FM3 and gets hot (Justin, 15 November 2026).
 - **Yamaha MD-BT01** (about $55): the best record with Fractal editing,
-  through FracPad. It also runs hot on an FM3, and may be discontinued.
+  through FracPad. FM3 owners report it hot about as often as not; a
+  customer's works on an FM3 (Justin, 15 November 2026). It may be
+  discontinued. Its manual: the two plugs go in MIDI IN and MIDI OUT
+  matching their arrows, the lamp flashes once the instrument is on and
+  stays lit once connected, its only power is MIDI OUT, and it has no app to
+  update it with.
 - **BOSS WM-1 and Quicco mi.1:** no SysEx documented. A Windows tool for the
   mi.1 II warns that large SysEx is dropped.
 - Dongles typically take one Bluetooth connection at a time. A Mac that has

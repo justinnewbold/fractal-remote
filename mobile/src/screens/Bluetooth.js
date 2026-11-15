@@ -63,11 +63,8 @@ import {
   CLOSE_AND_REOPEN,
   CONNECT_AGAIN,
   CONNECT_AGAIN_SUB,
-  FIRST_TIME,
-  FIRST_TIME_ADAPTER,
-  FM3_NEVER,
+  FM3_WARNING,
   GUIDE_URL,
-  NOT_FOR_FM3,
   ONE_AT_A_TIME,
   PARTS,
   PLUGS_CHECK,
@@ -77,13 +74,14 @@ import {
   REPORT_NOTE,
   SWITCH_TO,
   SWITCH_TO_SUB,
-  TROUBLE_LIT,
   TRIED_NOTES,
   TURN_ON_BLUETOOTH,
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
   adapterOfUnit,
+  adapterTabFor,
+  adapterTabsFor,
   appleListForget,
   bluetoothOffHint,
   bluetoothOffLine,
@@ -91,13 +89,12 @@ import {
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
-  namedForFm3,
   notAnAdapter,
   notAnsweringLine,
+  troubleFor,
   untried,
   unitForReport,
   warningFor,
-  swapLine,
   waysFor,
   wrongAdapterLine,
   wrongUnitLine
@@ -130,6 +127,7 @@ import { useRig } from '../lib/rig'
 import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import Tabs from '../components/Tabs'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
@@ -186,10 +184,11 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
  * we can confirm it or if someone leaves us a note saying it doesn't work
  * then we can investigate" (Justin). It is drawn on Developer → App health
  * → Tried (BluetoothTried, below), and the head of every log says it. And
- * everybody, before any pick and whatever is picked, is told the cable is
- * never for an FM3 (NOT_FOR_FM3): "The FM three is the only one that ever
- * has overheating issues" (the same day), so no other unit has a heat
- * check.
+ * an FM3, once it is picked, has its heat warning in red (FM3_WARNING: an
+ * adapter may overheat, at its owner's own risk, since 15 November 2026; it
+ * said "never" of every adapter but one until then): "The FM three is the
+ * only one that ever has overheating issues" (31 October), so no other unit
+ * has a heat check.
  *
  * A VP4 IS SENT PRESETS AND SCENES, AND HEARD NOT AT ALL (lib/bleVp4.js). So
  * its connected line says the adapter is connected and the phone is sending
@@ -344,7 +343,7 @@ function status(b, unitState) {
        * under it, one tap on the same connection (switchUnit, below). Not
        * for a unit on a USB cable, which is the unit itself.
        */
-      if (pickable && !cable && adapterName(b.adapter) && carriesTo(b.answeredAs, b.adapter)) return { line: wrongAdapterLine({ adapter: adapterName(b.adapter), answered: b.answeredAs, picked: name }), tone: 'fault' }
+      if (pickable && !cable && adapterName(b.adapter)) return { line: wrongAdapterLine({ adapter: adapterName(b.adapter), answered: b.answeredAs, picked: name }), tone: 'fault' }
       return { line: wrongUnitLine({ answered: b.answeredAs, picked: name, pickable }), tone: 'fault' }
     }
     /* A unit on a USB cable: the same lines, saying the cable (lib/cableWords cableStatus), a VP4's still never answering. */
@@ -362,15 +361,6 @@ function status(b, unitState) {
   return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
 }
 
-/*
- * WHETHER THE PAGE MAY OFFER THE UNIT THAT ANSWERED ITS ADAPTER (Switch to):
- * any unit, but an FM3 only on an adapter the app names for one, the WIDI
- * Uhost (shared/bluetooth-gear namedForFm3). The FM3 rule: the WIDI Master
- * and the C2MIDI Pro are never offered for an FM3. With any other on an
- * FM3, the page says so with wrongUnitLine's Stop, pick and Connect, under
- * the red FM3 warning, and Connect lists the adapter for its owner's tap.
- */
-const carriesTo = (answered, a) => answered !== 'FM3' || namedForFm3(adapterName(a))
 
 /*
  * Blue for the unit answering over Bluetooth, as the bar is; green stays the
@@ -715,7 +705,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * step 1 rule (no other unit picked while on) has nothing to guard here.
    */
   const answeredKey = connected && b.answeredAs ? units.find((u) => u.name === b.answeredAs)?.key || null : null
-  const offerSwitch = !!answeredKey && !cable && canStart && carriesTo(b.answeredAs, b.adapter)
+  /* Any unit that answered, an FM3 too since 15 November 2026 (it was offered only on a WIDI Uhost: no adapter is ruled out for an FM3 any more, and its warning is drawn in red under this). */
+  const offerSwitch = !!answeredKey && !cable && canStart
   const switchUnit = () => {
     if (!offerSwitch) return
     arm()
@@ -827,7 +818,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           stands. Off, with the FM3 picked, it is drawn under the units in
           step 1 instead, so it is on the page once either way.
         */}
-        {(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone="fault">{FM3_NEVER}</Note> : null}
+        {(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone="fault">{FM3_WARNING}</Note> : null}
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
@@ -885,12 +876,12 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               Developer page's). THE FM3'S WARNING, ONLY
               WHEN IT IS PICKED: "if they select FM3, why we wanna give the
               warning" (Justin, 26 October 2026), red, straight under the
-              units and never folded (FM3_NEVER).
+              units and never folded (FM3_WARNING).
             */}
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
               <UnitChips units={units} picked={b.unit} disabled={b.on} />
-              {b.unit === 'fm3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
+              {b.unit === 'fm3' ? <Note tone="fault">{FM3_WARNING}</Note> : null}
               {/* And wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): not by its own USB port, which is not MIDI, but by a USB MIDI cable on its MIDI ports. */}
               {b.unit === 'fm3' && cablesHere() ? <Hint>{fm3CableLine(deviceNoun())}</Hint> : null}
             </View>
@@ -1020,49 +1011,53 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   )
 }
 
-/* The unit chips of step 1, on this page and on How to connect: the same pick, the same rule (not while it is on). */
+/* The units of step 1, on this page, on How to connect and on Troubleshooting: the same pick, the same rule (not while it is on), drawn as tabs (components/Tabs). */
 function UnitChips({ units, picked, disabled }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-      {units.map((u) => (
-        <Press
-          key={u.key}
-          label={u.name}
-          tone="signal"
-          on={u.key === picked}
-          disabled={disabled}
-          height={44}
-          style={{ paddingHorizontal: space.md }}
-          onPress={() => setBluetoothUnit(u.key)}
-        />
-      ))}
-    </View>
-  )
+  return <Tabs name="Your unit" items={units.map((u) => ({ key: u.key, label: u.name }))} picked={picked} disabled={disabled} onPick={(key) => setBluetoothUnit(key)} />
+}
+
+/*
+ * YOUR ADAPTER, as tabs under the units, on How to connect and on
+ * Troubleshooting: one adapter's parts, steps and fixes on the screen at a
+ * time (shared/bluetooth-gear waysFor has the report). It opens on the
+ * adapter this device has kept for the unit, told by its name
+ * (adapterTabFor), so somebody with a WIDI Jack lands on the WIDI Jack;
+ * else on the unit's first. A pick stands until the unit changes to one
+ * that has no such adapter, when the kept adapter's tab or the first is
+ * shown. Looking only: the tab changes what is read, never what is
+ * connected.
+ */
+function useAdapterTab(tabs, adapter) {
+  const [asked, setAsked] = useState(null)
+  /* The tab tapped, else the kept adapter's own, by its name (shared/bluetooth-gear adapterTabFor). A unit on a USB cable has no adapter to name. */
+  return [adapterTabFor(tabs, { asked, name: adapter && !isCable(adapter) ? adapterName(adapter) : null }), setAsked]
 }
 
 /* Troubleshooting's last step, by adapter or by cable. */
 const ANOTHER_UNIT = 'If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.'
 
-/* The other half of the quiet-unit hint: an adapter that only carries one way. */
-const BOTH_WAYS = 'The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.'
-
 /**
  * Bluetooth → How to connect my Bluetooth device.
  *
- * Every way to hook up the unit picked, best first (shared/bluetooth-gear
- * waysFor): the WIDI Master, the WIDI Jack, then the WIDI Uhost and a cable
- * on every unit but the FM3, whose one way is the Uhost and the U2MIDI Pro,
- * and, on a device a unit can plug into by cable, that U2MIDI Pro straight
- * in with no adapter (lib/cableWords FM3_CABLE_WAY). Each way is a row
- * that opens on its parts, each with View on Amazon, and its steps; the first is open. A way the app has not run on with this unit
- * says so, and says to feel the adapter in the first minute, straight after
- * the step that powers it.
+ * The unit, then its adapters, as two rows of tabs, and under them the one
+ * adapter picked: what to buy, each part with its button, and how it plugs
+ * in (shared/bluetooth-gear waysFor). "So we don't have to sort through so
+ * much information not relevant to the unit and device they are using"
+ * (Justin, 15 November 2026): until then every adapter for the unit was a
+ * fold-out row on the page, "Option 1 · WIDI Master" and on, each with its
+ * own parts and steps, and a line about the FM3 under other units' parts.
+ *
+ * The FM3's warning is red and over its adapters (FM3_WARNING), and, on a
+ * device a unit can plug into by cable, its U2MIDI Pro straight in with no
+ * adapter is said under them (lib/cableWords FM3_CABLE_WAY).
  */
 export function BluetoothWays() {
   const b = useBluetooth()
   const units = offeredUnits()
   const ways = waysFor(b.unit, deviceNoun())
-  const [open, setOpen] = useState(0)
+  const tabs = adapterTabsFor(b.unit)
+  const [tab, setTab] = useAdapterTab(tabs, b.adapter)
+  const way = ways.find((w) => w.key === tab) || null
   const firmware = firmwareLineFor(b.unit)
   const midi = midiSettingsFor(b.unit, deviceNoun())
   return (
@@ -1073,29 +1068,37 @@ export function BluetoothWays() {
         {b.on ? <Hint>To change the unit, tap Stop on the Bluetooth page first.</Hint> : null}
       </View>
       {!b.unit ? <Hint>Pick your unit to see what to buy and how it plugs in.</Hint> : null}
-      {/* The FM3's warning, red and in front of everything for it: the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master. */}
+      {/* The FM3's warning, red and in front of everything for it: an adapter may overheat, at the owner's own risk. */}
       {warningFor(b.unit) ? <Note tone="fault">{warningFor(b.unit)}</Note> : null}
       {firmware ? <Hint>{firmware}</Hint> : null}
-      {ways.map((w, i) => (
-        <Fold key={w.key} title={`${ways.length > 1 ? `Option ${i + 1} · ` : ''}${w.title}`} sub={w.best ? 'The simplest' : undefined} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)}>
-          <Way way={w} unit={b.unit} />
-        </Fold>
-      ))}
+      {tabs.length ? (
+        <View style={{ gap: space.sm }}>
+          <Heading>Your adapter</Heading>
+          <Tabs name="Your adapter" items={tabs} picked={tab} onPick={setTab} />
+        </View>
+      ) : null}
+      {way ? <Way way={way} /> : null}
       {/* The FM3's other way, with no adapter: the same U2MIDI Pro straight into this device, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere). Nothing more to buy. */}
       {b.unit === 'fm3' && cablesHere() ? <Hint>{FM3_CABLE_WAY(deviceNoun())}</Hint> : null}
       {midi ? <Hint>{midi}</Hint> : null}
       {b.unit ? <Hint>{ONE_AT_A_TIME}</Hint> : null}
       {b.unit ? <Hint>{SELLERS_LINE}</Hint> : null}
-      {/* The View on Amazon buttons carry his Associates tag, so the page says Amazon's sentence (shared/bluetooth-gear AMAZON_DISCLOSURE): once, the last line of the page, not beside the buttons (Justin, 10 November 2026). */}
-      {b.unit && ways.some((w) => w.parts.some((key) => PARTS[key]?.amazon)) ? <Hint>{AMAZON_DISCLOSURE}</Hint> : null}
+      {/* The View on Amazon buttons carry his Associates tag, so the page says Amazon's sentence (shared/bluetooth-gear AMAZON_DISCLOSURE): once, the last line of the page, not beside the buttons (Justin, 10 November 2026). Only where the adapter showing has such a button. */}
+      {way && way.parts.some((key) => PARTS[key]?.amazon) ? <Hint>{AMAZON_DISCLOSURE}</Hint> : null}
     </View>
   )
 }
 
-/* One way to hook it up: whether it has run here, what to buy, the firmware, then the steps with the heat check after the power. */
-function Way({ way, unit }) {
+/* One adapter's way to hook it up: what it is, a caution of its own, what to buy, its firmware, then the steps. */
+function Way({ way }) {
   return (
     <View style={{ gap: space.md }}>
+      <View style={{ gap: space.xs }}>
+        <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{way.title}</Text>
+        {way.sub ? <Hint>{way.sub}</Hint> : null}
+      </View>
+      {/* An adapter that takes its power from an FM3's MIDI OUT: what to do about the heat, in the warning's own color. */}
+      {way.caution ? <Note tone="warn">{way.caution}</Note> : null}
       {way.parts.map((key) => {
         const p = PARTS[key]
         const does = typeof p.does === 'function' ? p.does(deviceNoun()) : p.does
@@ -1114,9 +1117,8 @@ function Way({ way, unit }) {
         )
       })}
       {way.key === 'uhost' ? <Hint>{POWER_LINE}</Hint> : null}
-      {/* The C2MIDI Pro or a WIDI Master bought for another unit is the likeliest thing to end up on an FM3: said where they are bought. */}
-      {unit !== 'fm3' && (way.key === 'uhost' || way.key === 'master') ? <Hint>{NOT_FOR_FM3}</Hint> : null}
-      <Hint>{way.key === 'uhost' ? FIRST_TIME : FIRST_TIME_ADAPTER}</Hint>
+      {/* Its firmware, before the first time, where the adapter has an app to update it with (the WIDIs do; Yamaha's does not). */}
+      {way.before ? <Hint>{way.before}</Hint> : null}
       <Heading>How it plugs in</Heading>
       {way.steps.map((line, i) => (
         <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
@@ -1131,11 +1133,24 @@ function Way({ way, unit }) {
 /**
  * Bluetooth → Troubleshooting: "List all the troubleshooting steps that
  * we've created" (Justin, 26 October 2026). Every fix the page and the guide
- * know, in the order they are worth trying, for the unit picked, and the
- * report button at the foot.
+ * know, in the order they are worth trying, and the report button at the
+ * foot.
+ *
+ * BY UNIT AND BY ADAPTER SINCE 15 NOVEMBER 2026: "let's add Bluetooth device
+ * specific as well as the fractal units specific trouble shooting with tabs
+ * so we don't have to sort through so much information not relevant to the
+ * unit and device they are using" (Justin, with a picture of this page on
+ * an Axe-Fx III: six long steps, three of them about adapters he did not
+ * have). The units and the unit's adapters are tabs over the list, as on
+ * How to connect, with one more for any other adapter; the list is that
+ * adapter's lines on that unit (shared/bluetooth-gear troubleFor), then
+ * what is true whatever is plugged in. The unit tabs are the page's own
+ * pick (the right unit is itself a fix); the adapter tab only chooses what
+ * is read.
  */
 export function BluetoothTrouble({ onReport = null, way = null }) {
   const b = useBluetooth()
+  const units = offeredUnits()
   const settings = b.unit ? (hookupFor(b.unit, deviceNoun()) || []).at(-1) : null
   const midi = midiSettingsFor(b.unit, deviceNoun())
   /* An FM3 picked, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): not by its USB port, but by a USB MIDI cable on its MIDI ports (lib/cableWords fm3CableLine). */
@@ -1151,16 +1166,20 @@ export function BluetoothTrouble({ onReport = null, way = null }) {
   const jacks = cable && midiJacks(b.adapter)
   /* `way`: Troubleshooting asked about the adapter or the cable by name, whatever is kept; left out, the way kept decides. The Forget buttons stay the kept one's. */
   const cableWay = way === 'cable' || (way !== 'adapter' && cable)
+  /* The unit's adapters, and one more for any other: which one's lines are read. With no unit picked there are none yet, and the list is what is true of any adapter. */
+  const tabs = cableWay || !b.unit ? [] : adapterTabsFor(b.unit, { other: true })
+  const [tab, setTab] = useAdapterTab(tabs, b.adapter)
+  const own = troubleFor(b.unit, tab || 'other', deviceNoun())
   const steps = cableWay
     ? [...cableSteps(deviceNoun(), { jacks }), ...(jacks ? [settings, midi] : []), fm3, ANOTHER_UNIT].filter(Boolean)
     : [
-        TROUBLE_LIT,
+        own.lit,
         `Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings.`,
-        `${PLUGS_CHECK} ${swapLine(b.unit)}`,
-        BOTH_WAYS,
+        own.plugs,
+        own.typeA,
         settings,
         midi,
-        FIRST_TIME,
+        own.before,
         ONE_AT_A_TIME,
         CLOSE_AND_REOPEN,
         ios
@@ -1174,6 +1193,22 @@ export function BluetoothTrouble({ onReport = null, way = null }) {
       ].filter(Boolean)
   return (
     <View style={{ gap: space.lg }}>
+      {cableWay ? null : (
+        <View style={{ gap: space.sm }}>
+          <Heading>Your unit</Heading>
+          <UnitChips units={units} picked={b.unit} disabled={b.on} />
+          {b.on ? <Hint>To change the unit, tap Stop on the Bluetooth page first.</Hint> : null}
+          {!b.unit ? <Hint>Pick your unit to see what applies to it.</Hint> : null}
+        </View>
+      )}
+      {tabs.length ? (
+        <View style={{ gap: space.sm }}>
+          <Heading>Your adapter</Heading>
+          <Tabs name="Your adapter" items={tabs} picked={tab} onPick={setTab} />
+        </View>
+      ) : null}
+      {/* An FM3's adapter may be hot: its warning, red, over the fixes for one, as on the Bluetooth page and How to connect. */}
+      {!cableWay && warningFor(b.unit) ? <Note tone="fault">{warningFor(b.unit)}</Note> : null}
       {steps.map((line, i) => (
         <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
           <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 22 }}>{`${i + 1}.`}</Text>
@@ -1467,15 +1502,6 @@ function OpenSettings() {
  * under the name what it is (or what a tap does). A Press like every other
  * button here, so it is in the tap log and has the haptic.
  */
-function Fold({ title, sub, open, onToggle, children }) {
-  return (
-    <View style={{ gap: space.md }}>
-      <Press label={title} sub={sub ? `${sub} · ${open ? 'tap to hide' : 'tap to show'}` : open ? 'Tap to hide' : 'Tap to show'} height={52} onPress={onToggle} />
-      {open ? <View style={{ gap: space.md, paddingHorizontal: space.xs, paddingBottom: space.sm }}>{children}</View> : null}
-    </View>
-  )
-}
-
 /* One question the check asked, with its bytes: a flat panel of glass, its rim a ring inside it (lib/glass), so nothing moves. */
 function Row({ row }) {
   return (

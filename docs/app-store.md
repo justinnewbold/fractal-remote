@@ -1699,7 +1699,7 @@ line is the app as it is on 25 October 2026:
   2026, with a U2MIDI Pro) the FM3 have run it, from an iPhone and an
   Android phone. The FM9, Axe-Fx III and VP4 say "Not tried yet" under
   their names and "Not tried on the … yet" wherever else they are read,
-  with the report button. The FM3's warning (FM3_NEVER) is drawn whenever
+  with the report button. The FM3's warning (FM3_WARNING) is drawn whenever
   it is picked: the U2MIDI Pro, never the WIDI Master or the C2MIDI Pro,
   which got very hot on it and did not work. Everybody is told under step
   1 to use the U2MIDI Pro on an FM3.

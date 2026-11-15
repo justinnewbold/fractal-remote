@@ -371,7 +371,9 @@ test first, and under these rules:
   it there when a unit or adapter is confirmed. So far: the AM4 and the
   FM3 from an iPhone and an Android phone (26 October 2026), the AM4
   through the WIDI Uhost with the C2MIDI Pro, a WIDI Master and a WIDI
-  Jack, the FM3 through the WIDI Uhost with a CME U2MIDI Pro; the Axe-Fx
+  Jack, the FM3 through the WIDI Uhost with a CME U2MIDI Pro, and, a
+  customer's, through a Yamaha MD-BT01 and a WIDI Jack, which gets hot
+  (Justin, 15 November 2026; which phone was not said); the Axe-Fx
   III from an iPhone (31 October 2026, adapter not said, "It just works
   probably with all the connectors"); the FM9 ("FM9 has already been tested
   and works", 1 November 2026, phone and adapter not said). Not the VP4.
@@ -380,10 +382,42 @@ test first, and under these rules:
 - **The FM3 is the only unit with a heat warning.** "The FM three is the
   only one that ever has overheating issues so we don't need to worry
   about it for any other devices" (31 October 2026). So no heat check for
-  any other unit. The FM3's stays red and in front of it: the WIDI Master
-  and the C2MIDI Pro got very hot on an FM3 and the WIDI Master did not
-  work; use the U2MIDI Pro, which runs on USB power only, works and stays
-  cool. The C2MIDI Pro and the WIDI Master are never offered for one.
+  any other unit. The FM3's stays red and in front of it, and since 15
+  November 2026 it is a warning, not a never:
+
+  > "In addition to what we already confirmed works, I have now confirmed
+  > that from a user that The Yamaha B101 works also in addition to the
+  > WIDIJack that works but gets hot. So On the FM3 Instead of saying NEVER
+  > use a different Bluetooth device, just have a warning that devices on
+  > the FM3 may overheat and to use at their own risk."
+
+  ("B101" is read as Yamaha's MD-BT01, and both reports as on an FM3.) So
+  one sentence, `FM3_WARNING` in shared/bluetooth-gear.mjs (`FM3_SHORT` on
+  the website): an adapter may overheat on an FM3, use one at your own
+  risk, unplug it if it gets hot; the Uhost with the U2MIDI Pro runs on USB
+  power only and stays cool; the WIDI Master and the C2MIDI Pro got very
+  hot and did not work. No screen or page tells an FM3's owner "never",
+  and the app refuses no adapter for an FM3 by its name (it used to: never
+  chosen, offered or switched to). The FM3's adapters on How to connect are
+  the Uhost with the U2MIDI Pro first, then the Yamaha MD-BT01 and the WIDI
+  Jack, each with a yellow line to feel it in the first few minutes; never
+  steps for the WIDI Master or the C2MIDI Pro on an FM3, which did not
+  work. Still never a sentence that says an adapter stays cool or works on
+  an FM3 but the U2MIDI Pro. The setup email's FM3 sentence is the
+  server's, and changes only with his yes and a redeploy.
+- **Setup and Troubleshooting are by unit and by adapter, in tabs.** "With
+  tabs so we don't have to sort through so much information not relevant
+  to the unit and device they are using" (15 November 2026). How to connect
+  my Bluetooth device and Troubleshooting Bluetooth show the unit's chips
+  (the real pick, shut while Bluetooth is on), then that unit's adapters as
+  tabs (components/Tabs; `adapterTabsFor`, and which opens, `adapterTabFor`:
+  the kept adapter's own, by its name), and under them one adapter's parts
+  and steps (`waysFor`) or its fixes (`troubleFor`). A tab is looking only:
+  it never changes what the app connects to. A new adapter is a way in
+  `waysFor`, a name in `ADAPTER_NAMES`, a tab in `ADAPTER_TABS` and its
+  lines in `troubleFor`; test/bluetooth-tabs.mjs fails on lines under one
+  tab that name another adapter or another unit. The website's guide stays
+  short and has no tabs.
 - **The VP4 does only what the computer path does for it, and less:** a
   Program Change for a preset and the player's Scene Select for a scene
   (mobile/src/lib/bleVp4.js, the computer's own bytes from ForgeFX

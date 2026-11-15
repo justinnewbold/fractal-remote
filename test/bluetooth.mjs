@@ -7557,7 +7557,7 @@ export function run(test) {
     for (const part of Object.values(gear.PARTS)) assert.ok(!gear.BLUETOOTH_PAYWALL.includes(part.name), `the purchase page’s one line names the ${part.name}: the parts are one tap under it`)
     assert.equal(
       gear.BLUETOOTH_PARTS,
-      `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
+      `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank; on an FM9 or Axe-Fx III, a Yamaha MD-BT01 too. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank, or a Yamaha MD-BT01 or a CME WIDI Jack. On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.`
     )
     /* Every part each way of the Bluetooth page takes is named in it (3 November 2026: it named the Uhost kit alone for a week after the page put the WIDI Master first). */
     for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
@@ -7573,8 +7573,10 @@ export function run(test) {
     assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
     assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s parts name the old one')
     for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PARTS.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s parts do not name the ${part.name}`)
-    /* The FM3's warning goes with the parts it is about: nobody reads an adapter's name on the page without it. */
-    assert.match(gear.BLUETOOTH_PARTS, /Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one\.$/, 'the parts on the purchase page leave out the FM3’s warning')
+    /* The FM3's warning goes with the parts it is about: nobody reads an adapter's name on the page without it. A warning, at the owner's own risk, since 15 November 2026 (it said "Never the C2MIDI Pro or a WIDI Master on an FM3"). */
+    assert.ok(gear.BLUETOOTH_PARTS.endsWith(` ${gear.FM3_SHORT}`), 'the parts on the purchase page leave out the FM3’s warning')
+    assert.equal(gear.FM3_SHORT, 'On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.')
+    assert.ok(!/\bnever\b/i.test(gear.BLUETOOTH_PARTS), 'the purchase page still rules an adapter out for an FM3')
     for (const words of [gear.BLUETOOTH_PAYWALL, gear.BLUETOOTH_PARTS]) {
       assert.ok(!/Bluetooth page|Settings →/.test(words), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
       assert.ok(!/\$|price|\d+\.\d\d/i.test(words), 'the purchase page’s Bluetooth words name a price')
@@ -8386,19 +8388,31 @@ export function run(test) {
     assert.ok(!/findAdapters|lookForAdapterAgain/.test(code('mobile/src/lib/link.js') + code('mobile/src/lib/bleLink.js')), 'the link opens Apple’s screen by itself')
   })
 
-  test('the cable is never for an FM3: said when the FM3 is picked and where the cables are bought, and nobody is told the AM4 only', async () => {
+  test('the FM3’s heat warning is said when the FM3 is picked, nothing about an FM3 is under another unit’s parts, and nobody is told the AM4 only', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     /*
      * Under the units only when the FM3 is picked (Justin, 26 October 2026:
-     * "if they select FM3, why we wanna give the warning"), and for every
-     * other unit where the C2MIDI Pro and the WIDI Master are bought, on How
-     * to connect my Bluetooth device.
+     * "if they select FM3, why we wanna give the warning"). Until 15
+     * November 2026 every OTHER unit's Uhost and WIDI Master parts also said
+     * "On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI
+     * Master" (NOT_FOR_FM3): with the unit picked first and only its own
+     * adapter on the screen, it is not ("so we don't have to sort through
+     * so much information not relevant to the unit and device they are
+     * using", Justin).
      */
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null\}/)
-    assert.match(page, /\{unit !== 'fm3' && \(way\.key === 'uhost' \|\| way\.key === 'master'\) \? <Hint>\{NOT_FOR_FM3\}<\/Hint> : null\}/)
+    assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_WARNING\}<\/Note> : null\}/)
     const gear = await import('../shared/bluetooth-gear.mjs')
-    assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
+    assert.equal(gear.NOT_FOR_FM3, undefined)
+    assert.ok(!/NOT_FOR_FM3|FM3_NEVER\b/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still draws the old "never" line')
+    /* No way of a unit that is not an FM3 says anything of an FM3. */
+    for (const unit of ['am4', 'vp4', 'fm9', 'axefx3']) {
+      for (const way of gear.waysFor(unit)) {
+        const said = [way.title, way.sub, way.caution, way.before, ...way.steps, ...way.parts.map((key) => (typeof gear.PARTS[key].does === 'function' ? gear.PARTS[key].does('phone') : gear.PARTS[key].does))].filter(Boolean).join(' ')
+        /* The U2MIDI Pro's own line is for an FM3 by name, and is only among an FM3's parts. */
+        assert.ok(!/FM3/.test(said), `the ${unit}’s ${way.title} says something of an FM3: ${said.match(/[^.]*FM3[^.]*/)?.[0]}`)
+      }
+    }
     /* The customer's "AM4 only" is gone everywhere: every unit opens together (lib/ble-rule.js UNITS_FROM_STORE). */
     assert.equal(gear.AM4_ONLY, undefined, 'the gear file still has the customer’s AM4-only line')
     assert.ok(!/AM4_ONLY|am4Only|AM4 only/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still says the AM4 only to somebody')
@@ -8484,14 +8498,18 @@ export function run(test) {
      * App health → Tried ("we just need to keep track of it ourselves in the
      * developer menu", Justin).
      */
-    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === picked\} disabled=\{disabled\} height=\{44\}/)
+    assert.match(page, /function UnitChips\(\{ units, picked, disabled \}\) \{ return <Tabs name="Your unit" items=\{units\.map\(\(u\) => \(\{ key: u\.key, label: u\.name \}\)\)\} picked=\{picked\} disabled=\{disabled\} onPick=\{\(key\) => setBluetoothUnit\(key\)\} \/> \}/)
+    /* The row itself is components/Tabs since 15 November 2026 (the unit's adapters are tabs too): the app's own buttons, lit when picked, wrapping, never scrolled off the edge. */
+    assert.match(flat('mobile/src/components/Tabs.js'), /\{items\.map\(\(it\) => \( <Press key=\{it\.key\} label=\{it\.label\} tone="signal" on=\{it\.key === picked\} disabled=\{disabled\} height=\{44\}/)
+    assert.match(flat('mobile/src/components/Tabs.js'), /flexWrap: 'wrap'/)
+    assert.ok(!/ScrollView/.test(code('mobile/src/components/Tabs.js')))
     assert.match(page, /<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
-    assert.match(page, /on=\{u\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
-    assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 2, 'a unit chip somewhere can be changed while connected')
+    assert.match(flat('mobile/src/components/Tabs.js'), /on=\{it\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
+    assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 3, 'a unit chip somewhere can be changed while connected')
     /*
      * CHANGED ON PURPOSE, 24 October 2026: "It would be cool if, like, a
      * five-year-old could connect it." The units used to stay on the page
@@ -8533,7 +8551,7 @@ export function run(test) {
      * a cable, an adapter with no name, or a unit this account cannot pick
      * keeps wrongUnitLine's words.
      */
-    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) const pickable = units\.some\(\(u\) => u\.name === b\.answeredAs\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ if \(pickable && !cable && adapterName\(b\.adapter\) && carriesTo\(b\.answeredAs, b\.adapter\)\) return \{ line: wrongAdapterLine\(\{ adapter: adapterName\(b\.adapter\), answered: b\.answeredAs, picked: name \}\), tone: 'fault' \} return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable \}\), tone: 'fault' \}/)
+    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) const pickable = units\.some\(\(u\) => u\.name === b\.answeredAs\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ if \(pickable && !cable && adapterName\(b\.adapter\)\) return \{ line: wrongAdapterLine\(\{ adapter: adapterName\(b\.adapter\), answered: b\.answeredAs, picked: name \}\), tone: 'fault' \} return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable \}\), tone: 'fault' \}/)
     /* A VP4 never answers over Bluetooth: its connected line says the phone is sending, never "answering" (lib/bleVp4.js). */
     assert.match(status, /if \(b\.unit === 'vp4'\) return \{ line: VP4_CONNECTED, tone: 'ok' \} if \(unitState === 'present'\) return \{ line: `Connected · \$\{name\} answering`, tone: 'ok' \}/)
     assert.ok(!/in step 1, then tap Connect/.test(status), 'another line sends somebody to step 1 for a unit')
@@ -8611,13 +8629,16 @@ export function run(test) {
         `WIDI Master connected, but the ${name} isn’t answering. A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug. And check that MIDI Thru is off.`
       )
     }
-    /* By its name however the phone spells it; never another WIDI adapter, whose plugs are not these; and never an FM3, which is not offered one and keeps its own line. */
+    /* By its name however the phone spells it; never another WIDI adapter, whose plugs are not these. On an FM3 too since 15 November 2026: no adapter is ruled out for one any more, so its owner gets the WIDI Master's own two plugs (it kept the plain line, "which is not offered one"). */
     for (const spelt of ['WIDI Master', 'widi master bluetooth', 'WIDIMaster', 'My WIDI Master 2']) assert.equal(gearWords.isWidiMaster(spelt), true, spelt)
     for (const other of ['WIDI Uhost', 'WIDI Jack Bluetooth', 'WIDI Core', 'WIDI Bud Pro', 'C2MIDI', '', null, undefined]) {
       assert.equal(gearWords.isWidiMaster(other), false, String(other))
       assert.equal(gearWords.notAnsweringLine('axefx3', other), gearWords.notAnsweringLine('axefx3'), String(other))
     }
-    assert.equal(gearWords.notAnsweringLine('fm3', master), gearWords.notAnsweringLine('fm3'))
+    assert.equal(
+      gearWords.notAnsweringLine('fm3', master),
+      'WIDI Master connected, but the FM3 isn’t answering. A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug. And check that MIDI Thru is off.'
+    )
     /* No colour of a cable it does not have, and nothing about whether it was tried. */
     assert.ok(!/white|black|tried/i.test(gearWords.notAnsweringLine('axefx3', master)))
     assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
@@ -8641,7 +8662,9 @@ export function run(test) {
     assert.match(lib, /Location has to be on for it to find one/)
     /* The iPhone's "nothing connected" says where Bluetooth is allowed, and a one-way adapter is named as the likely cause. */
     assert.match(page, /'No adapter was connected\. Check Bluetooth is on and allowed for Fractal Remote, then tap Connect again\.'/)
-    assert.match(page, /The adapter has to carry MIDI both ways\./)
+    assert.match(gearWords.BOTH_WAYS, /^The adapter has to carry MIDI both ways\./)
+    /* Among the fixes for an adapter the app has no steps for (shared/bluetooth-gear troubleFor), which is where a one-plug adapter is. */
+    assert.ok(gearWords.troubleFor('fm9', 'other').plugs.startsWith(gearWords.BOTH_WAYS))
   })
 
   /*
@@ -8928,9 +8951,10 @@ export function run(test) {
      */
     assert.match(ble, /const pick = pickAdapter\(list, fresh, pickRule\(\)\) if \(pick\) chooseAdapter\(pick\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ else \{ afterScreen = \{ before, until: Date\.now\(\) \+ AFTER_SCREEN_MS \} \/\*[^*]*\*\/ if \(!saved\.adapter\) sayWhyNotPicked\(list, fresh\) \} return pick/, 'after Apple’s screen the adapter is not chosen by itself, or nothing says why it was not')
     assert.match(ble, /const pick = saved\.adapter \? null : pickAdapter\(now\.devices, new Set\(\), pickRule\(\)\) if \(pick\) chooseAdapter\(pick\)/, 'after an Android search the only adapter is not chosen by itself')
-    /* The pick is told what the cable rule is, and for an FM3 the adapters never offered for one: listed, never chosen by themselves. */
+    /* The pick is told what the cable rule is, and what is never chosen by itself: a footswitch, and nothing else. Until 15 November 2026 that was also, for an FM3, the adapters ruled out for one by name ("just have a warning that devices on the FM3 may overheat and to use at their own risk", Justin). */
     /* And, since 7 November 2026, never another unit's adapter as the only one there (`taken`: each unit keeps its own). */
-    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: \(n\) => notAnAdapter\(n\) \|\| \(saved\.unit === 'fm3' && neverOnFm3\(n\)\), taken: takenIds\(\), letGoOf \}\)/, 'the phone chooses a WIDI Master or a C2MIDI Pro for an FM3, or a footswitch on any unit, by itself')
+    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: \(n\) => notAnAdapter\(n\), taken: takenIds\(\), letGoOf \}\)/, 'the phone chooses a footswitch by itself, or still refuses an adapter for an FM3 by its name')
+    assert.ok(!/neverOnFm3|namedForFm3|FM3_NEVER/.test(code('mobile/src/lib/bluetooth.js')), 'lib/bluetooth still rules an adapter out for an FM3')
 
     /* The page: step 1 the unit, step 2 Connect; Stop once it is on; the list only for a real choice. */
     const page = flat('mobile/src/screens/Bluetooth.js')
@@ -9762,22 +9786,55 @@ export function run(test) {
         jackTrs: 'https://www.amazon.com/dp/B08ZZSYKQX?tag=justinnewbold-20',
         jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J?tag=justinnewbold-20',
         /* The pair the WIDI Master was tried with on his AM4 (Justin, 26 October 2026). */
-        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV?tag=justinnewbold-20'
+        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV?tag=justinnewbold-20',
+        /* Yamaha's MD-BT01 (15 November 2026): no Amazon link has been checked against the live page, so its button is Yamaha's own. */
+        mdbt01: null
       }
     )
+    assert.equal(gear.PARTS.mdbt01.name, 'Yamaha MD-BT01')
+    assert.equal(gear.PARTS.mdbt01.maker, 'https://usa.yamaha.com/musical-instruments/keyboards/products/accessories/md-bt01/index.html')
     /*
      * THE WAYS, BY UNIT, best first (Justin, 26 October 2026): the WIDI
-     * Master, the WIDI Jack, then the Uhost and a cable; the FM3 the Uhost
-     * and the U2MIDI Pro alone, with the adapter its USB-A plug needs.
+     * Master, the WIDI Jack, then the Uhost and a cable. Since 15 November
+     * 2026: Yamaha's MD-BT01 on the three units with 5-pin jacks ("the
+     * Yamaha B101 works also", a customer's), and the FM3, which had the
+     * Uhost and the U2MIDI Pro alone, has that first (it stays cool), then
+     * the MD-BT01 and the WIDI Jack, "with a warning that devices on the FM3
+     * may overheat and to use at their own risk". Never the WIDI Master or
+     * the C2MIDI Pro for an FM3: on his both got very hot and neither
+     * worked, so there is nothing to offer.
      */
     const ways = (u) => gear.waysFor(u).map((w) => [w.key, w.parts.join('+')])
     assert.deepEqual(ways('am4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
     assert.deepEqual(ways('vp4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
-    for (const u of ['fm9', 'axefx3']) assert.deepEqual(ways(u), [['master', 'master'], ['jack', 'jackDin'], ['uhost', 'uhost+c2midi']])
-    assert.deepEqual(ways('fm3'), [['uhost', 'uhost+u2midi+usbA']], 'something fed from MIDI OUT is offered for an FM3')
-    /* Tried: the AM4 through the WIDI Master and the Uhost, the FM3 through the Uhost and the U2MIDI Pro. Nothing else says it has run. */
+    for (const u of ['fm9', 'axefx3']) assert.deepEqual(ways(u), [['master', 'master'], ['jack', 'jackDin'], ['uhost', 'uhost+c2midi'], ['mdbt01', 'mdbt01']])
+    assert.deepEqual(ways('fm3'), [['uhost', 'uhost+u2midi+usbA'], ['mdbt01', 'mdbt01'], ['jack', 'jackDin']])
+    for (const way of gear.waysFor('fm3')) assert.ok(!way.parts.some((key) => ['master', 'c2midi'].includes(key)), 'what got very hot on his FM3 and did not work is offered for one')
+    /* The FM3's first is the one that stays cool, and says so; the two that take power from its MIDI OUT each say to feel them, the Jack that it gets hot. */
+    assert.deepEqual(gear.waysFor('fm3').map((w) => [w.key, w.sub || null, w.caution || null]), [
+      ['uhost', 'Stays cool on an FM3', null],
+      ['mdbt01', null, 'It takes its power from the FM3’s MIDI OUT. Feel it in the first few minutes, and unplug it if it gets hot.'],
+      ['jack', null, 'A WIDI Jack gets hot on an FM3. It takes its power from the FM3’s MIDI OUT. Feel it in the first few minutes, and unplug it if it gets hot.']
+    ])
+    /* No heat check but the FM3's ("The FM three is the only one that ever has overheating issues"): no other unit's way has a caution. */
+    for (const u of ['am4', 'vp4', 'fm9', 'axefx3']) for (const way of gear.waysFor(u)) assert.equal(way.caution, undefined, `${u} ${way.key}`)
+    /* Each way has the short name its tab wears, and the firmware line of an adapter that has an app to update it with (Yamaha's has none). */
+    for (const u of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
+      for (const way of gear.waysFor(u)) {
+        assert.equal(way.tab, gear.ADAPTER_TABS[way.key], `${u} ${way.key}`)
+        assert.equal(way.before, { uhost: gear.FIRST_TIME, master: gear.FIRST_TIME_ADAPTER, jack: gear.FIRST_TIME_ADAPTER, mdbt01: null }[way.key], `${u} ${way.key}`)
+      }
+    }
+    assert.deepEqual(gear.ADAPTER_TABS, { master: 'WIDI Master', jack: 'WIDI Jack', uhost: 'WIDI Uhost', mdbt01: 'Yamaha MD-BT01', other: 'Another adapter' })
+    /* Yamaha's own words for it: its plugs matched by their arrows, its lamp flashing once the unit is on, MIDI OUT its only power. */
+    assert.deepEqual(gear.waysFor('fm9').find((w) => w.key === 'mdbt01').steps.slice(0, 2), [
+      'Plug the MD-BT01’s two plugs into the FM9’s MIDI IN and its MIDI OUT/THRU jack, matching the arrows on its plugs. If the unit doesn’t answer, swap the two plugs.',
+      'It takes its power from the FM9’s MIDI OUT: with the FM9 on, its lamp flashes. It has no other way to be powered.'
+    ])
+    assert.match(gear.waysFor('axefx3').find((w) => w.key === 'mdbt01').steps[0], /MIDI IN and its MIDI OUT \(not THRU: the phone would only hear itself there\)/)
+    /* Tried: the AM4 through the WIDI Master, the WIDI Jack and the Uhost; the FM3 through the Uhost and the U2MIDI Pro, and, a customer's, the MD-BT01 and the WIDI Jack (Justin, 15 November 2026). Nothing else says it has run. */
     const tried = Object.fromEntries(['am4', 'fm3', 'fm9', 'axefx3', 'vp4'].map((u) => [u, gear.waysFor(u).filter((w) => w.tried).map((w) => w.key)]))
-    assert.deepEqual(tried, { am4: ['master', 'jack', 'uhost'], fm3: ['uhost'], fm9: [], axefx3: [], vp4: [] })
+    assert.deepEqual(tried, { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'], fm9: [], axefx3: [], vp4: [] })
     /* The WIDI Master runs on the unit's MIDI OUT alone (CME: "No external power option"): its steps never send anybody to a charger for it. */
     for (const u of ['am4', 'fm9']) assert.match(gear.waysFor(u)[0].steps.join(' '), /It has no other way to be powered\./)
     /* The FM3's U2MIDI Pro: CME's own page, checked on 26 October 2026, and no Amazon link until one has been checked. */
@@ -9827,18 +9884,19 @@ export function run(test) {
      * not something has been tested or not, we just need to keep track of it
      * ourselves in the developer menu" (Justin, 31 October 2026).
      */
-    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
+    assert.match(gear.FM3_WARNING, /^On an FM3, a Bluetooth adapter may overheat\. Use one at your own risk, and unplug it if it gets hot\. The WIDI Uhost with a CME U2MIDI Pro runs on USB power only, and stays cool\. A WIDI Master and a C2MIDI Pro both got very hot on an FM3 and did not work,/)
     assert.ok(!/220|resistor|pin 4|solder/i.test(gear.FM3_WARNING), 'the FM3 warning gives a home-made way round it again')
-    assert.match(gear.FM3_WARNING, /FM3 owners report the same heat with other adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
+    assert.match(gear.FM3_WARNING, /FM3 owners report heat with other adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
     assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
-    /* And the WIDI Master on an AM4, tried and working: said under the AM4's parts, never for an FM3. */
-    assert.match(gear.ALSO_ON_AM4, /^On an AM4, a CME WIDI Master works too[^]*Never on an FM3\.$/)
+    /* The line under an AM4's parts that ended "Never on an FM3" (ALSO_ON_AM4) went when the WIDI Master became the AM4's first way; nothing under another unit's parts is about an FM3 now. */
+    assert.equal(gear.ALSO_ON_AM4, undefined)
     /* The FM3 stays one the page knows, offered with the rest on a copy that opens Bluetooth (offeredUnits), its warning in front. */
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 is gone from the page')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     /* How to connect my Bluetooth device opens on the FM3's warning, red, before its way. */
     const waysPage = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
-    assert.ok(waysPage.indexOf('{warningFor(b.unit) ? <Note tone="fault">') < waysPage.indexOf('{ways.map('), 'How to connect does not put the FM3 warning in front of its way')
+    assert.ok(waysPage.indexOf('{warningFor(b.unit) ? <Note tone="fault">') > 0 && waysPage.indexOf('{warningFor(b.unit) ? <Note tone="fault">') < waysPage.indexOf('<Tabs name="Your adapter"'), 'How to connect does not put the FM3 warning in front of its adapters')
+    assert.ok(waysPage.indexOf('<Tabs name="Your adapter"') < waysPage.indexOf('{way ? <Way way={way} /> : null}'), 'the adapter’s parts and steps are drawn over its tabs')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
     /* The device in hand, passed in, for every part: an iPad's owner reads "Your iPad", and nobody is handed a function to draw. */
@@ -9850,7 +9908,7 @@ export function run(test) {
     assert.match(gear.hookupFor('axefx3', 'tablet').join(' '), /Not THRU: the tablet would only hear itself there\./)
     /* Who makes the parts, and that the app is not them and gets nothing from the links: the guide has said it all along. */
     /* Without "connected", which on this page is the Bluetooth link: under a CME adapter it read as the app failing to reach it. */
-    assert.equal(gear.SELLERS_LINE, 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
+    assert.equal(gear.SELLERS_LINE, 'CME, Yamaha, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
     assert.ok(!/connect/i.test(gear.SELLERS_LINE), 'the sellers’ line reads as a connection status')
     /* One thing driving the unit at a time, until the two together have been tried. */
     assert.match(gear.ONE_AT_A_TIME, /^While you use Bluetooth, quit the Fractal Remote app on the computer, or unplug the unit’s USB cable/)
@@ -9959,13 +10017,11 @@ export function run(test) {
     /* One short list for everybody since every unit opened together: the customer's AM4-only list (GEAR_IN_SHORT_AM4) is gone. */
     assert.equal(gear.GEAR_IN_SHORT_AM4, undefined, 'a customer still has a short list of their own')
     /*
-     * NEVER THE C2MIDI PRO ON AN FM3, TO EVERYBODY, WHATEVER IS PICKED. Its
-     * own line under the units in step 1 on every visit (since 25 October
-     * 2026), and the short list does not say it a second time. "Not for an
-     * FM3" while the FM3 was not offered to customers; what is not for an
-     * FM3 now is the cable.
+     * The line that said "never the C2MIDI Pro or a WIDI Master" on an FM3
+     * under every other unit's parts (NOT_FOR_FM3) is gone since 15 November
+     * 2026: the FM3's own warning is the FM3's, drawn where an FM3 is picked.
      */
-    assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
+    assert.equal(gear.NOT_FOR_FM3, undefined)
     assert.ok(!/FM3/.test(gear.GEAR_IN_SHORT), 'the short list says the FM3 line a second time, right under step 1')
 
 
@@ -10087,25 +10143,37 @@ export function run(test) {
     const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label={stop.label}'))
     assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. Tap Stop to change it\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
 
-    /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
-    const fold = page.slice(page.indexOf('function Fold('), page.indexOf('function Row('))
-    assert.match(fold, /<Press label=\{title\} sub=\{sub \? `\$\{sub\} · \$\{open \? 'tap to hide' : 'tap to show'\}` : open \? 'Tap to hide' : 'Tap to show'\} height=\{52\} onPress=\{onToggle\} \/>/)
+    /* The fold-out rows are gone with the adapters' tabs (15 November 2026): nothing on these pages is folded, and a tab is a Press like every other button, so it is in the tap log and has the haptic. */
+    assert.ok(!/function Fold\(|<Fold /.test(page), 'a fold-out row is back on the Bluetooth pages')
     assert.ok(!/Pressable/.test(page), 'a button on the page that is not a Press, so missing from the tap log')
     assert.match(page, /const openLink = \(url\) => Linking\.openURL\(url\)\.catch\(\(\) => \{\}\)/)
 
     /*
-     * How to connect my Bluetooth device: the unit, then every way for it,
-     * each a row, the first open; each way its parts with View on Amazon,
-     * the firmware, and its steps.
+     * How to connect my Bluetooth device: the unit, then that unit's
+     * adapters as tabs, and under them the one adapter showing: its parts
+     * with View on Amazon, the firmware, and its steps ("with tabs so we
+     * don't have to sort through so much information not relevant to the
+     * unit and device they are using", Justin, 15 November 2026). Until then
+     * every way for the unit was a fold-out row.
      */
     const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('export function BluetoothTrouble('))
-    assert.match(ways, /const ways = waysFor\(b\.unit, deviceNoun\(\)\) const \[open, setOpen\] = useState\(0\)/)
+    assert.match(ways, /const ways = waysFor\(b\.unit, deviceNoun\(\)\) const tabs = adapterTabsFor\(b\.unit\) const \[tab, setTab\] = useAdapterTab\(tabs, b\.adapter\) const way = ways\.find\(\(w\) => w\.key === tab\) \|\| null/)
+    assert.match(ways, /\{tabs\.length \? \( <View style=\{\{ gap: space\.sm \}\}> <Heading>Your adapter<\/Heading> <Tabs name="Your adapter" items=\{tabs\} picked=\{tab\} onPick=\{setTab\} \/> <\/View> \) : null\} \{way \? <Way way=\{way\} \/> : null\}/)
+    /* One adapter on the screen, never the list of them. */
+    assert.ok(!/ways\.map\(/.test(ways), 'every adapter for the unit is drawn again')
+    /* A tab is looking only: it never changes the adapter the app connects to, nor the unit. */
+    const tabHook = page.slice(page.indexOf('function useAdapterTab('), page.indexOf('export function BluetoothWays('))
+    assert.match(tabHook, /function useAdapterTab\(tabs, adapter\) \{ const \[asked, setAsked\] = useState\(null\) \/\*[^*]*\*\/ return \[adapterTabFor\(tabs, \{ asked, name: adapter && !isCable\(adapter\) \? adapterName\(adapter\) : null \}\), setAsked\] \}/)
+    assert.ok(!/forgetAdapter|setBluetooth|switchAdapter|chooseAdapter|letGoOf/.test(tabHook), 'picking an adapter’s tab changes what the app connects to')
     /* With no unit picked, one line to pick one, not the parts list: the parts come with the unit (30 October 2026, "too much to read everywhere you go"). */
     assert.match(ways, /\{!b\.unit \? <Hint>Pick your unit to see what to buy and how it plugs in\.<\/Hint> : null\}/)
     assert.match(ways, /\{warningFor\(b\.unit\) \? <Note tone="fault">\{warningFor\(b\.unit\)\}<\/Note> : null\}/, 'the FM3’s warning is not in front of its way')
     assert.match(ways, /<Press label=\{p\.amazon \? 'View on Amazon' : 'View on the maker’s site'\} height=\{44\} accessibilityLabel=\{p\.amazon \? `View the \$\{p\.name\} on Amazon` : `View the \$\{p\.name\} on the maker’s site`\} onPress=\{\(\) => openLink\(p\.amazon \|\| p\.maker\)\} \/>/)
     assert.match(ways, /\{way\.key === 'uhost' \? <Hint>\{POWER_LINE\}<\/Hint> : null\}/)
-    assert.match(ways, /<Hint>\{way\.key === 'uhost' \? FIRST_TIME : FIRST_TIME_ADAPTER\}<\/Hint>/)
+    /* The firmware line of an adapter that has an app to update it with; Yamaha's has none (way.before, shared/bluetooth-gear waysFor). */
+    assert.match(ways, /\{way\.before \? <Hint>\{way\.before\}<\/Hint> : null\}/)
+    /* What an FM3's owner does about the heat of an adapter fed from its MIDI OUT, in the warning's color, over that adapter's parts. */
+    assert.match(ways, /\{way\.caution \? <Note tone="warn">\{way\.caution\}<\/Note> : null\} \{way\.parts\.map\(/)
     /* Nothing on it says whether a way or a unit was tried (31 October 2026): the record is the Developer page's. */
     assert.ok(!/feelLine|WAY_UNTRIED|untriedUnit|untried\(|\.tried\b/.test(ways), 'the ways page says whether a way or a unit was tried')
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
@@ -10169,14 +10237,15 @@ export function run(test) {
       assert.ok(text.lastIndexOf('amazon.com/dp/') < text.indexOf('<footer>'), `${page} has an Amazon link in its footer`)
       assert.ok(!/gets nothing from them|earns nothing/.test(text), `${page} still says the links earn nothing`)
     }
-    assert.match(src('mobile/src/screens/Bluetooth.js'), /PARTS\[key\]\?\.amazon\)\) \? <Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}/, 'the app’s View on Amazon buttons are shown without the Associates sentence')
+    /* Wherever the adapter showing has a View on Amazon button, and only there (Yamaha's has the maker's page alone). */
+    assert.match(src('mobile/src/screens/Bluetooth.js'), /\{way && way\.parts\.some\(\(key\) => PARTS\[key\]\?\.amazon\) \? <Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}/, 'the app’s View on Amazon buttons are shown without the Associates sentence')
     {
       /* In the app: once, and the last line of How to connect, after the sellers' line. */
       const page = src('mobile/src/screens/Bluetooth.js')
       assert.equal(page.split('<Hint>{AMAZON_DISCLOSURE}</Hint>').length - 1, 1, 'the app says the Associates sentence more than once, or not at all')
       const ways = page.slice(page.indexOf('export function BluetoothWays()'))
       const end = ways.slice(0, ways.indexOf('\n}\n'))
-      assert.match(end, /<Hint>\{SELLERS_LINE\}<\/Hint> : null\}\n(?:\s*\{\/\*[^\n]*\*\/\}\n)?\s*\{b\.unit && [^\n]*<Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}\n\s*<\/View>\n\s*\)\s*$/, 'the Associates sentence is not the last line of How to connect')
+      assert.match(end, /<Hint>\{SELLERS_LINE\}<\/Hint> : null\}\n(?:\s*\{\/\*[^\n]*\*\/\}\n)?\s*\{way && [^\n]*<Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}\n\s*<\/View>\n\s*\)\s*$/, 'the Associates sentence is not the last line of How to connect')
     }
     for (const link of shop) assert.ok(gear.ALL_LINKS.includes(link), `the guide links ${link}, and the gear file does not give it`)
     /* Only the three parts: an untried adapter is named on the guide, never linked to buy. */
@@ -10291,57 +10360,74 @@ export function run(test) {
    */
   test('the FM3 picked shows a warning nothing folds away, and the FM9 and Axe-Fx III steps end with feeling the cable', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
+    /*
+     * A WARNING, NOT A NEVER, SINCE 15 NOVEMBER 2026. "Instead of saying
+     * NEVER use a different Bluetooth device, just have a warning that
+     * devices on the FM3 may overheat and to use at their own risk" (Justin,
+     * with a customer's Yamaha MD-BT01 working on one and a WIDI Jack that
+     * works but gets hot). One sentence, the same wherever the app draws it;
+     * FM3_NEVER, which said "Never the WIDI Master or the C2MIDI Pro … Nor
+     * any adapter that can take power from MIDI OUT", is gone.
+     */
     assert.equal(
-      gear.FM3_NEVER,
-      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+      gear.FM3_WARNING,
+      'On an FM3, a Bluetooth adapter may overheat. Use one at your own risk, and unplug it if it gets hot. The WIDI Uhost with a CME U2MIDI Pro runs on USB power only, and stays cool. A WIDI Master and a C2MIDI Pro both got very hot on an FM3 and did not work, and FM3 owners report heat with other adapters that take power from its MIDI OUT, even on USB power.'
     )
+    assert.equal(gear.FM3_SHORT, 'On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.')
+    assert.equal(gear.FM3_NEVER, undefined)
+    const fm3Words = [gear.FM3_WARNING, gear.FM3_SHORT, gear.FM3_FEEL, gear.FM3_JACK_HOT, ...gear.waysFor('fm3').flatMap((w) => [w.title, w.sub, w.caution, w.before, ...w.steps])].filter(Boolean)
+    for (const line of fm3Words) assert.doesNotMatch(line, /\bnever\b/i, `an FM3’s owner is still told never: ${line}`)
+    for (const line of [gear.FM3_WARNING, gear.FM3_SHORT]) {
+      assert.match(line, /may overheat/, line)
+      assert.match(line, /at your own risk/, line)
+      assert.match(line, /U2MIDI Pro runs on USB power only, and stays cool/, `${line} does not say which one stays cool`)
+    }
     /*
      * NOTHING A CUSTOMER READS SAYS IT WAS TRIED, the FM3's warnings and the
      * parts included. Changed on purpose in the 2 November 2026 audit: this
-     * held FM3_NEVER to "when we tried it, it worked and stayed cool", and
-     * FM3_WARNING and the WIDI Master's adapters said "When we tried" and
-     * "the ones the WIDI Master was tried with". "We don't need to mention
-     * really whether or not something has been tested or not, we just need
-     * to keep track of it ourselves in the developer menu" (Justin, 31
-     * October 2026): that record is TESTED, TRIED_WAYS and TRIED_NOTES, on
-     * Developer → App health → Tried, and is not read here.
+     * held the FM3's line to "when we tried it, it worked and stayed cool",
+     * and FM3_WARNING and the WIDI Master's adapters said "When we tried"
+     * and "the ones the WIDI Master was tried with". "We don't need to
+     * mention really whether or not something has been tested or not, we
+     * just need to keep track of it ourselves in the developer menu"
+     * (Justin, 31 October 2026): that record is TESTED, TRIED_WAYS and
+     * TRIED_NOTES, on Developer → App health → Tried, and is not read here.
      */
     const customerWords = [
-      gear.FM3_NEVER,
-      gear.FM3_WARNING,
-      gear.NOT_FOR_FM3,
-      gear.ALSO_ON_AM4,
+      ...fm3Words,
+      gear.BLUETOOTH_PARTS,
+      gear.BOTH_WAYS,
       gear.VP4_OVER_BLUETOOTH,
       gear.VP4_CANT_HEAR,
+      ...Object.values(gear.ADAPTER_TABS),
       ...Object.values(gear.PARTS).map((p) => (typeof p.does === 'function' ? p.does('phone') : p.does))
     ]
     for (const line of customerWords) assert.doesNotMatch(line, /tried|tested/i, `a customer is told what was tried: ${line}`)
-    /* Since 26 October 2026 ("Using the U2midi pro adapter the FM3 works and does not get hot", "The Widi Master did not work on the FM3 and got very hot"): what to use first, then what never to. */
     /* Said as what happened here and what owners report, with no way round it and nothing said as a fact about the unit. */
-    assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_NEVER))
+    assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_WARNING + gear.FM3_SHORT))
     /*
-     * EVEN ON USB POWER, as the full warning and the guide say: the only FM3
-     * line drawn with the fold closed read, to the owner of a WIDI Jack on a
-     * USB charger, as not about their adapter. "Can take" power, so one that
-     * runs on USB power alone, never from the jack, is not in it.
+     * EVEN ON USB POWER, as the guide says: a WIDI Jack on a USB charger
+     * still feeds from the jack too, so the warning is about it as well.
      */
-    assert.match(gear.FM3_NEVER, /any adapter that can take power from MIDI OUT, even on USB power/, 'the FM3 line that is never folded away leaves out USB power')
-    assert.match(gear.FM3_WARNING, /even on USB power/)
+    assert.match(gear.FM3_WARNING, /take power from its MIDI OUT, even on USB power/, 'the FM3 warning leaves out USB power')
     /* The guide and the notes say the same thing. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(guide, /never use the C2MIDI Pro or a WIDI Master: both got very hot on one/)
-    assert.match(guide, /Its MIDI OUT runs any adapter that draws power from it hot, even on USB power\./)
+    assert.match(guide, /<strong>On an FM3, a Bluetooth adapter may overheat: use one at your own risk\.<\/strong> The C2MIDI Pro and a WIDI Master both got very hot on one/)
+    assert.match(guide, /FM3 owners report heat with other adapters that draw power from its MIDI OUT, even on USB power\./)
     const notes = readFileSync(new URL('../docs/bluetooth-midi.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(notes, /Every adapter that feeds from MIDI Out runs hot on an FM3/)
+    assert.match(notes, /Adapters that feed from MIDI Out run hot on an FM3/)
+    assert.match(notes, /A warning, not a never \(15 November 2026\)/)
     const page = flat('mobile/src/screens/Bluetooth.js')
     /* And whenever an FM3 is the unit that answered a connection made for another unit (review of 25 October 2026). */
     /* Off with the FM3 picked: under the units. On, or answered when another was picked: under the line that says where it stands. Never folded. */
-    const at = page.indexOf("{(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone=\"fault\">{FM3_NEVER}</Note> : null}")
+    const at = page.indexOf("{(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone=\"fault\">{FM3_WARNING}</Note> : null}")
     assert.ok(at > 0, 'the FM3 line is not drawn while it is on with the FM3, or when the FM3 answered')
     assert.ok(at > page.indexOf('{said.line}') && at < page.indexOf('{b.on ? ( <View'), 'the FM3 line is inside one half of the page')
-    const off = page.indexOf("{b.unit === 'fm3' ? <Note tone=\"fault\">{FM3_NEVER}</Note> : null}")
+    const off = page.indexOf("{b.unit === 'fm3' ? <Note tone=\"fault\">{FM3_WARNING}</Note> : null}")
     assert.ok(off > page.indexOf('<Heading>1 · Pick your unit</Heading>') && off < page.indexOf('<Heading>2 · Connect</Heading>'), 'the FM3 line is not under the units when the FM3 is picked')
-    assert.equal((page.match(/\{FM3_NEVER\}/g) || []).length, 2)
+    assert.equal((page.match(/\{FM3_WARNING\}/g) || []).length, 2)
+    /* And over the adapters on How to connect and over the fixes in Troubleshooting (warningFor): four places, one sentence. */
+    assert.equal((page.match(/warningFor\(b\.unit\) \? <Note tone="fault">\{warningFor\(b\.unit\)\}<\/Note> : null\}/g) || []).length, 2)
     /*
      * The steps, numbered, and nothing between them: the heat line that
      * followed the power step on the units nobody here had run is gone
@@ -10368,7 +10454,7 @@ export function run(test) {
     /* The Program Change settings, for some owners only: under the ways, with their condition, never numbered among them. */
     const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
     assert.match(ways, /const midi = midiSettingsFor\(b\.unit, deviceNoun\(\)\)/)
-    assert.ok(ways.indexOf('{midi ? <Hint>{midi}</Hint> : null}') > ways.indexOf('{ways.map('), 'the Program Change settings are among the steps')
+    assert.ok(ways.indexOf('{midi ? <Hint>{midi}</Hint> : null}') > ways.indexOf('{way ? <Way way={way} /> : null}'), 'the Program Change settings are among the steps')
     assert.ok(ways.indexOf('{midi ? <Hint>{midi}</Hint> : null}') < ways.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>'))
   })
 
@@ -14052,7 +14138,7 @@ export function run(test) {
     /* The unit's firmware line, on How to connect, before its ways. */
     const waysPage = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
     assert.match(waysPage, /const firmware = firmwareLineFor\(b\.unit\)/)
-    assert.ok(waysPage.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') < waysPage.indexOf('{ways.map('))
+    assert.ok(waysPage.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') > 0 && waysPage.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') < waysPage.indexOf('<Tabs name="Your adapter"'))
     /*
      * And the record is drawn on Developer → App health → Tried, which only
      * his account opens: each unit, tried or not, the ways it went through,
@@ -16272,7 +16358,7 @@ export function run(test) {
      * The button that takes the cable, named: Connect goes to a Bluetooth
      * adapter kept, or to Apple's screen beside one connected, never to the
      * cable (the path from bug 8519c338). And only the U2MIDI Pro, never
-     * "a USB MIDI cable": Troubleshooting draws the line with no FM3_NEVER
+     * "a USB MIDI cable": Troubleshooting draws the line with no FM3 warning
      * beside it, and the C2MIDI Pro is one too.
      */
     for (const line of [W.fm3CableLine('iPad'), W.FM3_CABLE_WAY('iPad')]) {
@@ -16744,8 +16830,14 @@ export function run(test) {
       b.allowBluetooth(ADMINS[0])
       await b.restoreBluetooth()
       const ids = (l) => l.map((d) => d.id)
-      /* The FM3 picked, the Uhost kept: the U2MIDI Pro, never the C2MIDI Pro (FM3_NEVER) nor the AM4 on its own cable. */
-      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id])
+      /*
+       * The FM3 picked, the Uhost kept: the USB MIDI cables, never the AM4
+       * on its own cable. The C2MIDI Pro too since 15 November 2026: it was
+       * refused for an FM3 by name ("never the C2MIDI Pro"), and nothing is
+       * now: the page's red warning says what it did on one, and the choice
+       * is the owner's ("to use at their own risk", Justin).
+       */
+      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id, C2.id])
       /* With a Bluetooth adapter up beside it Connect takes no cable (cablesFirst); the button still offers it. */
       const up = [{ ...HOST, offline: false }, U2]
       assert.deepEqual(b.cablesConnectTakes(up), [])
@@ -16755,12 +16847,12 @@ export function run(test) {
       assert.equal(b.bluetoothSettings().adapter.id, U2.id)
       assert.equal(b.bluetoothSettings().on, true)
       assert.ok(bench.log.some((l) => l === 'ble Use the USB cable: U2MIDI Pro Port 1, as asked'), 'the tap is not logged')
-      assert.deepEqual(b.cablesToOffer(list), [], 'the cable in use is offered as another')
+      assert.deepEqual(ids(b.cablesToOffer(list)), [C2.id], 'the cable in use is offered as another, or the other cable is not offered')
       /* Use a Bluetooth adapter instead lets it go (Connect will not take it); the button offers it again, and the tap takes it back. */
       assert.equal(b.adapterInsteadOfCable({ byHand: true })?.id, HOST.id)
       assert.equal(b.cableLetGo(U2.id), true)
       assert.ok(!ids(b.cablesConnectTakes([U2])).includes(U2.id))
-      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id], 'a cable let go of by hand is never offered again')
+      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id, C2.id], 'a cable let go of by hand is never offered again')
       assert.equal(b.takeCable(U2, null), false, 'the cable watch takes a cable let go of by hand')
       assert.equal(b.chooseCableHere(U2), true, 'the tap does not take a cable let go of by hand')
       assert.equal(b.cableLetGo(U2.id), false, 'the tap leaves the cable let go of')
@@ -16770,8 +16862,12 @@ export function run(test) {
       list = [HOST, C2, AM4C]
       assert.equal(b.chooseCableHere(U2), false, 'a cable no longer plugged in is chosen')
       assert.equal(b.bluetoothSettings().adapter.id, HOST.id)
-      /* Never a cable the FM3 refuses, even asked for by hand. */
-      assert.equal(b.chooseCableHere(C2), false, 'the C2MIDI Pro is chosen for an FM3')
+      /* Never another unit's own cable, even asked for by hand. */
+      assert.equal(b.chooseCableHere(AM4C), false, 'the AM4 on its own cable is chosen for an FM3')
+      assert.equal(b.bluetoothSettings().adapter.id, HOST.id)
+      /* The C2MIDI Pro, on its owner's tap: chosen, for an FM3 too since 15 November 2026 (it was refused for one by name). */
+      assert.equal(b.chooseCableHere(C2), true, 'the C2MIDI Pro its owner tapped is refused for an FM3')
+      assert.equal(b.bluetoothSettings().adapter.id, C2.id)
       /*
        * The AM4 picked, the U2MIDI Pro kept for the FM3: offered with the
        * rest. A USB MIDI cable on the MIDI jacks (named for no unit) moves
@@ -16809,8 +16905,10 @@ export function run(test) {
     /* bleAdapters cablesFor, the rule both share: Connect's (cablesFirst) is it, less what needs a question. */
     const A = await import('../mobile/src/lib/bleAdapters.js')
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
-    const { neverOnFm3 } = await import('../shared/bluetooth-gear.mjs')
-    assert.deepEqual(ids2(A.cablesFor([HOST, U2, C2, AM4C, { ...U2, id: '71:72', offline: true }], { unit: 'fm3', units: BLE_UNITS, refused: neverOnFm3 })), [U2.id])
+    assert.deepEqual(ids2(A.cablesFor([HOST, U2, C2, AM4C, { ...U2, id: '71:72', offline: true }], { unit: 'fm3', units: BLE_UNITS })), [U2.id, C2.id])
+    /* The rule can still be told what never to take, as it is for anything that is not a cable to a unit: only nothing is refused for an FM3 by its name. */
+    assert.deepEqual(ids2(A.cablesFor([HOST, U2, C2, AM4C], { unit: 'fm3', units: BLE_UNITS, refused: (n) => /C2MIDI/.test(n) })), [U2.id])
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /return cablesFor\(list, \{ unit: saved\.unit, units: BLE_UNITS \}\)\.filter\(/, 'a cable is refused for an FM3 by its name again')
     assert.deepEqual(ids2(A.cablesFor([U2, C2, AM4C], { unit: 'am4', units: BLE_UNITS })), [U2.id, C2.id, AM4C.id])
     function ids2(l) {
       return l.map((d) => d.id)
@@ -16835,7 +16933,7 @@ export function run(test) {
   test('the FM3 says it cannot plug in by its USB port but can by a USB MIDI cable on its MIDI ports, on the page and in Troubleshooting, where a unit can plug in at all, and its heat warning is untouched', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null\}/, 'the FM3’s heat warning moved')
+    assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_WARNING\}<\/Note> : null\}/, 'the FM3’s heat warning moved')
     /* Only where a unit can plug in by cable at all (cablesHere): today's Android copies list no cable, so "can't plug in" would read as the others can. */
     assert.match(step1, /\{b\.unit === 'fm3' && cablesHere\(\) \? <Hint>\{fm3CableLine\(deviceNoun\(\)\)\}<\/Hint> : null\}/, 'the FM3 is not told how it plugs in by cable, or is told on a copy where no unit can')
     const trouble = page.slice(page.indexOf('export function BluetoothTrouble('), page.indexOf('export function BluetoothLimits('))
@@ -17362,12 +17460,13 @@ export function run(test) {
     assert.equal(otherAdapterHere([kept, near], kept, { os: 'ios' })?.id, 'a', 'the bench does not offer a device at all')
     assert.equal(otherAdapterHere([kept, near], kept, rule), null, 'a footswitch was offered as another adapter')
     assert.equal(otherAdapterHere([kept, near, uhost], kept, rule)?.id, 'u', 'a footswitch nearby hid the real adapter')
-    assert.match(flat('mobile/src/lib/bluetooth.js'), /refused: \(name\) => notAnAdapter\(name\) \|\| \(saved\.unit === 'fm3' && !namedForFm3\(name\)\)/)
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /refused: \(name\) => notAnAdapter\(name\) \}/)
   })
 
-  test('which other adapter is here while the one kept is not: one, by name, never the one kept, a cable, the iPhone’s own port, or for an FM3 one it is never offered', async () => {
+  test('which other adapter is here while the one kept is not: one, by name, never the one kept, a cable or the iPhone’s own port, and nothing is ruled out for an FM3 by its name', async () => {
     const { otherAdapterHere } = await import('../mobile/src/lib/bleAdapters.js')
-    const { neverOnFm3, FM3_NEVER_NAMES, waysFor, PARTS } = await import('../shared/bluetooth-gear.mjs')
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const { waysFor, PARTS, adapterKind, ADAPTER_NAMES, notAnAdapter } = gear
     /* Android: scan results, seen nearby. */
     assert.equal(otherAdapterHere([WIDI_JACK], WIDI_MASTER, { os: 'android' }), WIDI_JACK)
     assert.equal(otherAdapterHere([WIDI_MASTER, WIDI_JACK], WIDI_MASTER, { os: 'android' }), WIDI_JACK, 'the one kept is offered as another')
@@ -17395,40 +17494,54 @@ export function run(test) {
     delete silentJack.offline
     assert.equal(otherAdapterHere([masterI, silentJack], masterI, { os: 'ios' }), null, 'a port that does not say it is connected to the iPhone is offered')
     assert.equal(otherAdapterHere([masterI, own, { ...own, id: 'p-pad', name: 'iPad Bluetooth' }], masterI, { os: 'ios' }), null, 'the iPhone’s own port is offered as an adapter')
-    /* For an FM3: never the WIDI Master or the C2MIDI Pro, nor the WIDI Jack or MD-BT01 (FM3_NEVER's "any adapter that can take power from MIDI OUT"). */
-    const fm3 = { os: 'android', refused: neverOnFm3 }
-    assert.equal(otherAdapterHere([WIDI_MASTER], uhost, fm3), null, 'a WIDI Master is offered for an FM3')
-    assert.equal(otherAdapterHere([WIDI_JACK], uhost, fm3), null, 'a WIDI Jack is offered for an FM3')
-    assert.equal(otherAdapterHere([WIDI_MASTER, { ...uhost, id: 'AA:BB:CC:00:00:04' }], uhost, fm3)?.id, 'AA:BB:CC:00:00:04', 'refused adapters are counted as a real choice')
-    for (const name of ['WIDI Master', 'widi master', 'WIDIMaster', 'C2MIDI Pro', 'CME C2MIDI Pro', 'WIDI Jack Bluetooth', 'MD-BT01']) assert.equal(neverOnFm3(name), true, `${name} is offered for an FM3`)
-    for (const name of ['WIDI Uhost', 'WIDI Uhost Bluetooth', '', null, undefined]) assert.equal(neverOnFm3(name), false, `${name} is never offered for an FM3`)
-    assert.ok(Object.isFrozen(FM3_NEVER_NAMES))
-    /* The FM3's own way is never among them, by the names on its parts; the parts never for one always are. */
-    for (const way of waysFor('fm3')) for (const part of way.parts) assert.equal(neverOnFm3(PARTS[part].name), false, `${PARTS[part].name}, the FM3’s own way, is never offered for one`)
     /*
-     * And named for an FM3 by the app itself, only the FM3's own way's
-     * adapter, the WIDI Uhost: an adapter it has no name for could take power
-     * from MIDI OUT, which FM3_NEVER refuses.
+     * AN FM3 LIKE ANY UNIT, SINCE 15 NOVEMBER 2026. Until then the WIDI
+     * Master, the C2MIDI Pro, the WIDI Jack and the MD-BT01 were refused for
+     * an FM3 by name (neverOnFm3), and only the WIDI Uhost was named for one
+     * (namedForFm3). "Instead of saying NEVER use a different Bluetooth
+     * device, just have a warning … use at their own risk" (Justin): the
+     * rules that told a name apart for an FM3 are gone from the gear file,
+     * and what the app is told to refuse is a footswitch, on every unit.
      */
-    const { namedForFm3 } = await import('../shared/bluetooth-gear.mjs')
-    for (const name of ['WIDI Uhost', 'WIDI Uhost Bluetooth', 'widi uhost']) assert.equal(namedForFm3(name), true, `${name}, the FM3’s own way, is never named for one`)
-    for (const name of ['Bluetooth MIDI', 'mi.1', 'UD-BT01', '', null, undefined, 'WIDI Master', 'WIDI Jack Bluetooth', 'C2MIDI Pro', 'MD-BT01']) assert.equal(namedForFm3(name), false, `${name} is named for an FM3`)
-    assert.ok(waysFor('fm3').some((way) => way.parts.some((part) => namedForFm3(PARTS[part].name))), 'the FM3’s own way has no adapter the app names for one')
-    assert.equal(otherAdapterHere([{ id: 'AA:BB:CC:00:00:09', name: 'Bluetooth MIDI' }], uhost, { os: 'android', refused: (n) => !namedForFm3(n) }), null, 'an adapter the app has no name for is named for an FM3')
+    for (const gone of ['neverOnFm3', 'namedForFm3', 'FM3_NEVER_NAMES', 'FM3_OWN_NAMES', 'FM3_NEVER', 'NOT_FOR_FM3']) assert.equal(gear[gone], undefined, `${gone} is back in the gear file`)
+    const anyUnit = { os: 'android', refused: (n) => notAnAdapter(n) }
+    assert.equal(otherAdapterHere([WIDI_MASTER], uhost, anyUnit), WIDI_MASTER)
+    assert.equal(otherAdapterHere([WIDI_JACK], uhost, anyUnit), WIDI_JACK)
+    assert.equal(otherAdapterHere([{ id: 'AA:BB:CC:00:00:09', name: 'Bluetooth MIDI' }], uhost, anyUnit)?.id, 'AA:BB:CC:00:00:09', 'an adapter the app has no name for is refused')
+    /* What is refused is still not one of the choices: with a footswitch beside it, the one real adapter is offered. */
+    assert.equal(otherAdapterHere([{ id: 'AA:BB:CC:00:00:0A', name: 'FootCtrl' }, { ...uhost, id: 'AA:BB:CC:00:00:04' }], uhost, { os: 'android', refused: (n) => /FootCtrl/.test(n) })?.id, 'AA:BB:CC:00:00:04', 'refused devices are counted as a real choice')
     /*
-     * The phone's own pick (pickAdapter): for an FM3, never one of those by
-     * itself. Still listed, and still one of the choices; the tap is the
-     * owner's, under the red FM3 note.
+     * WHICH ADAPTER A NAME IS (adapterKind): the tab How to connect and
+     * Troubleshooting open on. By the name the phone gives, however it
+     * spells it; null for one the app has no steps for.
+     */
+    assert.deepEqual(Object.keys(ADAPTER_NAMES), ['master', 'jack', 'uhost', 'mdbt01'])
+    assert.ok(Object.isFrozen(ADAPTER_NAMES))
+    for (const [name, kind] of [
+      ['WIDI Master', 'master'], ['widi master', 'master'], ['WIDIMaster', 'master'], ['WIDI Master Bluetooth', 'master'],
+      ['WIDI Jack', 'jack'], ['WIDI Jack Bluetooth', 'jack'], ['WIDIJack', 'jack'],
+      ['WIDI Uhost', 'uhost'], ['WIDI Uhost Bluetooth', 'uhost'], ['widi uhost', 'uhost'],
+      ['MD-BT01', 'mdbt01'], ['Yamaha MD-BT01', 'mdbt01'], ['MD BT01', 'mdbt01'], ['MDBT01', 'mdbt01'],
+      ['Bluetooth MIDI', null], ['mi.1', null], ['UD-BT01', null], ['WIDI Core', null], ['C2MIDI Pro', null], ['', null], [null, null], [undefined, null]
+    ]) assert.equal(adapterKind(name), kind, `${name} is read as ${adapterKind(name)}`)
+    /* Every way the app has steps for is told by the name on its adapter, and to its own tab. */
+    for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
+      for (const way of waysFor(unit)) assert.equal(adapterKind(PARTS[way.parts[0]].name), way.key, `${unit}: ${PARTS[way.parts[0]].name} does not open its own tab`)
+    }
+    /*
+     * The phone's own pick (pickAdapter): the only adapter found, whatever
+     * its name and whatever the unit. Still never a device it is told to
+     * refuse, which stays listed for the owner's own tap.
      */
     const { pickAdapter } = await import('../mobile/src/lib/bleAdapters.js')
-    const refusedFm3 = { refused: neverOnFm3 }
-    assert.equal(pickAdapter([WIDI_MASTER], new Set(), refusedFm3), null, 'the only adapter found, a WIDI Master, is chosen for an FM3')
-    assert.equal(pickAdapter([WIDI_MASTER], new Set([WIDI_MASTER.id]), refusedFm3), null, 'a WIDI Master just connected in Apple’s screen is chosen for an FM3')
-    assert.equal(pickAdapter([uhost], new Set(), refusedFm3), uhost)
-    assert.equal(pickAdapter([WIDI_MASTER, uhost], new Set(), refusedFm3), null, 'a refused adapter is not one of the choices any more')
-    assert.equal(pickAdapter([WIDI_MASTER], new Set()), WIDI_MASTER, 'the only adapter found is not chosen for another unit')
+    const refusing = { refused: (n) => /WIDI Master/.test(n) }
+    assert.equal(pickAdapter([WIDI_MASTER], new Set(), refusing), null)
+    assert.equal(pickAdapter([WIDI_MASTER], new Set([WIDI_MASTER.id]), refusing), null)
+    assert.equal(pickAdapter([uhost], new Set(), refusing), uhost)
+    assert.equal(pickAdapter([WIDI_MASTER, uhost], new Set(), refusing), null, 'a refused adapter is not one of the choices any more')
+    assert.equal(pickAdapter([WIDI_MASTER], new Set()), WIDI_MASTER, 'the only adapter found is not chosen')
+    assert.equal(pickAdapter([WIDI_MASTER], new Set(), { refused: (n) => notAnAdapter(n) }), WIDI_MASTER, 'the only adapter found, a WIDI Master, is not chosen: the rule the app passes for an FM3 is this one')
     assert.equal(pickAdapter([androidCable], new Set(), { refused: () => true }), androidCable, 'a cable is refused as an adapter')
-    for (const part of ['master', 'c2midi', 'jackTrs', 'jackDin']) assert.equal(neverOnFm3(PARTS[part].name), true, `${PARTS[part].name} is offered for an FM3`)
   })
 
   test('while the link tries an adapter that is not there, the page offers the one the phone can see, by name, and switches only on the tap', async () => {
@@ -17541,9 +17654,11 @@ export function run(test) {
       }
     }
     /*
-     * An FM3: a WIDI Master it can see is never offered, nor switched to on
-     * any tap, nor is an adapter the app has no name for. Another WIDI Uhost,
-     * the FM3's own way, is: as the other one, since both have its name.
+     * An FM3, like any unit since 15 November 2026: the WIDI Master it can
+     * see is offered by name and switched to on the tap, and so is an
+     * adapter the app has no name for. (Neither was, while the app ruled
+     * adapters out for an FM3 by name; the page's red warning is what an
+     * FM3's owner has now.) With two others here it is a real question.
      */
     {
       const uhost = { id: 'AA:BB:CC:00:00:03', name: 'WIDI Uhost' }
@@ -17557,17 +17672,23 @@ export function run(test) {
         await bench.ble.restoreBluetooth()
         bench.ble.noteBluetooth({ phase: 'connecting', notThere: true })
         assert.equal(await bench.ble.glanceForAdapters(), true)
-        assert.equal(bench.ble.otherAdapterNow(), null, 'a WIDI Master is offered for an FM3')
-        assert.equal(bench.ble.switchAdapter(WIDI_MASTER), false, 'an FM3 is switched to a WIDI Master')
+        assert.equal(bench.ble.otherAdapterNow()?.id, WIDI_MASTER.id, 'a WIDI Master is not offered for an FM3')
         found = [nameless]
-        assert.equal(bench.ble.otherAdapterNow(), null, 'an adapter the app has no name for is offered for an FM3')
-        assert.equal(bench.ble.switchAdapter(nameless), false, 'an FM3 is switched to an adapter the app has no name for')
-        assert.equal(bench.ble.bluetoothSettings().adapter.id, uhost.id)
-        found = [WIDI_MASTER, second]
+        assert.equal(bench.ble.otherAdapterNow()?.id, nameless.id, 'an adapter the app has no name for is not offered for an FM3')
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, uhost.id, 'offering is not switching')
+        found = [WIDI_MASTER, nameless]
+        assert.equal(bench.ble.otherAdapterNow(), null, 'the phone guessed between two adapters for an FM3')
+        found = [second]
         assert.equal(bench.ble.otherAdapterNow()?.id, second.id, 'another WIDI Uhost is not offered for an FM3')
         assert.deepEqual(bench.ble.otherAdapterWords(uhost, second), { line: 'WIDI Uhost isn’t answering. Another WIDI Uhost is here.', button: 'Use the other WIDI Uhost' }, 'two of the same name read like a mistake')
         assert.equal(bench.ble.switchAdapter(second), true)
         assert.equal(bench.ble.bluetoothSettings().adapter.id, second.id)
+        /* And the WIDI Master, on the owner's tap: switched to, and kept as the FM3's. */
+        found = [WIDI_MASTER]
+        bench.ble.noteBluetooth({ phase: 'connecting', notThere: true })
+        assert.equal(bench.ble.switchAdapter(WIDI_MASTER), true, 'an FM3 is not switched to a WIDI Master its owner tapped')
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, WIDI_MASTER.id)
+        assert.equal(bench.ble.bluetoothSettings().unit, 'fm3')
       } finally {
         bench.done()
       }
@@ -18325,9 +18446,9 @@ export function run(test) {
     assert.match(page, /\{offerAgain \? <Press label=\{CONNECT_AGAIN\} sub=\{CONNECT_AGAIN_SUB\} tone="live" height=\{52\} onPress=\{again\} \/> : null\} \{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'Connect again is not first under a silent unit')
     /* Switch to: the unit that answered, one this account can pick, with the adapter going with it. */
     assert.match(page, /const answeredKey = connected && b\.answeredAs \? units\.find\(\(u\) => u\.name === b\.answeredAs\)\?\.key \|\| null : null/)
-    /* And never an FM3 on an adapter the app does not name for one (carriesTo): the FM3 rule. */
-    assert.match(page, /const offerSwitch = !!answeredKey && !cable && canStart && carriesTo\(b\.answeredAs, b\.adapter\)/)
-    assert.match(page, /const carriesTo = \(answered, a\) => answered !== 'FM3' \|\| namedForFm3\(adapterName\(a\)\)/)
+    /* An FM3 too, whatever the adapter, since 15 November 2026 (carriesTo, which kept the button off an adapter the app did not name for an FM3, is gone). */
+    assert.match(page, /const offerSwitch = !!answeredKey && !cable && canStart(?! &&)/)
+    assert.ok(!/carriesTo|namedForFm3/.test(page))
     assert.match(page, /setBluetoothUnit\(answeredKey, \{ carry: true \}\)/)
     /* An iPhone's row for an adapter not connected to it opens Apple's screen, and says so under itself. */
     assert.match(page, /const viaApple = ios && d\.offline && !isCable\(d\) && !shut/)
@@ -18447,38 +18568,47 @@ export function run(test) {
     assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) (?:\/\*.*?\*\/ )?if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{.*?\} if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
   })
 
-  test('the FM3 rule: Switch to FM3 is never offered, nor carried, on an adapter the app does not name for an FM3', async () => {
+  /*
+   * THE FM3 RULE, UNTIL 15 NOVEMBER 2026: Switch to FM3 was never offered,
+   * nor the adapter carried, on an adapter the app did not name for an FM3
+   * (only the WIDI Uhost was). "Instead of saying NEVER use a different
+   * Bluetooth device, just have a warning that devices on the FM3 may
+   * overheat and to use at their own risk" (Justin): an FM3 is switched to
+   * like any unit, whatever the adapter, and the red warning is drawn.
+   */
+  test('an FM3 like any unit: Switch to FM3 carries the adapter whatever it is, an adapter kept with no unit is the FM3’s when the FM3 is picked first, and the red warning is drawn', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
     const BT = 'com.apple.AppleMIDIBluetoothDriver'
     const kept = (d) => ({ id: d.id, name: d.name, driver: d.driver })
     const MASTER = { id: '71:72', name: 'WIDI Master Bluetooth', driver: BT }
     const NAMELESS = { id: '81:82', name: 'BLE MIDI', driver: BT }
+    const YAMAHA = { id: '91:92', name: 'MD-BT01', driver: BT }
     const UHOST = { id: '21:22', name: 'WIDI Uhost Bluetooth', driver: BT }
-    for (const never of [MASTER, NAMELESS]) {
-      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm9', adapter: kept(never) }) }
-      const bench = await bluetoothOnABench({ mod: { ...iphoneModule('allowedAlways').mod, devices: () => [{ ...never, offline: false }] }, disk })
+    for (const adapter of [MASTER, NAMELESS, YAMAHA, UHOST]) {
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm9', adapter: kept(adapter) }) }
+      const bench = await bluetoothOnABench({ mod: { ...iphoneModule('allowedAlways').mod, devices: () => [{ ...adapter, offline: false }] }, disk })
       try {
         const b = bench.ble
         b.allowBluetooth(ADMINS[0])
         await b.restoreBluetooth()
-        assert.equal(b.setBluetoothUnit('fm3', { carry: true }), 'fm9', `${never.name}: switched to the FM3 on it`)
-        assert.equal(b.bluetoothSettings().unit, 'fm9')
-        assert.equal(b.bluetoothSettings().adapter.id, never.id)
-        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.adapters')), { fm9: kept(never) }, `${never.name}: kept as the FM3’s`)
-        assert.ok(bench.log.some((l) => l.endsWith('is not one the app names for an FM3: the FM3 is not switched to on it')), bench.log.join(' | '))
+        assert.equal(b.setBluetoothUnit('fm3', { carry: true }), 'fm3', `${adapter.name}: not switched to the FM3 on it`)
+        assert.equal(b.bluetoothSettings().unit, 'fm3')
+        assert.equal(b.bluetoothSettings().adapter.id, adapter.id)
+        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.adapters')), { fm3: kept(adapter) }, `${adapter.name}: not kept as the FM3’s`)
+        assert.ok(!bench.log.some((l) => /is not one the app names for an FM3/.test(l)), bench.log.join(' | '))
       } finally {
         bench.done()
       }
     }
-    /* An adapter kept with no unit picked yet is not handed to an FM3 picked first, unless the app names it for one. */
-    for (const [adapter, handed] of [[MASTER, false], [UHOST, true]]) {
+    /* An adapter kept with no unit picked yet is the FM3's when the FM3 is picked first, whatever it is. */
+    for (const adapter of [MASTER, YAMAHA, UHOST]) {
       const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: null, adapter: kept(adapter) }) }
       const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
       try {
         bench.ble.allowBluetooth(ADMINS[0])
         await bench.ble.restoreBluetooth()
         bench.ble.setBluetoothUnit('fm3')
-        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, handed ? adapter.id : null, `${adapter.name} ${handed ? 'not ' : ''}handed to the FM3`)
+        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, adapter.id, `${adapter.name} not handed to the FM3`)
       } finally {
         bench.done()
       }
@@ -18493,35 +18623,21 @@ export function run(test) {
         await bench.ble.restoreBluetooth()
         assert.equal(bench.ble.bluetoothSettings().adapter?.id, CABLE.id, 'the bench did not keep the cable')
         bench.ble.setBluetoothUnit('fm3')
-        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, CABLE.id, 'the FM3 on its own USB cable was refused as an adapter not named for it')
+        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, CABLE.id, 'the FM3 on its own USB cable was refused')
       } finally {
         bench.done()
       }
     }
-    /* The WIDI Uhost, the FM3's own: carried, and kept as the FM3's. */
-    {
-      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: kept(UHOST) }) }
-      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
-      try {
-        bench.ble.allowBluetooth(ADMINS[0])
-        await bench.ble.restoreBluetooth()
-        assert.equal(bench.ble.setBluetoothUnit('fm3', { carry: true }), 'fm3')
-        assert.equal(bench.ble.bluetoothSettings().adapter.id, UHOST.id)
-        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.adapters')), { fm3: kept(UHOST) })
-      } finally {
-        bench.done()
-      }
-    }
-    /* The page: the line falls back to Stop, pick and Connect, and no button, for any but the Uhost on an FM3. */
+    /* The file: nothing in it tells an adapter's name apart for an FM3. */
+    const lib = code('mobile/src/lib/bluetooth.js')
+    assert.ok(!/notForFm3|namedForFm3|neverOnFm3/.test(lib), 'lib/bluetooth rules an adapter out for an FM3 by its name again')
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /const adapter = \(carry \|\| !was\) && using \? using : byUnit\[key\] \|\| null/)
     const gear = await import('../shared/bluetooth-gear.mjs')
-    for (const [name, offered] of [['WIDI Master Bluetooth', false], ['C2MIDI Pro', false], ['WIDI Jack', false], ['BLE MIDI', false], ['WIDI Uhost Bluetooth', true]]) {
-      assert.equal(gear.namedForFm3(name), offered, `${name} is ${offered ? 'not ' : ''}named for an FM3`)
-    }
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const switchUnit = \(\) => \{ if \(!offerSwitch\) return arm\(\) setBluetoothUnit\(answeredKey, \{ carry: true \}\) \}/)
     assert.equal(gear.wrongUnitLine({ answered: 'FM3', picked: 'AM4', pickable: true }), 'An FM3 answered, not the AM4. Tap Stop, pick FM3 in step 1, then tap Connect.')
-    /* And the red FM3 warning stays drawn whenever an FM3 answered a connection made for another unit. */
-    assert.match(page, /\(b\.answeredAs === 'FM3' && b\.unit !== 'fm3'\) \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null/)
+    /* And the red FM3 warning is drawn whenever an FM3 answered a connection made for another unit: the adapter on it may be getting hot now. */
+    assert.match(page, /\(b\.answeredAs === 'FM3' && b\.unit !== 'fm3'\) \? <Note tone="fault">\{FM3_WARNING\}<\/Note> : null/)
   })
 
   test('Android: a quick no from the adapter is Bluetooth off only when the module’s own search says so; with Bluetooth on, the ordinary backoff', async () => {
