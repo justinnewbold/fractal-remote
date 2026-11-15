@@ -1051,7 +1051,8 @@ export function am4DumpPart(f) {
   return null
 }
 
-const crcCcitt = (bytes) => {
+/** The container's CRC-16 (CCITT, init 0xAA55), over bytes with its own field zeroed. Shared with lib/gen3-grid. */
+export const crcCcitt = (bytes) => {
   let crc = 0xaa55
   for (const b of bytes) {
     crc ^= b << 8
@@ -1068,7 +1069,7 @@ const crcCcitt = (bytes) => {
  * format can make (one leaf per byte value), so it is refused rather than
  * followed off the end of the stream.
  */
-function unpackBody(packed, want) {
+export function unpackBody(packed, want) {
   let at = 0
   const bit = () => {
     if (at >= packed.length * 8) throw new Error('the preset ended early')

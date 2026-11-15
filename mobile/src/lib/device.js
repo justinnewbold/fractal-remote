@@ -27,6 +27,7 @@ import { linkIsDown } from './tapGate'
 import { notSentError } from './relay-rules'
 import { logDebug } from './debugLog'
 import { tapTime } from './tapTimes'
+import { chainFromZero, withGridEdit } from './chainShape'
 
 /**
  * Every question this app asks a unit, and the one place the demo answers.
@@ -306,6 +307,9 @@ const told = (what, req) =>
  * is. An AM4 is four slots in a chain with no routing; an FM3 is a matrix with
  * eight scenes. The shape of every other answer depends on this one.
  */
+/* The capabilities of the last unit detected: what the chain read's columns are judged by. */
+let chainCaps = null
+
 export const detect = async () => {
   /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
   refused.forget()
@@ -316,6 +320,13 @@ export const detect = async () => {
   vp4Scenes = null
   /* A VP4's screens offer no channels: nothing can switch one from the app (lib/vp4-safety vp4ScreenCaps). What the computer said stays in vp4Caps. */
   if (onVp4) res = vp4ScreenUnit(res)
+  /*
+   * Whether blocks can be placed in its grid, said where the computer leaves
+   * it out (lib/chainShape withGridEdit), and the capabilities kept for the
+   * chain read's columns (`presetBlocks`).
+   */
+  if (res?.capabilities) res = { ...res, capabilities: withGridEdit(res.capabilities, { demo: !!demoDevice(), vp4: isVp4(res) }) }
+  chainCaps = res?.capabilities ?? null
   /*
    * AND THE FIRMWARE, WHICH IS ON THE OTHER ENDPOINT. `/device/detect` answers
    * with the capabilities rather than the whole unit, so a version read only
@@ -356,8 +367,10 @@ export async function currentPreset() {
  * ones a screen wants is that screen's business; see `stageBlocks`.
  */
 export async function presetBlocks() {
-  const list = await remoteRequest('/preset/blocks')
-  if (!Array.isArray(list)) return []
+  const read = await remoteRequest('/preset/blocks')
+  if (!Array.isArray(read)) return []
+  /* AN AM4'S SLOTS COUNT FROM ONE in this read, through the computer and over Bluetooth alike; put back to zero here, as the browser does (lib/chainShape chainFromZero). */
+  const list = chainFromZero(read, chainCaps, { demo: !!demoDevice(), vp4: onVp4 })
   /*
    * AND A BLOCK NEWER THAN THE APP IS KEPT, MARKED `unknown` (lib/new-block).
    * Every block with no slug used to be dropped here, so the Axe-Fx III's NAM

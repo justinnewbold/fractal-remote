@@ -429,7 +429,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['nam-travel.js', 'own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
+  for (const f of ['nam-travel.js', 'own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'chainShape.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -2131,6 +2131,54 @@ export function run(test) {
     /* Every announcement that is not this phone's own echo is held while the
        chain is being written, whatever it would otherwise have read. */
     assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
+    /*
+     * HELD, SO A PLAN OF MANY WRITES ASKS THE UNIT ITSELF (Quick build): the
+     * preset on screen stands still while the chain is written, and the news
+     * of a change does not always come (through a computer a preset changed
+     * at the unit is a scene, or nothing; over Bluetooth a gen-3 unit says
+     * nothing of its own footswitch). Asked every time, no news needed:
+     * same, moved, or unknown when it will not say or names slot -1.
+     */
+    const rigCode = rig.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(rigCode, /export async function unitOnPreset\(n\) \{ let fresh = null try \{ fresh = await device\.currentPreset\(\) \} catch \{ return 'unknown' \} const number = fresh\?\.number if \(!Number\.isInteger\(number\) \|\| number < 0\) return 'unknown' return number === n \? 'same' : 'moved' \}/)
+    assert.match(rigCode, /export function followPresetAfterChainWrite\(\) \{ return followPresetNews\(\) \}/)
+    assert.ok(!/chainPresetNews|leftPresetInChainWrite/.test(rigCode), 'the question waits for news that may never come')
+    const qb = read('mobile/src/components/QuickBuild.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    /* The screen's own number is a move only when it names a real preset: a unit gone quiet shows -1 there, and then the unit is asked. */
+    assert.match(qb, /const where = async \(n\) => \{ const here = ofNumber\(\) return Number\.isInteger\(here\) && here >= 0 && here !== n \? 'moved' : unitOnPreset\(n\) \}/, 'a -1 on the screen is taken for another preset')
+    assert.match(qb, /const n = ofNumber\(\) if \(!Number\.isInteger\(n\) \|\| n < 0\) \{ setBusy\(null\) setSaid\(READ_FAILED\) return \}/, 'a build is held to no preset at all')
+    assert.match(qb, /const held = \(n, gone, call\) => async \(\.\.\.args\) => \{ gone\.unsent = true const on = gone\.moved \? 'moved' : await where\(n\) if \(on === 'moved'\) \{ gone\.moved = true throw new Error\(PRESET_MOVED\) \} if \(on !== 'same'\) throw new Error\(UNIT_QUIET\) gone\.unsent = false return call\(\.\.\.args\) \}/, 'a step of a build goes without asking the unit which preset it is on')
+    assert.match(qb, /placeBlock: held\(n, gone, [\s\S]*clearCell: held\(n, gone, [\s\S]*setCable: held\(n, gone, /)
+    assert.match(qb, /runPlan\(d\.undo, \{ setCable: held\(d\.n, gone, setCable\), placeBlock: held\(d\.n, gone, placeBlock\), clearCell: held\(d\.n, gone, clearCell\) \}\)/, 'an Undo’s steps are not held to the preset')
+    /* The preset a build is for is taken BEFORE its chain is read, so the number the steps are held to is the one whose chain the plan was made from. */
+    assert.match(qb, /setBusy\(CHECKING_EMPTY\) const n = ofNumber\(\) if \(!Number\.isInteger\(n\) \|\| n < 0\) \{[^}]*\} let cells try \{ cells = await gridCells\(\) \}/, 'the preset number is taken after the chain was read')
+    assert.ok(!/const plan = planBuild[\s\S]*const n = ofNumber\(\)/.test(qb))
+    /* Asked while the chain write is still held; then, moved: followed, nothing read back, and the words say whether the run was stopped, never began, or had finished. */
+    assert.equal((qb.match(/const on = gone\.moved \? 'moved' : await where\((?:d\.)?n\) endChainWrite\(\{ refresh: false \}\) if \(on === 'moved'\) \{ followPresetAfterChainWrite\(\)/g) || []).length, 2)
+    /* "After it was sent" only of a run that finished: one that stopped on the way, whatever stopped it, was not all sent. */
+    assert.match(qb, /setSaid\(tried === 0 \? PRESET_MOVED_BEFORE : gone\.moved \|\| !res\.ok \? PRESET_MOVED : PRESET_MOVED_AFTER\) return \}/)
+    assert.match(qb, /setUndoSaid\(\{ bad: true, text: gone\.moved \|\| !res\.ok \? PRESET_MOVED : UNDO_MOVED_AFTER \}\) return \}/)
+    /* Would not say, and not one step went: nothing was built, and no result card is drawn for it. */
+    assert.match(qb, /if \(tried === 0\) \{ if \(on !== 'same'\) followPresetAfterChainWrite\(\) logDebug\([^)]*\) if \(!alive\.current\) return setBusy\(null\) setSaid\(UNIT_QUIET_BEFORE\) return \}/, 'a build of which nothing was sent is drawn as "Sent, but not read back"')
+    /* The same of an Undo: nothing taken out, so the Undo stays to be tapped again. */
+    assert.match(qb, /if \(!res\.ok && res\.done === 0 && gone\.unsent\) \{ if \(on !== 'same'\) followPresetAfterChainWrite\(\) logDebug\([^)]*\) if \(!alive\.current\) return setBusy\(null\) setUndoSaid\(\{ bad: true, text: UNIT_QUIET_BEFORE \}\) return \}/, 'an Undo of which nothing was sent is thrown away')
+    /* And the screen's -1 is not "the chain has changed since" either. */
+    assert.match(qb, /const shown = ofNumber\(\) if \(\(Number\.isInteger\(shown\) && shown >= 0 && shown !== d\.n\) \|\| undoStale\(d\.plan, now, d\.ran\)\) \{/)
+    assert.ok(!/ofNumber\(\) !== d\.n/.test(qb))
+    /* What stopped a run: the app's own reason once, as it is, where the app stopped the step itself; and "read again" only where the chain was. */
+    assert.match(qb, /const stoppedWords = \(res, gone, read\) => \(res\.ok \? null : gone\.unsent \? res\.error : stoppedLine\(res\.failed, res\.error, read\)\)/)
+    assert.match(qb, /stopped: stoppedWords\(res, gone, after !== null\),/)
+    assert.match(qb, /const words = !res\.ok \? \{ bad: true, text: stoppedWords\(res, gone, after !== null\) \}/)
+    assert.ok(!/stoppedLine\(res\.failed, res\.error\)/.test(qb), 'a stop is said with "the chain has been read again" whether it was or not')
+    /* Would not say: nothing is read back as this preset's, and the news is followed for when it can be. */
+    assert.equal((qb.match(/\} else \{ followPresetAfterChainWrite\(\)/g) || []).length, 2)
+    /* An Undo asks first too, before it reads or writes anything. */
+    assert.match(qb, /setBusy\(UNDOING\) const before = await where\(d\.n\) if \(before !== 'same'\) \{/)
+    assert.match(qb, /setUndoSaid\(\{ bad: true, text: before === 'moved' \? UNDO_STALE : READ_FAILED \}\) return \}/)
+    /* Save the preset from the result only ever arms the save. */
+    assert.match(read('mobile/src/screens/Edit.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' '), /const saveFromQuickBuild = \(\) => \{ saveTo\.arm\(\)/, 'a Save armed before the build is confirmed by a tap that never showed its warning')
+    assert.match(read('mobile/src/components/SaveToSlot.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' '), /arm: \(\) => \{ if \(notHere\) \{ setArmed\(false\) setSaid\(\{ tone: 'warn', text: VP4_NO_SAVE \}\) return \} setArmed\(true\) setSaid\(null\) \},/)
+
     /* And the chain read another client's change waits for is held the same way. */
     assert.match(rig, /gridTimer = null syncChainBusy\(\) if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) readOnceCopyRunsOut\(\) \}/, 'announcements held during a write are lost, or read twice')

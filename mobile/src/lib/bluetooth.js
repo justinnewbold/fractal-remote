@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2172,7 +2172,9 @@ export function openWire() {
     /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for his account, the NAM block for everyone (ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     namKnobs: () => ownKnobsLevel(allUnits === true),
     /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
-    save: () => saveOverBluetooth()
+    save: () => saveOverBluetooth(),
+    /* The chain read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain): his account's, until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    chain: () => chainOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2239,3 +2241,12 @@ export const ownKnobsLevel = (admin) => (admin === true || OWN_KNOBS_FOR_EVERYON
  * on the unit, and for the Bluetooth page's words.
  */
 export const saveOverBluetooth = () => allUnits === true || SAVE_OVER_BLUETOOTH_FOR_EVERYONE
+
+/**
+ * Whether this account's chain is read as a grid and changed from the app
+ * over Bluetooth or a USB cable (lib/gen3-grid, lib/am4-chain): his, by the
+ * sign-in kept on the device, until lib/features
+ * CHAIN_OVER_BLUETOOTH_FOR_EVERYONE. For the wire, which also wants Edit
+ * open on the unit.
+ */
+export const chainOverBluetooth = () => allUnits === true || CHAIN_OVER_BLUETOOTH_FOR_EVERYONE

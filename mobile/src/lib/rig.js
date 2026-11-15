@@ -985,6 +985,37 @@ export function beginChainWrite() {
   chainChanged()
   chainWrites += 1
 }
+
+/**
+ * WHICH PRESET THE UNIT IS ON, AGAINST THE ONE A PLAN WAS MADE FOR: 'same',
+ * 'moved', or 'unknown' when it would not say.
+ *
+ * A plan of many writes (Quick build) asks this before every step. Nothing
+ * else can be gone by. The preset on the screen is held still while a
+ * chain write is going (its news is noted, not followed, above). And the
+ * news itself does not always come: through a computer a preset changed
+ * at the unit is announced as a scene, or as nothing at all when the new
+ * preset opens on the same scene; over Bluetooth a gen-3 unit says nothing
+ * of its own footswitch, and the clock that asks is held off while the
+ * line is busy, which a build keeps it. So the unit is asked, each time:
+ * one small read. A unit mid-switch names slot -1, which is 'unknown'.
+ */
+export async function unitOnPreset(n) {
+  let fresh = null
+  try {
+    fresh = await device.currentPreset()
+  } catch {
+    return 'unknown'
+  }
+  const number = fresh?.number
+  if (!Number.isInteger(number) || number < 0) return 'unknown'
+  return number === n ? 'same' : 'moved'
+}
+
+/** The preset news a chain write noted and did not follow, followed now: what the writer calls once it has found the unit on another preset, or could not find out. */
+export function followPresetAfterChainWrite() {
+  return followPresetNews()
+}
 export function endChainWrite({ refresh = true } = {}) {
   if (!chainWrites) return
   chainWrites -= 1

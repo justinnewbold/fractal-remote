@@ -100,6 +100,9 @@ import NoComputerWords from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
+import { askQuickBuild, quickBuildHere } from '../lib/quickBuild'
+import { useQuickBuild } from '../lib/useQuickBuild'
+import { QUICK_BUILD_SUB, QUICK_BUILD_TITLE, isBareChain } from '../lib/starter-chains'
 import TempoDot from '../components/TempoDot'
 import Tile from '../components/Tile'
 import Coach from '../components/Coach'
@@ -361,6 +364,15 @@ export default function Stage({
    * number. Now grey cards stand in for them. See lib/chain-view.
    */
   const chainNow = useChain()
+  /*
+   * QUICK BUILD FROM PLAY (lib/quickBuild): on a preset with nothing but its
+   * Input and Output, one button under Play's empty-chain line that opens
+   * Edit with Quick build's sheet up. By the same door as
+   * Edit's, and only where Play has an Edit to open.
+   */
+  const quickOn = useQuickBuild()
+  const quickBuildOnPlay =
+    !!onOpenEdit && chain === 'ok' && isBareChain(allBlocks) && quickBuildHere({ on: quickOn, vp4: vp4Here(), caps, elsewhere: chainNow.elsewhere })
   const tunerOn = useRig(ofTunerOn)
   const tuning = useRig(ofTuning)
   const bpm = useRig(ofBpm)
@@ -1782,6 +1794,18 @@ export default function Stage({
           {/* A VP4 over Bluetooth is sent presets and scenes and read nothing (lib/bleVp4.js): its chain is empty because it cannot be read, and Play says that, not that the preset is empty. */}
           {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
             <Note>{vp4Here() && overBluetooth(caps) ? VP4_OVER_BLUETOOTH : CHAIN_EMPTY}</Note>
+          ) : null}
+          {quickBuildOnPlay ? (
+            <Press
+              label={QUICK_BUILD_TITLE}
+              sub={QUICK_BUILD_SUB}
+              tone="signal"
+              on
+              onPress={() => {
+                askQuickBuild()
+                onOpenEdit()
+              }}
+            />
           ) : null}
 
           {/*

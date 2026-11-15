@@ -102,6 +102,10 @@ import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, g
 import Sheet from '../components/Sheet'
 import BlockSettings from '../components/BlockSettings'
 import CapturePicker from '../components/CapturePicker'
+import QuickBuild from '../components/QuickBuild'
+import { quickBuildHere } from '../lib/quickBuild'
+import { useQuickBuild } from '../lib/useQuickBuild'
+import { isBareChain } from '../lib/starter-chains'
 import searchIcon from '../../assets/icons/search.png'
 import moreIcon from '../../assets/icons/more.png'
 import moreAndroidIcon from '../../assets/icons/more-vertical.png'
@@ -431,6 +435,24 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
     setTool(which)
     page.current?.scrollTo({ y: 0, animated: true })
   }
+  /*
+   * QUICK BUILD (lib/quickBuild, components/QuickBuild): on a preset with
+   * nothing but its Input and Output, the blocks tapped in order are laid in
+   * one row and joined. His account until features QUICK_BUILD_FOR_EVERYONE;
+   * never a VP4; only where the unit says it edits its grid (`gridEdit`); and
+   * only on this preset's own chain. The wire is never asked: see
+   * lib/quickBuild for why.
+   */
+  const quickOn = useQuickBuild()
+  const quickBuildShown = quickBuildHere({ on: quickOn, vp4: vp4Bench(), caps, elsewhere: chainNow.elsewhere })
+  const chainReadHere = chain === 'ok' && !chainNow.elsewhere
+  const bareNow = chainReadHere && isBareChain(chainAll)
+  const emptyNoteShown = chainReadHere && !chainAll.length && !quickBuildShown
+  /* Save the preset, from Quick build's result: the app's own Save, armed, with its warning at the top of the page. Armed and never written: a Save armed before the build would otherwise be confirmed by this tap, with its warning out of sight. */
+  const saveFromQuickBuild = () => {
+    saveTo.arm()
+    page.current?.scrollTo({ y: 0, animated: true })
+  }
   /* A tool this preset no longer offers (a move to Bluetooth, a chain still on its way) closes. */
   const toolShown = tool === 'chain' ? chainTools : tool === 'modifiers' ? modsHere : tool === 'rename' ? renameHere : false
 
@@ -593,7 +615,11 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
           told us.
         </Note>
       ) : null}
-      {!chainAll.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
+      {emptyNoteShown ? <Note>This preset is empty.</Note> : null}
+      {/* Quick build and the starter chains, on an empty preset (mock-up 1); its sheet stays up past the build it ends. */}
+      {quickBuildShown ? (
+        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} onSave={saveFromQuickBuild} onPlay={onBack} />
+      ) : null}
 
       {/*
         THE KNOBS COME AS HIGH AS THE CHAIN ALLOWS. "In edit move search bar

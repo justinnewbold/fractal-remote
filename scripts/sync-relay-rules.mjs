@@ -646,6 +646,21 @@ export const FILES = [
     target: '../mobile/src/lib/grid-plan.js',
     render: (text) => banner('../shared/grid-plan.mjs') + text.replace("from './new-block.mjs'", "from './new-block.js'")
   },
+  /*
+   * Quick build and starter chains: the words, the kept chains and the plan
+   * that lays a row of blocks on an empty preset. The phone's alone for now
+   * (nothing under src/ imports it, so it is outside the computer app).
+   */
+  {
+    source: '../shared/starter-chains.mjs',
+    target: '../mobile/src/lib/starter-chains.js',
+    render: (text) =>
+      banner('../shared/starter-chains.mjs') +
+      text
+        .replace("from './split-chain.mjs'", "from './split-chain.js'")
+        .replace("from './grid-plan.mjs'", "from './grid-plan.js'")
+        .replace("from './play-words.mjs'", "from './play-words.js'")
+  },
   /* Dragging a block up or down a lane, as grid cells: one copy of the maths, so the
      browser's chain editor and the phone's move the same block to the same column. */
   { source: '../shared/lane-order.mjs', target: '../mobile/src/lib/laneOrder.js' },

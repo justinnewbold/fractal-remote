@@ -4,8 +4,9 @@
   "days": [
     {
       "date": "2026-11-15",
-      "version": "1.90.74",
+      "version": "1.90.76",
       "lines": [
+        "On an AM4, the chain editor shows each block in its real slot, and adding or taking one out changes the right slot. It was one slot along.",
         "Bluetooth: when your adapter is connected but your unit isn’t answering, the note under the pill on Play now says so, with what to check, instead of saying Connected. For a WIDI Master it names its own two plugs: the larger one in MIDI OUT and the small one in MIDI IN.",
         "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion blocks now have their own colors on Play instead of gray. On an FM9, the Vocoder and Tone Match do too."
       ]

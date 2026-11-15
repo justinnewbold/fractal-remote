@@ -385,3 +385,58 @@ export const TONE3000_QUICK_FOR_EVERYONE = false
  * version, and only once he has saved from his phone and said so.
  */
 export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * THE CHAIN, READ AS A GRID AND CHANGED OVER BLUETOOTH OR THE UNIT'S OWN USB
+ * CABLE (lib/gen3-grid on an FM3, FM9 or Axe-Fx III; lib/am4-chain on an
+ * AM4): a block put in a cell or a slot, a cell emptied, a cable joined.
+ *
+ * "The four screens are good. I need everything with the chain builder to
+ * work over Bluetooth also" (Justin, 15 November 2026, of Quick build and
+ * the starter chains). Until then the chain could only be changed through
+ * the computer. What is sent is the computer app's own, byte for byte (the
+ * tests hold every frame to the pinned codec), and every frame of it is
+ * held at the way out to the one job the wire has in hand.
+ *
+ * NOT ONE OF THESE MESSAGES HAS GONE TO A UNIT FROM A PHONE YET: no block
+ * placed, no cable, and neither grid read over an adapter. So it is his
+ * account only (lib/bluetooth chainOverBluetooth): every other account's
+ * Bluetooth answers the four routes "not over Bluetooth" as it always did,
+ * shows nothing new, and a frame of these shapes is refused at the way out.
+ *
+ * OPENING IT TO CUSTOMERS IS A STORE VERSION, not this switch alone: every
+ * copy out was reviewed with notes, and a listing, that say blocks are not
+ * moved, added or removed over Bluetooth (CLAUDE.md, "It is switched on for
+ * customers only in a new store version"), as Edit over Bluetooth itself
+ * was (lib/ble-rule.js EDIT_FROM_STORE). So this says true only in the pull
+ * request of a build pair whose texts say so, keyed to that store version,
+ * and only once he has built a chain from his phone and said so.
+ */
+export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * QUICK BUILD AND STARTER CHAINS (shared/starter-chains.mjs,
+ * components/QuickBuild, components/StarterChains): on an empty preset, the
+ * blocks tapped in order go into one row and are joined from the Input to
+ * the Output, the chain is read back and what landed is said, with one Undo;
+ * and named chains the player keeps, offered on every empty preset and kept
+ * in Settings → Starter chains.
+ *
+ * "Let's also look into building out a way to build a preset quickly from an
+ * empty preset. Maybe a "quick build" to build what blocks go in them
+ * (including NAM blocks) and a quick default starter chain option as well
+ * with settings a user where A user can create their own custom starter
+ * chains with what blocks they want in their starter chain." Then, of the
+ * four pictures: "The four screens are good. I need everything with the
+ * chain builder to work over Bluetooth also" (Justin, 15 November 2026).
+ *
+ * His account first, as every new thing is: NOBODY HAS BUILT A CHAIN THIS
+ * WAY ON A REAL UNIT YET, nor run its Undo. Off, it is his account only
+ * (lib/useQuickBuild); every other account's empty preset says "This preset
+ * is empty." as it always did, and Settings has no Starter chains row.
+ * Where it is drawn is lib/quickBuild `quickBuildHere`: never a VP4, only
+ * where the unit's capabilities say `gridEdit`, and only on this preset's
+ * own chain. It asks nothing about the wire, so it works over Bluetooth on
+ * the day the wire says `gridEdit` there.
+ */
+export const QUICK_BUILD_FOR_EVERYONE = false

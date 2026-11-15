@@ -199,7 +199,7 @@ export const AREAS = [
   {
     area: 'the chain and block editor',
     web: ['src/components/GridEditor.jsx', 'src/components/Modifiers.jsx'],
-    phone: ['mobile/src/screens/Edit.js'],
+    phone: ['mobile/src/screens/Edit.js', 'mobile/src/components/QuickBuild.js'],
     buttons: [
       { does: 'put a new block in an empty slot', web: 'Add', phone: 'Add', unreadable: ['web'] },
       {
@@ -246,11 +246,26 @@ export const AREAS = [
         phone: null,
         why: 'only in the browser — nobody has decided whether the phone should offer it'
       },
+      /*
+       * Quick build (15 November 2026): the phone's is the blocks tapped in
+       * order, laid in one row and joined, or a kept starter chain; the
+       * browser's Starter chain is its fixed five. Its words are constants
+       * (shared/starter-chains.mjs), so unreadable here.
+       */
+      { does: 'build a starting chain on an empty preset', web: 'Starter chain', phone: 'Quick build', unreadable: ['phone'] },
       {
-        does: 'build a starting chain on an empty preset',
-        web: 'Starter chain',
-        phone: null,
-        why: 'only in the browser — nobody has decided whether the phone should offer it'
+        does: 'keep the blocks picked as a named chain, to start another empty preset from',
+        web: null,
+        phone: 'Keep as a starter chain',
+        unreadable: ['phone'],
+        why: 'phone only, for now: Quick build and starter chains are his account’s until QUICK_BUILD_FOR_EVERYONE (mobile/src/lib/features.js); the browser comes in a later change, since importing shared/starter-chains.mjs there makes a computer release'
+      },
+      {
+        does: 'take a Quick build back out in one tap',
+        web: null,
+        phone: 'Undo',
+        unreadable: ['phone'],
+        why: 'phone only, for now, with Quick build itself (above); the browser’s Starter chain has no undo'
       },
       { does: 'attach a modifier to a control', web: 'Attach', phone: 'Attach' },
       {
@@ -1114,6 +1129,9 @@ export function run(test) {
       CONNECT_ROW:
         'phone only, for now: the four ways (Bluetooth adapter, USB cable, a computer, a Raspberry Pi), Bluetooth first, each opening its own steps, from 10 November 2026. Two of the four are Bluetooth, which a browser cannot do, and the browser opens on its own connect page, which already says the computer way and that Bluetooth is in the apps (BLUETOOTH_IN_APPS)',
       /* STAGE_VIEW_NAME: "Stage view" (mobile/src/lib/stageView.js). */
+      /* STARTERS_TITLE: "Starter chains" (shared/starter-chains.mjs). */
+      STARTERS_TITLE:
+        'phone only, for now: the chains Quick build offers on an empty preset, built on 15 November 2026 for his account only until QUICK_BUILD_FOR_EVERYONE (mobile/src/lib/features.js), and the row is not drawn for an account without it (useQuickBuild). The browser comes in a later change: importing the shared file there would make a computer release',
       STAGE_VIEW_NAME:
         'phone only, for now: Play drawn large to read from a stand, his account only until STAGE_VIEW_FOR_EVERYONE (mobile/src/lib/features.js); the browser has no such view yet, and the row is not drawn for an account without it (App.js hands Settings no onStageView)',
       'Get it on your phone or tablet': 'browser only, and only at the computer end (the computer app’s window, and the demo on a computer that could host the rig): a phone or tablet, in the app or in its browser, has no use for a way to get itself onto a phone, and the browser leaves it out there (phoneEnd). At the computer it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
