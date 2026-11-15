@@ -1074,6 +1074,80 @@ what the computer sends for the same edit, and a test holds it there.
     FIRST NUL (gen3-describe decodeDescribe), on purpose unlike the pinned
     codec, which has the same blind spot. What still is not text is
     printed as it came, never a bare "?".
+- **Quick build and starter chains: built 15 November 2026 (1.90.76),
+  HIS ACCOUNT ONLY.** "Let's also look into building out a way to build a
+  preset quickly from an empty preset. Maybe a "quick build" to build what
+  blocks go in them (including NAM blocks) and a quick default starter
+  chain option as well with settings a user where A user can create their
+  own custom starter chains with what blocks they want in their starter
+  chain." Then, of the four pictures (in the session's scratchpad, not the
+  repository): "The four screens are good. I need everything with the
+  chain builder to work over Bluetooth also" (15 November 2026).
+  - *What it is.* On a preset with nothing in it but its Input and Output,
+    Edit shows Quick build and the starter chains in place of "This preset
+    is empty." (components/QuickBuild), and Play one Quick build button
+    under its empty-chain line, which opens Edit with the sheet up. The
+    player taps blocks in order (NAM and the III's other own blocks are in
+    the list, through lib/ownBlocks `ownInPalette`), the app reads the grid
+    fresh, refuses if the preset is no longer bare, places them in one row
+    (the Input's row, else the second) and joins them from the Input to
+    the Output, reads the chain back and says what landed, with one Undo
+    and Save the preset. WHAT THE CARD SAYS IS WHAT THE READ BACK SHOWS,
+    never what was sent: "Built and connected" only where every cell from
+    the one after the Input's to the Output's is fed from that row
+    (`joinBreak`); otherwise "Built, but not joined all the way", with the
+    column where the signal stops. A read back that failed is said as not
+    read (`NOT_READ`, and `UNDO_NOT_READ` for an Undo), never as an empty
+    chain or as everything taken back out. A starter chain is such an order, named and kept
+    on the device, one drawer per unit (`fractal.starterChains`); "Classic
+    rig" (drive, amp, cab, delay, reverb) comes with the app and can stop
+    being the default but never be changed. Settings → My rig → Starter
+    chains makes, renames, orders (Move up / Move down) and removes them,
+    with no unit linked if need be (the unit's list as last read, else
+    every family by name).
+  - *The rules, the words and the plan are one file*, shared/starter-chains.mjs
+    (the phone's copy generated). NOTHING UNDER src/ IMPORTS IT YET: the
+    browser's half is a later change and a computer release. The plan is
+    split-chain's own steps (every place, then a cable out of each column
+    up to the one before the last, never out of the last), run by
+    `runPlan`, and its Undo is the exact inverse, taken back only as far as
+    a stopped run got.
+  - *The switch* is `QUICK_BUILD_FOR_EVERYONE` in features.js, false
+    (lib/useQuickBuild). Where it is drawn is lib/quickBuild
+    `quickBuildHere`: never a VP4, only where the unit's capabilities say
+    `gridEdit === true`, and only on this preset's own chain. It opens to
+    everyone when he says so, with its What's new line then.
+  - *THE COMPUTER NEVER SENT `gridEdit`.* ForgeFX's drivers carry it, but
+    the capabilities it serves are a curated subset that leaves it out, so
+    the phone says it itself from what is there (lib/chainShape
+    `withGridEdit`, asked in lib/device `detect`): `gridRouting` (gen-3
+    and Axe-Fx II) or a linear unit that is not a VP4 (the AM4); the demo
+    every unit but its VP4. A wire that says `gridEdit` itself is believed
+    as it is.
+  - *OVER BLUETOOTH IT IS THE SAME SCREENS.* They reach the unit through
+    five calls of lib/device and nothing else (blockCatalog, gridCells,
+    placeBlock, clearCell, setCable) and never ask which wire is under
+    them (a test holds both). The Bluetooth wire answers those four routes
+    and says `gridEdit: true` for his account since the same change ("The
+    chain over Bluetooth", below), so Quick build opens there too, and on
+    the unit's USB cable into the phone.
+  - *AN AM4'S CHAIN READ COUNTED FROM ONE ON THE PHONE, AND IS PUT BACK TO
+    ZERO SINCE 1.90.76, FOR EVERY ACCOUNT* (lib/chainShape `chainFromZero`,
+    in lib/device `presetBlocks`, as the browser has done since September;
+    the one part of this change a customer sees, and its What's new line). ForgeFX's
+    am4.ts placedBlocks answers slots 1 to 4 and the Bluetooth wire the
+    same, so through the computer the phone's chain editor called slot 1
+    "slot 2", and taking out the block in the first slot cleared the
+    second. Not the demo, whose AM4 counts from zero.
+  - *NOT PROVEN ON A UNIT:* nobody has built a chain this way on a real
+    unit yet, nor run its Undo; on a six-row unit (FM9, Axe-Fx III) with
+    the Input on the top row it builds there but lays no cables (that row's
+    cable is a case nobody has decoded) and says so; and whether the unit
+    keeps a bare wire's joins under a block placed over it is not known, so
+    the plan joins every cell it places into again. His first build is the
+    first check: the result card names what the unit did not take.
+  - *Next:* the browser's half (its Starter chain is still its fixed
+    five), and the chain EDITOR over Bluetooth.
 - **Saving over Bluetooth is built, HIS ACCOUNT ONLY, since 1.90.52 (13
   November 2026).** He had thought it existed ("I think we can actually
   save on Bluetooth now", 12 November, and was told it did not), and then
@@ -1181,7 +1255,7 @@ GONE TO A UNIT FROM A PHONE YET.**
 
 > "The four screens are good. I need everything with the chain builder to
 > work over Bluetooth also" (15 November 2026, of Quick build and the
-> starter chains, below)
+> starter chains, above)
 
 Until then the chain could only be changed through the computer: the phone
 had no message that places a block, and its Bluetooth read of the chain

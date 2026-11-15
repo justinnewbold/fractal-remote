@@ -145,6 +145,10 @@ import { WHATS_NEW_PAGE } from '../lib/whats-new-rule'
 import { STAGE_VIEW_NAME, STAGE_VIEW_SUB } from '../lib/stageView'
 import { CONNECT_ROW, IN_USE, PI_TITLE, PI_TROUBLE_PAGE, STILL_STUCK, TROUBLE_ASK, connectRowStatus, troubleWays, wayInUse } from '../lib/setupWays'
 import { ConnectWays, PiSetup, PiTrouble } from '../components/SetupWays'
+import StarterChains from '../components/StarterChains'
+import { useQuickBuild } from '../lib/useQuickBuild'
+import { useStarterChains } from '../lib/starterChainsHere'
+import { STARTERS_TITLE, startersStatus } from '../lib/starter-chains'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -340,6 +344,9 @@ export default function Settings({
    * every screen to this now.
    */
   const [page, setPage] = useState(startPage)
+  /* Starter chains (lib/quickBuild): his account until features QUICK_BUILD_FOR_EVERYONE, the row and the page alike. */
+  const startersOpen = useQuickBuild()
+  const starterChains = useStarterChains()
 
   /* An account the service has vouched for is the top bar's photo's (lib/accountPhoto; nothing to do when App has said so already). */
   useEffect(() => {
@@ -817,6 +824,8 @@ export default function Settings({
             {onRealVp4 ? (
               <SetupRow title={MIDI_SETUP_TITLE} status={vp4SetupStatus(readVp4Setup(sync), caps)} onPress={() => setPage('vp4')} />
             ) : null}
+            {/* The chains Quick build offers on an empty preset, kept for this unit (components/StarterChains). */}
+            {startersOpen ? <SetupRow title={STARTERS_TITLE} status={startersStatus(starterChains)} onPress={() => setPage('starters')} /> : null}
           </Group>
 
           <Group title="Help" hint={HELP_HINT}>
@@ -1334,6 +1343,14 @@ export default function Settings({
         his account's alone. The card says TONE3000's name itself, so the
         page's head is the only other place it is written.
       */}
+      {/* Settings → Starter chains (mock-up 4): the chains an empty preset is offered, made, named, ordered and removed here. */}
+      {page === 'starters' && startersOpen ? (
+        <>
+          {head(STARTERS_TITLE, 'back')}
+          <StarterChains />
+        </>
+      ) : null}
+
       {page === 'tone3000' && isAdmin(account?.id) ? (
         <>
           {head('TONE3000', 'back')}

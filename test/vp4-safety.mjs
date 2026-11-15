@@ -76,7 +76,7 @@ async function phoneOnABench() {
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (slug, x) => x\n'
   }
-  for (const f of ['bleSwitch.js', 'nam-travel.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
+  for (const f of ['bleSwitch.js', 'nam-travel.js', 'tapGate.js', 'tapTimes.js', 'chainShape.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
     files[f] = esm(lib(f))
   }
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -352,7 +352,7 @@ async function phoneMidiBench() {
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (slug, x) => x\n'
   }
-  for (const f of ['bleSwitch.js', 'nam-travel.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
+  for (const f of ['bleSwitch.js', 'nam-travel.js', 'tapGate.js', 'tapTimes.js', 'chainShape.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
     files[f] = esm(lib(f))
   }
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -1728,8 +1728,8 @@ export function run(test) {
     /* Every check on Edit's screen that takes something away from a VP4 asks the bench; only the unread on/off (a real VP4's alone) asks vp4Here. */
     const code = (text) => text.replace(/\/\*[^]*?\*\//g, '')
     const body = code(edit)
-    /* Ten since 10 November 2026: the block opened by itself, More's rows (chainTools, renameHere), the magnifier and the box behind it, and More's VP4 line (test/edit-more.mjs). */
-    assert.equal((body.match(/vp4Bench\(\)/g) || []).length, 10, 'one of Edit’s VP4 checks leaves the demo’s VP4 out, or there is another to hold')
+    /* Ten since 10 November 2026: the block opened by itself, More's rows (chainTools, renameHere), the magnifier and the box behind it, and More's VP4 line (test/edit-more.mjs). Eleven since 15 November 2026: Quick build's door (lib/quickBuild quickBuildHere), never on a VP4, the demo's included. */
+    assert.equal((body.match(/vp4Bench\(\)/g) || []).length, 11, 'one of Edit’s VP4 checks leaves the demo’s VP4 out, or there is another to hold')
     assert.equal((body.match(/vp4Here\(\)/g) || []).length, 3, 'Edit asks vp4Here somewhere the demo’s VP4 should be asked too')
     assert.equal((body.match(/const unsure = vp4Here\(\) && typeof (?:b|block)\.bypassed !== 'boolean'/g) || []).length, 2)
     /* Play and the requests: device.js's VP4 is never the demo's, as before. */

@@ -413,3 +413,30 @@ export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
  * and only once he has built a chain from his phone and said so.
  */
 export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * QUICK BUILD AND STARTER CHAINS (shared/starter-chains.mjs,
+ * components/QuickBuild, components/StarterChains): on an empty preset, the
+ * blocks tapped in order go into one row and are joined from the Input to
+ * the Output, the chain is read back and what landed is said, with one Undo;
+ * and named chains the player keeps, offered on every empty preset and kept
+ * in Settings → Starter chains.
+ *
+ * "Let's also look into building out a way to build a preset quickly from an
+ * empty preset. Maybe a "quick build" to build what blocks go in them
+ * (including NAM blocks) and a quick default starter chain option as well
+ * with settings a user where A user can create their own custom starter
+ * chains with what blocks they want in their starter chain." Then, of the
+ * four pictures: "The four screens are good. I need everything with the
+ * chain builder to work over Bluetooth also" (Justin, 15 November 2026).
+ *
+ * His account first, as every new thing is: NOBODY HAS BUILT A CHAIN THIS
+ * WAY ON A REAL UNIT YET, nor run its Undo. Off, it is his account only
+ * (lib/useQuickBuild); every other account's empty preset says "This preset
+ * is empty." as it always did, and Settings has no Starter chains row.
+ * Where it is drawn is lib/quickBuild `quickBuildHere`: never a VP4, only
+ * where the unit's capabilities say `gridEdit`, and only on this preset's
+ * own chain. It asks nothing about the wire, so it works over Bluetooth on
+ * the day the wire says `gridEdit` there.
+ */
+export const QUICK_BUILD_FOR_EVERYONE = false
