@@ -1135,8 +1135,16 @@ export function run(test) {
       'You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ' +
       /* No version numbers in the words since 11 November 2026: "You probably just leave out the version numbers though" (Justin). */
       'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. ' +
-      /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
-      'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.'
+      /*
+       * Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. And since 15
+       * November 2026 that warning is the app's own one line and no longer a never ("On an FM3, use a CME U2MIDI Pro, never the
+       * C2MIDI Pro or a WIDI Master, which got very hot on one."): "Yes replace 'this never use a C2MIDI Pro or WIDI Master on an
+       * FM3' with the updated wording" (Justin).
+       */
+      'On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.'
+    /* Word for word the app's (the function is one file and imports nothing, so this is what keeps the two the same). */
+    assert.ok(second.endsWith(` ${(await import('../shared/bluetooth-gear.mjs')).FM3_SHORT}`), 'the email’s FM3 line is not the app’s FM3_SHORT')
+    assert.doesNotMatch(read('supabase/functions/setup-reminder/index.ts').replace(/\/\*[\s\S]*?\*\//g, ''), /\bnever\b[^.\n]*(C2MIDI|WIDI Master)|(C2MIDI|WIDI Master)[^.\n]*\bnever\b/i, 'the setup email still says never of an adapter')
     const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
     /*
      * Asked for with editing off, by name: this is the paragraph every copy
@@ -1271,7 +1279,14 @@ export function run(test) {
     const editLine = 'You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).'
     const on = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: true })
     const off = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: false })
-    assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, use a CME U2MIDI Pro`), 'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
+    assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, a Bluetooth adapter may overheat: use one at your own risk.`), 'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
+    /* The FM3's line is whole in both emails, text and HTML, with editing and without (the HTML keeps the apostrophe-free sentence as it is). */
+    const fm3Line = (await import('../shared/bluetooth-gear.mjs')).FM3_SHORT
+    for (const [which, mail] of [['on', on], ['off', off], ['the reminder', setupEmail('reminder', 'fan@example.com', { bluetooth: true, editing: true })]]) {
+      assert.ok(mail.text.includes(fm3Line), `with editing ${which}, the text email has not the app’s FM3 line`)
+      assert.ok(mail.html.includes(fm3Line), `with editing ${which}, the HTML email has not the app’s FM3 line`)
+      assert.ok(!/\bnever\b[^.]*(C2MIDI|WIDI Master)|use a CME U2MIDI Pro,/i.test(mail.text + mail.html), `with editing ${which}, the email still says never of an adapter`)
+    }
     assert.ok(on.html.includes(editLine), 'the HTML email leaves out the editing sentence')
     assert.ok(!/no editing or saving/.test(on.text), 'the email says there is no editing beside the sentence that says there is')
     assert.ok(off.text.includes('(on a VP4, presets and scenes only), with no editing or saving. On an FM3') && !off.text.includes(editLine), 'with editing off, the Bluetooth paragraph is not what it was')

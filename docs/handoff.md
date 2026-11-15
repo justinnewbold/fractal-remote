@@ -64,8 +64,12 @@ over-the-air updates: no Expo build was started today.
   before Play throws away unsaved changes from Edit or Derek's panel),
   6 (open to customers: `SIDES_FOR_EVERYONE`). Steps 3 (the tuner in a
   side, 1.90.10) and 4 (Derek's block panel, 1.90.15) are in.
-- Play listing (#56 in the old task list): confirm Grok's update, sync
-  store/google-play, delete UNCHECKED.
+- Play listing: store/google-play is Play's own text since 15 November
+  2026 (read from Play, UNCHECKED gone, the FM3's line and two "free"s
+  changed and written). Still Justin's to say: Play's description says "No
+  editing or saving" over Bluetooth and that the app "gets nothing" from
+  its Amazon links, both untrue now; *Google Play Description, from 1.90.0*
+  in docs/app-store.md is ready for the first.
 - Later, from docs/later.md: NAM through the computer, VP4 opt-in editing
   (two decisions pending), FM3/FC6 recording session.
 

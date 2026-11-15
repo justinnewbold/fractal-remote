@@ -285,12 +285,14 @@ from your phone", which, under the name Fractal Remote, reads as Fractal's
 own remote for your Fractal. Since 18 October 2026 it says whose app it is
 not instead, cut to fit, in ordinary letters. It opened "Requires a computer
 and our desktop app" until 30 October 2026, when Bluetooth made that untrue:
-now the two ways, the computer first, 76 of 80. Play changes it any time:
-Play Console → Grow users → Store presence → Store listings → Short
-description.
+then the two ways. This block said "Through a computer, or by Bluetooth"
+(the computer first), which never went onto Play: the line below is Play's
+own, Justin's with his listing of 4 November 2026, read from Play on 15
+November 2026, Bluetooth first, 75 of 80. Play changes it any time: Play
+Console → Grow users → Store presence → Store listings → Short description.
 
 ```
-Through a computer, or by Bluetooth. Not made or supported by Fractal Audio.
+By Bluetooth or through a computer. Not made or supported by Fractal Audio.
 ```
 
 ### Google Play from GitHub (play-text)
@@ -358,15 +360,37 @@ WIDI are names, not emphasis). And while Google is reviewing anything
 else for the app, such as a new Android build, the job tells Google to say
 no rather than cancel that review, so nothing is sent until it is over.
 
-**store/google-play/en-US was filled from this file, not read from Play**
-(4 November 2026): the Name, the short description above, and *Description,
-from 1.89.0*, the last full description this file says went onto Play
-(*Submission day*, step 17). Its UNCHECKED.txt keeps Write it refused until
-Play's live text has been copied in from a run without it and the marker
-deleted, in one pull request; if Play's short description differs from the
-block above, the block changes with it. The seed could not go live as it
-is anyway: its BLUETOOTH paragraph says what has been tried. From then on
-test/play-text.mjs holds the repo's copy to every rule above.
+**store/google-play/en-US is Play's own text since 15 November 2026.** It
+was filled from this file on 4 November (the Name, the short description,
+and *Description, from 1.89.0*) with a marker, UNCHECKED.txt, that kept
+Write it refused. On 15 November the listing was read from Play (play-text
+run 43769734883, Write it unticked) and copied in: the title was the same,
+the short description was Justin's own "By Bluetooth or through a
+computer…" (the block above changed with it), and the full description was
+his listing of 4 November 2026, nothing like the seed. The marker went in
+that pull request, and test/play-text.mjs holds the copy to every rule
+above from then on.
+
+Two things were changed in the copy that day, and written to Play with
+Write it once merged, and nothing else:
+
+- **The FM3's sentence.** "Never plug the C2MIDI Pro or a WIDI Master into
+  an FM3: both got very hot on one." became the app's own one line
+  (`FM3_SHORT`, shared/bluetooth-gear.mjs): the app had stopped saying never
+  for an FM3 that day, and Justin, asked whether the email and the Play
+  description should follow: "Yes replace 'this never use a C2MIDI Pro or
+  WIDI Master on an FM3' with the updated wording".
+- **"free" off the desktop app, twice** ("the free Fractal Remote desktop
+  app", "The free desktop app runs on"). His listing said it, his rule says
+  never (*Never call the computer app free*, above), and the job refuses to
+  write a text that does, so the sentence could not go without it. He was
+  told the same day.
+
+What Play's text still says that the app has outgrown, left as it is
+because it was not asked for: "No editing or saving" over Bluetooth, the
+knob line's "(with a computer)", and "gets nothing from the app's links to
+them" of Amazon (the links carry an Associates tag since 1.90.18).
+*Google Play Description, from 1.90.0* has the first two ready.
 
 **The log is public**, as the repository is: the listing and the pictures
 are public anyway, and vitals prints rates and each problem's kind, place,
@@ -3243,14 +3267,17 @@ Started from the live Google Play Description (updated 4 November 2026),
 which is Justin's own text and already the two ways, Bluetooth first, with
 the trial in it. Five changes from the live Play text and nothing else, so
 he is not surprised by any: "free" taken out before "Fractal Remote desktop app" and before
-"desktop app" (CLAUDE.md: never call the computer app free); "and per
+"desktop app" (CLAUDE.md: never call the computer app free; that one went
+onto Play on 15 November 2026 with the FM3's sentence, which is the app's
+one line here too since that day: *Google Play from GitHub*); "and per
 device" on the trial; WHAT IT DOES's knob line; the BLUETOOTH section's
 "No editing or saving" sentence made what Edit does there; and a USB CABLE
 section after it. Fractal Audio's sentence and the trademark line stay the
 second paragraph. It names neither phone. Within 4000 characters
-(test/limits.mjs); tight, so if anything is added, take "(get it at
-fractal.newbold.cloud/downloads)" out of the first paragraph (it is in the
-computer section too).
+(test/limits.mjs), at 3997: "(get it at fractal.newbold.cloud/downloads)"
+came out of the first paragraph on 15 November 2026 to make room for the
+FM3's longer line (it is in the computer section too), so nothing more
+fits without something else going.
 
 - **Google Play:** once 1.90.0 is live on Android, not before (until then
   the copies Google hands out are 1.89.36, whose Edit stays closed over
@@ -3258,7 +3285,7 @@ computer section too).
   has run a unit by cable from a Play build.
 
 ```
-Control your Fractal unit from your phone, by Bluetooth or through a computer. With Bluetooth, a Bluetooth MIDI adapter goes on the unit's MIDI jacks and your phone controls it directly, with no computer at all. With a computer, your unit plugs into a Mac, Windows PC, Linux computer or Raspberry Pi with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). A computer has less lag and more features.
+Control your Fractal unit from your phone, by Bluetooth or through a computer. With Bluetooth, a Bluetooth MIDI adapter goes on the unit's MIDI jacks and your phone controls it directly, with no computer at all. With a computer, your unit plugs into a Mac, Windows PC, Linux computer or Raspberry Pi with a USB cable, and that computer runs the Fractal Remote desktop app. A computer has less lag and more features.
 
 Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.
 
@@ -3281,7 +3308,7 @@ WHAT IT DOES
 • Colors that can match your Fractal unit (Settings → Colors), so you find things by looking
 
 BLUETOOTH: NO COMPUTER NEEDED
-With a Bluetooth MIDI adapter on the unit's MIDI jacks, your phone controls an AM4, FM3, FM9, Axe-Fx III or VP4 directly, with presets, scenes, effects on and off, channels, tempo and the tuner, within about 30 feet (on a VP4, presets and scenes). On an AM4, FM3, FM9 or Axe-Fx III, Edit opens over Bluetooth too: turn knobs, change models and switch blocks on and off. Changes play right away; to keep one, save it on the unit itself. No looper. It is part of the full version. The parts are sold separately, by other companies (CME, LOOTOOLS, Eldraqth and Anker); Fractal Remote has nothing to do with them or with Amazon, and gets nothing from the app's links to them. Never plug the C2MIDI Pro or a WIDI Master into an FM3: both got very hot on one. What to buy and how to plug it in: Settings → My rig → Bluetooth.
+With a Bluetooth MIDI adapter on the unit's MIDI jacks, your phone controls an AM4, FM3, FM9, Axe-Fx III or VP4 directly, with presets, scenes, effects on and off, channels, tempo and the tuner, within about 30 feet (on a VP4, presets and scenes). On an AM4, FM3, FM9 or Axe-Fx III, Edit opens over Bluetooth too: turn knobs, change models and switch blocks on and off. Changes play right away; to keep one, save it on the unit itself. No looper. It is part of the full version. The parts are sold separately, by other companies (CME, LOOTOOLS, Eldraqth and Anker); Fractal Remote has nothing to do with them or with Amazon, and gets nothing from the app's links to them. On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool. What to buy and how to plug it in: Settings → My rig → Bluetooth.
 
 USB CABLE
 An AM4 can also plug straight into your phone or tablet with a USB cable: no computer and no adapter, with the same features as Bluetooth. Plug it in, then Settings → My rig → Bluetooth. The FM3 can't plug in this way, because its USB port isn't MIDI.

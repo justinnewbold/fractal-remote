@@ -1355,7 +1355,7 @@ export function run(test) {
     const { fenced } = await import('../scripts/store-text.mjs')
     const store = read('docs/app-store.md')
     assert.equal(store.match(/\| \*\*Subtitle\*\* \| 30 \| `([^`]+)` \|/)?.[1], 'Independent · needs a computer')
-    assert.equal(fenced(store, '### Google Play: short description').trim(), 'Through a computer, or by Bluetooth. Not made or supported by Fractal Audio.')
+    assert.equal(fenced(store, '### Google Play: short description').trim(), 'By Bluetooth or through a computer. Not made or supported by Fractal Audio.')
     /* Written rules, so the next screenshot or listing does not undo them. */
     assert.match(flat(store), /\*\*Never a Fractal logo, a product photo or a real Fractal unit\*\* \(18 October 2026\), in any screenshot, App Preview, Play feature graphic, store video or picture on the website\./)
     assert.match(flat(store), /\*\*The one exception is the review videos\*\*/)

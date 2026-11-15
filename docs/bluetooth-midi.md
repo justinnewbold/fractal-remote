@@ -235,9 +235,15 @@ Now:
 - The record is ours (`TRIED_WAYS.fm3`, `TRIED_NOTES.fm3`): no screen says
   either adapter was tried or works.
 
-The setup email's FM3 sentence ("never the C2MIDI Pro or a WIDI Master") is
-the server's (supabase/functions/setup-reminder) and changes only with
-Justin's yes and a redeploy.
+The setup email's FM3 sentence ("never the C2MIDI Pro or a WIDI Master") was
+the server's (supabase/functions/setup-reminder), and Google Play's
+description carried one like it ("Never plug the C2MIDI Pro or a WIDI Master
+into an FM3"). Both became the app's one line (`FM3_SHORT`) the same day,
+on his word: "Yes replace 'this never use a C2MIDI Pro or WIDI Master on an
+FM3' with the updated wording". The email's is held to `FM3_SHORT` by
+test/server.mjs and goes out with a redeploy; Play's goes by the play-text
+job (docs/app-store.md, *Google Play from GitHub*). The App Store's
+Description never had the sentence.
 
 Sources: CME C2MIDI Pro manual v03
 (https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),

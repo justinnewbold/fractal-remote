@@ -319,10 +319,21 @@ export function setupEmail(
    * email any more.
    */
   const units = 'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only)'
+  /*
+   * THE FM3'S WARNING, AS THE APP SAYS IT IN ONE LINE (shared/bluetooth-gear.mjs
+   * FM3_SHORT, which test/server.mjs holds this to word for word: the
+   * function is deployed as this one file and imports nothing). It said "On
+   * an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master,
+   * which got very hot on one." until 15 November 2026, when the app stopped
+   * saying never for an FM3 (a warning and the owner's own risk instead) and
+   * Justin, asked whether the email should follow: "Yes replace 'this never
+   * use a C2MIDI Pro or WIDI Master on an FM3' with the updated wording".
+   */
+  const FM3_LINE = 'On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.'
   const edits = editing === true
     ? `${units}. You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
     : `${units}, with no editing or saving.`
-  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
+  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} ${FM3_LINE}`
   /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */
   const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
   const help = first
