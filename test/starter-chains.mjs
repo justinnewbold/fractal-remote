@@ -247,6 +247,102 @@ export function run(test) {
     assert.equal(plan.joined, true)
   })
 
+  /*
+   * "I'm confused by the built but not joined? Can't build an auto joined
+   * rig?" (Justin, 15 November 2026.) Quick build put an Input, Drive 1,
+   * NAM 1 and an Output on ROW 2 of an empty preset on his Axe-Fx III, sent
+   * three cables along it, and the read back showed the row not joined at
+   * its first cable: the message that joins two cells was wrong for a
+   * six-row unit's row 2 (mobile/src/lib/gen3-grid.js). Along row 3 the old
+   * message and the corrected one are the same bytes, so that is where a
+   * six-row chain goes.
+   */
+  test('Quick build on a SIX-row grid with nothing in it goes on the THIRD row, where every cable is the same bytes from a computer app of any age', async () => {
+    const s = await lib()
+    const g = await import(new URL('../mobile/src/lib/gen3-grid.js', import.meta.url).href)
+    const { picks } = s.resolveChain(['drive', 'nam'], III)
+    const plan = s.planBuild({ cells: [], shape: SIX, palette: III, picks, blocks: [] })
+    assert.equal(plan.ok, true)
+    assert.equal(plan.row, 2, 'his build of 15 November went on row index 1 and was not joined')
+    assert.deepEqual(plan.steps.filter((x) => x.kind === 'place').map((x) => [x.row, x.col, x.blockId]), [[2, 0, 37], [2, 1, 118], [2, 2, 206], [2, 3, 42]])
+    assert.deepEqual(cables(plan), [[2, 0, 2, true], [2, 1, 2, true], [2, 2, 2, true]])
+    assert.deepEqual([plan.joined, plan.joinNote], [true, null])
+    assert.deepEqual(plan.span, { first: 0, last: 3 })
+    /* Every cable of that plan, as the wire numbers it (from one): the same three bytes from the old law and the corrected rule. */
+    for (const [srcRow, srcCol, destRow] of cables(plan)) assert.equal(g.cableAsTheLaw(6, srcCol + 1, destRow + 1), true, `column ${srcCol + 1}`)
+    /* And the same picks on the SECOND row, as they went that day: not one cable of them was. */
+    for (const srcCol of [0, 1, 2]) assert.equal(g.cableAsTheLaw(6, srcCol + 1, 2), false)
+    /* A full row of it, both parities of column, all the way to the last. */
+    for (let srcCol = 1; srcCol <= 13; srcCol++) assert.equal(g.cableAsTheLaw(6, srcCol, s.homeRow(6) + 1), true)
+    /* A read back of this plan's row with every cable in (MADE UP: no unit has been seen to join it), and what is said of it: joined, and said so. */
+    const landed = [cell(2, 0, 37, 'Input 1'), cell(2, 1, 118, 'Drive 1', { fromRows: [2] }), cell(2, 2, 206, 'NAM 1', { fromRows: [2] }), cell(2, 3, 42, 'Output 1', { fromRows: [2] })]
+    const said = s.whatLanded(plan, landed)
+    assert.deepEqual([said.title, said.text], ['Built and connected', '2 blocks in row 3, joined from input to output.'])
+    /* The home row, by the size of the grid: one row, four (an FM3 is as it was), six. */
+    assert.deepEqual([s.homeRow(1), s.homeRow(4), s.homeRow(6)], [0, 1, 2])
+    assert.equal(s.planBuild({ cells: [], shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp'], FM3).picks, blocks: [] }).row, 1, 'an FM3 moved')
+    /* A preset that HAS an Input or an Output says its own row, on six rows as on four: the app does not move a player's ends. */
+    for (const row of [1, 3, 4]) {
+      const own = ends(row, 13)
+      assert.equal(s.planBuild({ cells: own, shape: SIX, palette: III, picks, blocks: chainOf(own) }).row, row)
+    }
+    const outOnly = [cell(4, 9, 42, 'Output 1')]
+    assert.equal(s.planBuild({ cells: outOnly, shape: SIX, palette: III, picks, blocks: chainOf(outOnly) }).row, 4)
+  })
+
+  test('the log has the whole row as the unit read it back, not only where it first stops', async () => {
+    const s = await lib()
+    /* His build of 15 November as it was planned: the ends on row index 1 (the app put them there), two blocks between. */
+    const own = [cell(1, 0, 37, 'Input 1'), cell(1, 3, 42, 'Output 1')]
+    const plan = s.planBuild({ cells: own, shape: SIX, palette: III, picks: s.resolveChain(['drive', 'nam'], III).picks, blocks: chainOf(own) })
+    const blocks = [cell(1, 1, 118, 'Drive 1'), cell(1, 2, 206, 'NAM 1')]
+    /* No cable took: what his card called "stops at column 2", and the log could not tell from one cable lost. */
+    assert.equal(s.rowAsRead(plan, [...own, ...blocks]), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from nothing), column 3 NAM 1 (fed from nothing), column 4 Output 1 (fed from nothing)')
+    /* One cable lost and two kept reads differently, which is the point of the line. */
+    const two = [own[0], blocks[0], { ...blocks[1], fromRows: [1] }, { ...own[1], fromRows: [1] }]
+    assert.equal(s.rowAsRead(plan, two), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from nothing), column 3 NAM 1 (fed from row 2), column 4 Output 1 (fed from row 2)')
+    assert.equal(s.joinBreak(plan, two), 1, 'and the card still says where it first stops')
+    /* Fed from two rows, from another row, a bare wire, an empty cell, a read with no word on cables. */
+    const mixed = [own[0], { ...blocks[0], fromRows: [0, 1] }, cell(1, 2, 1030, 'Shunt 7', { isShunt: true, fromRows: [3] }), { ...own[1], fromRows: undefined }]
+    assert.equal(s.rowAsRead(plan, mixed), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from row 1 and 2), column 3 a bare wire (fed from row 4), column 4 Output 1 (feed not read)')
+    assert.equal(s.rowAsRead(plan, [own[0], blocks[0], own[1]]), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from nothing), column 3 empty, column 4 Output 1 (fed from nothing)')
+    /* A cell on another row is not this row's. */
+    assert.match(s.rowAsRead(plan, [own[0], { ...blocks[0], row: 2 }, blocks[1], own[1]]), /column 2 empty/)
+    /* Nothing to say of a read that did not come, of no plan, or of a linear unit, whose slots have no cables. */
+    assert.equal(s.rowAsRead(plan, null), '')
+    assert.equal(s.rowAsRead(null, []), '')
+    const am4 = s.planBuild({ cells: [], shape: AM4_SHAPE, palette: AM4, picks: s.resolveChain(['amp'], AM4).picks, blocks: [] })
+    assert.equal(am4.ok, true)
+    assert.equal(s.rowAsRead(am4, []), '')
+    /*
+     * A PLAN THAT DOES NOT JOIN THE ENDS STILL SENDS ITS CABLES, and the line
+     * covers every cell those reach (an independent read, 15 November 2026:
+     * it covered the placed cells only, so the cable out of the Input was
+     * left out of the one line written to say which cables took).
+     */
+    const noOut = [cell(1, 0, 37, 'Input 1')]
+    const noEnds = s.planBuild({ cells: noOut, shape: SIX, palette: III.filter((e) => e.family !== 'output'), picks: s.resolveChain(['amp', 'cab'], III).picks, blocks: chainOf(noOut) })
+    assert.deepEqual([noEnds.joined, noEnds.span], [false, null])
+    assert.deepEqual(cables(noEnds), [[1, 0, 1, true], [1, 1, 1, true]], 'the Input’s own cable is sent')
+    assert.equal(s.rowAsRead(noEnds, [noOut[0], cell(1, 1, 58, 'Amp 1', { fromRows: [1] }), cell(1, 2, 62, 'Cab')]), 'row 2 as read: column 1 Input 1, column 2 Amp 1 (fed from row 2), column 3 Cab (fed from nothing)')
+    /* The mirror: an Output on the row and no Input to be had. The cables run on to the Output, across the empty cells, and so does the line. */
+    const outOnly = [cell(1, 5, 42, 'Output 1')]
+    const noIn = s.planBuild({ cells: outOnly, shape: SIX, palette: III.filter((e) => e.family !== 'input'), picks: s.resolveChain(['amp'], III).picks, blocks: chainOf(outOnly) })
+    assert.deepEqual([noIn.joined, noIn.span], [false, null])
+    assert.deepEqual(cables(noIn).map((c) => c[1]), [0, 1, 2, 3, 4])
+    assert.equal(s.rowAsRead(noIn, [cell(1, 0, 58, 'Amp 1'), { ...outOnly[0], fromRows: [1] }]), 'row 2 as read: column 1 Amp 1, column 2 empty, column 3 empty, column 4 empty, column 5 empty, column 6 Output 1 (fed from row 2)')
+    /* A list of rows with something in it that is no row is a read the app does not understand, and is not said as a row. */
+    assert.equal(s.rowAsRead(plan, [own[0], { ...blocks[0], fromRows: ['1', null] }, blocks[1], own[1]]), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (feed not read), column 3 NAM 1 (fed from nothing), column 4 Output 1 (fed from nothing)')
+    assert.match(s.rowAsRead(plan, [own[0], { ...blocks[0], fromRows: [1, 1.5] }, blocks[1], own[1]]), /Drive 1 \(feed not read\)/)
+    /* A plan with nothing in it says nothing rather than throw. */
+    assert.equal(s.rowAsRead({ row: 1, placed: [], steps: [] }, []), '')
+    assert.equal(s.rowAsRead({ row: 1 }, []), '')
+    /* And the screen writes it down, with whether the row read as connected, after every build that was read back. */
+    const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
+    assert.match(qb, /const read = rowAsRead\(plan, after\) if \(read\) logDebug\('chain', 'quick build', read\)/)
+    assert.match(qb, /plan\.joined \? \(landed\.joined \? '; connected from the input to the output' : `; NOT connected\$\{Number\.isInteger\(landed\.stops\) \? `, stops at column \$\{landed\.stops \+ 1\}` : ''\}`\) : ''/)
+  })
+
   test('Quick build over a row of bare wires: a shunt’s cell is free, and the way back puts the shunt back', async () => {
     const s = await lib()
     const cells = [...ends(), ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((c) => ({ row: 1, col: c, effectId: 1024 + c, name: 'Shunt', isShunt: true, fromRows: [1] }))]

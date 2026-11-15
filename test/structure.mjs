@@ -1847,7 +1847,46 @@ export function run(test) {
     const build = grid.slice(grid.indexOf('const buildStarter'), grid.indexOf('const picker ='))
     assert.ok(build.length > 200, 'the starter chain moved; retarget this test')
     assert.ok(build.includes('placeBlock'), 'the starter chain no longer places anything')
-    assert.match(build, /wireRow\(1,/, 'the starter chain places blocks and never joins them up — the preset will be silent')
+    assert.match(build, /wireRow\(row,/, 'the starter chain places blocks and never joins them up — the preset will be silent')
+    /*
+     * ON THE ROW IT PUT THEM ON, and that row is the third on a six-row
+     * unit with no Input or Output in its preset (15 November 2026: a row
+     * built on an Axe-Fx III's second row came back not joined at its first cable;
+     * mobile/src/lib/gen3-grid.js). Every other preset is built on as it
+     * always was, row index 1.
+     */
+    assert.match(build, /const row = starterRow\(\{ linear, rows, blocks \}\)/)
+    assert.match(build, /const onRow = \(blocks \|\| \[\]\)\.filter\(\(b\) => b\.row === row\)/, 'the blocks already there are looked for on another row than the one built on')
+    assert.equal((build.match(/placeBlock\(row, /g) || []).length, 3, 'the input, the blocks and the output are not all placed on the row that is wired')
+    assert.ok(!/placeBlock\(1,|wireRow\(1,|b\.row === 1\b/.test(build), 'a row is still written as 1')
+    /* The rule itself, run: its source is lifted out of the file whole (it imports nothing), so what is run is what the page runs. */
+    const from = grid.indexOf('export const starterRow = ({ linear, rows, blocks }) => {')
+    const to = grid.indexOf('\n}\n', from)
+    assert.ok(from > 0 && to > from, 'the starter chain’s row rule moved; retarget this test')
+    const starterRow = new Function(`${grid.slice(from, to + 2).replace('export const starterRow =', 'const starterRow =')}\nreturn starterRow`)()
+    const ends = (row) => [{ slug: 'input', row, col: 0 }, { slug: 'output', row, col: 11 }]
+    /* Six rows with nothing in the preset: the third row (index 2). */
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [] }), 2, 'an empty preset on a six-row unit')
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: undefined }), 2)
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [{ slug: 'amp', row: 4, col: 3 }] }), 2, 'a block that is no end says nothing of the row')
+    /*
+     * SIX ROWS WITH ITS OWN ENDS: THEIR ROW, WHICHEVER IT IS. The first cut
+     * sent every preset that had an end to row index 1, and an independent
+     * read found what that did to the presets this very change makes (an
+     * Input and an Output on the third row): a second pair placed on the
+     * second row.
+     */
+    for (const row of [0, 1, 2, 3, 5]) assert.equal(starterRow({ linear: false, rows: 6, blocks: ends(row) }), row, `ends on row index ${row}`)
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [ends(4)[1]] }), 4, 'an Output alone says the row')
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [{ slug: 'output', row: 3, col: 9 }, { slug: 'input', row: 1, col: 0 }] }), 1, 'the Input’s row before the Output’s')
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [{ slug: 'input' }] }), 2, 'an end with no row is not a row')
+    assert.equal(starterRow({ linear: false, rows: 6, blocks: [null, { slug: 'input', row: 3, col: 0 }] }), 3)
+    /* Four rows, and a linear unit, are as they always were: row index 1, wherever anything is. */
+    assert.equal(starterRow({ linear: false, rows: 4, blocks: [] }), 1, 'an FM3 moved')
+    for (const row of [0, 1, 2, 3]) assert.equal(starterRow({ linear: false, rows: 4, blocks: ends(row) }), 1, `an FM3 with ends on row index ${row} moved`)
+    assert.equal(starterRow({ linear: false, rows: undefined, blocks: [] }), 1, 'a unit that says no rows')
+    assert.equal(starterRow({ linear: true, rows: 1, blocks: [] }), 1, 'a linear unit is as it was')
+    assert.equal(starterRow({ linear: true, rows: 6, blocks: ends(3) }), 1)
     assert.ok(
       build.indexOf('placeBlock') < build.indexOf('wireRow'),
       'the row is wired before the blocks are in it'
@@ -3369,7 +3408,7 @@ export function run(test) {
      */
     assert.match(
       grid,
-      /placeBlock\(1, linear \? i : plan\.cols\[i\], block\.page\)/,
+      /placeBlock\(row, linear \? i : plan\.cols\[i\], block\.page\)/,
       'the starter chain starts one column late'
     )
   })

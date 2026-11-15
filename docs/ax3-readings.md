@@ -456,3 +456,119 @@ Not in this log: Quick build, the starter chains, anything over Bluetooth,
 and a capture picked for a NAM block (the tap is there, on NAM 2, with the
 app put to sleep straight after it and no line of what it wrote).
 
+
+## Quick build through the Pi: built, and not joined (15 November 2026)
+
+> "I'm confused by the built but not joined? Can't build an auto joined
+> rig? Or make sure the user selects what's needed to build a playable
+> starter rig?"
+
+His Axe-Fx III, the phone on 1.90.80, through the Raspberry Pi 5 on computer
+app 1.90.63. Two builds, each on a preset with nothing in it at all (no
+Input, no Output: the app put both in).
+
+- **Preset 388**: Input 1, Compressor 1, NAM 1, Amp 1, Phaser 1, Output 1 on
+  row 2, columns 1 to 6, then five cables along the row, each `ok`, and
+  `quick build landed — 6 in, 0 not`. He tapped Back to Play; what the card
+  said is not in the log (the log did not yet say whether a row read as
+  joined).
+- **Preset 389**: Input 1, Drive 1, NAM 1, Output 1 on row 2, columns 1 to
+  4, three cables (`cable row 2 column 1 → row 2 — ok`, column 2, column 3),
+  `quick build landed — 4 in, 0 not`, and the card: "Built, but not joined
+  all the way … it stops at column 2." Saved to slot 389 as it was.
+
+So every block went where it was sent, every cable was "taken" (which only
+means the unit sent no refusal within a tenth of a second), and both
+presets were read back whole straight afterwards with every block in (the
+"landed" line is only written from a read back). Preset 389's showed the
+first cable not there. Whether its other two took, that read back did not
+say (the card names only where the row first stops). Whether 388's row read
+as joined is not known: the log line did not yet say, and its card is not
+in the log. One row seen not joined, not two.
+
+### Why: the cable message named another cell
+
+A cable is function 0x01, sub 0x35, and its last three bytes say which two
+cells. On an FM3 the codec's rule (FM3-Edit's own messages bear it out) is
+the two cells' numbers, eight bits each, packed seven to a byte:
+
+```
+from = (srcCol − 1) × rows + (srcRow − 1)        the cell the cable leaves
+to   = srcCol × rows + (destRow − 1)             the cell it feeds, one column on
+b21 = from >> 1     b22 = ((from & 1) << 6) | (to >> 2)     b23 = (to & 3) << 5
+```
+
+For six rows (FM9, Axe-Fx III) the codec has a fitted "law" instead
+(`colTerm`, `destSign`, `|destRow − 3|`). Over the 432 cables it builds:
+
+| The cable goes | The law's bytes are |
+|---|---|
+| into row 3 or 4, from any column | the packing |
+| out of an odd column into row 1, 5 or 6 | the packing |
+| into row 2, from any column | NOT: they name row 6 of the source's own column |
+| out of an even column into row 1 | NOT: they name row 3 of the source's own column |
+| out of an even column into row 5 or 6 | NOT: they name row 1 or 2 of the next column |
+
+270 cables are the packing and 162 are not. What went to his unit for row 2:
+
+| Asked for | Sent (the law) | Which names | The packing |
+|---|---|---|---|
+| row 2, column 1 → row 2, column 2 | `00 41 20` | column 1, row 6 | `00 41 60` |
+| row 2, column 2 → row 2, column 3 | `03 42 60` | column 2, row 6 | `03 43 20` |
+| row 2, column 3 → row 2, column 4 | `06 44 20` | column 3, row 6 | `06 44 60` |
+
+The codec's notes say the law was fitted to 26 cables recorded from
+FM9-Edit, and hold none of the recordings; its own test examples for row 2
+are, two of them, the FM3's bytes for the same cells. Three independent
+reads of the codec, the server and the phone (15 November) found no other
+cause along the way (the numbering, the read back, a stale copy, the order
+of the messages) and no recorded message that contradicts the packing.
+
+### What changed (1.90.82)
+
+- **The computer app builds the packing itself for six rows** (ForgeFX
+  07bc01a, `server/src/gridCable.ts`): the same bytes as before wherever the
+  law was the packing, the cells that were asked for in the other 162. The
+  codec still says what is a cable at all, so the top row from an even
+  column is still refused. This is every feature that joins cells through
+  the computer on an FM9 or an Axe-Fx III: the rows editor, the looper at
+  the end, putting a block back, the browser's Starter chain, Quick build.
+- **The phone's own Bluetooth builder is the same packing**
+  (`mobile/src/lib/gen3-grid.js`), held to the same three frames as the
+  server's test.
+- **Quick build puts a six-row chain on the THIRD row** where the preset has
+  no Input or Output to say (`homeRow` in shared/starter-chains.mjs), and
+  the browser's Starter chain does the same on a preset with neither (and
+  builds on the row of the preset's own Input or Output where it has one).
+  A cable along row 3 is the same bytes from the law and from the packing,
+  so that row does not depend on which computer app is sending. His Pi was
+  on 1.90.63.
+- **The log says the whole row as read back** (`[chain] quick build — row 3
+  as read: column 1 Input 1, column 2 Drive 1 (fed from row 3), column 3
+  NAM 1 (fed from row 3), column 4 Output 1 (fed from row 3)`), and the
+  line before it says whether it read as connected (`quick build landed —
+  4 in, 0 not; connected from the input to the output`, or `; NOT
+  connected, stops at column 2`), not only how many blocks are in.
+
+### Not known yet
+
+- **Whether a unit takes the packing where the law was wrong.** Nobody has
+  seen one do it. The first build on row 2 (a preset that already has its
+  Input there) through a computer app from 1.90.82, or over Bluetooth, is
+  the first check, and the "as read" line is where to look.
+- **Whether row 3 joins**, which rests on the law being right where it
+  agrees with the packing. His next Quick build on an empty preset is that
+  check, through the Pi as it is.
+- **What the unit did with the three messages it was sent.** They named
+  cells in row 6 that hold nothing. A read of the preset does not show
+  cables into an empty cell, so preset 389 as saved may carry three marks
+  there that nothing draws. It has no sound path either way; build again on
+  another empty preset rather than mend it.
+- **The top row from an even column.** The codec calls it "not decoded" and
+  refuses it. It is very likely just the packing: out of an even column the
+  law is wrong into four of the six rows (1, 2, 5 and 6), so recordings of
+  those cables could not have been made to fit it. It stays refused until a
+  row-2 build has been seen to join.
+- **What Axe-Edit III itself sends.** One recording of it drawing a cable
+  into row 2 (MIDI Monitor, as for the capture) would settle every line
+  above at once.

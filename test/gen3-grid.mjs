@@ -33,7 +33,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { AM4_CODES, GRID_UNITS, cableWalked, gridDigests, idsFor } from './gen3-grid-sweep.mjs'
+import { AM4_CODES, GRID_UNITS, cableFromCodec, cableWalked, gridDigests, idsFor } from './gen3-grid-sweep.mjs'
 import { makeDump, makeLive } from './gen3-grid-fake.mjs'
 
 const GRID = '../mobile/src/lib/gen3-grid.js'
@@ -117,11 +117,96 @@ export function run(test) {
       slot: c.buildAm4Slot
     })
     assert.deepEqual(mine, kept.sums)
-    /* And the walk is the whole of it: every cable a unit has but the undecoded ones, so none is left out of the digest by a loop that stops early. */
+    /*
+     * And the walk is the whole of what is the codec's: every FM3 cable, and
+     * on six rows the 270 (joined and parted, 540) whose bytes the codec's
+     * law gets right, so none is left out of the digest by a loop that stops
+     * early. The other 162 are the next test's.
+     */
     assert.deepEqual(
       Object.fromEntries(Object.entries(GRID_UNITS).map(([name]) => [name, kept.sums[name].cables])),
-      { fm3: 4 * 11 * 4 * 2, fm9: (6 * 13 - 6) * 6 * 2, axefx3: (6 * 13 - 6) * 6 * 2 }
+      { fm3: 4 * 11 * 4 * 2, fm9: 270 * 2, axefx3: 270 * 2 }
     )
+  })
+
+  /*
+   * "I'm confused by the built but not joined?" (Justin, 15 November 2026:
+   * Quick build on his Axe-Fx III, an Input, two blocks and an Output on row
+   * 2, three cables, every message taken, and a read back with the row not
+   * joined at its first cable.) The
+   * codec's six-row cable law names the wrong cell for a cable into row 2.
+   */
+  test('a six-row cable names the two cells that were asked for, every one of them; the codec’s law does not, into row 2', async () => {
+    const g = await import(GRID)
+    /* The codec's fitted six-row law, as the phone sent it until 1.90.82 and as a computer app from before then still does. Kept here to say what those bytes meant. */
+    const law = (srcRow, srcCol, destRow) => {
+      const cell = (srcCol - 1) * 6 + (srcRow - 1)
+      const colTerm = Math.floor((3 * (srcCol - 1)) / 2) + 1
+      return [Math.floor(cell / 2), ((cell & 1) << 6) | (colTerm + (destRow >= 3 ? 1 : 0)), ((Math.abs(destRow - 3) + (srcCol % 2 === 0 ? 2 : 0)) % 4) << 5]
+    }
+    const checked = (f) => (f.slice(0, -2).reduce((a, b) => a ^ b, 0) & 0x7f) === f[f.length - 2]
+    for (const [name, unit] of Object.entries(GRID_UNITS)) {
+      let same = 0
+      let changed = 0
+      for (let srcCol = 1; srcCol < unit.cols; srcCol++) {
+        for (let srcRow = 1; srcRow <= unit.rows; srcRow++) {
+          if (!cableWalked(unit, srcRow, srcCol)) continue
+          for (let destRow = 1; destRow <= unit.rows; destRow++) {
+            for (const join of [true, false]) {
+              const f = g.buildGridCable(unit.model, srcRow, srcCol, destRow, join)
+              const where = `${name} row ${srcRow}, column ${srcCol} into row ${destRow}`
+              assert.equal(f.length, 26, where)
+              assert.ok(checked(f), `${where}: the checksum`)
+              assert.equal(f[12], join ? 0x01 : 0x02, `${where}: joined or parted`)
+              /* Read back out of the frame: the cell it leaves, and the cell it feeds, one column on. */
+              const { from, to } = g.cableCells(f[21], f[22], f[23])
+              assert.equal(from, (srcCol - 1) * unit.rows + (srcRow - 1), `${where}: the cell it leaves`)
+              assert.equal(to, srcCol * unit.rows + (destRow - 1), `${where}: the cell it feeds`)
+              assert.equal(Math.floor(to / unit.rows), Math.floor(from / unit.rows) + 1, `${where}: not into the next column`)
+              for (const b of f.slice(21, 24)) assert.ok(b >= 0 && b <= 0x7f, `${where}: a byte over seven bits`)
+            }
+            if (unit.rows !== 6) continue
+            const mine = g.buildGridCable(unit.model, srcRow, srcCol, destRow, true).slice(21, 24).join(',')
+            const laws = law(srcRow, srcCol, destRow).join(',')
+            /* Which cables the law got right is the sweep's rule and the phone's own, and they are one rule. */
+            assert.equal(mine === laws, cableFromCodec(unit, srcCol, destRow), `${name} row ${srcRow}, column ${srcCol} into row ${destRow}: the law and the packing`)
+            assert.equal(g.cableAsTheLaw(6, srcCol, destRow), cableFromCodec(unit, srcCol, destRow), 'the phone’s own word for which cables an older computer app gets right')
+            if (mine === laws) same++
+            else changed++
+          }
+        }
+      }
+      if (unit.rows === 6) assert.deepEqual([same, changed], [270, 162], `${name}: how many cables are the law’s own bytes, and how many changed`)
+      assert.equal(g.cableAsTheLaw(unit.rows, 2, 2), unit.rows !== 6, `${name}: row 2 from an even column`)
+    }
+    /* THE ROW THAT DID NOT JOIN: row 2 of an Axe-Fx III, columns 1 to 4. What went out named row 6 of the source's own column. */
+    for (const [i, srcCol] of [1, 2, 3].entries()) {
+      const { from, to } = g.cableCells(...law(2, srcCol, 2))
+      assert.equal(from, i * 6 + 1, 'the law’s bytes have the source right')
+      assert.equal(to, i * 6 + 5, 'read as the two cells, the law’s row-2 bytes name row 6 of the SAME column')
+    }
+    /* Out of an even column into rows 5 and 6, the law names rows 1 and 2 of the next column: a real cable, into the wrong row. */
+    assert.deepEqual(g.cableCells(...law(2, 2, 5)), { from: 7, to: 12 })
+    assert.deepEqual(g.cableCells(...law(2, 2, 6)), { from: 7, to: 13 })
+    /* What goes out now, by its bytes: the same three frames the computer app's own test holds (ForgeFX server/test/drivers/grid-cable.test.ts), so the two ends cannot drift. */
+    assert.equal(hex(g.buildGridCable(0x10, 2, 1, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 00 41 60 03 f7')
+    assert.equal(hex(g.buildGridCable(0x10, 2, 2, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 03 43 20 42 f7')
+    assert.equal(hex(g.buildGridCable(0x10, 2, 3, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 06 44 60 00 f7')
+    /* And along row 3, where Quick build puts a chain on a six-row unit, the law's bytes and these are the same, column after column: an older computer app sends the same bytes there. (Whether a unit joins that row has not been seen.) */
+    for (let srcCol = 1; srcCol <= 13; srcCol++) {
+      assert.deepEqual(g.buildGridCable(0x10, 3, srcCol, 3, true).slice(21, 24), law(3, srcCol, 3), `row 3, column ${srcCol}`)
+      assert.deepEqual(g.buildGridCable(0x12, 4, srcCol, 4, true).slice(21, 24), law(4, srcCol, 4), `row 4, column ${srcCol}`)
+      assert.ok(g.cableAsTheLaw(6, srcCol, 3) && g.cableAsTheLaw(6, srcCol, 4))
+      assert.equal(g.cableAsTheLaw(6, srcCol, 2), false, 'no cable into row 2 is right from an older computer app')
+    }
+    /* An FM3's rule IS the packing with four rows (FM3-Edit's own messages bear it out), which is why six rows are packed the same way. */
+    for (let srcCol = 1; srcCol <= 11; srcCol++) for (let srcRow = 1; srcRow <= 4; srcRow++) for (let destRow = 1; destRow <= 4; destRow++) {
+      const cell = (srcCol - 1) * 4 + (srcRow - 1)
+      assert.deepEqual(g.cableWhere(4, srcRow, srcCol, destRow), [Math.floor(cell / 2), ((cell & 1) << 6) | srcCol, (destRow - 1) << 5])
+    }
+    /* The shared rules send a six-row chain to the third row, and say why in the same place this file does. */
+    const rules = await import(new URL('../shared/starter-chains.mjs', import.meta.url).href)
+    assert.equal(rules.homeRow(6), 2)
   })
 
   test('the frames themselves, read off the bytes: which cell, which block, which cable', async () => {

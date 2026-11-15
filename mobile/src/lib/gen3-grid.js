@@ -10,13 +10,14 @@
  * to a unit: bleWire sends them, one at a time, through its one way out.
  *
  * WHAT IS SENT IS THE COMPUTER'S OWN, BYTE FOR BYTE. Each frame here is the
- * one forgefx-midi builds for the same thing at the commit
- * desktop/forgefx.lock.json pins (buildClearBlock, buildSetGridCell,
- * buildSetGridRouting, buildRequestGridLayout, buildRequestPresetDump), and
- * test/gen3-grid.mjs holds every one of them to the codec over every cell
- * and every cable there is. The computer app has placed blocks and joined
- * rows on players' units with these since its chain editor came. Over a
- * Bluetooth adapter nobody had sent one before this file.
+ * one the computer app sends for the same thing: forgefx-midi's at the
+ * commit desktop/forgefx.lock.json pins (buildClearBlock, buildSetGridCell,
+ * buildSetGridRouting, buildRequestGridLayout, buildRequestPresetDump),
+ * EXCEPT WHERE A SIX-ROW CABLE GOES (below), which the computer app now
+ * builds itself (ForgeFX server/src/gridCable.ts) and this file builds the
+ * same way. test/gen3-grid.mjs holds every one of them, over every cell and
+ * every cable there is. Over a Bluetooth adapter nobody had sent one before
+ * this file.
  *
  *   select a cell   01 30 00 | 00 00 00 00 | cell, five septets | 00 00 00 00
  *   put a block     01 32 00 | block id, 14 bits | 00 00 | cell, 14 bits | 00 × 7
@@ -30,10 +31,49 @@
  * wrong cell without it), so the phone does too. A block id of 0 empties the
  * cell.
  *
- * THE CABLE ON A SIX-ROW GRID HAS ONE CASE NOBODY HAS DECODED: out of the
- * TOP row from an even column. The codec refuses to build it, and so does
- * this file (`cableKnown`). Every other cable on an FM9 and an Axe-Fx III,
- * and every cable on an FM3, is byte-confirmed against Fractal's editors.
+ * WHERE A CABLE GOES IS THE TWO CELLS' OWN NUMBERS, eight bits each, packed
+ * seven to a byte: the cell it leaves, and the cell it feeds one column on.
+ *
+ *   from = (srcCol − 1) × rows + (srcRow − 1)     to = srcCol × rows + (destRow − 1)
+ *   b21 = from >> 1     b22 = ((from & 1) << 6) | (to >> 2)     b23 = (to & 3) << 5
+ *
+ * On an FM3 that is the codec's own rule, borne out by FM3-Edit's messages.
+ * FOR SIX ROWS THE CODEC HAS A FITTED "LAW" INSTEAD, AND IT NAMES THE WRONG
+ * CELL FOR SOME CABLES. It is this packing wherever a cable goes into row 3
+ * or 4, and out of an odd column into row 1, 5 or 6 (270 of the 432 cables
+ * it builds on a unit). For the other 162, read as the packing, its bytes
+ * name:
+ *
+ *   into row 2, from any column              row 6 of the source's OWN column
+ *   out of an even column into row 1         row 3 of the source's OWN column
+ *   out of an even column into row 5 or 6    row 1 or 2 of the next column
+ *
+ * Its notes hold no recorded message for any of those, and two of its row-2
+ * examples are the FM3's bytes for the same cells.
+ *
+ * WHAT A UNIT DID WITH THE LAW'S BYTES (15 November 2026, Justin's Axe-Fx
+ * III through the computer app on his Raspberry Pi): Quick build put an
+ * Input, two blocks and an Output on row 2 of an empty preset and sent
+ * three cables along it. Every message was taken, all four blocks were
+ * there on the read back, and the row was not joined at its first cable
+ * (whether the other two took, that read back did not say).
+ *
+ * So a six-row cable is the packing here and in the computer app (from the
+ * release that carries ForgeFX's gridCable.ts): the same bytes as before
+ * wherever the law was the packing, the cells that were asked for
+ * everywhere else. NOT SEEN ON A UNIT YET in the cables that changed, and an
+ * OLDER COMPUTER APP STILL SENDS THE LAW'S, which is why Quick build puts a
+ * chain on a six-row unit's THIRD row (shared/starter-chains `homeRow`):
+ * a cable along row 3 is the same bytes either way, so that row does not
+ * depend on which computer app is sending. (Whether a unit joins it is the
+ * next thing his log will say: no cable of these has been seen to take.)
+ *
+ * ONE CABLE IS STILL REFUSED: out of a six-row grid's TOP row from an even
+ * column (`cableKnown`). The codec refuses it as "not decoded", the computer
+ * app still goes by that, and so does this file. It is very likely just the
+ * packing too: out of an even column the law is wrong into four of the six
+ * rows, so recordings of those cables could not have been made to fit it.
+ * It opens when a row-2 build has been seen to join.
  *
  * TWO WAYS TO READ THE GRID, AND WHY BOTH.
  *
@@ -134,8 +174,9 @@ export function buildGridPut(model, row, col, blockId) {
 
 /**
  * Whether a cable out of (srcRow, srcCol) into destRow of the next column is
- * one this unit has and whose bytes are known. On a six-row grid, out of the
- * top row from an even column is the one case nobody has decoded.
+ * one this unit has and the app builds. On a six-row grid, out of the top
+ * row from an even column is the one the codec and the computer app refuse,
+ * so this refuses it too (see the head of this file).
  */
 export function cableKnown(model, srcRow, srcCol, destRow) {
   const size = gridSize(model)
@@ -147,23 +188,35 @@ export function cableKnown(model, srcRow, srcCol, destRow) {
   return true
 }
 
+/** Where a cable goes, as its three bytes: the cell it leaves and the cell it feeds (see the head of this file). Wire numbers, from one. */
+export function cableWhere(rows, srcRow, srcCol, destRow) {
+  const from = (srcCol - 1) * rows + (srcRow - 1)
+  const to = srcCol * rows + (destRow - 1)
+  return [from >> 1, ((from & 1) << 6) | (to >> 2), (to & 3) << 5]
+}
+
+/** The two cell numbers three such bytes name: what a test, or the log, reads back out of a frame. */
+export const cableCells = (b21, b22, b23) => ({ from: (b21 << 1) | (b22 >> 6), to: ((b22 & 0x3f) << 2) | (b23 >> 5) })
+
+/**
+ * Whether the pinned codec's six-row law builds the SAME three bytes for this
+ * cable: into row 3 or 4, or out of an odd column into row 1, 5 or 6. An
+ * older computer app sends the law's bytes, so through one of those these
+ * are the only six-row cables whose bytes name the two cells that were asked
+ * for. Always true on four rows. Nothing in the app asks this yet: it is the
+ * rule written down where the tests can hold it, for the day a screen has to
+ * say "update the computer app" over a row an older one cannot join.
+ */
+export function cableAsTheLaw(rows, srcCol, destRow) {
+  if (rows !== 6) return true
+  return destRow === 3 || destRow === 4 || (srcCol % 2 === 1 && (destRow === 1 || destRow === 5 || destRow === 6))
+}
+
 /** A cable joined (`join` true) or parted. Null for one that cannot be built (`cableKnown`). */
 export function buildGridCable(model, srcRow, srcCol, destRow, join = true) {
   if (!cableKnown(model, srcRow, srcCol, destRow)) return null
   const { rows } = gridSize(model)
-  const cell = (srcCol - 1) * rows + (srcRow - 1)
-  const b21 = Math.floor(cell / 2)
-  let b22
-  let b23
-  if (rows === 4) {
-    b22 = ((cell & 1) << 6) | srcCol
-    b23 = (destRow - 1) << 5
-  } else {
-    const colTerm = Math.floor((3 * (srcCol - 1)) / 2) + 1
-    b22 = ((cell & 1) << 6) | (colTerm + (destRow >= 3 ? 1 : 0))
-    b23 = ((Math.abs(destRow - 3) + (srcCol % 2 === 0 ? 2 : 0)) % 4) << 5
-  }
-  return frame(model, FN.PARAM, [GRID_SUB.CABLE, 0x00, 0, 0, 0, 0, join ? CABLE_JOIN : CABLE_PART, 0, 0, 0, 0, 0, 0, 0x02, 0x00, b21, b22, b23])
+  return frame(model, FN.PARAM, [GRID_SUB.CABLE, 0x00, 0, 0, 0, 0, join ? CABLE_JOIN : CABLE_PART, 0, 0, 0, 0, 0, 0, 0x02, 0x00, ...cableWhere(rows, srcRow, srcCol, destRow)])
 }
 
 /** "Where is everything on the grid?": the live read. */

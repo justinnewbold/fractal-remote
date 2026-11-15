@@ -703,6 +703,25 @@ const listedEnd = (palette, end) =>
   (palette || []).filter((e) => familyOf(e) === end && Number.isInteger(e.page)).sort((a, b) => (a.instance || 0) - (b.instance || 0))[0] || null
 
 /**
+ * THE ROW A CHAIN GOES ON where the preset has no Input or Output to say:
+ * the second (row index 1), where factory presets keep theirs, and on a
+ * SIX-ROW unit (FM9, Axe-Fx III) the THIRD.
+ *
+ * Why the third. On 15 November 2026 Quick build put an Input, two blocks and
+ * an Output on row 2 of an empty preset on Justin's Axe-Fx III and sent the
+ * cables; every message was taken, and the read back showed all four blocks
+ * and the row not joined at its first cable. The message that joins two
+ * cells was wrong for a six-row unit's row 2 (mobile/src/lib/gen3-grid.js
+ * has the whole of it): it named another cell. Along rows 3 and 4 the old
+ * message and the corrected one are the same bytes, so a chain there does
+ * not depend on which computer app sends them, and a player's may well be
+ * from before the correction. Row 3 of the two, the nearer to the second,
+ * where a chain used to go. NOT SEEN ON A UNIT YET: that row 3 joins rests
+ * on the old message being right where it and the corrected one agree.
+ */
+export const homeRow = (rows) => (rows >= 6 ? 2 : rows > 1 ? 1 : 0)
+
+/**
  * Where the blocks go, without the steps: the row, the Input's and Output's
  * columns (and whether each is placed here), and the free cells between.
  */
@@ -723,7 +742,7 @@ function layout({ cells, shape = {}, palette = [], blocks = [] }) {
   const output = ends.find((x) => x.end === 'output')?.c || null
   if (input && output && input.row !== output.row) return { ok: false, why: ENDS_APART }
   const rows = map.rows
-  const row = input ? input.row : output ? output.row : rows > 1 ? 1 : 0
+  const row = input ? input.row : output ? output.row : homeRow(rows)
   const inEntry = !input ? listedEnd(palette, 'input') : null
   const outEntry = !output ? listedEnd(palette, 'output') : null
   let inCol = input ? input.col : null
@@ -957,6 +976,49 @@ export function joinBreak(plan, cellsAfter) {
     if (col === plan.span.last && cell.isShunt) return col
   }
   return null
+}
+
+/**
+ * THE PLAN'S ROW AS THE UNIT READ IT BACK, for the log and nowhere else: each
+ * cell from the first the plan cares about to the last, and which rows of the
+ * column before feed it. The card says only where the row FIRST stops; a log
+ * that says the same cannot tell one cable that did not take from three, and
+ * that is the difference between a message the unit dropped and a message
+ * that was wrong (his 15 November log could not say). Empty for a linear
+ * unit, whose slots have no cables.
+ */
+export function rowAsRead(plan, cellsAfter) {
+  if (!plan || plan.linear || !Array.isArray(cellsAfter)) return ''
+  /*
+   * EVERY CELL THE PLAN TOUCHED: the ones it placed into, and both ends of
+   * every cable it sent. Not `span` alone, which a plan has only when it
+   * joins the Input to the Output: a preset with an Input and no Output (or
+   * the other way round) still has its cables sent, from the Input's column
+   * or on to the Output's, and the cells those reach are the ones a log is
+   * read for.
+   */
+  const cols = (plan.placed || []).map((p) => p.col)
+  for (const step of plan.steps || []) if (step.kind === 'cable' && step.srcRow === plan.row && step.destRow === plan.row) cols.push(step.srcCol, step.srcCol + 1)
+  if (plan.span) cols.push(plan.span.first, plan.span.last)
+  const whole = cols.filter((c) => Number.isInteger(c))
+  if (!whole.length) return ''
+  const first = Math.min(...whole)
+  const last = Math.max(...whole)
+  const parts = []
+  for (let col = first; col <= last; col++) {
+    const cell = cellsAfter.find((c) => c && c.row === plan.row && c.col === col)
+    if (!cell) {
+      parts.push(`column ${colLabel(col)} empty`)
+      continue
+    }
+    const what = cell.isShunt ? 'a bare wire' : cell.name || `block ${cell.effectId}`
+    /* Only whole row numbers are said: anything else in the list is a read the app does not understand, and is said as that. */
+    const rows = Array.isArray(cell.fromRows) ? cell.fromRows.filter((r) => Number.isInteger(r)) : null
+    const fed = rows === null || rows.length !== cell.fromRows.length ? 'feed not read' : rows.length ? `fed from row ${rows.map((r) => rowLabel(r)).join(' and ')}` : 'fed from nothing'
+    /* The first cell is where the row starts (the Input, or the first block of a row with none): nothing the plan sent feeds it. */
+    parts.push(`column ${colLabel(col)} ${what}${col === first ? '' : ` (${fed})`}`)
+  }
+  return `row ${rowLabel(plan.row)} as read: ${parts.join(', ')}`
 }
 
 /**

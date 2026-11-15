@@ -23,12 +23,23 @@
  * the codec still refuses a cable out of a six-row grid's top row from an
  * even column. If a later codec builds it, this stops and says so, and the
  * phone's rule (gen3-grid cableKnown) is what to look at.
+ *
+ * AND WHERE THE CODEC IS NOT FOLLOWED. On a six-row grid the codec's cable
+ * bytes are a fitted law that names the wrong cell for some cables (into row
+ * 2; out of an even column into row 1, 5 or 6): mobile/src/lib/gen3-grid.js
+ * has how that was found. Those cables are not in the digest (the sweep's
+ * `cableFromCodec`), and this checks the split both ways on the codec in
+ * hand: where the digest covers a cable the codec's bytes ARE the plain
+ * packing of its two cells, and where it does not they are NOT. If a later
+ * codec builds the packing everywhere, this stops and says so: then the
+ * phone and the computer app (ForgeFX gridCable.ts) can go back to the
+ * codec's own bytes for every cable.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { GRID_UNITS, cableWalked, gridDigests } from '../test/gen3-grid-sweep.mjs'
+import { GRID_UNITS, cableFromCodec, cableWalked, gridDigests } from '../test/gen3-grid-sweep.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'test', 'gen3-grid-codec.json')
@@ -57,6 +68,35 @@ for (const unit of Object.values(GRID_UNITS)) {
     }
   }
 }
+
+/* The plain packing of a cable's two cells, written out here too: what the codec's bytes are measured against. */
+const packed = (rows, srcRow, srcCol, destRow) => {
+  const fromCell = (srcCol - 1) * rows + (srcRow - 1)
+  const toCell = srcCol * rows + (destRow - 1)
+  return [fromCell >> 1, ((fromCell & 1) << 6) | (toCell >> 2), (toCell & 3) << 5].join(',')
+}
+let lawIsPacking = 0
+let lawIsNot = 0
+for (const unit of Object.values(GRID_UNITS)) {
+  for (let srcCol = 1; srcCol < unit.cols; srcCol++) {
+    for (let srcRow = 1; srcRow <= unit.rows; srcRow++) {
+      if (!cableWalked(unit, srcRow, srcCol)) continue
+      for (let destRow = 1; destRow <= unit.rows; destRow++) {
+        const built = gen3.buildSetGridRouting({ srcRow, srcCol, destRow, rows: unit.rows, op: gen3.ROUTING_OP_CONNECT }, unit.model)
+        const same = built.slice(21, 24).join(',') === packed(unit.rows, srcRow, srcCol, destRow)
+        const where = `row ${srcRow}, column ${srcCol} into row ${destRow} on a ${unit.rows}-row grid`
+        if (cableFromCodec(unit, srcCol, destRow)) {
+          if (!same) throw new Error(`the codec's cable bytes for ${where} are not the two cells' numbers, and the digest holds the phone to them: the sweep's cableFromCodec is wrong for this codec`)
+          lawIsPacking++
+        } else {
+          if (same) throw new Error(`the codec now builds the two cells' numbers for ${where}: its six-row law has changed, so see whether gen3-grid.js and ForgeFX's gridCable.ts can go back to the codec's bytes`)
+          lawIsNot++
+        }
+      }
+    }
+  }
+}
+console.log(`the codec's cable bytes are the two cells' numbers for ${lawIsPacking} cables (every FM3 cable, and 270 on each six-row unit), and are not for ${lawIsNot} (162 on each six-row unit)`)
 
 const sums = gridDigests({
   select: (model, row, col) => gen3.buildClearBlock({ row, col, rows: rowsOf(model) }, model),

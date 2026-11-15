@@ -31,6 +31,19 @@ import { ownInChainEditor, ownInPalette } from '../../shared/own-blocks.mjs'
  */
 const STARTER_ORDER = ['drive', 'amp', 'cab', 'delay', 'reverb']
 
+/**
+ * The row a starter chain is built on (counted from nought). Everywhere but
+ * a six-row grid: the second, as it always was. On a six-row grid (an FM9,
+ * an Axe-Fx III): the row the preset's own Input is on, else its Output's,
+ * and the third where it has neither. `buildStarter` says why.
+ */
+export const starterRow = ({ linear, rows, blocks }) => {
+  if (linear || !(rows >= 6)) return 1
+  const ends = blocks || []
+  const end = ends.find((b) => b?.slug === 'input') || ends.find((b) => b?.slug === 'output')
+  return Number.isInteger(end?.row) ? end.row : 2
+}
+
 /* The question Remove asks, in the phone's words — test/both-ends.mjs holds
    the two ends to the same sentence. */
 const removeQuestion = (name) => `Remove ${name || 'this block'}?`
@@ -431,7 +444,50 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
        * neither with a drive that nothing feeds and nothing that reaches the
        * jack. Both are silent, and both look perfect on screen.
        */
-      const onRow = (blocks || []).filter((b) => b.row === 1)
+      /*
+       * WHICH ROW: the second (row index 1), where factory presets keep
+       * theirs. On a SIX-ROW unit (an FM9, an Axe-Fx III) the row the
+       * preset's own Input or Output is on, and the third where it has
+       * neither.
+       *
+       * The message that joins two cells was wrong for a six-row unit's
+       * second row: a row built there on an Axe-Fx III came back with every
+       * block in and its first cable not there (15 November 2026;
+       * mobile/src/lib/gen3-grid.js has the whole of it). The computer app
+       * builds the message another way from 1.90.82, but this page also
+       * drives computer apps from before that, and along the third row the
+       * old message and the new are the same bytes, whichever computer app
+       * sends them. (Not seen on a unit yet, either of them.)
+       *
+       * THE PRESET'S OWN ENDS SAY THE ROW, ON SIX ROWS. The third row is now
+       * where the phone's Quick build and this button put an Input and an
+       * Output, so a preset with nothing in it but those two, on that row,
+       * is a common thing to meet. Built on the second row regardless, as
+       * the first cut of this did, it got a second Input and Output placed
+       * beside the ones it had.
+       *
+       * THREE THINGS THIS DOES NOT MEND, all as they were before in kind.
+       * A six-row preset whose ends are on the SECOND row is built there,
+       * and through a computer app older than 1.90.82 every cable along
+       * that row names another cell: none is refused, this page says
+       * "Built a starter chain", and the row is not joined (the one thing
+       * of all this that has been SEEN, on 15 November 2026). The same for
+       * the cables out of every other column along the fifth and sixth
+       * rows. A
+       * preset whose ends are on the TOP row is built there, where the
+       * cables out of every other column are refused: what is said after
+       * the build ("the unit refused N of the M connections along the row")
+       * is the only word of it, and the preset is silent until the row is
+       * joined on the unit. And a preset whose Input and Output are on
+       * DIFFERENT rows is built on the Input's, with an Output asked for
+       * there too; the phone's Quick build refuses such a preset in words,
+       * and this button does not yet.
+       *
+       * On four rows nothing has changed: row index 1, wherever the ends
+       * are, as it always was.
+       */
+      const row = starterRow({ linear, rows, blocks })
+      const onRow = (blocks || []).filter((b) => b.row === row)
       const has = (slug) => palette.some((b) => b.slug === slug)
       const plan = chainPlan({
         onRow,
@@ -444,14 +500,14 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
 
       if (plan.input !== null && !onRow.some((b) => b.slug === 'input')) {
         const into = palette.find((b) => b.slug === 'input')
-        if (into) await placeBlock(1, plan.input, into.page)
+        if (into) await placeBlock(row, plan.input, into.page)
       }
       for (const [i, block] of fits.entries()) {
-        await placeBlock(1, linear ? i : plan.cols[i], block.page)
+        await placeBlock(row, linear ? i : plan.cols[i], block.page)
       }
       if (plan.output !== null && !onRow.some((b) => b.slug === 'output')) {
         const out = palette.find((b) => b.slug === 'output')
-        if (out) await placeBlock(1, plan.output, out.page)
+        if (out) await placeBlock(row, plan.output, out.page)
       }
       /*
        * And join the row up, or the starter chain is five blocks that make no
@@ -459,7 +515,7 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
        * anything, and an empty preset has no cabling of its own to inherit.
        * A linear unit has no grid and nothing to wire.
        */
-      const wiring = linear ? null : await wireRow(1, plan.wireTo)
+      const wiring = linear ? null : await wireRow(row, plan.wireTo)
       onChanged(`Built a starter chain — ${fits.map((b) => b.name).join(', ')}`)
       if (wiring?.refused) {
         setIssue(
