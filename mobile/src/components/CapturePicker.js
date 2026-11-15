@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { CAPTURES_SHOWN, captureMore, captureNumber, captureSaid, capturesFound } from '../lib/captureList'
+import { CAPTURES_SHOWN, captureMore, captureNumber, captureSaid, capturesFound, newestFirst } from '../lib/captureList'
 import { captureHead, loadCaptures, nameCapture, useCaptures } from '../lib/captureListHere'
 import Note from './Note'
 import Press from './Press'
@@ -93,7 +93,8 @@ export default function CapturePicker({ slot, choosing = null, disabled = false,
     /* Read now if it has never been read whole, or there is reason to think it has changed; else it is simply there. */
     loadCaptures()
   }
-  const found = capturesFound(captures.list, find)
+  /* Newest first (lib/captureList newestFirst says what stands in for "newest"); the list itself stays in slot order. */
+  const found = capturesFound(newestFirst(captures.list), find)
   const reading = captures.loading ? `Reading the captures on the unit: ${captures.asked} of ${captures.total}` : null
 
   return (
@@ -110,7 +111,7 @@ export default function CapturePicker({ slot, choosing = null, disabled = false,
         open={open}
         onClose={close}
         title="Capture"
-        note={browsing && library.offered ? 'Captures from TONE3000. One you preview or get plays on the channel this block is on.' : 'The captures on the unit. The one picked plays on the channel this block is on.'}
+        note={browsing && library.offered ? 'Captures from TONE3000. One you preview or get plays on the channel this block is on.' : 'The captures on the unit, newest first. The one picked plays on the channel this block is on.'}
         tall={browsing && library.offered}
         scrollKey={browsing && library.offered ? 'library' : undefined}
       >

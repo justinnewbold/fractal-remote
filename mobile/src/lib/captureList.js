@@ -89,6 +89,24 @@ export function captureMore(head) {
   return [said(head?.by) ? `by ${said(head.by)}` : '', gear].filter(Boolean).join(' · ')
 }
 
+/**
+ * NEWEST FIRST, FOR THE SCREEN. "Change it so the newest added captures are
+ * at the top of the list, and go from newest to oldest" (Justin, 15
+ * November 2026): the ones he has just put on the unit were under some
+ * thirty of Fractal's own.
+ *
+ * THE UNIT SAYS NOTHING OF WHEN A CAPTURE WAS ADDED, so two things stand in
+ * for it. A capture the list SAW ARRIVE (a slot that was empty, or held
+ * another capture, the last time the list was read whole) carries when
+ * (`added`), and those come first, the latest on top. Everything else goes
+ * by its slot, highest first: a capture is loaded into the first empty
+ * slot, which on a unit as it comes is the one after Fractal's own, so a
+ * higher slot is a later capture. The list itself stays in slot order,
+ * which is how it is read and kept; this is the order it is drawn in.
+ */
+export const newestFirst = (list) =>
+  [...(Array.isArray(list) ? list : [])].sort((a, b) => (Number.isFinite(b?.added) ? b.added : 0) - (Number.isFinite(a?.added) ? a.added : 0) || b.slot - a.slot)
+
 /** The captures whose number, name, maker or gear holds every word typed. */
 export function capturesFound(list, text) {
   const words = String(text || '')
@@ -207,12 +225,30 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     }
   }
 
+  /*
+   * WHEN A CAPTURE WAS FIRST SEEN IN ITS SLOT (`added`, for newestFirst).
+   * Only on a list that has been read whole before (`done`): on the first
+   * read every capture is new to the app and none is new to the unit. The
+   * same capture in the same slot keeps what it had; a slot that was empty,
+   * unheard of, or held another name, and now holds a capture, is one that
+   * arrived, and is stamped now. An empty slot has no stamp.
+   */
+  const stamped = (next, had) => {
+    if (next.empty) return next
+    if (had && had.name === next.name) return Number.isFinite(had.added) ? { ...next, added: had.added } : next
+    return done ? { ...next, added: now() } : next
+  }
   const take = (h) => {
     if (!h || !Number.isInteger(h.slot) || h.slot < 0) return false
-    bySlot.set(h.slot, headOf(h))
+    bySlot.set(h.slot, stamped(headOf(h), bySlot.get(h.slot)))
     return true
   }
-  const written = () => ({ at, heads: get().list.map((h) => ({ slot: h.slot, name: h.name, by: h.by, make: h.make, model: h.model })) })
+  /* What is written down: the list, when each capture was seen to arrive, and whether something has said it is out of date (so a capture sent just before the app was closed is still read in the next time). */
+  const written = () => ({
+    at,
+    ...(stale ? { stale: true } : {}),
+    heads: get().list.map((h) => ({ slot: h.slot, name: h.name, by: h.by, make: h.make, model: h.model, ...(Number.isFinite(h.added) ? { added: h.added } : {}) }))
+  })
 
   /*
    * Whether the unit has answered a slot's question of late, in a read or
@@ -381,7 +417,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     const had = bySlot.get(slot)
     const said = name.trim()
     const same = !!had && had.name === said && had.empty === (said === '<EMPTY>')
-    bySlot.set(slot, headOf({ ...(had || {}), slot, name: said, empty: said === '<EMPTY>' }))
+    bySlot.set(slot, stamped(headOf({ ...(had || {}), slot, name: said, empty: said === '<EMPTY>' }), had))
     heardNow()
     if (!same) publish()
   }
@@ -394,6 +430,8 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
   function markStale() {
     const was = stale
     outOfDate()
+    /* Written down too, where there is a list to write: kept only in memory, a capture sent and the app closed straight after was not in the list the next launch showed, and nothing said to read again. */
+    if (done && Number.isFinite(at)) keep(written())
     if (!was) publish()
   }
 
@@ -402,8 +440,10 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     if (done || loading || bySlot.size) return false
     const list = Array.isArray(kept?.heads) ? kept.heads.filter((h) => Number.isInteger(h?.slot) && h.slot >= 0 && h.slot < CAPTURES_LISTED && typeof h.name === 'string' && h.name) : []
     if (!list.length || !Number.isFinite(kept?.at)) return false
-    for (const h of list) take({ ...h, empty: false })
+    /* As they were kept, stamps and all: nothing "arrives" by being remembered. */
+    for (const h of list) bySlot.set(h.slot, { ...headOf({ ...h, empty: false }), ...(Number.isFinite(h.added) ? { added: h.added } : {}) })
     done = true
+    if (kept.stale === true) outOfDate()
     at = kept.at
     asked = CAPTURES_LISTED
     publish()

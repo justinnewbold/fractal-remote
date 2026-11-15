@@ -2134,6 +2134,23 @@ the capture on the unit, which is the hard half.
     every one of the last round's is a test that was run with its fix
     taken out and seen to fail. FIXES GET READ TOO, and a test is not a
     guard until it has been seen to fail.
+  - *THE SHEET DRAWS THEM NEWEST FIRST, since 1.90.77.* "Change it so the
+    newest added captures are at the top of the list, and go from newest
+    to oldest" (15 November 2026, with a picture of the sheet opening on
+    001 Archean LD Gain BAL2: what he had just sent was under some thirty
+    of Fractal's own). THE UNIT SAYS NOTHING OF WHEN A CAPTURE WAS ADDED,
+    so two things stand in for it (lib/captureList `newestFirst`): a
+    capture the list SAW ARRIVE (its slot was empty, unheard of, or held
+    another name, on a list already read whole once) carries when
+    (`added`, kept on the device with the list) and those come first, the
+    latest on top; everything else goes by slot, highest first, since a
+    capture is loaded into the first empty slot. On the first read ever
+    nothing is stamped (every capture is new to the app, none to the
+    unit). THE LIST ITSELF STAYS IN SLOT ORDER, as it is read and kept;
+    only the sheet's drawing is turned, and the sheet's note says "newest
+    first". "Out of date" is written down with the list now too, so a
+    capture sent and the app closed straight after is read in at the next
+    launch.
   - *Slots 001 to 256 are listed; the 257th is not offered.* In the
     recording the last slot listed the same capture as the one just
     loaded, so it may be no slot of its own. A block that is on it still

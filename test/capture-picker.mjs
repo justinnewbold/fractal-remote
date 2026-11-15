@@ -124,6 +124,119 @@ export function run(test) {
     assert.equal(c.captureNotAsListed(29, 'Listed Name', '<EMPTY>'), 'Slot 030 is empty on the unit now, not “Listed Name”. The list of captures will be read again.')
   })
 
+  test('capture picker: the newest captures are on top, and the list goes from newest to oldest', async () => {
+    /*
+     * "Change it so the newest added captures are at the top of the list, and
+     * go from newest to oldest." The unit says nothing of when a capture was
+     * added, so: a capture the list saw arrive, latest first; then the rest
+     * by slot, highest first (a capture is loaded into the first empty slot,
+     * which on a unit as it comes is the one after Fractal's own).
+     */
+    const c = await lib()
+    const rows = [{ slot: 0, name: 'A' }, { slot: 28, name: 'B' }, { slot: 34, name: 'C' }, { slot: 5, name: 'D', added: 2000 }, { slot: 40, name: 'E', added: 1000 }, { slot: 7, name: 'F', added: 2000 }]
+    assert.deepEqual(c.newestFirst(rows).map((h) => h.name), ['F', 'D', 'E', 'C', 'B', 'A'])
+    assert.deepEqual(rows.map((h) => h.name), ['A', 'B', 'C', 'D', 'E', 'F'], 'the list handed in was put in another order')
+    assert.deepEqual(c.newestFirst([{ slot: 3, name: 'x', added: 'soon' }, { slot: 9, name: 'y', added: NaN }, { slot: 1, name: 'z' }]).map((h) => h.slot), [9, 3, 1], 'a stamp that is no time counts as none')
+    assert.deepEqual(c.newestFirst([{ slot: 3, name: 'x', added: 'soon' }, { slot: 1, name: 'y', added: 5 }, { slot: 2, name: 'z', added: Infinity }]).map((h) => h.slot), [1, 3, 2])
+    for (const none of [null, undefined, 'text']) assert.deepEqual(c.newestFirst(none), [])
+
+    /* THE FIRST READ: every capture is new to the app and none is new to the unit. Nothing is stamped, and the order is the slots', highest first. */
+    const { u, heads } = unit({ 0: 'Brit Crunch', 1: 'Clean One', 28: 'MV25 Ch1 Crunch', 29: 'Orange Flat', 256: 'MV25 Ch1 Crunch' })
+    let t = 1000
+    const kept = []
+    const list = c.captureList({ heads, pause: async () => {}, now: () => t, rest: () => 0, keep: (k) => kept.push(JSON.parse(JSON.stringify(k))) })
+    const first = await list.load()
+    assert.ok(first.list.every((h) => h.added === undefined), 'a capture was called newly arrived on the first read of a unit')
+    assert.deepEqual(first.list.map((h) => h.slot), [0, 1, 28, 29], 'the list itself is no longer kept in slot order')
+    assert.deepEqual(c.newestFirst(first.list).map((h) => h.slot), [29, 28, 1, 0])
+    assert.ok(kept.at(-1).heads.every((h) => !('added' in h)))
+
+    /*
+     * A capture loaded since, INTO A GAP BELOW the others (the first empty
+     * slot is wherever one is): by its slot it would be in the middle of
+     * Fractal's own. It was seen to arrive, so it is on top; and one that
+     * arrives after it goes over it.
+     */
+    u.held[5] = 'Jcm800'
+    list.stale()
+    t = 5000
+    const second = await list.load()
+    assert.equal(second.list.find((h) => h.slot === 5).added, 5000)
+    assert.deepEqual(c.newestFirst(second.list).map((h) => h.slot), [5, 29, 28, 1, 0])
+    u.held[30] = 'MES DRECF'
+    list.stale()
+    t = 9000
+    const third = await list.load()
+    assert.deepEqual(c.newestFirst(third.list).map((h) => [h.slot, h.added]), [[30, 9000], [5, 5000], [29, undefined], [28, undefined], [1, undefined], [0, undefined]])
+    /* Read again with nothing new: the same capture in the same slot keeps the time it arrived, it does not arrive again. */
+    list.stale()
+    t = 20000
+    assert.deepEqual(c.newestFirst((await list.load()).list).map((h) => [h.slot, h.added]).slice(0, 2), [[30, 9000], [5, 5000]])
+    /* ANOTHER capture put in a slot that held one is one that arrived; an emptied slot has no stamp to leave behind. */
+    u.held[28] = 'Replaced'
+    delete u.held[5]
+    list.stale()
+    t = 30000
+    const fourth = await list.load()
+    assert.deepEqual(c.newestFirst(fourth.list).map((h) => [h.slot, h.added]), [[28, 30000], [30, 9000], [29, undefined], [1, undefined], [0, undefined]])
+    u.held[5] = 'Back Again'
+    list.stale()
+    t = 40000
+    assert.equal((await list.load()).list.find((h) => h.slot === 5).added, 40000)
+
+    /* WRITTEN DOWN AND REMEMBERED: the next launch shows the same order, and remembering a capture is not seeing it arrive. */
+    const written = kept.at(-1)
+    assert.deepEqual(written.heads.filter((h) => 'added' in h).map((h) => [h.slot, h.added]), [[5, 40000], [28, 30000], [30, 9000]])
+    const next = unit(u.held)
+    const later = c.captureList({ heads: next.heads, pause: async () => {}, now: () => 99999, rest: () => 0 })
+    assert.equal(later.recall(written), true)
+    assert.deepEqual(c.newestFirst(later.get().list).map((h) => [h.slot, h.added]), [[5, 40000], [28, 30000], [30, 9000], [29, undefined], [1, undefined], [0, undefined]])
+    assert.deepEqual(next.u.asked, [])
+
+    /* A capture a block was pointed at, in a slot the list had as empty: seen to arrive there and then (the app has just sent it). */
+    const noted = c.captureList({ heads: unit().heads, pause: async () => {}, now: () => 777, rest: () => 0 })
+    await noted.load()
+    noted.note(40, 'Sent Just Now')
+    assert.deepEqual(c.newestFirst(noted.get().list).map((h) => [h.slot, h.added])[0], [40, 777])
+    noted.note(0, 'Brit Crunch')
+    assert.equal(noted.get().list.find((h) => h.slot === 0).added, undefined, 'a capture that was there all along was called new when a block was pointed at it')
+    noted.note(40, '<EMPTY>')
+    assert.equal(noted.head(40).added, undefined)
+
+    /*
+     * AND A CAPTURE SENT JUST BEFORE THE APP WAS CLOSED IS READ IN THE NEXT
+     * TIME: "out of date" is written down with the list, where it was only
+     * ever kept in memory, and the list remembered says so and is read again
+     * when the picker is next opened.
+     */
+    const disk = []
+    const sender = unit({ 0: 'Brit Crunch' })
+    const before = c.captureList({ heads: sender.heads, pause: async () => {}, now: () => 50, rest: () => 0, keep: (k) => disk.push(JSON.parse(JSON.stringify(k))) })
+    await before.load()
+    assert.equal(disk.at(-1).stale, undefined)
+    sender.u.held[1] = 'Sent, Then Closed'
+    before.stale()
+    assert.equal(disk.at(-1).stale, true, 'that the list is out of date was not written down')
+    const relaunch = unit(sender.u.held)
+    const after = c.captureList({ heads: relaunch.heads, pause: async () => {}, now: () => 60, rest: () => 0, keep: (k) => disk.push(JSON.parse(JSON.stringify(k))) })
+    assert.equal(after.recall(disk.at(-1)), true)
+    assert.equal(after.get().stale, true)
+    assert.deepEqual(after.get().list.map((h) => h.slot), [0])
+    const reread = await after.load()
+    assert.ok(relaunch.u.asked.length > 0, 'a list remembered as out of date was not read again')
+    assert.deepEqual(c.newestFirst(reread.list).map((h) => [h.name, h.added]), [['Sent, Then Closed', 60], ['Brit Crunch', undefined]])
+    assert.equal(disk.at(-1).stale, undefined, 'a list just read whole is still written down as out of date')
+    /* Nothing is written down for a list that was never read: there is none to keep. */
+    const blank = []
+    c.captureList({ heads: unit().heads, pause: async () => {}, keep: (k) => blank.push(k) }).stale()
+    assert.deepEqual(blank, [])
+
+    /* The picker draws that order, and finds in it; the sheet says which order it is. */
+    const picker = read('mobile/src/components/CapturePicker.js')
+    assert.match(picker, /const found = capturesFound\(newestFirst\(captures\.list\), find\)/)
+    assert.match(picker, /'The captures on the unit, newest first\. The one picked plays on the channel this block is on\.'/)
+  })
+
   test('capture picker: the list is read in pieces, shown as it comes, and holds the captures of slots 001 to 256 and no empty one', async () => {
     const c = await lib()
     const { u, heads } = unit()
@@ -803,7 +916,7 @@ export function run(test) {
     assert.ok(words.includes('Capture') && words.includes('Find a capture'), words.join(' | '))
     /* The sheet's note is one of two now (the captures on the unit, or the way to more of them): both are read. */
     const notes = [...read('mobile/src/components/CapturePicker.js').match(/note=\{[^}]*\}/)[0].matchAll(/'([^']+)'/g)].map((m) => m[1])
-    assert.deepEqual(notes, ['Captures from TONE3000. One you preview or get plays on the channel this block is on.', 'The captures on the unit. The one picked plays on the channel this block is on.'])
+    assert.deepEqual(notes, ['Captures from TONE3000. One you preview or get plays on the channel this block is on.', 'The captures on the unit, newest first. The one picked plays on the channel this block is on.'])
     for (const said of [...words, ...notes]) assert.ok(!/this phone|\bbeta\b|\bsoon\b|coming|tried|official|iPhone|Android/i.test(said), said)
 
     /* The wiring: one list for the app, kept under one key, the device's own asker either way it is connected, and told when the card has sent a capture. */
