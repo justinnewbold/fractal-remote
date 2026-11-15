@@ -106,3 +106,51 @@ export function nameOwnBlocks(blocks, unitSlug, open) {
   })
   return named ? out : blocks
 }
+
+/*
+ * AND IN THE CHAIN EDITOR (src/components/GridEditor.jsx), for the same
+ * accounts. "Looks like NAM blocks and some others are missing from the
+ * chain editor when adding new blocks not currently in the chain" (Justin,
+ * 15 November 2026). The editor's list of blocks to add is the engine's
+ * own, built from a table with none of these in it, though its route that
+ * puts a block in a cell takes any effect id. So the list gets these added
+ * (`ownInPalette`), and one that is in the chain is the editor's to move
+ * and remove (`ownInChainEditor`), where it was held as a New block with
+ * nothing to press. The phone's own, word for word
+ * (mobile/src/lib/ownBlocks.js, which says what has not been proven on a
+ * unit: placing one, and the second of each kind's id).
+ *
+ * The chain the rest of the page keeps is still untouched: only the editor
+ * is handed the copy.
+ */
+
+/** The engine's list of blocks to add, with this unit's own blocks added where the list lacks them. The same list back when there is nothing to add or the account is not shown them. */
+export function ownInPalette(list, unitSlug, open) {
+  if (open !== true || !Array.isArray(list) || !list.length) return list
+  const own = OWN_BLOCKS[String(unitSlug || '').toLowerCase()]
+  if (!own) return list
+  const have = new Set(list.map((b) => b?.page))
+  const more = []
+  for (const fam of own) {
+    for (let i = 0; i < fam.count; i++) {
+      const page = fam.id + i
+      if (!have.has(page)) more.push({ page, name: fam.count > 1 ? `${fam.name} ${i + 1}` : fam.name, slug: fam.slug, family: fam.slug })
+    }
+  }
+  return more.length ? [...list, ...more] : list
+}
+
+/** The chain for the chain editor: a block this unit has a name for is named and is one of the editor's own. The same list back when there is none. */
+export function ownInChainEditor(blocks, unitSlug, open) {
+  if (open !== true || !Array.isArray(blocks)) return blocks
+  if (!OWN_BLOCKS[String(unitSlug || '').toLowerCase()]) return blocks
+  let any = false
+  const out = blocks.map((b) => {
+    if (!b || typeof b !== 'object' || b.slug) return b
+    const own = ownBlock(unitSlug, b.effectId)
+    if (!own) return b
+    any = true
+    return { ...b, slug: own.slug, name: own.name, unknown: false, onPlay: true }
+  })
+  return any ? out : blocks
+}

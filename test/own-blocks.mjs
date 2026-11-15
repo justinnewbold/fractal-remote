@@ -142,7 +142,7 @@ export function run(test) {
     const gig = flat(code(read('src/components/Gig.jsx')))
     /* Play is told who it is open to, by the account the Developer rows go by. */
     assert.match(app, /ownOpen=\{ownBlocksOpenTo\(link\.account\?\.id\)\}/)
-    assert.equal((app.match(/ownBlocksOpenTo/g) || []).length, 2, 'the import and Play’s one prop')
+    assert.equal((app.match(/ownBlocksOpenTo/g) || []).length, 4, 'the import, Play’s one prop and the chain editor’s two (it is mounted twice)')
     /* And names the chain it draws, once, off by default. */
     assert.match(gig, /sideways = false, ownOpen = false, headSlot = null,/)
     assert.match(gig, /const blocks = useMemo\( \(\) => nameOwnBlocks\(allBlocks, deviceKey, ownOpen\)\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\), \[allBlocks, deviceKey, ownOpen\] \)/)
@@ -155,5 +155,68 @@ export function run(test) {
     assert.equal(read('shared/own-blocks.mjs').match(/^import .*$/gm).join('\n'), "import { isAdmin } from './admin.mjs'")
     /* Nothing under mobile/ imports it: the phone has its own (lib/ownBlocks), and this one is the computer's. */
     for (const f of ['mobile/src/lib/ownBlocks.js', 'mobile/src/lib/ownBlocksHere.js', 'mobile/src/lib/blockIcons.js']) assert.ok(!/own-blocks/.test(read(f)), f)
+  })
+
+  test('the chain editor’s list has them, and one in the chain is the editor’s to move and remove: the phone’s own rule, for the same accounts', async () => {
+    /*
+     * "Looks like NAM blocks and some others are missing from the chain
+     * editor when adding new blocks not currently in the chain" (Justin, 15
+     * November 2026). The engine's list of blocks to add has none of these
+     * in it; its route that places a block takes any effect id.
+     */
+    const { ownInPalette, ownInChainEditor, nameOwnBlocks, OWN_BLOCKS } = await own()
+    const phone = await import('../mobile/src/lib/ownBlocks.js')
+    const fromEngine = () => [
+      { page: 58, name: 'Amp 1', slug: 'amp', family: 'amp' },
+      { page: 62, name: 'Cab 1', slug: 'cab', family: 'cab' }
+    ]
+    /* The same list as the phone makes of the same one, on each unit, entry for entry. */
+    for (const unit of ['axefxiii', 'fm9']) {
+      assert.deepEqual(ownInPalette(fromEngine(), unit, true), phone.ownInPalette(fromEngine(), unit, true), unit)
+      assert.ok(ownInPalette(fromEngine(), unit, true).length > 2, unit)
+    }
+    assert.deepEqual(ownInPalette(fromEngine(), 'axefxiii', true).slice(2).map((b) => b.page), [134, 142, 143, 170, 195, 196, 197, 198, 202, 203, 206, 207])
+    assert.deepEqual(ownInPalette(fromEngine(), 'axefxiii', true).find((b) => b.page === 207), { page: 207, name: 'NAM 2', slug: 'nam', family: 'nam' })
+    /* Nothing twice, and the very same list back for every other unit, an account not shown them, and a list that failed. */
+    const has206 = [...fromEngine(), { page: 206, name: 'NAM', slug: 'nam', family: 'nam' }]
+    assert.equal(ownInPalette(has206, 'axefxiii', true).filter((b) => b.page === 206).length, 1)
+    const list = fromEngine()
+    for (const unit of ['fm3', 'am4', 'vp4', 'axefxii', '', null]) assert.equal(ownInPalette(list, unit, true), list, String(unit))
+    for (const open of [false, undefined, null, 'yes', 1]) assert.equal(ownInPalette(list, 'axefxiii', open), list, String(open))
+    const empty = []
+    assert.equal(ownInPalette(empty, 'axefxiii', true), empty)
+    assert.equal(ownInPalette(undefined, 'axefxiii', true), undefined)
+
+    /* In the chain: as the engine sends it (no slug), named and made the editor's own in one step; the stranger and the Performance page stay as they were. */
+    const { lanesFor } = await import('../shared/grid-plan.mjs')
+    const { markNewBlocks } = await import('../shared/new-block.mjs')
+    const chain = markNewBlocks(III())
+    const forEditor = ownInChainEditor(chain, 'axefxiii', true)
+    const caps = { grid: { rows: 6, cols: 14 } }
+    const row1 = (blocks) => lanesFor(blocks, caps).find((l) => l.row === 1)
+    assert.deepEqual(row1(chain).blocks.map((b) => b.name), ['Comp 1', 'Cab 1'], 'the chain as the page keeps it changed')
+    assert.deepEqual(row1(forEditor).blocks.map((b) => b.name), ['Comp 1', 'NAM 1', 'NAM 2', 'IR Player 1', 'Vocoder', 'Crossover 2', 'Tone Match', 'Dynamic Distortion 1', 'Cab 1'])
+    assert.equal(row1(forEditor).held.length, 0)
+    assert.deepEqual(lanesFor(forEditor, caps).find((l) => l.row === 2).held.map((b) => b.effectId), [201, 240])
+    /* The names Play gives them, and only `unknown` differs from Play's copy. */
+    const onPlay = nameOwnBlocks(chain, 'axefxiii', true)
+    for (const b of forEditor.filter((x) => x.onPlay)) assert.deepEqual({ ...b, unknown: true }, onPlay.find((x) => x.effectId === b.effectId))
+    assert.equal(chain.find((b) => b.effectId === 206).slug, '', 'the page’s own chain was named in place')
+    /* The same chain back where it is not open, on another unit, and where there is none of them. */
+    for (const open of [false, undefined, null, 'yes']) assert.equal(ownInChainEditor(chain, 'axefxiii', open), chain, String(open))
+    assert.equal(ownInChainEditor(chain, 'fm3', true), chain)
+    const plain = [{ slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 1 }]
+    assert.equal(ownInChainEditor(plain, 'axefxiii', true), plain)
+    assert.ok(Object.keys(OWN_BLOCKS).length === 2)
+
+    /* Where it is asked: the editor alone, told the unit and the account by the page, at both places it is mounted. */
+    const editor = flat(code(read('src/components/GridEditor.jsx')))
+    assert.match(editor, /export default function GridEditor\(\{ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false \}\) \{ const blocks = useMemo\(\(\) => ownInChainEditor\(asRead, deviceKey, ownOpen\), \[asRead, deviceKey, ownOpen\]\) const withOwn = \(list\) => ownInPalette\(list, deviceKey, ownOpen\)/)
+    assert.equal((editor.match(/const list = withOwn\(Array\.isArray\(res\) \? res : \[\]\)/g) || []).length, 2, 'the list is read somewhere that leaves them out')
+    assert.equal((editor.match(/await blockCatalog\(\)/g) || []).length, 2)
+    assert.ok(!/\basRead\b/.test(editor.slice(editor.indexOf('const withOwn'))), 'the editor reads the chain as it came somewhere')
+    const app = flat(code(read('src/App.jsx')))
+    assert.equal((app.match(/<GridEditor blocks=\{blocks\} capabilities=\{device\?\.capabilities\} deviceKey=\{currentDeviceSlug\(\)\} ownOpen=\{ownBlocksOpenTo\(link\.account\?\.id\)\} busy=\{busy\}/g) || []).length, 2)
+    assert.equal((app.match(/<GridEditor /g) || []).length, 2)
   })
 }

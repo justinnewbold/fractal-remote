@@ -33,6 +33,7 @@ import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import { NAM_ON_THE_UNIT, NO_KNOBS_YET } from '../lib/gen3Catalog'
 import { OWN_KNOBS_NEED_COMPUTER } from '../lib/ownBlocks'
+import { ownChainHere, ownPaletteHere } from '../lib/ownBlocksHere'
 import {
   CAB_REFUSED,
   CAB_UNDO_LOST,
@@ -228,6 +229,8 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
    */
   const chainAll = useRig(ofBlocks)
   const blocks = useMemo(() => editBlocks(chainAll), [chainAll])
+  /* The chain as the chain editor takes it: an Axe-Fx III's own blocks, named by the phone, are ones it can move and remove (lib/ownBlocks ownInChainEditor says why, and for whom). */
+  const chainForEditor = useMemo(() => ownChainHere(chainAll), [chainAll])
   /* Modifiers go by the blocks the app knows: never one the phone named for itself (lib/ownBlocks `turns`). */
   const modBlocks = useMemo(() => knownBlocks(blocks), [blocks])
   const scene = useRig(ofScene)
@@ -699,7 +702,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         Modifiers (on a held knob's control when a knob opened it), or the
         rename boxes. Each draws what its door under the knobs opened.
       */}
-      {toolShown && tool === 'chain' ? <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} /> : null}
+      {toolShown && tool === 'chain' ? <ChainEditor blocks={chainForEditor} caps={caps} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} /> : null}
       {toolShown && tool === 'modifiers' ? (
         <Modifiers key={modStart ? `${modStart.eid}:${modStart.paramId}` : 'more'} blocks={modBlocks} onError={setError} start={modStart} onClose={() => setTool(null)} />
       ) : null}
@@ -2079,7 +2082,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     let stop = false
     ;(async () => {
       try {
-        const list = await blockCatalog()
+        /* The computer's list, with the unit's own blocks the phone names added where it lacks them (lib/ownBlocks ownInPalette: NAM and the rest, for the accounts they are named for). */
+        const list = ownPaletteHere(await blockCatalog())
         if (!stop) setPalette(list)
       } catch {
         /* An empty catch left Place disabled with nothing to explain it. */

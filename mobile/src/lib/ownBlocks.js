@@ -92,3 +92,54 @@ export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
   })
   return named ? out : blocks
 }
+
+/*
+ * AND IN THE CHAIN EDITOR, through the computer. "Looks like NAM blocks and
+ * some others are missing from the chain editor when adding new blocks not
+ * currently in the chain" (Justin, 15 November 2026).
+ *
+ * The editor's list of blocks to add is the computer's own (GET /blocks),
+ * and the computer's engine builds it from a table that stops before these
+ * blocks: it has no NAM, IR Player, Vocoder, Crossover, Tone Match or
+ * Dynamic Distortion in it. The engine's route that PUTS a block in a cell
+ * takes any effect id, though, so nothing has to change on the computer:
+ * the phone adds its own names to the list (`ownInPalette`) and the editor
+ * places one by its id, as it places any block.
+ *
+ * NOT PROVEN ON A UNIT. Nobody has seen an editor place one of these with
+ * that message; the editor re-reads the chain after every add and says
+ * when the unit did not take it. So it is for the accounts the names
+ * themselves are for (lib/ownBlocksHere: his alone, until he has placed
+ * one), and the second of each kind (NAM 2, IR Player 2 to 4, and so on) is
+ * the id after the first, never read off a unit.
+ *
+ * And once one is in the chain, the editor treats it as a block of its own
+ * (`ownInChainEditor`): moved, removed, added after. It was held as a "New
+ * block" with nothing to press, which would have left a NAM just added
+ * with no way to take it out again. Only in the editor: Edit, the report
+ * and everything else still see the block as they did.
+ */
+
+/** The computer's list of blocks to add, with this unit's own blocks added where the list lacks them. The same list back when there is nothing to add or the account is not offered them. */
+export function ownInPalette(list, deviceSlug, open) {
+  if (open !== true || !Array.isArray(list) || !list.length) return list
+  const unit = ownUnit(deviceSlug)
+  if (!unit) return list
+  const have = new Set(list.map((b) => b?.page))
+  const more = catalogFor(unit)
+    .filter((c) => OWN_FAMILIES.includes(c.slug) && !have.has(c.page))
+    .map((c) => ({ page: c.page, name: c.name, slug: c.slug, family: c.family }))
+  return more.length ? [...list, ...more] : list
+}
+
+/** The chain for the chain editor: a block named here is one of the editor's own, no longer held as a New block. The same list back when there is none. */
+export function ownInChainEditor(blocks, open) {
+  if (open !== true || !Array.isArray(blocks)) return blocks
+  let any = false
+  const out = blocks.map((b) => {
+    if (!b || b.unknown !== true || b.onPlay !== true || !OWN_FAMILIES.includes(b.slug) || !Number.isInteger(b.effectId)) return b
+    any = true
+    return { ...b, unknown: false }
+  })
+  return any ? out : blocks
+}
