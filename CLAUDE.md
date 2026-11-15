@@ -2134,6 +2134,58 @@ the capture on the unit, which is the hard half.
     every one of the last round's is a test that was run with its fix
     taken out and seen to fail. FIXES GET READ TOO, and a test is not a
     guard until it has been seen to fail.
+  - *THE SHEET DRAWS THEM NEWEST FIRST, since 1.90.77.* "Change it so the
+    newest added captures are at the top of the list, and go from newest
+    to oldest" (15 November 2026, with a picture of the sheet opening on
+    001 Archean LD Gain BAL2: what he had just sent was under some thirty
+    of Fractal's own). THE UNIT SAYS NOTHING OF WHEN A CAPTURE WAS ADDED,
+    so two things stand in for it (lib/captureList `newestFirst`): a
+    capture the list SAW ARRIVE (its slot was empty, unheard of, or held
+    another name, on a list already read whole once) carries when
+    (`added`, kept on the device with the list) and those come first, the
+    latest on top; everything else goes by slot, highest first, since a
+    capture is loaded into the first empty slot. On the first read ever
+    nothing is stamped (every capture is new to the app, none to the
+    unit). THE LIST ITSELF STAYS IN SLOT ORDER, as it is read and kept;
+    only the sheet's drawing is turned, and the sheet's note says "newest
+    first". "Out of date" is written down with the list now too, so a
+    capture sent and the app closed straight after is read in at the next
+    launch. AN INDEPENDENT READ before it went out found three things,
+    each fixed with a test seen to fail without the fix: a slot that said
+    nothing for one read is taken out of the list, and when it answered
+    again it was "unheard of", so one of Fractal's own captures went to
+    the top as the newest for good (what a left-out slot held is kept
+    aside now, `gone`, written down with the list, and a slot that comes
+    back is judged against it; one that had never answered is not
+    stamped); a capture the app sent during the FIRST read was never
+    stamped (the send says its slot, `list.stale(slot)`, and that one is
+    stamped with when it was sent, whatever else is known); and during a
+    first read, which comes in by slot over half a minute, every piece
+    went in ABOVE the rows on show, so the row under a finger was another
+    capture a second later. So THE SHEET'S ORDER IS SETTLED AS THE LIST
+    COMES UP (when the sheet opens, and when the list comes back from
+    TONE3000's page), never while it is on show: a list never read whole
+    comes up in slot order with the old note, and newest first every time
+    after. A SECOND READ, OF THOSE FIXES, found two more, fixed the same
+    way: a send the unit did not keep (it has dropped three of his) left
+    its time standing, and whatever was loaded into that slot later took
+    it and sat under captures sent before it (any answer from the slot,
+    an empty one too, ends the send now); and the list that came back
+    from TONE3000's page did not have the capture just sent until the
+    read reached its slot, seconds later, when it went in over the rows
+    on show (the send's answer says what the slot holds, and that is in
+    the list at once: `list.stale(slot, name)`). A capture changed on the
+    unit by other means still goes to the top when a read finds it, with
+    the list on show: that is what the read was asked for. AND THE
+    BREAK-IT SCRIPT SAID "ALL CAUGHT" OVER A TEST THAT WAS ALREADY
+    FAILING: a runner that proves guards fail checks first that they pass.
+    A THIRD, of those: a capture sent into a slot the list had under an
+    old one (cleared on the unit first) wore the old capture's maker and
+    gear until a read reached it (`note` carries those over only for the
+    same capture now). Left as it is, knowingly: a capture the unit files
+    LATE, after reading back empty, on a list never read whole, is in
+    slot order and not on top (one install's first read, his unit's
+    occasional habit, and nothing lost).
   - *Slots 001 to 256 are listed; the 257th is not offered.* In the
     recording the last slot listed the same capture as the one just
     loaded, so it may be no slot of its own. A block that is on it still
