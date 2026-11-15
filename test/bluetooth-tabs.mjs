@@ -181,9 +181,15 @@ export function run(test) {
       const said = [way.title, way.sub, way.before, ...way.steps].filter(Boolean).join(' ')
       assert.ok(!/doesn’t answer|isn’t answering/.test(said), `VP4, ${way.title}: its owner is told to wait for an answer that never comes`)
     }
-    for (const key of ['master', 'jack']) {
-      assert.match(g.waysFor('vp4').find((w) => w.key === key).steps.join(' '), /If presets don’t change on the VP4, swap the two plugs\./, key)
-      assert.match(g.waysFor('am4').find((w) => w.key === key).steps.join(' '), /If the unit doesn’t answer, swap the two plugs\./, key)
+    /* The WIDI Jack, which a charger can power too, is the one adapter whose plugs are swapped on a quiet unit. */
+    assert.match(g.waysFor('vp4').find((w) => w.key === 'jack').steps.join(' '), /If presets don’t change on the VP4, swap the two plugs\./)
+    assert.match(g.waysFor('am4').find((w) => w.key === 'jack').steps.join(' '), /If the unit doesn’t answer, swap the two plugs\./)
+    /* A WIDI Master's swap is told by its light, on every unit: never by a quiet unit, on How to connect any more than in Troubleshooting. */
+    for (const unit of ['am4', 'vp4', 'fm9', 'axefx3']) {
+      const steps = g.waysFor(unit).find((w) => w.key === 'master').steps
+      assert.equal(steps.filter((line) => /swap/.test(line)).length, 1, `${unit}: the WIDI Master’s steps say swap more than once, or never`)
+      assert.match(steps.join(' '), /its light comes on\. If its light stays off, swap the two plugs\. It has no other way to be powered\./, unit)
+      assert.ok(!/(answer|don’t change)[^.]*, swap/.test(steps.join(' ')), `${unit}: a lit WIDI Master’s plugs are swapped on a quiet unit, which takes its power away`)
     }
     assert.match(g.troubleFor('fm9', 'mdbt01', 'tablet').lit, /stays lit once this tablet has connected to it/)
     assert.match(g.troubleFor('fm9', 'mdbt01').lit, /stays lit once this phone has connected to it/)
@@ -299,13 +305,8 @@ export function run(test) {
     const settings = flat(code(read('mobile/src/screens/Settings.js')))
     assert.match(settings, /const quietLine = throughAdapter && !cable && link === 'connected' && unitState === 'missing' \? quietCardLine\(deviceName, macName\) : null/)
     assert.match(settings, /: quietLine \? cards\.map\(\(c\) => \(c\.key === 'unit' \? \{ \.\.\.c, body: quietLine \} : c\)\) : cards/)
-    /* The same cards come back otherwise: only the unit's words change, never its tone, its wire or another card. */
-    const cards = linkChain({ here: 'phone', via: 'bluetooth', unit: { name: NAME, state: 'missing' }, adapter: { name: 'MD-BT01', link: 'connected' }, phone: {} })
-    const line = g.quietCardLine(NAME, 'MD-BT01')
-    const mapped = cards.map((c) => (c.key === 'unit' ? { ...c, body: line } : c))
-    assert.deepEqual(mapped.map((c) => c.key), cards.map((c) => c.key))
-    assert.equal(mapped.find((c) => c.key === 'unit').tone, 'bad')
-    assert.deepEqual(mapped.filter((c) => c.key !== 'unit'), cards.filter((c) => c.key !== 'unit'))
+    /* Only the words are the phone's: the card keeps link-chain's own tone, which is the red one. */
+    assert.equal(unitCard('MD-BT01').tone, 'bad')
     /* Play's line under the pill: the white plug to a Uhost on an Axe-Fx III, and to nobody else. */
     assert.match(g.notAnsweringLine('axefx3', 'WIDI Uhost'), /the white one goes in MIDI OUT, not THRU\.$/)
     for (const other of ['MD-BT01', 'WIDI Jack', 'Bluetooth MIDI', null]) {

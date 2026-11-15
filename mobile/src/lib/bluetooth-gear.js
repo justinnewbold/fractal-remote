@@ -899,7 +899,12 @@ export const FM3_FEEL = 'It takes its power from the FM3’s MIDI OUT. Feel it i
 export const FM3_JACK_HOT = `A WIDI Jack gets hot on an FM3. ${FM3_FEEL}`
 
 const thruOff = (name) => `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
-const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. It has no other way to be powered.`
+/*
+ * A WIDI Master's power is the plug in MIDI OUT, so its light is what says
+ * its plugs are swapped. Never "if the unit doesn't answer, swap the two
+ * plugs" for one: with its light on, a swap takes its power away.
+ */
+const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. If its light stays off, swap the two plugs. It has no other way to be powered.`
 const jackPower = (name) => `It takes its power from the ${name}’s MIDI OUT. If its light stays off, plug a phone charger or power bank into the Jack’s USB-C socket.`
 /* Yamaha's manual: "Turn on the instrument. The lamp of the MD-BT01 flashes", and "Power: MIDI OUT". */
 const mdPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its lamp flashes. If the lamp stays off, swap the two plugs. It has no other way to be powered.`
@@ -911,7 +916,7 @@ export function waysFor(unit, noun = 'phone') {
   const uhost = (parts, more = {}) => ({ key: 'uhost', tab: ADAPTER_TABS.uhost, title: 'WIDI Uhost and a cable', parts, before: FIRST_TIME, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), ...more })
   if (unit === 'am4' || unit === 'vp4') {
     const vp4 = unit === 'vp4'
-    /* A VP4 sends nothing back over Bluetooth, so "doesn't answer" is not something its owner can see: the words Troubleshooting uses (troubleFor). */
+    /* The WIDI Jack's, which a charger can power too. A VP4 sends nothing back over Bluetooth, so "doesn't answer" is not something its owner can see: the words Troubleshooting uses (troubleFor). */
     const swap = vp4 ? 'If presets don’t change on the VP4, swap the two plugs.' : swapIfQuiet
     return mark(unit, [
       {
@@ -923,7 +928,7 @@ export function waysFor(unit, noun = 'phone') {
         before: FIRST_TIME_ADAPTER,
         steps: [
           `Push one 3.5 mm adapter into the ${name}’s MIDI IN, and the other into its MIDI OUT.`,
-          `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swap}`,
+          'Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say.',
           masterPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
@@ -956,7 +961,7 @@ export function waysFor(unit, noun = 'phone') {
     sub: 'The simplest',
     parts: ['master'],
     before: FIRST_TIME_ADAPTER,
-    steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say. ${swapIfQuiet}`, masterPower(name), settings],
+    steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say.`, masterPower(name), settings],
     powerAt: 1
   }
   const jack = {

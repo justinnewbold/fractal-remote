@@ -8616,7 +8616,7 @@ export function run(test) {
      */
     assert.equal(gearWords.notAnsweringLine('axefx3', 'WIDI Uhost Bluetooth'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
     assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: one in MIDI IN and one in MIDI OUT, not THRU.')
-    for (const noWhitePlug of ['MD-BT01', 'WIDI Jack Bluetooth', 'WIDI Core', 'Bluetooth MIDI', '', null, undefined]) {
+    for (const noWhitePlug of ['MD-BT01', 'WIDI Jack Bluetooth', 'WIDI Core', 'WIDI Bud Pro', 'C2MIDI', 'Bluetooth MIDI', '', null, undefined]) {
       for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) assert.ok(!/white|black/i.test(gearWords.notAnsweringLine(unit, noWhitePlug)), `${unit}, ${noWhitePlug}: told of a plug by a color its adapter has not got`)
       assert.match(gearWords.notAnsweringLine('axefx3', noWhitePlug), /not THRU\.$/, `${noWhitePlug}: the Axe-Fx III’s THRU jack is not said`)
     }
