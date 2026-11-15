@@ -41,8 +41,8 @@ hydrate().then(() => {
     // Nothing kept that can be read: the list is read from the unit.
   }
 })
-/* A capture sent from the app (the TONE3000 card) is not in the list yet. */
-onCaptureSent(() => list.stale())
+/* A capture sent from the app (the TONE3000 card) is not in the list yet; the send says which slot it went into, and that one is the newest. */
+onCaptureSent((got) => list.stale(got?.slot))
 
 /** The list as the screen draws it: { list, asked, total, loading, done, stale, at, fault }. */
 export const useCaptures = () => useSyncExternalStore(list.subscribe, list.get, list.get)

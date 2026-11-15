@@ -122,6 +122,8 @@ export function capturesFound(list, text) {
 
 const text = (x) => (typeof x === 'string' ? x : '')
 /* A head as the list keeps it: what the row needs, and nothing the unit did not say. */
+/* What stands for "this slot had never answered" among the slots a read left out. */
+const UNHEARD = Object.freeze({ unheard: true })
 const headOf = (h) => ({ slot: h.slot, name: text(h.name), by: text(h.by), make: text(h.make), model: text(h.model), gearType: text(h.gearType), toneType: text(h.toneType), empty: h.empty === true })
 
 /**
@@ -141,6 +143,10 @@ const headOf = (h) => ({ slot: h.slot, name: text(h.name), by: text(h.by), make:
 export function captureList({ heads, pause, now = () => Date.now(), piece = () => 8, rest = () => 150, again = 2500, busyEvery = 1200, busyFor = 45000, keep = () => {} }) {
   /* Every slot that has answered, empty ones too, by slot. */
   const bySlot = new Map()
+  /* Slots a whole read left out because they said nothing, with what each held before (UNHEARD where it had never answered): what comes back in one is not new for having been missed. */
+  const gone = new Map()
+  /* Slots the app itself has just sent a capture into, and when: that one is new whatever else is known, even on a list not yet read whole. */
+  const arrived = new Map()
   let asked = 0
   let loading = null
   let done = false
@@ -232,23 +238,54 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
    * same capture in the same slot keeps what it had; a slot that was empty,
    * unheard of, or held another name, and now holds a capture, is one that
    * arrived, and is stamped now. An empty slot has no stamp.
+   *
+   * TWO THINGS AN INDEPENDENT READ FOUND, before this went out. A slot that
+   * said nothing for one read is taken out of the list, and when it answered
+   * again it was "unheard of": one of Fractal's own captures went to the
+   * top as the newest, for good. So what a left-out slot held is kept
+   * (`gone`), and a slot that comes back is judged against that: the same
+   * name keeps its stamp or its lack of one, and a slot that had never
+   * answered is not stamped at all. And a capture the app itself sent
+   * during the FIRST read was never stamped, since nothing is on a first
+   * read: the send says which slot it went into (`arrived`), and that one
+   * is stamped with when it was sent, whatever else is known.
    */
   const stamped = (next, had) => {
     if (next.empty) return next
+    const sent = arrived.get(next.slot)
+    if (sent !== undefined) {
+      arrived.delete(next.slot)
+      return { ...next, added: sent }
+    }
+    if (had === UNHEARD) return next
     if (had && had.name === next.name) return Number.isFinite(had.added) ? { ...next, added: had.added } : next
     return done ? { ...next, added: now() } : next
   }
+  /* What a slot is judged against when it answers: what the list has for it, else what it held when a read left it out. An answer ends its being left out. */
+  const before = (slot) => {
+    const had = bySlot.get(slot) ?? gone.get(slot)
+    gone.delete(slot)
+    return had
+  }
   const take = (h) => {
     if (!h || !Number.isInteger(h.slot) || h.slot < 0) return false
-    bySlot.set(h.slot, stamped(headOf(h), bySlot.get(h.slot)))
+    bySlot.set(h.slot, stamped(headOf(h), before(h.slot)))
     return true
   }
   /* What is written down: the list, when each capture was seen to arrive, and whether something has said it is out of date (so a capture sent just before the app was closed is still read in the next time). */
-  const written = () => ({
-    at,
-    ...(stale ? { stale: true } : {}),
-    heads: get().list.map((h) => ({ slot: h.slot, name: h.name, by: h.by, make: h.make, model: h.model, ...(Number.isFinite(h.added) ? { added: h.added } : {}) }))
-  })
+  const written = () => {
+    /* The slots left out, with the name each held (no name where it had never answered; an empty one is not written down, as no empty slot is, and a capture in one is new). */
+    const out = [...gone]
+      .filter(([, was]) => was === UNHEARD || !was.empty)
+      .sort((x, y) => x[0] - y[0])
+      .map(([slot, was]) => (was === UNHEARD ? { slot } : { slot, name: was.name, ...(Number.isFinite(was.added) ? { added: was.added } : {}) }))
+    return {
+      at,
+      ...(stale ? { stale: true } : {}),
+      heads: get().list.map((h) => ({ slot: h.slot, name: h.name, by: h.by, make: h.make, model: h.model, ...(Number.isFinite(h.added) ? { added: h.added } : {}) })),
+      ...(out.length ? { gone: out } : {})
+    }
+  }
 
   /*
    * Whether the unit has answered a slot's question of late, in a read or
@@ -353,7 +390,12 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
       try {
         const leftOut = await read()
         /* Only now, with every slot asked, is what did not answer taken out: only what this read heard stays. A read that failed takes nothing out. And a slot that has answered since it was left out (asked by itself, for a block's button) keeps what it said. */
-        for (const [slot, was] of leftOut) if (bySlot.get(slot) === was) bySlot.delete(slot)
+        for (const [slot, was] of leftOut) {
+          if (bySlot.get(slot) !== was) continue
+          bySlot.delete(slot)
+          /* Kept aside, so that what answers there next is not taken for a capture that has just arrived. A slot already aside keeps what it held. */
+          if (!gone.has(slot)) gone.set(slot, was || UNHEARD)
+        }
         done = true
         /* A capture sent while this was being read may be in a slot it had already passed: still out of date, and the next open reads again. */
         stale = changes !== began
@@ -417,7 +459,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     const had = bySlot.get(slot)
     const said = name.trim()
     const same = !!had && had.name === said && had.empty === (said === '<EMPTY>')
-    bySlot.set(slot, stamped(headOf({ ...(had || {}), slot, name: said, empty: said === '<EMPTY>' }), had))
+    bySlot.set(slot, stamped(headOf({ ...(had || {}), slot, name: said, empty: said === '<EMPTY>' }), before(slot)))
     heardNow()
     if (!same) publish()
   }
@@ -427,9 +469,11 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     changes++
     stale = true
   }
-  function markStale() {
+  function markStale(slot) {
     const was = stale
     outOfDate()
+    /* The slot the app sent a capture into, where the send says: that capture is the newest there is. */
+    if (Number.isInteger(slot)) arrived.set(slot, now())
     /* Written down too, where there is a list to write: kept only in memory, a capture sent and the app closed straight after was not in the list the next launch showed, and nothing said to read again. */
     if (done && Number.isFinite(at)) keep(written())
     if (!was) publish()
@@ -442,6 +486,10 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     if (!list.length || !Number.isFinite(kept?.at)) return false
     /* As they were kept, stamps and all: nothing "arrives" by being remembered. */
     for (const h of list) bySlot.set(h.slot, { ...headOf({ ...h, empty: false }), ...(Number.isFinite(h.added) ? { added: h.added } : {}) })
+    for (const g of Array.isArray(kept.gone) ? kept.gone : []) {
+      if (!Number.isInteger(g?.slot) || g.slot < 0 || bySlot.has(g.slot)) continue
+      gone.set(g.slot, typeof g.name === 'string' && g.name ? { ...headOf({ slot: g.slot, name: g.name }), ...(Number.isFinite(g.added) ? { added: g.added } : {}) } : UNHEARD)
+    }
     done = true
     if (kept.stale === true) outOfDate()
     at = kept.at

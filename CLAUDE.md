@@ -2150,7 +2150,23 @@ the capture on the unit, which is the hard half.
     only the sheet's drawing is turned, and the sheet's note says "newest
     first". "Out of date" is written down with the list now too, so a
     capture sent and the app closed straight after is read in at the next
-    launch.
+    launch. AN INDEPENDENT READ before it went out found three things,
+    each fixed with a test seen to fail without the fix: a slot that said
+    nothing for one read is taken out of the list, and when it answered
+    again it was "unheard of", so one of Fractal's own captures went to
+    the top as the newest for good (what a left-out slot held is kept
+    aside now, `gone`, written down with the list, and a slot that comes
+    back is judged against it; one that had never answered is not
+    stamped); a capture the app sent during the FIRST read was never
+    stamped (the send says its slot, `list.stale(slot)`, and that one is
+    stamped with when it was sent, whatever else is known); and during a
+    first read, which comes in by slot over half a minute, every piece
+    went in ABOVE the rows on show, so the row under a finger was another
+    capture a second later. So THE SHEET'S ORDER IS SETTLED AS THE LIST
+    COMES UP (when the sheet opens, and when the list comes back from
+    TONE3000's page), never while it is on show: a list never read whole
+    comes up in slot order with the old note, and newest first every time
+    after.
   - *Slots 001 to 256 are listed; the 257th is not offered.* In the
     recording the last slot listed the same capture as the one just
     loaded, so it may be no slot of its own. A block that is on it still

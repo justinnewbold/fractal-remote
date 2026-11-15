@@ -199,7 +199,7 @@ export function run(test) {
     assert.equal((picker.match(/<Tone3000Door /g) || []).length, 1)
     /* The page is in the SAME sheet, in the list's place, taller while it is up and starting at its own top; never where it is not offered. */
     assert.match(picker, /tall=\{browsing && library\.offered\} scrollKey=\{browsing && library\.offered \? 'library' : undefined\}/)
-    assert.match(picker, /\{open && browsing && library\.offered \? \( <Tone3000InPop id=\{library\.id\} n=\{library\.n\} from="captures" onPointed=\{\(at\) => \{ pointed\.current = at if \(left\.current\) changed\.current\?\.\(at\) \}\} onBack=\{\(line\) => \{ setCame\(line\) setBrowsing\(false\) loadCaptures\(\) leave\(\) \}\} \/> \) : open \? \(/)
+    assert.match(picker, /\{open && browsing && library\.offered \? \( <Tone3000InPop id=\{library\.id\} n=\{library\.n\} from="captures" onPointed=\{\(at\) => \{ pointed\.current = at if \(left\.current\) changed\.current\?\.\(at\) \}\} onBack=\{\(line\) => \{ setCame\(line\) setBrowsing\(false\) setNewest\(captures\.done\) loadCaptures\(\) leave\(\) \}\} \/> \) : open \? \(/)
     /*
      * Edit is told with the slot the unit last said the block was pointed
      * at in the library (none at each new visit), through the newest
@@ -225,7 +225,7 @@ export function run(test) {
      * is closed from the page; and the page is not what is up the next time.
      */
     assert.match(picker, /const close = \(\) => \{ setOpen\(false\) setFind\(''\) if \(browsing\) leave\(\) setBrowsing\(false\) setCame\(''\) \}/)
-    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(\) => list\.stale\(\)\)/)
+    assert.match(flat(code(read('mobile/src/lib/captureListHere.js'))), /onCaptureSent\(\(got\) => list\.stale\(got\?\.slot\)\)/)
     /* The picker still writes nothing to the unit itself, and Edit's own file still holds nothing of TONE3000's. */
     assert.ok(!/chooseCapture|namPickHere|setEnum|setParam|blockParams|lib\/device|Tone3000Test|tone3000Here/.test(picker))
     assert.ok(!/tone3000|t3k/i.test(code(read('mobile/src/screens/Edit.js'))))
@@ -253,7 +253,7 @@ export function run(test) {
     assert.equal(w.useAndBackSub(2), 'Plays it in NAM 2 and returns to its knobs')
     assert.equal(w.getSays('Plexi', { n: 2, held: true, back: 'anything else' }), 'Get Plexi: puts it on the Axe-Fx III, plays it in NAM 2 and goes back to its knobs')
     /* The sheet's own note while the page is up says what it is, in the picker's own plain words. */
-    assert.match(picker, /note=\{browsing && library\.offered \? 'Captures from TONE3000\. One you preview or get plays on the channel this block is on\.' : 'The captures on the unit, newest first\. The one picked plays on the channel this block is on\.'\}/)
+    assert.match(picker, /note=\{browsing && library\.offered \? 'Captures from TONE3000\. One you preview or get plays on the channel this block is on\.' : newest \? 'The captures on the unit, newest first\. The one picked plays on the channel this block is on\.' : 'The captures on the unit\. The one picked plays on the channel this block is on\.'\}/)
   })
 
   test('tone3000 quick: Edit reads the block again after the capture list’s page changed its capture: no call dropped, and the unit’s own word believed where the read fails', async () => {
