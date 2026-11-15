@@ -8,7 +8,7 @@
  * so a chain made in the demo never lands on a real unit's list. Kept on
  * this device only.
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { sync, useStored } from './store'
 import { isDemo } from './demo'
 import { DEFAULT_SLUG, stageKey } from './device-slug'
@@ -46,8 +46,13 @@ const ofSlug = (s) => s.deviceSlug
 /**
  * Chains made with no unit known yet (Settings, on the couch) are filed
  * under no unit's name, and a unit's own drawer never opened that one. So
- * the first real unit to be known takes them (shared adoptStarters). Never
- * in the demo, whose drawer is its own.
+ * the first real unit Quick build is offered on takes them (shared
+ * adoptStarters). CALLED ONLY BY QUICK BUILD, once a real unit has just
+ * answered with its list of blocks: never on a slug alone, which outlives
+ * the demo (the rig keeps the demo unit's after it is left) and is also set
+ * by units with no Quick build at all (a VP4). Never in the demo, whose
+ * drawer is its own. One thing it cannot tell apart: a real unit that
+ * answered without naming itself files under the same name as no unit.
  */
 export function adoptUnlinkedHere(device = getState().deviceSlug) {
   if (isDemo() || !device || device === DEFAULT_SLUG) return 0
@@ -58,9 +63,6 @@ export function adoptUnlinkedHere(device = getState().deviceSlug) {
 export function useStarterChains() {
   const rev = useStored()
   const slug = useRig(ofSlug)
-  useEffect(() => {
-    adoptUnlinkedHere(slug)
-  }, [slug])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => starterList(sync, drawer(slug)), [rev, slug])
 }

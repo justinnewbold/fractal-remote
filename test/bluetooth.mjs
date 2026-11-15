@@ -305,6 +305,8 @@ function fakeGen3(sx, o) {
         return
       case 0x0d: {
         const n = sx.decode14(p[0], p[1])
+        /* `state.mutePreset`, set by a test: it stops saying which preset it is on. */
+        if (state.mutePreset && n === 0x3fff) return
         const which = n === 0x3fff ? state.preset : opt.numbered === 'yes' ? n : opt.numbered === 'current' ? state.preset : null
         if (which === null) return
         return reply(0x0d, [...sx.encode14(which), ...nameBytes(state.names.get(which) || '')])
@@ -19010,7 +19012,8 @@ export function run(test) {
     assert.deepEqual([first.rows, first.cols, first.source], [4, 12, 'preset'])
     assert.deepEqual(first.cells.map((c) => [c.name, c.isShunt]), [['Input 1', false], ['Output 1', false]])
     assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [1, 1])
-    assert.deepEqual(t.frames().map(hex), [grid.buildGridRead(0x11), grid.buildGridDump(0x11)].map(hex), 'something other than the two reads went out')
+    const sx = await import(SX)
+    assert.deepEqual(t.frames().map(hex), [grid.buildGridRead(0x11), grid.buildGridDump(0x11), sx.buildGetPreset(0x11)].map(hex), 'something other than the two reads, and which preset it is on after them, went out')
     assert.ok(t.logs.some((l) => /the live grid read agrees with the preset: 2 blocks, each where the preset has it/.test(l)), t.logs.join(' | '))
     assert.ok(t.logs.some((l) => /^the live grid answer, as it came: F0 00 01 74 11 01 2E 00/.test(l)), 'the answer itself is not in the log for the record')
     assert.ok(t.logs.some((l) => /^the grid, read from the preset in \d+\.\d s: 2 blocks$/.test(l)), t.logs.join(' | '))
@@ -19046,11 +19049,15 @@ export function run(test) {
     t.unit.state.grid = BARE3.map((c) => ({ ...c }))
     const moving = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 13 }) })
     const asking = t.wire.request('/preset/grid')
+    asking.catch(() => {})
     await drive(t.clock, moving)
-    const fourth = await drive(t.clock, asking)
-    assert.equal(cellsOf(fourth.cells), cellsOf(BARE3), 'the last preset’s grid was handed on for the new one')
+    /* A read that straddles the change is neither preset's for certain, and is refused, not answered from the one kept. */
+    await assert.rejects(drive(t.clock, asking), (e) => e.status === 409 && /changed while the app was reading the chain/.test(e.message))
+    assert.equal(t.unit.state.lives, livesBefore + 1, 'the last preset’s grid was handed on for the new one')
+    await advance(t.clock, 1000)
+    const fourth = await t.get('/preset/grid')
+    assert.equal(cellsOf(fourth.cells), cellsOf(BARE3))
     assert.equal(fourth.source, 'live')
-    assert.equal(t.unit.state.lives, livesBefore + 1)
   })
 
   test('a grid kept for a moment is not what is answered after a block went in: the read straight after a write is the unit’s', async () => {
@@ -19274,11 +19281,12 @@ export function run(test) {
       const t = await onTheLine(kind, kind === 'am4' ? CHAIN_OPEN : { grid: BARE3, ...CHAIN_OPEN })
       const body = kind === 'am4' ? { row: 1, col: 4, blockId: 0x42 } : { row: 2, col: 2, blockId: 118 }
       const refused = (e) => e.status === 409 && e.bluetooth === true && /The scene or preset changed since the app read the chain\. Try it again\./.test(e.message)
-      /* Nothing read on this connection yet. */
-      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', body), refused, kind)
-      if (kind !== 'am4') await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2 }), refused)
+      /* Nothing read on this connection yet: refused, in words that do not say the unit changed anything (a wire is new with each connection). */
+      const unread = (e) => e.status === 409 && e.bluetooth === true && e.message === 'The app has not read the chain on this connection yet. Try it again.'
+      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', body), unread, kind)
+      if (kind !== 'am4') await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2 }), unread)
       assert.equal(t.sent.length, 0, `${kind}: something was sent for a chain nobody had read`)
-      assert.ok(t.logs.some((l) => /^not sent, the chain has not been read since the scene or preset last changed: /.test(l)), t.logs.join(' | '))
+      assert.ok(t.logs.some((l) => /^not sent, the chain has not been read on this connection: /.test(l)), t.logs.join(' | '))
       /* Read, and it goes. */
       await seen(t)
       assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', body), { ok: true }, kind)
@@ -19307,6 +19315,66 @@ export function run(test) {
       t.sent.length = 0
       await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', kind === 'am4' ? { row: 1, col: 2, blockId: 0x46 } : { row: 2, col: 4, blockId: 62 }), refused, `${kind}: a chain read while the preset changed was taken as the new preset’s`)
     }
+  })
+
+  test('a unit stepped to another preset without a word, while its chain was being read, is found out before the read vouches for anything', async () => {
+    /*
+     * A gen-3 unit says nothing when its own footswitch changes preset: the
+     * phone asks, on a clock, and the clock's questions are skipped while the
+     * line is busy, which the whole preset keeps it for seconds. So the read
+     * ends by asking which preset the unit is on.
+     */
+    const grid = await import(GRID)
+    const t = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
+    await seen(t)
+    await advance(t.clock, 2000)
+    const reading = t.wire.request('/preset/grid')
+    reading.catch(() => {})
+    const dumps = t.unit.state.dumps
+    for (let i = 0; i < 2000 && t.unit.state.dumps === dumps; i++) await advance(t.clock, 2)
+    assert.equal(t.unit.state.dumps, dumps + 1, 'the preset was never asked for')
+    t.unit.state.preset = 13
+    t.unit.state.grid = BARE3.map((c) => ({ ...c }))
+    await assert.rejects(drive(t.clock, reading), (e) => e.status === 409 && e.bluetooth === true && e.message === 'The scene or preset changed while the app was reading the chain. Try it again.')
+    assert.ok(t.logs.some((l) => l === 'the scene or preset changed while the chain was being read; the read is not used'), t.logs.join(' | '))
+    assert.ok(t.events.some((e) => e.type === 'changed' && e.scope === 'preset'), 'the rig was not told the unit is on another preset')
+    /* And nothing is written on the strength of it. */
+    t.sent.length = 0
+    await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 70 }), (e) => e.status === 409)
+    assert.equal(gridFrames(t, grid).length, 0, 'a block went into the preset the unit had been stepped to')
+    /* Read again, on the preset it is on now, and it is that preset's chain, with writes taken. */
+    await advance(t.clock, 2000)
+    const now = await t.get('/preset/grid')
+    assert.equal(cellsOf(now.cells), cellsOf(BARE3))
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 70 }), { ok: true })
+
+    /* A unit that will not say which preset it is on is not vouched for either: the read is refused, and so is a write after it. */
+    const mute = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
+    mute.unit.state.mutePreset = true
+    await assert.rejects(mute.get('/preset/grid'), (e) => e.status === 504 && /The FM3 didn’t say which preset it is on, so the app can’t tell whose chain it read\./.test(e.message))
+    mute.sent.length = 0
+    await assert.rejects(sendTo(mute, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 70 }), (e) => e.status === 409 && /has not read the chain on this connection/.test(e.message))
+    assert.equal(mute.sent.length, 0)
+
+    /* AN AM4'S ANSWER SAYS WHICH PRESET ITS SLOTS ARE, AND THAT IS HEEDED: stepped on without a word, its next slots are another preset's. */
+    const a = await onTheLine('am4', CHAIN_OPEN)
+    await seen(a)
+    await advance(a.clock, 1000)
+    a.unit.state.location = 6
+    a.unit.state.slots = [0x3a, 0, 0, 0]
+    await assert.rejects(a.get('/preset/grid'), (e) => e.status === 409 && /changed while the app was reading the chain/.test(e.message))
+    a.sent.length = 0
+    await assert.rejects(sendTo(a, 'PUT', '/preset/grid/cell', { row: 1, col: 2, blockId: 0x46 }), (e) => e.status === 409)
+    assert.equal(a.frames().filter((f) => f.length === 23 && f[6] === 0x4e).length, 0, 'a slot was written in the preset the AM4 had been stepped to')
+    await advance(a.clock, 1000)
+    assert.deepEqual((await a.get('/preset/grid')).cells.map((c) => c.col), [0])
+    /* And in the read back after a write: stepped on while the app waited, the slots it reads are not the write's answer. */
+    const placing = a.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 1, col: 4, blockId: 0x42 }) })
+    for (let i = 0; i < 400 && a.unit.state.slots[3] !== 0x42; i++) await advance(a.clock, 2)
+    assert.equal(a.unit.state.slots[3], 0x42)
+    a.unit.state.location = 7
+    a.unit.state.slots = [0, 0, 0, 0]
+    assert.deepEqual(await drive(a.clock, placing), { ok: true, unread: true }, 'another preset’s empty slot was said as the AM4 refusing the block')
   })
 
   test('a preset stepped to while the cell is being selected does not get the block: asked again between the select and the put', async () => {
@@ -19379,6 +19447,14 @@ export function run(test) {
       await advance(mute.clock, 1000)
     }
     assert.deepEqual([mute.unit.state.lives, mute.unit.state.dumps], [2, 4])
+    /* A unit whose live answer this app cannot read at all (the same block named twice) settles nothing however often it is asked: a handful of times, then no more. */
+    const odd = await onTheLine('fm3', { grid: CHAIN3, liveOf: (cells) => [...cells, { ...cells[1], col: 7 }], ...CHAIN_OPEN })
+    for (let i = 0; i < 7; i++) {
+      assert.equal((await odd.get('/preset/grid')).source, 'preset')
+      await advance(odd.clock, 1000)
+    }
+    assert.deepEqual([odd.unit.state.lives, odd.unit.state.dumps], [4, 7], 'an answer that can never settle the question was asked for with every read')
+    assert.ok(odd.logs.some((l) => /^the live grid answer, as it came: /.test(l)))
     /* THE LIVE ANSWER IS IN THE LOG EVEN WHERE THE PRESET NEVER COMES (a unit that does not send its preset down this wire): it is then the only thing his log has to go on. */
     const none = await onTheLine('fm3', { grid: CHAIN3, noDump: true, ...CHAIN_OPEN })
     await assert.rejects(none.get('/preset/grid'), (e) => e.status === 504)

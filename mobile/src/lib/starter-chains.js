@@ -159,6 +159,14 @@ export const NOT_READ_TITLE = 'Sent, but not read back'
 export const NOT_READ = 'The blocks were sent, but the unit did not answer when the app read the chain back, so the app can’t say what landed. Open the preset again to see.'
 export const NONE_ADDED_TITLE = 'Nothing was added'
 export const NONE_ADDED = 'The unit did not take any of the blocks. The chain has been read again.'
+/* None of the picked blocks is in, and an Input or Output the app placed is: "Nothing was added" over that, beside an Undo, would be two things said at once. */
+export const NO_BLOCKS_TITLE = 'None of the blocks were added'
+export const stoppedEarlyLine = (names = []) =>
+  names.length
+    ? `The build stopped before any block was sent. ${names.join(' and ')} ${names.length === 1 ? 'was' : 'were'} put in, and Undo takes ${names.length === 1 ? 'it' : 'them'} back out.`
+    : 'The build stopped before any block was sent.'
+export const endsPutLine = (names) =>
+  `The unit did not take any of the blocks. ${names.join(' and ')} ${names.length === 1 ? 'was' : 'were'} put in, and Undo takes ${names.length === 1 ? 'it' : 'them'} back out.`
 
 /** A family the unit does not have, or has no more of. */
 export const missingLine = (names) =>
@@ -174,6 +182,13 @@ export const NOT_LISTED = 'The unit did not list one of these blocks. Read the p
 export const READ_FAILED = 'The unit did not answer when the app asked what is in this preset. Nothing was changed.'
 /** The unit went to another preset while a build or an Undo was going: nothing more is sent, and nothing is said of a chain that is no longer the one on screen. */
 export const PRESET_MOVED = 'The preset changed part-way, so the app stopped and sent nothing more. Open the preset again to see what is in it.'
+/** The same, before a single step went. */
+export const PRESET_MOVED_BEFORE = 'The preset changed before the app could build, so nothing was sent. Nothing was changed.'
+/** The same, found only once every step had gone: nothing was stopped, so that is not said. */
+export const PRESET_MOVED_AFTER = 'The unit went to another preset right after the build was sent, so the app can’t read what landed. Open that preset again to see what is in it.'
+export const UNDO_MOVED_AFTER = 'The unit went to another preset right after Undo was sent, so the app can’t read whether everything is out. Open that preset again to see.'
+/** The unit would not say which preset it is on between two steps: the app does not go on writing to a preset it cannot name. */
+export const UNIT_QUIET = 'The unit stopped answering part-way, so the app stopped and sent nothing more.'
 
 /** A step that threw part-way: which, and that nothing more went. */
 export const stoppedLine = (step, error) =>
@@ -183,8 +198,11 @@ export const stoppedLine = (step, error) =>
 export const UNDO_NOT_READ = 'Undo was sent, but the unit did not answer when the app read the chain back, so the app can’t say it is all out. Open the preset again to see.'
 export const undoneLine = (n) => (n === 1 ? 'Took the block back out.' : n > 1 ? `Took the ${n} blocks back out.` : 'Put the preset back as it was.')
 /* The blocks are out, and the chain read back does not show the wiring the preset had before the build. */
-export const undoNotJoinedLine = (col) =>
-  `Took the blocks back out, but the row is not joined the way it was before: it stops at column ${colLabel(col)}. Nothing will sound until it is. Join it on the unit, or load the preset again if you have not saved it.`
+export const undoNotJoinedLine = (col, n = 0) =>
+  `${n === 1 ? 'Took the block back out' : n > 1 ? `Took the ${n} blocks back out` : 'Undo ran'}, but the row is not joined the way it was before: it stops at column ${colLabel(col)}. Nothing will sound until it is. Join it on the unit, or load the preset again if you have not saved it.`
+/* The unit's chain read does not show its cables (an older computer app): the Undo then cuts none, since none is known to be the build's own, and says so. */
+export const undoWiringLeftLine = (n = 0) =>
+  `${n === 1 ? 'Took the block back out' : n > 1 ? `Took the ${n} blocks back out` : 'Undo ran'}. The cables in the row were left as they are, because this unit’s chain read does not show its wiring.`
 /** The unit's list of blocks could not be read: said as that, never as a unit with no blocks. */
 export const BLOCKS_NOT_READ = 'The unit did not answer when the app asked which blocks it has.'
 export const TRY_AGAIN = 'Try again'
@@ -204,7 +222,8 @@ export const SHOWN_WORDS = () => [
   NOT_JOINED_TITLE, notJoinedLine(5, 1, 6), notJoinedLine(1, 1, 2), NOT_READ_TITLE, NOT_READ,
   missingLine(['Cab']), missingLine(['NAM', 'Cab']), leftLine(['Reverb']), NOT_BARE, NO_PICKS, ENDS_APART, NO_ROOM, NOT_LISTED,
   READ_FAILED, PRESET_MOVED, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'no answer'), undoneLine(1), undoneLine(5),
-  undoMissedLine(['Amp']), UNDO_NOT_READ, undoSub(0), undoneLine(0), undoNotJoinedLine(3), BLOCKS_NOT_READ, TRY_AGAIN,
+  undoMissedLine(['Amp']), UNDO_NOT_READ, undoSub(0), undoneLine(0), undoNotJoinedLine(3), undoNotJoinedLine(3, 1), undoNotJoinedLine(3, 4), undoWiringLeftLine(0), undoWiringLeftLine(2), BLOCKS_NOT_READ, TRY_AGAIN,
+  NO_BLOCKS_TITLE, stoppedEarlyLine(), stoppedEarlyLine(['Input 1']), endsPutLine(['Input 1']), endsPutLine(['Input 1', 'Output 1']), PRESET_MOVED_BEFORE, PRESET_MOVED_AFTER, UNDO_MOVED_AFTER, UNIT_QUIET,
   notAddedLine(['Cab'], 2, false, 2), endMissingLine(['Output 1'], 2), endMissingLine(['Input 1', 'Output 1'], 1)
 ]
 
@@ -784,6 +803,13 @@ export function planBuild({ cells, shape = {}, palette = [], picks = [], blocks 
     put(outCol, l.output.entry, true)
   }
   const steps = placed.map((p) => place(p.row, p.col, p.blockId, p.name))
+  /*
+   * WHETHER THE READ SHOWS THE WIRING AT ALL. A chain read with no `fromRows`
+   * on a cell (an older computer app, a driver that does not decode routing)
+   * says nothing of which cables are there, so none of the cables the build
+   * sends is known to be new: `wiringKnown` false, and the Undo cuts none.
+   */
+  const wiringKnown = l.linear || l.map.cells.filter((c) => c.row === row).every((c) => Array.isArray(c.fromRows))
   /* The preset's own cables at the cells placed into: into each (from any row of the column before), and out of each (into any row of the column after). */
   const prior = []
   if (!l.linear) {
@@ -815,7 +841,7 @@ export function planBuild({ cells, shape = {}, palette = [], picks = [], blocks 
   }
   /* Where the join runs, when the plan makes one: from the Input's column to the Output's (joinBreak reads the chain back along it). */
   const span = joined ? { first: l.input.col, last: outCol } : null
-  const plan = { ok: true, row, rows: l.map.rows, linear: l.linear, steps, placed, was, prior, joined, joinNote, span, left }
+  const plan = { ok: true, row, rows: l.map.rows, linear: l.linear, steps, placed, was, prior, wiringKnown, joined, joinNote, span, left }
   plan.undo = undoSteps(plan)
   return plan
 }
@@ -827,8 +853,13 @@ function priorTouched(plan, done) {
   const at = new Set(ranPlaces(plan, done).map((s) => `${s.row}:${s.col}`))
   return (plan?.prior || []).filter((c) => at.has(`${c.destRow}:${c.srcCol + 1}`) || at.has(`${c.srcRow}:${c.srcCol}`))
 }
-/* A cable the app cannot make: out of the top row of a six-row grid (layout's `top`). */
-const unmakeable = (plan, c) => (plan?.rows ?? 0) >= 6 && c.srcRow === 0
+/*
+ * A cable the app cannot make: out of the top row of a six-row grid from an
+ * even column as the unit counts them (from one), which is an odd one here
+ * (lib/gen3-grid cableKnown, and the codec refuses the same). The other
+ * half of that row's cables it can make, so they are joined again like any.
+ */
+const unmakeable = (plan, c) => (plan?.rows ?? 0) >= 6 && c.srcRow === 0 && c.srcCol % 2 === 1
 
 /**
  * The way back from the first `done` steps of a plan (all of them by
@@ -848,7 +879,8 @@ export function undoSteps(plan, done = plan?.steps?.length ?? 0) {
   const ran = (plan?.steps || []).slice(0, Math.max(0, done))
   const own = new Set((plan?.prior || []).map(cableKey))
   const out = []
-  for (const s of ran.filter((s) => s.kind === 'cable' && s.connect).reverse()) if (!own.has(cableKey(s))) out.push(cable(s.srcRow, s.srcCol, s.destRow, false))
+  /* Where the read did not show the wiring, no cable is known to be the build's own, and none is cut (planBuild `wiringKnown`). */
+  if (plan?.wiringKnown !== false) for (const s of ran.filter((s) => s.kind === 'cable' && s.connect).reverse()) if (!own.has(cableKey(s))) out.push(cable(s.srcRow, s.srcCol, s.destRow, false))
   for (const s of ran.filter((s) => s.kind === 'place').reverse()) {
     const shunt = plan.was?.[`${s.row}:${s.col}`]
     out.push(Number.isInteger(shunt) ? place(s.row, s.col, shunt, 'the bare wire') : clear(s.row, s.col, s.name))
@@ -916,9 +948,14 @@ const holds = (cells, p) => (Array.isArray(cells) ? cells : []).some((c) => c &&
 export function joinBreak(plan, cellsAfter) {
   if (!plan?.joined || !plan.span) return null
   const cells = Array.isArray(cellsAfter) ? cellsAfter : []
+  const at = (col) => cells.find((c) => c && c.row === plan.row && c.col === col)
+  /* The two ends have to BE there: a bare wire, or nothing, where the Input or the Output should be is a row with no sound however well it is fed. */
+  const input = at(plan.span.first)
+  if (!input || input.isShunt) return plan.span.first
   for (let col = plan.span.first + 1; col <= plan.span.last; col++) {
-    const cell = cells.find((c) => c && c.row === plan.row && c.col === col)
+    const cell = at(col)
     if (!cell || !Array.isArray(cell.fromRows) || !cell.fromRows.includes(plan.row)) return col
+    if (col === plan.span.last && cell.isShunt) return col
   }
   return null
 }
@@ -944,8 +981,14 @@ export function whatLanded(plan, cellsAfter, done = plan?.steps?.length ?? 0) {
   const missing = asked.filter((p) => !holds(cellsAfter, p))
   const blocksIn = landed.filter((p) => !p.end)
   const cols = blocksIn.map((p) => p.col)
-  /* None of the picked blocks is in (an Input or Output the app placed may be: that is not a block added, and "the other 0 blocks are in" is not a sentence). */
-  if (!blocksIn.length) return { all: false, none: true, joined: false, landed, missing, tone: 'fault', title: NONE_ADDED_TITLE, text: NONE_ADDED }
+  /* None of the picked blocks is in ("the other 0 blocks are in" is not a sentence). An Input or Output the app placed may be, and then that is said, with the Undo that takes it back out. */
+  if (!blocksIn.length) {
+    const endsIn = landed.filter((p) => p.end).map((p) => p.name)
+    /* A run that stopped before any picked block was sent: the unit refused nothing, and is not said to have. */
+    if (!asked.some((p) => !p.end)) return { all: false, none: true, joined: false, landed, missing, tone: 'fault', title: NONE_ADDED_TITLE, text: stoppedEarlyLine(endsIn) }
+    if (endsIn.length) return { all: false, none: true, joined: false, landed, missing, tone: 'fault', title: NO_BLOCKS_TITLE, text: endsPutLine(endsIn) }
+    return { all: false, none: true, joined: false, landed, missing, tone: 'fault', title: NONE_ADDED_TITLE, text: NONE_ADDED }
+  }
   if (!missing.length) {
     /* Every block is in, and the plan was to join them: "connected" only if the chain read back shows it. */
     if (plan.joined && !joined) return { all: true, none: false, joined: false, stops, landed, missing, tone: 'warn', title: NOT_JOINED_TITLE, text: notJoinedLine(blocksIn.length, plan.row, stops) }

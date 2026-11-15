@@ -1092,11 +1092,19 @@ what the computer sends for the same edit, and a test holds it there.
     back, and joins the preset's own cables again (`plan.prior`,
     `undoSteps`), and its read back asks after the wiring too
     (`undoUnjoined`). A PRESET CHANGED BY A FOOTSWITCH PART-WAY got the
-    rest of the build: the screen's own preset number is frozen while the
-    chain is written, so the rig asks the unit where news came in
-    (`leftPresetInChainWrite`), each step asks first, and the run stops
-    with nothing said of a chain that is no longer the one on screen
-    (`PRESET_MOVED`). An Undo is not run over a block swapped into one of
+    rest of the build. THE UNIT ITSELF IS ASKED WHICH PRESET IT IS ON
+    BEFORE EVERY STEP (rig `unitOnPreset`: same, moved, or unknown), and
+    nothing else is gone by: the preset on the screen stands still while
+    the chain is written, and the news does not always come (through a
+    computer a preset changed at the unit is a scene, or nothing; over
+    Bluetooth a gen-3 unit says nothing of its own footswitch). Moved, or
+    a unit that will not say, and the run stops; the number the steps are
+    held to is taken BEFORE the chain is read; and the words say whether a
+    run was stopped, never began, or had finished (`PRESET_MOVED`,
+    `PRESET_MOVED_BEFORE`, `PRESET_MOVED_AFTER`, `UNIT_QUIET`), with nothing
+    read back as this preset's once the unit is on another. A first cut
+    asked only when preset news had come in, which a second read showed
+    never comes through a computer. An Undo is not run over a block swapped into one of
     its cells since (`undoStale`, read fresh first). A block the unit
     refused in the middle of the row is said as a row with no sound; a
     missing Input or Output has its own words, never the CPU sentence;
@@ -1109,6 +1117,20 @@ what the computer sends for the same edit, and a test holds it there.
     preset only ever ARMS the save (`saveTo.arm`). Where the app has no
     Save on the connection the sheet says to save on the unit. No words
     name Edit chain, which is not there over Bluetooth.
+  - *And a second read, of those fixes, found more, fixed the same way.*
+    "Connected" was still said over a row whose Output the unit had refused
+    (its cell was a bare wire, fed from the row): `joinBreak` now wants the
+    Input and the Output to BE there. Where a chain read shows no wiring at
+    all (an older computer app), the Undo cut every cable in the row: it
+    cuts none now (`wiringKnown`) and says it left them. Out of a six-row
+    unit's top row the app can make half the cables, and the Undo left all
+    of them out. "Nothing was added" stood over an Input the app had added.
+    A count nobody confirmed ("Took the 5 blocks back out" after a read
+    that never came) is not said. Couch-made chains were moved on the rig's
+    unit name alone, which the demo leaves behind and a VP4 sets too: they
+    move only when Quick build has just read a real unit's blocks. THE
+    LESSON AGAIN: the fix for "a preset change slips through" had its own
+    way for one to slip through.
   - *What it is.* On a preset with nothing in it but its Input and Output,
     Edit shows Quick build and the starter chains in place of "This preset
     is empty." (components/QuickBuild), and Play one Quick build button
@@ -1344,7 +1366,14 @@ where the chain is open).
   to another preset between any two; without this the rest of a build
   went into that preset. And the block is asked about again between its
   two messages (select, then put), and an AM4's slots read back after a
-  move are not taken as the write's answer.
+  move are not taken as the write's answer. A CHAIN READ ENDS BY ASKING
+  THE UNIT WHICH PRESET IT IS ON (`gen3StillHere`): a gen-3 unit stepped
+  on while its preset was being read says nothing, and the clock that
+  would have asked is held off while the line is busy, so the read is
+  refused if the unit has moved or will not say. An AM4's answer names its
+  own preset, and that is heeded (`am4SlotsNow`). A wire is new with each
+  connection, and a write before any read says that, not that the preset
+  changed.
 - **TWO WAYS TO READ THE GRID, AND THE FAST ONE IS NOT BELIEVED YET.** The
   preset whole (the edit buffer, the read the computer app uses, proven on
   all three units through a computer) is 24,680 bytes from an FM3 or FM9

@@ -2961,13 +2961,45 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * settled either way, and not again after two silences.
    */
   const liveSettled = () => gridProved.cells === false || gridProved.rowBit === false || (gridProved.cells === true && typeof gridProved.rowBit === 'number')
-  const liveWanted = () => liveGrid === true || (liveSilent < 2 && !liveSettled())
+  /* And a handful of times at most: an answer this app cannot read at all (an Axe-Fx III's may be one) settles nothing however often it is asked for, and the log has it from the first. */
+  let liveAsks = 0
+  const LIVE_ASKS_MOST = 4
+  const liveWanted = () => liveGrid === true || (liveSilent < 2 && liveAsks < LIVE_ASKS_MOST && !liveSettled())
   /* The count of scene and preset changes the chain was last read at (null: not read on this connection). */
   let gridSeenAt = null
   function chainSeen(what) {
     if (gridSeenAt === moves) return
+    if (gridSeenAt === null) {
+      /* A wire is made new for each connection: nothing changed on the unit, and the words do not say it did. */
+      say(`not sent, the chain has not been read on this connection: ${what}`)
+      throw failure('The app has not read the chain on this connection yet. Try it again.', 409)
+    }
     say(`not sent, the chain has not been read since the scene or preset last changed: ${what}`)
     throw failure('The scene or preset changed since the app read the chain. Try it again.', 409)
+  }
+  const movedInRead = () => failure('The scene or preset changed while the app was reading the chain. Try it again.', 409)
+  /*
+   * WHICH PRESET THE UNIT IS ON, ASKED AT THE END OF A GRID READ. A gen-3
+   * unit says nothing when its own footswitch changes preset: the phone
+   * learns of it by asking, on a clock, and that clock's questions are
+   * skipped while anything else is on the line, which the preset is for
+   * eight or sixteen seconds. So a unit stepped on during the read was not
+   * counted as moved, the read vouched for the chain (chainSeen), and the
+   * first writes of a build went into the preset it had been stepped to.
+   * Asked here, off the clock, the move is counted before the read vouches
+   * for anything; a unit that will not say is not vouched for either.
+   */
+  async function gen3StillHere(at) {
+    const got = await presetNow('editRead')
+    if (!got || got === SKIPPED || rejected(got) || !Number.isInteger(got.number)) {
+      say('the unit did not say which preset it is on after the chain was read; the read is not used')
+      throw failure(`The ${spec.name} didn’t say which preset it is on, so the app can’t tell whose chain it read. Try again in a moment.`, 504)
+    }
+    notePreset(got, true)
+    if (moves !== at) {
+      say('the scene or preset changed while the chain was being read; the read is not used')
+      throw movedInRead()
+    }
   }
   /* Kept for a moment, and only while nothing has moved: another preset's is another grid (`moves`), and a write to this one makes it read again (chainChanged). */
   let gridKept = null
@@ -3042,7 +3074,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const started = time.now()
       const asked = liveWanted()
       const { frame: liveFrame, live } = asked ? await gen3LiveGrid() : { frame: null, live: null }
-      if (asked) liveSilent = liveFrame ? 0 : liveSilent + 1
+      if (asked) {
+        liveAsks += 1
+        liveSilent = liveFrame ? 0 : liveSilent + 1
+      }
       /* The live answer itself, once a connection and before the preset is asked for (which a unit may not send down this wire at all): what settles its layout on a unit nobody has read it from. */
       if (liveFrame && !liveTold) {
         liveTold = true
@@ -3062,10 +3097,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
           }
         }
       }
+      /* Is the unit still on the preset this was read from? Asked, since a gen-3 unit does not say (gen3StillHere); refused if not. */
+      await gen3StillHere(at)
       const cells = grid.cells.map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, name: c.isShunt ? `Shunt ${c.effectId - SHUNT_FROM + 1}` : blockNamed(c.effectId), isShunt: c.isShunt, fromRows: c.fromRows }))
       const value = { rows: grid.rows, cols: grid.cols, cells, source }
-      if (moves === at) gridKept = { value, at: time.now(), moves }
-      /* What a write is then held to (chainSeen): the count this read began at, so a grid read across a move vouches for nothing. */
+      gridKept = { value, at: time.now(), moves }
+      /* What a write is then held to (chainSeen): the count this read began at and ended at. */
       gridSeenAt = at
       const shunts = cells.filter((c) => c.isShunt).length
       say(`the grid, read ${source === 'live' ? 'live' : 'from the preset'} in ${((time.now() - started) / 1000).toFixed(1)} s: ${cells.length - shunts} block${cells.length - shunts === 1 ? '' : 's'}${shunts ? `, ${shunts} shunt${shunts === 1 ? '' : 's'}` : ''}`)
@@ -3141,10 +3178,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   const am4Named = (code) => AM4_PALETTE.find((b) => b.page === code)?.name || am4Block(code)?.slug || `0x${Number(code).toString(16)}`
   /* The AM4's four slots as it has just said them, read again where one answer is not yet believed (believeSlots). */
+  /*
+   * The same answer says WHICH PRESET they are (its location), and that is
+   * heeded: an AM4 stepped to another preset is otherwise only counted as
+   * moved by the clock's next question, up to two seconds on, and until
+   * then another preset's slots would be read as this one's.
+   */
   async function am4SlotsNow(fresh) {
     let s = await readStructure({ priority: 'editRead', fresh })
     if (s && s !== SKIPPED && !s.slots) s = await readStructure({ priority: 'editRead', fresh: true })
-    return s && s !== SKIPPED && s.slots ? s.slots : null
+    if (!s || s === SKIPPED || !s.slots) return null
+    if (Number.isInteger(s.location)) notePreset({ number: s.location, name: s.name }, true)
+    return s.slots
   }
 
   /** GET /preset/grid on an AM4: its four slots in a line, as the computer answers it (row 0, slot 1 at column 0). */
@@ -3152,6 +3197,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const at = moves
     const slots = await am4SlotsNow(false)
     if (!slots) throw timedOut()
+    if (moves !== at) {
+      say('the scene or preset changed while the slots were being read; the read is not used')
+      throw movedInRead()
+    }
     gridSeenAt = at
     const cells = []
     slots.forEach((code, i) => {

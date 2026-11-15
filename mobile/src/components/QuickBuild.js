@@ -3,7 +3,7 @@ import { Image, Pressable, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { blockCatalog, clearCell, gridCells, placeBlock, setCable } from '../lib/device'
-import { beginChainWrite, endChainWrite, followPresetAfterChainWrite, getState, leftPresetInChainWrite, refreshBlocks } from '../lib/rig'
+import { beginChainWrite, endChainWrite, followPresetAfterChainWrite, getState, refreshBlocks, unitOnPreset } from '../lib/rig'
 import { logDebug } from '../lib/debugLog'
 import { gridShape } from '../lib/grid-plan'
 import { UNDO_STALE, runPlan, stepWords } from '../lib/split-chain'
@@ -12,7 +12,7 @@ import { blockIconOwn } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { ownPaletteHere } from '../lib/ownBlocksHere'
 import { takeQuickBuildAsk } from '../lib/quickBuild'
-import { addStarterHere, keepPaletteHere, roomForStarterHere, useStarterChains } from '../lib/starterChainsHere'
+import { addStarterHere, adoptUnlinkedHere, keepPaletteHere, roomForStarterHere, useStarterChains } from '../lib/starterChainsHere'
 import {
   BACK_TO_PLAY,
   BLOCKS_HEAD,
@@ -38,12 +38,16 @@ import {
   READING_BACK,
   READING_BLOCKS,
   PRESET_MOVED,
+  PRESET_MOVED_AFTER,
+  PRESET_MOVED_BEFORE,
   READ_FAILED,
   SAVE_PRESET,
   STARTERS_FULL,
   STARTER_NAME_MAX,
   TRY_AGAIN,
   UNDOING,
+  UNDO_MOVED_AFTER,
+  UNIT_QUIET,
   UNDO_LABEL,
   YOUR_CHAIN,
   buildBlocked,
@@ -60,7 +64,6 @@ import {
   UNDO_NOT_READ,
   planBuild,
   resolveChain,
-  sentBlocks,
   stillIn,
   stoppedLine,
   undoMissedLine,
@@ -69,6 +72,7 @@ import {
   undoSteps,
   undoSub,
   undoUnjoined,
+  undoWiringLeftLine,
   undoneLine,
   whatLanded
 } from '../lib/starter-chains'
@@ -336,6 +340,8 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
         if (stop) return
         setPalette(list)
         keepPaletteHere(list)
+        /* A real unit has just answered with its blocks, and it is one Quick build is offered on: chains kept before any unit was known are its now (never in the demo). */
+        adoptUnlinkedHere()
       } catch (err) {
         logDebug('chain', 'quick build: block list', err?.message || String(err))
         if (!stop) setListFailed(true)
@@ -370,25 +376,32 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   }
 
   /*
-   * A plan is many requests, and the unit can be stepped to another preset
-   * between any two (a footswitch). So each step asks first whether the
-   * unit is still on the preset the plan was made for (`n`), and the first
-   * that finds it is not stops the run (runPlan stops at a throw) and says
-   * so in `gone`. The preset on the screen is not enough to go by: while
-   * the chain is being written its news is noted and not followed, so the
-   * rig is asked, and it asks the unit where news has come in
-   * (leftPresetInChainWrite). The wire holds the same over Bluetooth, sooner
-   * than the screen can know (bleWire chainSeen).
+   * A PLAN IS MANY REQUESTS, AND THE UNIT CAN BE STEPPED TO ANOTHER PRESET
+   * BETWEEN ANY TWO (a footswitch). So before every step the unit itself is
+   * asked which preset it is on (rig unitOnPreset, which says why nothing
+   * else can be gone by: the preset on the screen is held still while the
+   * chain is written, and the news of a change does not always come). Moved,
+   * and the run stops there (runPlan stops at a throw) with `gone.moved`
+   * set; a unit that will not say stops it too, since the app does not go
+   * on writing to a preset it cannot name. `gone.unsent` is whether the step
+   * that threw was stopped HERE, before it was sent: one that threw on its
+   * own way may have reached the unit. Over Bluetooth the wire holds the
+   * same line itself (bleWire chainSeen).
    */
+  const where = async (n) => (ofNumber() !== n ? 'moved' : unitOnPreset(n))
   const held = (n, gone, call) => async (...args) => {
-    if (gone.moved || ofNumber() !== n || (await leftPresetInChainWrite(n))) {
+    gone.unsent = true
+    const on = gone.moved ? 'moved' : await where(n)
+    if (on === 'moved') {
       gone.moved = true
       throw new Error(PRESET_MOVED)
     }
+    if (on !== 'same') throw new Error(UNIT_QUIET)
+    gone.unsent = false
     return call(...args)
   }
-  /* After a run: whether the unit is on another preset now. */
-  const leftFor = async (n, gone) => gone.moved || ofNumber() !== n || (await leftPresetInChainWrite(n))
+  /* How many of a run's steps may have reached the unit: the ones answered, and the one that threw unless it was stopped before it was sent. */
+  const triedOf = (res, gone) => (res.ok ? res.done : res.done + (gone.unsent ? 0 : 1))
 
   /* The five calls, with each step said while it goes and written in the log. */
   const wire = (plan, n, gone) => ({
@@ -413,13 +426,16 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     if (busy || !picks.length) return
     setSaid(null)
     setBusy(CHECKING_EMPTY)
+    /* The preset this is for, taken BEFORE its chain is read: the plan is made from that read, and every step is held to this number. */
+    const n = ofNumber()
     let cells
     try {
       cells = await gridCells()
     } catch (err) {
       logDebug('chain', 'quick build: grid read', err?.message || String(err))
       setBusy(null)
-      setSaid(READ_FAILED)
+      /* The wire's own words where it refused the read (the preset changed while it was being read); else that the unit did not answer. */
+      setSaid(err?.status === 409 && err?.message ? err.message : READ_FAILED)
       return
     }
     const { picks: entries } = resolveChain(picks, palette || [])
@@ -430,8 +446,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       setSaid(plan.why)
       return
     }
-    const n = ofNumber()
-    const gone = { moved: false }
+    const gone = { moved: false, unsent: false }
     beginChainWrite()
     let res
     try {
@@ -440,29 +455,42 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       res = { ok: false, done: 0, failed: plan.steps[0], error: err?.message || String(err) }
     }
     logSteps('quick build', plan.steps, res)
-    const left = await leftFor(n, gone)
+    const tried = triedOf(res, gone)
+    /* Where the unit is now, asked while the chain write is still held. */
+    const on = gone.moved ? 'moved' : await where(n)
     endChainWrite({ refresh: false })
-    /* On another preset now: the chain that would be read back is not the one this was built in, so nothing is said of it and no Undo is offered. The news the chain write noted is followed, so the screen shows the preset the unit is on. */
-    if (left) {
+    /*
+     * On another preset now: the chain that would be read back is not the
+     * one this was built in, so nothing is said of it and no Undo is
+     * offered. The news the chain write noted is followed, so the screen
+     * shows the preset the unit is on. And the words say what happened: a
+     * run that was stopped, one that never began, or one that had finished.
+     */
+    if (on === 'moved') {
       followPresetAfterChainWrite()
-      logDebug('chain', 'quick build', 'the preset changed part-way; nothing read back')
+      logDebug('chain', 'quick build', `the preset changed (${tried} of ${plan.steps.length} steps may have gone); nothing read back`)
       if (!alive.current) return
       setBusy(null)
-      setSaid(PRESET_MOVED)
+      setSaid(tried === 0 ? PRESET_MOVED_BEFORE : gone.moved ? PRESET_MOVED : PRESET_MOVED_AFTER)
       return
     }
-    if (alive.current) setBusy(READING_BACK)
-    await refreshBlocks({ quiet: true })
-    /* Null when the unit did not answer: what landed is then not known, which is not the same as nothing landing (whatLanded). */
+    /* Null when the unit did not answer: what landed is then not known, which is not the same as nothing landing (whatLanded). And where it would not say which preset it is on, nothing is read back as this preset's at all. */
     let after = null
-    try {
-      after = await gridCells()
-    } catch (err) {
-      logDebug('chain', 'quick build: read back', err?.message || String(err))
+    if (on === 'same') {
+      if (alive.current) setBusy(READING_BACK)
+      await refreshBlocks({ quiet: true })
+      try {
+        after = await gridCells()
+      } catch (err) {
+        logDebug('chain', 'quick build: read back', err?.message || String(err))
+      }
+    } else {
+      followPresetAfterChainWrite()
+      logDebug('chain', 'quick build', 'the unit did not say which preset it is on; nothing read back')
     }
-    const landed = whatLanded(plan, after, res.done)
-    logDebug('chain', 'quick build landed', `${landed.landed.length} in, ${landed.missing.length} not${landed.missing.length ? `: ${landed.missing.map((p) => p.name).join(', ')}` : ''}`)
-    const undo = undoSteps(plan, res.done)
+    const landed = whatLanded(plan, after, tried)
+    logDebug('chain', 'quick build landed', landed.unread ? 'not read' : `${landed.landed.length} in, ${landed.missing.length} not${landed.missing.length ? `: ${landed.missing.map((p) => p.name).join(', ')}` : ''}`)
+    const undo = undoSteps(plan, tried)
     if (!alive.current) return
     setBusy(null)
     setDone({
@@ -470,9 +498,9 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       landed,
       stopped: res.ok ? null : stoppedLine(res.failed, res.error),
       undo: undo.length ? undo : null,
-      /* What Undo says it takes out: the blocks the read back shows, or where it did not come, the ones that were sent. */
-      count: landed.unread ? sentBlocks(plan, res.done) : landed.landed.filter((p) => !p.end).length,
-      ran: res.done,
+      /* What Undo says it takes out: the blocks the read back shows. Where it did not come, no number: what was sent is not what the unit said it holds. */
+      count: landed.unread ? 0 : landed.landed.filter((p) => !p.end).length,
+      ran: tried,
       n
     })
   }
@@ -480,12 +508,17 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   const runUndo = async () => {
     const d = done
     if (!d?.undo || busy) return
-    if (ofNumber() !== d.n) {
-      setDone({ ...d, undo: null })
-      setUndoSaid({ bad: true, text: UNDO_STALE })
+    setBusy(UNDOING)
+    /* Still on the preset the build was made in? Asked of the unit, as before every step. */
+    const before = await where(d.n)
+    if (before !== 'same') {
+      logDebug('chain', 'quick build undo', before === 'moved' ? 'another preset now; not run' : 'the unit did not say which preset it is on; not run')
+      if (!alive.current) return
+      setBusy(null)
+      if (before === 'moved') setDone({ ...d, undo: null })
+      setUndoSaid({ bad: true, text: before === 'moved' ? UNDO_STALE : READ_FAILED })
       return
     }
-    setBusy(UNDOING)
     /*
      * The chain as it is now, before anything is taken out: a block swapped
      * into one of these cells since (at the unit, or from the computer's
@@ -499,7 +532,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       logDebug('chain', 'quick build undo: grid read', err?.message || String(err))
       if (!alive.current) return
       setBusy(null)
-      setUndoSaid({ bad: true, text: READ_FAILED })
+      setUndoSaid({ bad: true, text: err?.status === 409 && err?.message ? err.message : READ_FAILED })
       return
     }
     if (ofNumber() !== d.n || undoStale(d.plan, now, d.ran)) {
@@ -510,7 +543,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       setUndoSaid({ bad: true, text: UNDO_STALE })
       return
     }
-    const gone = { moved: false }
+    const gone = { moved: false, unsent: false }
     beginChainWrite()
     let res
     try {
@@ -519,24 +552,28 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       res = { ok: false, done: 0, failed: d.undo[0], error: err?.message || String(err) }
     }
     logSteps('quick build undo', d.undo, res)
-    const left = await leftFor(d.n, gone)
+    const on = gone.moved ? 'moved' : await where(d.n)
     endChainWrite({ refresh: false })
-    if (left) {
+    if (on === 'moved') {
       followPresetAfterChainWrite()
-      logDebug('chain', 'quick build undo', 'the preset changed part-way; nothing read back')
+      logDebug('chain', 'quick build undo', 'the preset changed; nothing read back')
       if (!alive.current) return
       setBusy(null)
       setDone({ ...d, undo: null })
-      setUndoSaid({ bad: true, text: PRESET_MOVED })
+      setUndoSaid({ bad: true, text: gone.moved ? PRESET_MOVED : UNDO_MOVED_AFTER })
       return
     }
-    await refreshBlocks({ quiet: true })
-    /* Null when the unit did not answer: then nothing is said to be out. */
+    /* Null when the unit did not answer, or would not say which preset it is on: then nothing is said to be out. */
     let after = null
-    try {
-      after = await gridCells()
-    } catch (err) {
-      logDebug('chain', 'quick build undo: read back', err?.message || String(err))
+    if (on === 'same') {
+      await refreshBlocks({ quiet: true })
+      try {
+        after = await gridCells()
+      } catch (err) {
+        logDebug('chain', 'quick build undo: read back', err?.message || String(err))
+      }
+    } else {
+      followPresetAfterChainWrite()
     }
     const still = after === null ? [] : stillIn(d.plan, after)
     /* The blocks out is half of it: the wiring the preset had before has to be back too, or it is a preset with no sound. */
@@ -548,8 +585,10 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
         : still.length
           ? { bad: true, text: undoMissedLine(still.map((p) => p.name)) }
           : unjoined !== null
-            ? { bad: true, text: undoNotJoinedLine(unjoined) }
-            : { bad: false, text: undoneLine(d.count) }
+            ? { bad: true, text: undoNotJoinedLine(unjoined, d.count) }
+            : d.plan.wiringKnown === false
+              ? { bad: false, text: undoWiringLeftLine(d.count) }
+              : { bad: false, text: undoneLine(d.count) }
     logDebug('chain', 'quick build undo', words.text)
     if (!alive.current) return
     setBusy(null)
