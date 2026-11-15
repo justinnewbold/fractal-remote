@@ -14,7 +14,7 @@ import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
-import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
+import { notAnAdapter, unitForReport } from './bluetooth-gear'
 import { CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
@@ -777,22 +777,17 @@ export function setBluetoothUnit(key, { carry = false } = {}) {
   const was = saved.unit
   const using = saved.adapter
   /*
-   * NEVER ONTO AN FM3 AN ADAPTER NOT NAMED FOR ONE (the FM3 rule: the WIDI
-   * Master and the C2MIDI Pro are never offered for an FM3, and only the
-   * WIDI Uhost is named for one, shared/bluetooth-gear namedForFm3). Switch
-   * to FM3 is refused with such an adapter, as switchAdapter refuses one,
-   * and one kept with no unit is not handed to an FM3 picked: Connect finds
-   * the FM3's own, and lists any other for its owner's tap. A USB cable is
-   * the unit itself, never refused here (bleAdapters pickAdapter).
+   * AN FM3 LIKE ANY UNIT, since 15 November 2026. Until then an adapter the
+   * app did not name for an FM3 (anything but a WIDI Uhost) was never
+   * carried onto one, by Switch to or by the first pick: "Instead of saying
+   * NEVER use a different Bluetooth device, just have a warning that
+   * devices on the FM3 may overheat and to use at their own risk" (Justin;
+   * shared/bluetooth-gear, A WARNING, NOT A NEVER). The warning is the
+   * page's, in red, wherever the FM3 is picked or has answered.
    */
-  const notForFm3 = key === 'fm3' && !!using && !isCable(using) && !namedForFm3(using.name)
-  if (carry && notForFm3) {
-    logDebug('ble', `${adapterName(using) || 'the adapter'} is not one the app names for an FM3: the FM3 is not switched to on it`)
-    return saved.unit
-  }
   /* The unit left keeps the adapter it was using, for when it is picked again. */
   if (was && using && !carry) keepFor(was, using)
-  const adapter = (carry || (!was && !notForFm3)) && using ? using : byUnit[key] || null
+  const adapter = (carry || !was) && using ? using : byUnit[key] || null
   /* Another unit: what was let go of for the last one is no longer a question (letGoOf), nor is a note from its search about this one (it sat under the next unit's working connection). */
   letGoOf = null
   if (now.said) now = { ...now, said: null }
@@ -999,12 +994,14 @@ let letGoOf = null
 const cableRule = () => ({ unit: saved.unit, units: BLE_UNITS, skip: letGo })
 /*
  * What the phone's own pick is told (bleAdapters pickAdapter): the same, and
- * for an FM3 the adapters never offered for one (neverOnFm3), which are
- * listed for a tap but never chosen by themselves: the search's only one
- * found, Apple's screen's one just connected, or the iPhone's list.
+ * what is never chosen by itself. That is a footswitch, on any unit, and
+ * nothing else: until 15 November 2026 it was also, for an FM3, a WIDI
+ * Master, a WIDI Jack, a C2MIDI Pro and an MD-BT01 by name, which were
+ * listed for a tap but never picked (shared/bluetooth-gear, A WARNING, NOT
+ * A NEVER). An FM3's adapter is picked like any other unit's now.
  */
-/* Never picked by itself: a footswitch (notAnAdapter), on any unit, and on an FM3 the adapters never offered for one. Either is still listed, for a tap. */
-const pickRule = () => ({ ...cableRule(), refused: (n) => notAnAdapter(n) || (saved.unit === 'fm3' && neverOnFm3(n)), taken: takenIds(), letGoOf })
+/* Never picked by itself: a footswitch (notAnAdapter), on any unit. It is still listed, for a tap. */
+const pickRule = () => ({ ...cableRule(), refused: (n) => notAnAdapter(n), taken: takenIds(), letGoOf })
 
 /** The cables a tap on Connect would take straight away now, from a list already read (bleAdapters cablesFirst): the page's hint says the same as Connect does. */
 export const cablesConnectTakes = (list) => cablesFirst(list, cableRule())
@@ -1164,14 +1161,12 @@ function sameSaidStill(devices) {
  * forgotten and this one chosen, exactly as a tap in the search list chooses
  * one (chooseAdapter), and the link, which is trying the one kept, lets it
  * go and connects to this one (bleLink settingsMoved). Never a cable, never
- * the one kept, and for an FM3 only an adapter the app names for one
- * (namedForFm3: the WIDI Uhost, never one neverOnFm3 refuses). True when it
- * switched.
+ * the one kept. For an FM3 as for any unit, since 15 November 2026 (it took
+ * only a WIDI Uhost for one until then). True when it switched.
  */
 export function switchAdapter(dev) {
   const a = saved.adapter
   if (!a || isCable(a) || !dev || !isAdapter(dev) || isCable(dev) || dev.id === a.id) return false
-  if (saved.unit === 'fm3' && !namedForFm3(dev.name)) return false
   logDebug('ble', `switching from ${adapterName(a) || 'the adapter from last time'} to ${adapterName(dev) || 'an adapter with no name'}, as asked`)
   chooseAdapter(dev)
   return true
@@ -1216,8 +1211,8 @@ export function takeCable(dev, unit, { byHand = false } = {}) {
  * through Apple's screen, by luck: it was the one port left after it.
  *
  * So every cable plugged in now that could be the unit picked's (bleAdapters
- * cablesFor: not one named for another unit; for an FM3 never the C2MIDI
- * Pro), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
+ * cablesFor: not one named for another unit; none is refused by its name
+ * since 15 November 2026), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
  * (onMidiJacks: named for no unit) kept for another unit is offered too: the
  * same U2MIDI Pro moves from the AM4's jacks to the FM3's, Connect itself
  * would take it (cablesFirst has no such rule), and the tap moves it to the
@@ -1230,7 +1225,8 @@ export function takeCable(dev, unit, { byHand = false } = {}) {
 export function cablesToOffer(list = adapterDevices()) {
   if (!saved.unit || !offered(saved.unit)) return []
   const taken = takenIds()
-  return cablesFor(list, { unit: saved.unit, units: BLE_UNITS, refused: saved.unit === 'fm3' ? neverOnFm3 : null }).filter(
+  /* No cable is refused by its name: until 15 November 2026 a C2MIDI Pro was, for an FM3, here and not at Connect, which took it all the same. */
+  return cablesFor(list, { unit: saved.unit, units: BLE_UNITS }).filter(
     (d) => d.id !== saved.adapter?.id && !(taken.has(d.id) && !onMidiJacks(d, BLE_UNITS))
   )
 }
@@ -1360,8 +1356,9 @@ export function pairScreenShut() {
  *
  * When only one adapter could be meant it is chosen here (pickAdapter), and
  * on an iPhone the promise resolves to it; otherwise to nothing, and the list
- * on the page asks. For an FM3, never one of the adapters never offered for
- * it (pickRule): that one is listed, for a tap.
+ * on the page asks. Never a footswitch (pickRule): that is listed, for a
+ * tap. Until 15 November 2026 the same held, for an FM3, of the adapters
+ * then ruled out for one by name.
  */
 export async function findAdapters({ cableFirst = true } = {}) {
   const mod = ble()
@@ -2026,10 +2023,9 @@ export async function lookForAdapterAgain(poke) {
  * unit says nothing through it, or null: for the Bluetooth page
  * to offer by name ("WIDI Master isn't answering. WIDI Jack Bluetooth is
  * here."), never to take by itself (bleAdapters otherAdapterHere). `list` is
- * what the module lists (adapterDevices), as the page has it. For an FM3,
- * only an adapter the app names for one (shared/bluetooth-gear namedForFm3:
- * the WIDI Uhost, the FM3's own way): an adapter it has no name for could
- * take power from MIDI OUT, which FM3_NEVER refuses.
+ * what the module lists (adapterDevices), as the page has it. For an FM3
+ * as for any unit, since 15 November 2026: it was offered only another WIDI
+ * Uhost until then.
  *
  * ON ANDROID, ONLY WHAT THIS ROUND'S LOOK HEARD (glanceForAdapters). The
  * module's list is its last search's, kept until the next search starts, so
@@ -2046,7 +2042,7 @@ export const otherAdapterNow = (list = adapterDevices()) => {
   const taken = takenIds()
   const here = (Array.isArray(list) ? list : []).filter((d) => !taken.has(d?.id))
   /* Never a footswitch (notAnAdapter), on any unit: it is not offered, nor counted against the one real adapter here. */
-  return otherAdapterHere(here, saved.adapter, { os: Platform.OS, refused: (name) => notAnAdapter(name) || (saved.unit === 'fm3' && !namedForFm3(name)) })
+  return otherAdapterHere(here, saved.adapter, { os: Platform.OS, refused: (name) => notAnAdapter(name) })
 }
 
 /*

@@ -55,7 +55,27 @@
  * MIDI OUT it goes into. On his FM3, through the Uhost: it works, and stays
  * cool. So the FM3 has a shopping list and steps of its own (the U2MIDI Pro
  * in the C2MIDI Pro's place), and everybody is told before any pick that
- * the C2MIDI Pro and the WIDI Master are never for an FM3 (NOT_FOR_FM3).
+ * the C2MIDI Pro and the WIDI Master were never for an FM3 (until 15
+ * November 2026: below).
+ *
+ * A WARNING, NOT A NEVER, SINCE 15 NOVEMBER 2026. "I have now confirmed
+ * that from a user that The Yamaha B101 works also in addition to the
+ * WIDIJack that works but gets hot. So On the FM3 Instead of saying NEVER
+ * use a different Bluetooth device, just have a warning that devices on the
+ * FM3 may overheat and to use at their own risk." (Justin; "B101" is read
+ * as Yamaha's MD-BT01, the one Bluetooth MIDI adapter Yamaha makes for MIDI
+ * jacks.) Until then the FM3 had one way, the Uhost and a U2MIDI Pro, every
+ * other adapter was refused for it by name (FM3_NEVER_NAMES, neverOnFm3,
+ * namedForFm3: never picked, never offered when another was missing, never
+ * switched to), and the words said "never" in red. Now: the FM3 is offered
+ * the Uhost and the U2MIDI Pro first, as the way that stays cool, then the
+ * Yamaha MD-BT01 and the WIDI Jack; nothing is refused for an FM3 by name;
+ * and FM3_WARNING, red wherever the FM3 is picked, says an adapter may
+ * overheat, that it is the owner's own risk, to unplug one that gets hot,
+ * and what happened here (the WIDI Master and the C2MIDI Pro got very hot
+ * on his FM3 and did not work, which is why neither is among its ways).
+ * Still what happened and what owners report, never a fact about the
+ * unit, and still no home-made way round it.
  *
  * NO RECIPE FOR THE WAY ROUND IT. The warning and the guide once said what
  * FM3 owners fit (a resistor on one pin of a home-made adapter, "someone who
@@ -142,7 +162,7 @@ export const TESTED = ['am4', 'fm3', 'fm9', 'axefx3']
 /** What we know of each try, for the Developer page. */
 export const TRIED_NOTES = {
   am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
-  fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
+  fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it. A customer’s Yamaha MD-BT01 works on one, and a WIDI Jack works but gets hot (Justin, 15 November 2026; which phone was not said).',
   fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
   axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said. Justin’s own (Mark II, firmware 33.01) from his iPhone, 13 November 2026: Edit’s knobs on the NAM block all work.'
 }
@@ -246,14 +266,14 @@ export const HOW_CONNECT = {
 }
 
 /*
- * NEVER THE C2MIDI PRO ON AN FM3, TO EVERYBODY, BEFORE AND WHATEVER IS
- * PICKED. FM3_NEVER is drawn once the FM3 is picked; an FM3 owner who has
- * not picked yet would otherwise read an AM4's shopping list first. So this
- * goes under the units in step 1, on every visit. It said "Not for an FM3"
- * while the FM3 was not offered to customers; it is offered now, and what
- * is not for an FM3 is the cable.
+ * THE FM3'S WARNING IN ONE LINE, for where there is room for one: the
+ * website's /bluetooth page (held to this word for word by a test) and the
+ * foot of the purchase page's parts. It said "never the C2MIDI Pro or a
+ * WIDI Master" (NOT_FOR_FM3) until 15 November 2026, and was drawn under
+ * every other unit's parts too, for an FM3 owner reading the wrong list;
+ * with the unit picked first and only its own adapters shown, it is not.
  */
-export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.'
+export const FM3_SHORT = 'On an FM3, a Bluetooth adapter may overheat: use one at your own risk. The CME U2MIDI Pro runs on USB power only, and stays cool.'
 
 /*
  * THE PURCHASE PAGE'S LINE, on a copy that opens Bluetooth to customers: one
@@ -269,8 +289,8 @@ export const BLUETOOTH_PARTS_SHOW = 'Which adapter do I need?'
  * units, what a VP4 gets over it, and every part each way of the Bluetooth
  * page takes, by the name on its box (PARTS, below) and what it is, plus
  * POWER_LINE's charger, with no prices. Named here, not sent elsewhere:
- * nobody who has not paid can open the Bluetooth page. And the parts never
- * for an FM3, in the same lines that name them.
+ * nobody who has not paid can open the Bluetooth page. And the FM3's
+ * warning, after the parts.
  *
  * AND THE WAYS THE BLUETOOTH PAGE OFFERS (waysFor), since the audit of 3
  * November 2026 found this list still naming only the Uhost kit of 25
@@ -278,9 +298,9 @@ export const BLUETOOTH_PARTS_SHOW = 'Which adapter do I need?'
  * piece, powered by the unit, no charger), then the WIDI Jack, then the
  * Uhost. Never a sentence that says it works on a unit, only what each unit
  * takes; and the FM3's own list, with the small adapter its U2MIDI Pro needs,
- * and both parts it is never to have.
+ * and its warning in a line (FM3_SHORT).
  */
-export const BLUETOOTH_PARTS = `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
+export const BLUETOOTH_PARTS = `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank; on an FM9 or Axe-Fx III, a Yamaha MD-BT01 too. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank, or a Yamaha MD-BT01 or a CME WIDI Jack. ${FM3_SHORT}`
 
 /*
  * THE WALKTHROUGH AND THE SIGN-IN SCREEN, ON A COPY THAT OPENS BLUETOOTH.
@@ -460,8 +480,8 @@ export const PARTS = {
   /*
    * THE WIDI MASTER: the adapter and its two MIDI plugs in one, powered by
    * the unit's MIDI OUT alone (CME: "No external power option"). Tried and
-   * working on an AM4, through the two 3.5 mm adapters (26 October 2026),
-   * and never for an FM3, where it got very hot and did not work.
+   * working on an AM4, through the two 3.5 mm adapters (26 October 2026).
+   * Not among an FM3's ways: on his it got very hot and did not work.
    */
   master: {
     name: 'CME WIDI Master',
@@ -487,6 +507,20 @@ export const PARTS = {
     does: (noun = 'phone') => `The Bluetooth adapter, with two cables that end in 5-pin MIDI plugs. Your ${noun} connects to it.`,
     amazon: 'https://www.amazon.com/dp/B08ZZSVM1J?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/widi-jack/'
+  },
+  /*
+   * YAMAHA'S MD-BT01: two plugs on a short lead, one for MIDI IN and one
+   * for MIDI OUT, powered by MIDI OUT alone (its manual: "Power: MIDI OUT";
+   * its lamp flashes when the instrument is on, and lights steadily once a
+   * device has connected). A customer's works on an FM3 (Justin, 15
+   * November 2026). No Amazon link: none has been checked against the live
+   * page, so its button is Yamaha's own page (checked 15 November 2026).
+   */
+  mdbt01: {
+    name: 'Yamaha MD-BT01',
+    does: (noun = 'phone') => `The Bluetooth adapter: two plugs on a short lead, one for MIDI IN and one for MIDI OUT. Your ${noun} connects to it. It takes its power from the unit’s MIDI OUT, so there is nothing else to plug in.`,
+    amazon: null,
+    maker: 'https://usa.yamaha.com/musical-instruments/keyboards/products/accessories/md-bt01/index.html'
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
@@ -521,60 +555,42 @@ export const ALL_LINKS = [GUIDE_URL, ...Object.values(PARTS).flatMap((p) => [p.a
 const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III', vp4: 'VP4' }
 
 /*
- * THE FM3 WARNING, in place of its parts and its steps, for the account that
- * can still pick it: what happened, and what owners report, in the fewest
- * words that say both. Said as their reports, not as a fact about the
- * FM3's hardware, and with no home-made way round it (see the head of this
- * file). What happened, never that it was tried: it said "When we tried the
- * WIDI Master and the C2MIDI Pro on an FM3" until the 2 November 2026 audit
- * ("We don't need to mention really whether or not something has been
- * tested or not", Justin, 31 October 2026).
+ * THE FM3'S WARNING, red, wherever the FM3 is the unit picked: on the
+ * Bluetooth page (under the units, and while it is on), over its ways on
+ * How to connect, and over Troubleshooting. One sentence set for all of
+ * them since 15 November 2026 (there were two, FM3_WARNING and FM3_NEVER,
+ * worded apart).
+ *
+ * WHAT IT SAYS, in his order: an adapter may overheat; it is the owner's
+ * own risk; what to do if one does. Then what stays cool and why, and what
+ * happened here, as what happened and what owners report, never as a fact
+ * about the FM3's hardware, and with no home-made way round it (see the
+ * head of this file). Never that anything was "tried" ("We don't need to
+ * mention really whether or not something has been tested or not", Justin,
+ * 31 October 2026), and never that an adapter "works": what has run where
+ * is ours (TRIED_NOTES).
+ *
+ * WITH "EVEN ON USB POWER", as the guide has it: without it the owner of a
+ * WIDI Jack on a USB charger read the warning as not about their adapter.
  */
 export const FM3_WARNING =
-  'On an FM3, use the CME U2MIDI Pro. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
+  'On an FM3, a Bluetooth adapter may overheat. Use one at your own risk, and unplug it if it gets hot. The WIDI Uhost with a CME U2MIDI Pro runs on USB power only, and stays cool. A WIDI Master and a C2MIDI Pro both got very hot on an FM3 and did not work, and FM3 owners report heat with other adapters that take power from its MIDI OUT, even on USB power.'
 
 /** The units the parts list must not be bought for as it is: none since the FM3 has the U2MIDI Pro (26 October 2026). */
 export const NOT_STRAIGHT_IN = []
 
 /*
- * THE FM3 LINE THAT IS NEVER FOLDED AWAY. FM3_WARNING is inside How to plug
- * it in, which starts folded for anybody who has used an adapter here
- * before, and NOT_FOR_FM3 is under step 1, which is not drawn while
- * Bluetooth is on. The likeliest cable to end up on an FM3 is an AM4
- * owner's C2MIDI Pro. So whenever the FM3 is the unit picked, on or off,
- * this is drawn near the top of the page, where nothing folds it (critic,
- * 25 October 2026). Said as the guide and docs/bluetooth-midi.md say it:
- * what happened here, and what owners report, never a fact about the unit.
- *
- * WITH "EVEN ON USB POWER", as FM3_WARNING and the guide have it ("Powering
- * the adapter from USB doesn't stop it, because the jack is still feeding
- * it"). This is the only FM3 line drawn with the fold closed, and without it
- * the owner of a WIDI Jack or WIDI Master on a USB charger read it as not
- * about their adapter. "Can take" power, so an adapter that runs on USB
- * power alone, and never from the jack (the U2MIDI Pro the FM3 plan tries),
- * is not in it.
- *
- * And what the U2MIDI Pro does, never that it was tried: "when we tried it,
- * it worked and stayed cool" until the 2 November 2026 audit, the same rule
- * as FM3_WARNING's.
+ * WHICH ADAPTER IT IS, BY THE NAME A PHONE LISTS IT BY ("WIDI Master",
+ * "WIDI Jack Bluetooth", "WIDI Uhost", "MD-BT01"), case and spaces not
+ * counted: the way of the guide it belongs to (waysFor's keys), or null for
+ * one the app has no way for. A WIDI renamed by its owner is the owner's to
+ * know. It decides one thing only: which adapter's tab How to connect and
+ * Troubleshooting open on. NOTHING IS REFUSED BY IT: until 15 November 2026
+ * these names were a list of adapters never picked, offered or switched to
+ * for an FM3 (FM3_NEVER_NAMES, neverOnFm3, namedForFm3).
  */
-export const FM3_NEVER =
-  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
-
-/*
- * THE ADAPTERS NEVER OFFERED FOR AN FM3, BY THE NAME A PHONE LISTS THEM BY.
- * The Bluetooth page offers another adapter it can see when the one kept is
- * not answering (lib/bluetooth otherAdapterNow, 3 November 2026), and for an
- * FM3 that is never the WIDI Master or the C2MIDI Pro, which got very hot on
- * his, nor the other two FM3_NEVER means by "any adapter that can take power
- * from MIDI OUT": CME's WIDI Jack and Yamaha's MD-BT01 (see NOT THE C2MIDI
- * PRO OR THE WIDI MASTER ON AN FM3, above). The FM3's one way is the Uhost
- * (waysFor), which is not among them. By name only, as the phone's list
- * gives it ("WIDI Master", "WIDI Jack Bluetooth", "C2MIDI Pro"), case and
- * spaces not counted: a WIDI renamed by its owner is the owner's to know.
- */
-export const FM3_NEVER_NAMES = Object.freeze([/widi\s*master/i, /widi\s*jack/i, /c2\s*midi/i, /md-?\s*bt01/i])
-export const neverOnFm3 = (name) => FM3_NEVER_NAMES.some((re) => re.test(String(name || '')))
+export const ADAPTER_NAMES = Object.freeze({ master: /widi\s*master/i, jack: /widi\s*jack/i, uhost: /widi\s*uhost/i, mdbt01: /md-?\s*bt01/i })
+export const adapterKind = (name) => Object.keys(ADAPTER_NAMES).find((kind) => ADAPTER_NAMES[kind].test(String(name || ''))) || null
 
 /*
  * NOT AN ADAPTER: A MIDI FOOTSWITCH THAT TALKS BLUETOOTH MIDI.
@@ -592,27 +608,6 @@ export const neverOnFm3 = (name) => FM3_NEVER_NAMES.some((re) => re.test(String(
  */
 export const NOT_ADAPTER_NAMES = Object.freeze([/^\s*foot\s*ctrl/i])
 export const notAnAdapter = (name) => NOT_ADAPTER_NAMES.some((re) => re.test(String(name || '')))
-
-/*
- * AND THE ONLY ADAPTER NAMED FOR AN FM3 BY THE APP ITSELF: the FM3's own
- * way's, the WIDI Uhost (waysFor('fm3')). FM3_NEVER also refuses "any
- * adapter that can take power from MIDI OUT", and an adapter the app has no
- * name for could be one, so the four names above are not enough for the
- * page's "… is here. Use …" (lib/bluetooth otherAdapterNow, switchAdapter).
- * Any other adapter is still in the search's list, under the red FM3_NEVER,
- * for its owner to choose with a tap; it is just never named for one.
- */
-export const FM3_OWN_NAMES = Object.freeze([/widi\s*uhost/i])
-export const namedForFm3 = (name) => !neverOnFm3(name) && FM3_OWN_NAMES.some((re) => re.test(String(name || '')))
-
-/*
- * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place
- * of the Uhost and the C2MIDI Pro, its two MIDI plugs in the two 3.5 mm
- * adapters. Said under the AM4's parts, with no link (nobody has checked
- * one against the live page), and never for an FM3.
- */
-export const ALSO_ON_AM4 =
-  'On an AM4, a CME WIDI Master works too, in place of the Uhost and the C2MIDI Pro: its two MIDI plugs go into the two 3.5 mm adapters. Never on an FM3.'
 
 /*
  * STILL NOT CONNECTING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK IN.
@@ -642,8 +637,9 @@ export const CLOSE_AND_REOPEN =
  * NO HEAT CHECK BUT THE FM3'S. Each untried way said "In the first minute,
  * feel the adapter" until 31 October 2026: "The FM three is the only one
  * that ever has overheating issues so we don't need to worry about it for
- * any other devices." The FM3 keeps its warning (FM3_NEVER, FM3_WARNING,
- * NOT_FOR_FM3), red and in front.
+ * any other devices." The FM3 keeps its warning (FM3_WARNING, FM3_SHORT),
+ * red and in front, and its two ways that take power from MIDI OUT say to
+ * feel the adapter (FM3_FEEL).
  */
 
 /*
@@ -714,7 +710,7 @@ export function partsFor(unit, noun = 'phone') {
  * "isn't connected with them" under a CME adapter read as the app failing to
  * reach it.
  */
-export const SELLERS_LINE = 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
+export const SELLERS_LINE = 'CME, Yamaha, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
 
 /*
  * ONE THING TALKING TO THE UNIT. With Bluetooth on, the phone never looks
@@ -754,8 +750,7 @@ export const PLUGS_CHECK =
 
 /*
  * Before a unit is picked: the whole of it in two lines. The FM3 is not in
- * it: NOT_FOR_FM3 says it to everybody under step 1, right above, whatever
- * is picked. One list for everybody since 25 October 2026, when a customer
+ * it: its own warning is drawn once it is picked. One list for everybody since 25 October 2026, when a customer
  * stopped being offered the AM4 alone (it had a list of its own,
  * GEAR_IN_SHORT_AM4, until then).
  */
@@ -860,39 +855,76 @@ const powerStep = (name) =>
  * the WIDI Uhost ... On the FM3 just show the WIDI Uhost setup with the
  * U2MIDI Pro ... On the FM9 and Axe-Fx III show the WIDI Master OR the WIDI
  * Jack with 5-pin connector OR the WIDI Uhost with the C2MIDI Pro" (Justin,
- * 26 October 2026). Each way: its title, its parts (by PARTS key), its
- * steps, whether the app has run on this unit through it (`tried`), and the
- * one thing to feel in the first minute where it has not (`feel`), said
- * straight after the step that powers it (`powerAt`).
+ * 26 October 2026). Each way: its key (the adapter it is: adapterKind's
+ * word for it), the short name on its tab (`tab`), its title, a word on why
+ * it is first where it is (`sub`), its parts (by PARTS key), the line about
+ * its firmware before the first time (`before`, none for an adapter with
+ * nothing to update), its steps, a caution of its own (`caution`), and
+ * whether the app has run on this unit through it (`tried`: ours, for the
+ * Developer page, never said to a customer).
  *
- * The FM3 has the one way, the U2MIDI Pro's: everything fed from its MIDI
- * OUT (the WIDI Master, the WIDI Jack, the C2MIDI Pro) got very hot on one
- * or is the same kind, so none of them is ever offered for it.
+ * ONE ADAPTER AT A TIME ON THE SCREEN, since 15 November 2026: "let's add
+ * Bluetooth device specific as well as the fractal units specific trouble
+ * shooting with tabs so we don't have to sort through so much information
+ * not relevant to the unit and device they are using" (Justin). How to
+ * connect draws these as tabs under the units (they were fold-out "Option
+ * 1, Option 2" rows, every one on the page), and Troubleshooting has the
+ * same tabs (adapterTabsFor, troubleFor).
+ *
+ * THE FM3 HAS THREE WAYS SINCE THAT DAY (see A WARNING, NOT A NEVER, at the
+ * head of this file): the Uhost and a U2MIDI Pro first, which runs on USB
+ * power only and stays cool; then Yamaha's MD-BT01 and the WIDI Jack, which
+ * take their power from its MIDI OUT, each with the caution to feel it
+ * (FM3_FEEL), the Jack's saying it gets hot there. Not the WIDI Master, nor
+ * the Uhost with a C2MIDI Pro: on his FM3 both got very hot and neither
+ * worked, so there is nothing to offer. An FM3 owner who has one can still
+ * connect through it: nothing is refused by name any more.
+ *
+ * THE YAMAHA MD-BT01 on the three units with 5-pin jacks it plugs straight
+ * into (FM3, FM9, Axe-Fx III). Not on an AM4 or VP4, whose 3.5 mm jacks it
+ * would need adapters for that nobody has had on one.
  */
-/* The WIDI Jack on an AM4 since 28 October 2026: "WIDI jack works perfectly with AM4". */
-const TRIED_WAYS = { am4: ['master', 'jack', 'uhost'], fm3: ['uhost'] }
+/* The WIDI Jack on an AM4 since 28 October 2026: "WIDI jack works perfectly with AM4". On an FM3, a customer's MD-BT01 and WIDI Jack (15 November 2026). */
+const TRIED_WAYS = { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'] }
+
+/** The name on each adapter's tab, and the one for an adapter the app has no way for (Troubleshooting's last tab). */
+export const ADAPTER_TABS = Object.freeze({ master: 'WIDI Master', jack: 'WIDI Jack', uhost: 'WIDI Uhost', mdbt01: 'Yamaha MD-BT01', other: 'Another adapter' })
+
+/* On an FM3, under a way that takes its power from MIDI OUT: the one heat check the app still asks for (NO HEAT CHECK BUT THE FM3'S, above). */
+export const FM3_FEEL = 'It takes its power from the FM3’s MIDI OUT. Feel it in the first few minutes, and unplug it if it gets hot.'
+export const FM3_JACK_HOT = `A WIDI Jack gets hot on an FM3. ${FM3_FEEL}`
 
 const thruOff = (name) => `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
-const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. It has no other way to be powered.`
+/*
+ * A WIDI Master's power is the plug in MIDI OUT, so its light is what says
+ * its plugs are swapped. Never "if the unit doesn't answer, swap the two
+ * plugs" for one: with its light on, a swap takes its power away.
+ */
+const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. If its light stays off, swap the two plugs. It has no other way to be powered.`
 const jackPower = (name) => `It takes its power from the ${name}’s MIDI OUT. If its light stays off, plug a phone charger or power bank into the Jack’s USB-C socket.`
+/* Yamaha's manual: "Turn on the instrument. The lamp of the MD-BT01 flashes", and "Power: MIDI OUT". */
+const mdPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its lamp flashes. If the lamp stays off, swap the two plugs. It has no other way to be powered.`
 const swapIfQuiet = 'If the unit doesn’t answer, swap the two plugs.'
 
 export function waysFor(unit, noun = 'phone') {
   const name = UNITS[unit]
   if (!name) return []
-  const uhost = (parts) => ({ key: 'uhost', title: 'WIDI Uhost and a cable', parts, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), firstTime: true })
-  if (unit === 'fm3') return mark(unit, [uhost(['uhost', 'u2midi', 'usbA'])])
+  const uhost = (parts, more = {}) => ({ key: 'uhost', tab: ADAPTER_TABS.uhost, title: 'WIDI Uhost and a cable', parts, before: FIRST_TIME, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), ...more })
   if (unit === 'am4' || unit === 'vp4') {
     const vp4 = unit === 'vp4'
+    /* The WIDI Jack's, which a charger can power too. A VP4 sends nothing back over Bluetooth, so "doesn't answer" is not something its owner can see: the words Troubleshooting uses (troubleFor). */
+    const swap = vp4 ? 'If presets don’t change on the VP4, swap the two plugs.' : swapIfQuiet
     return mark(unit, [
       {
         key: 'master',
+        tab: ADAPTER_TABS.master,
         title: 'WIDI Master',
-        best: true,
+        sub: 'The simplest',
         parts: ['master', 'masterAdapters'],
+        before: FIRST_TIME_ADAPTER,
         steps: [
           `Push one 3.5 mm adapter into the ${name}’s MIDI IN, and the other into its MIDI OUT.`,
-          `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swapIfQuiet}`,
+          'Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say.',
           masterPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
@@ -900,11 +932,13 @@ export function waysFor(unit, noun = 'phone') {
       },
       {
         key: 'jack',
+        tab: ADAPTER_TABS.jack,
         title: 'WIDI Jack with 3.5 mm cables',
         parts: ['jackTrs'],
+        before: FIRST_TIME_ADAPTER,
         steps: [
           'Set the switch on the WIDI Jack to Type A.',
-          `Plug its two cables into the Jack, then their 3.5 mm plugs into the ${name}’s MIDI IN and MIDI OUT, as the labels say. ${swapIfQuiet}`,
+          `Plug its two cables into the Jack, then their 3.5 mm plugs into the ${name}’s MIDI IN and MIDI OUT, as the labels say. ${swap}`,
           jackPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
@@ -913,26 +947,43 @@ export function waysFor(unit, noun = 'phone') {
       uhost(['uhost', 'c2midi', 'adapters'])
     ])
   }
+  /* The three units with 5-pin jacks. */
   const out = unit === 'axefx3' ? `its MIDI OUT (not THRU: the ${noun} would only hear itself there)` : 'its MIDI OUT/THRU jack'
   const settings = hookupFor(unit, noun).at(-1)
-  return mark(unit, [
-    {
-      key: 'master',
-      title: 'WIDI Master',
-      best: true,
-      parts: ['master'],
-      steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say. ${swapIfQuiet}`, masterPower(name), settings],
-      powerAt: 1
-    },
-    {
-      key: 'jack',
-      title: 'WIDI Jack with 5-pin cables',
-      parts: ['jackDin'],
-      steps: [`Plug its two cables into the Jack, then their 5-pin plugs into the ${name}’s MIDI IN and ${out}, as the labels say. ${swapIfQuiet}`, jackPower(name), settings],
-      powerAt: 1
-    },
-    uhost(['uhost', 'c2midi'])
-  ])
+  const master = {
+    key: 'master',
+    tab: ADAPTER_TABS.master,
+    title: 'WIDI Master',
+    sub: 'The simplest',
+    parts: ['master'],
+    before: FIRST_TIME_ADAPTER,
+    steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say.`, masterPower(name), settings],
+    powerAt: 1
+  }
+  const jack = {
+    key: 'jack',
+    tab: ADAPTER_TABS.jack,
+    title: 'WIDI Jack with 5-pin cables',
+    parts: ['jackDin'],
+    before: FIRST_TIME_ADAPTER,
+    steps: [`Plug its two cables into the Jack, then their 5-pin plugs into the ${name}’s MIDI IN and ${out}, as the labels say. ${swapIfQuiet}`, jackPower(name), settings],
+    powerAt: 1
+  }
+  /* Yamaha's manual: "connect the MD-BT01 to the MIDI terminals ... Make sure to match the arrow directions as shown." It has no app to update it with. */
+  const mdbt01 = {
+    key: 'mdbt01',
+    tab: ADAPTER_TABS.mdbt01,
+    title: 'Yamaha MD-BT01',
+    parts: ['mdbt01'],
+    before: null,
+    /* No "if the unit doesn't answer, swap": a swap moves the plug that powers it out of MIDI OUT, so its lamp is what says the plugs are swapped (mdPower). */
+    steps: [`Plug the MD-BT01’s two plugs into the ${name}’s MIDI IN and ${out}, matching the arrows on its plugs.`, mdPower(name), settings],
+    powerAt: 1
+  }
+  if (unit === 'fm3') {
+    return mark(unit, [uhost(['uhost', 'u2midi', 'usbA'], { sub: 'Stays cool on an FM3' }), { ...mdbt01, caution: FM3_FEEL }, { ...jack, caution: FM3_JACK_HOT }])
+  }
+  return mark(unit, [master, jack, uhost(['uhost', 'c2midi']), mdbt01])
 }
 
 /* The VP4's own settings step, in its manual's words (the same as hookupFor's). */
@@ -943,11 +994,137 @@ function mark(unit, ways) {
   return ways.map((w) => ({ ...w, tried: (TRIED_WAYS[unit] || []).includes(w.key) }))
 }
 
-/* Troubleshooting's first two fixes, with the parts named: the light, and the plugs swapped on the one-piece adapters. */
-export const TROUBLE_LIT =
-  'Check the adapter is lit. The WIDI Uhost needs a phone charger or power bank in its USB Power socket. A WIDI Master, or a WIDI Jack with no charger, lights up from the unit’s MIDI OUT once the unit is on.'
-export const swapLine = (unit) => `With a WIDI Master or WIDI Jack, swap its two plugs if the ${UNITS[unit] || 'unit'} doesn’t answer.`
+/*
+ * TROUBLESHOOTING, BY UNIT AND BY ADAPTER. It was one list for everybody,
+ * with every adapter's line in it ("The WIDI Uhost needs a phone charger ...
+ * A WIDI Master, or a WIDI Jack with no charger, lights up from the unit's
+ * MIDI OUT ... With the C2MIDI Pro or the U2MIDI Pro, the black plug ...
+ * With a WIDI Master or WIDI Jack, swap its two plugs ... update the Uhost
+ * in CME's free WIDI app"), whatever was plugged in. "So we don't have to
+ * sort through so much information not relevant to the unit and device they
+ * are using" (Justin, 15 November 2026): the page has the units and the
+ * unit's adapters as tabs now, and these are the lines that are an
+ * adapter's own, for one unit. What is the same for every adapter (the
+ * device's Bluetooth, the unit's settings, closing the app, the range) is
+ * the page's (screens/Bluetooth BluetoothTrouble).
+ *
+ * `kind` is a way's key (waysFor), or 'other' for an adapter the app has no
+ * way for, which gets the lines true of any of them. Each answer: `lit`
+ * (its light, and what powers it), `plugs` (which plug goes where on THIS
+ * unit, in the adapter's own words: a WIDI Master has no white plug), `typeA`
+ * (an AM4's or VP4's 3.5 mm jacks, where it applies) and `before` (the
+ * firmware line, for an adapter that has one).
+ */
+/* The tabs Troubleshooting and How to connect draw for a unit: its ways, and on Troubleshooting one more for any other adapter. */
+export const adapterTabsFor = (unit, { other = false } = {}) => [...waysFor(unit).map((w) => ({ key: w.key, label: w.tab })), ...(other ? [{ key: 'other', label: ADAPTER_TABS.other }] : [])]
 
+/* The other half of the quiet-unit hint, for an adapter with no way of its own here: one that only carries one way. */
+/**
+ * WHICH ADAPTER TAB SHOWS. The one tapped, while the unit picked still has
+ * it; else the tab of the adapter kept from last time, by its name; else,
+ * for a kept adapter the unit has no tab for (one of another make, or a WIDI
+ * Master kept for an FM3), the tab for any other adapter, where the page has
+ * one; else the first. Pure, so a test runs it: a tab is only ever a view,
+ * and picking one never changes what the app connects to.
+ *
+ * @param {{ key: string }[]} tabs
+ * @param {{ asked?: string|null, name?: string|null }} [how] the tab tapped, and the kept adapter's name
+ */
+export const adapterTabFor = (tabs, { asked = null, name = null } = {}) => {
+  const has = (key) => !!key && tabs.some((t) => t.key === key)
+  if (has(asked)) return asked
+  const kind = adapterKind(name)
+  if (has(kind)) return kind
+  if (name && has('other')) return 'other'
+  return tabs[0]?.key ?? null
+}
+
+export const BOTH_WAYS = 'The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.'
+
+/* A WIDI Master's two plugs, in its own words (see A WIDI MASTER HAS NO WHITE PLUG, below). */
+const masterBoth = (unit) =>
+  `A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT${unit === 'axefx3' ? ' (not THRU)' : ''}, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug.`
+
+/**
+ * TROUBLESHOOTING'S OWN LINES FOR ONE ADAPTER ON ONE UNIT: the ones that
+ * differ by adapter. Its light and where its power comes from (`lit`), where
+ * its plugs go and what to do if nothing gets through (`plugs`), Type A on
+ * the two units with 3.5 mm jacks (`typeA`), and its firmware, where it has
+ * an app to update it with (`before`). The page puts them among the lines
+ * that are true of every adapter (screens/Bluetooth BluetoothTrouble).
+ *
+ * Until 15 November 2026 the list named every adapter at once ("Check the
+ * adapter is lit: the Uhost needs …, a WIDI Master or WIDI Jack lights up
+ * from …"). "So we don't have to sort through so much information not
+ * relevant to the unit and device they are using" (Justin): a line here
+ * names its own adapter and its own unit and no other, and a test holds it
+ * (test/bluetooth-tabs.mjs).
+ *
+ * @param {string|null} unit  the unit picked, or null for none yet
+ * @param {string|null} kind  a key of ADAPTER_TABS; anything else reads as 'other'
+ * @param {string} [noun]     the device in hand (shared/device-word)
+ * @returns {{ lit: string, plugs: string, typeA: string|null, before: string|null }}
+ */
+export function troubleFor(unit, kind, noun = 'phone') {
+  const name = UNITS[unit] || 'unit'
+  const small = unit === 'am4' || unit === 'vp4'
+  const vp4 = unit === 'vp4'
+  /* A VP4 sends nothing back over Bluetooth, so "doesn't answer" is not something its owner can see: presets not changing is. */
+  const quiet = vp4 ? 'If presets don’t change on the VP4' : `If the ${name} doesn’t answer`
+  const jacks = unit === 'axefx3' ? 'MIDI IN and MIDI OUT (never THRU)' : small ? 'MIDI IN and MIDI OUT' : 'MIDI IN and MIDI OUT/THRU'
+  const fromOut = (what) => `Check the ${what} is lit. It lights up from the ${name}’s MIDI OUT once the ${name} is on.`
+  if (kind === 'uhost') {
+    const cable = unit === 'fm3' ? 'U2MIDI Pro' : 'C2MIDI Pro'
+    return {
+      lit: 'Check the Uhost is lit. It needs a phone charger or power bank in its right socket, USB Power (5 volts, nothing stronger).',
+      plugs: vp4
+        ? `With the ${cable}, only the black plug goes in: into the adapter in the VP4’s MIDI IN. The white plug stays out.`
+        : small
+          ? `With the ${cable}, the black plug goes in the adapter in the ${name}’s MIDI IN and the white one in the adapter in its MIDI OUT. Swapped, nothing gets through.`
+          : `With the ${cable}, the black plug goes in the ${name}’s MIDI IN and the white one in ${unit === 'axefx3' ? 'MIDI OUT (never THRU)' : 'MIDI OUT/THRU'}. Swapped, nothing gets through.`,
+      typeA: small ? TYPE_A : null,
+      before: FIRST_TIME
+    }
+  }
+  if (kind === 'master') {
+    return {
+      lit: `${fromOut('WIDI Master')} It has no other way to be powered.`,
+      /* No swap after it: the line has just said which plug goes where, and the larger one in MIDI OUT is its only power. */
+      plugs: masterBoth(unit),
+      typeA: small ? TYPE_A : null,
+      before: FIRST_TIME_ADAPTER
+    }
+  }
+  if (kind === 'jack') {
+    return {
+      lit: `${fromOut('WIDI Jack')} If it stays dark, plug a phone charger or power bank into the Jack’s USB-C socket.`,
+      plugs: `Its two cables go in the ${name}’s ${jacks}, as their labels say. ${quiet}, swap the two plugs.`,
+      typeA: small ? 'The switch on the WIDI Jack has to be set to Type A.' : null,
+      before: FIRST_TIME_ADAPTER
+    }
+  }
+  if (kind === 'mdbt01') {
+    return {
+      lit: `Check the MD-BT01’s lamp. It flashes once the ${name} is on, and stays lit once this ${noun} has connected to it. It takes its power from the ${name}’s MIDI OUT and has no other way to be powered.`,
+      /* Its lamp is the test: it lights only from MIDI OUT, so dark with the unit on means the plugs are swapped. */
+      plugs: `Its two plugs go in the ${name}’s ${jacks}, matching the arrows on them. If the lamp stays off with the ${name} on, swap the two plugs.`,
+      typeA: small ? TYPE_A : null,
+      before: null
+    }
+  }
+  return {
+    lit: 'Check the adapter is lit, and has the power it needs.',
+    /* A VP4 is only ever sent to (lib/bleVp4), so "both ways" is not its rule: its Uhost steps leave the white plug out. What has to be reached is its MIDI IN. */
+    plugs: vp4
+      ? 'The adapter has to reach the VP4’s MIDI IN: the app only sends to a VP4, and nothing comes back over Bluetooth. If presets don’t change on the VP4 and the adapter has two plugs, swap them.'
+      : `${BOTH_WAYS}${unit === 'axefx3' ? ' On an Axe-Fx III that is MIDI OUT, never THRU.' : ''} ${quiet}, swap the two plugs.`,
+    typeA: small ? `The ${name}’s MIDI jacks are small 3.5 mm ones: an adapter or cable for them has to be Type A.` : null,
+    before: null
+  }
+}
+
+/* An AM4's or VP4's two 3.5 mm adapters (PARTS adapters, masterAdapters: "They must be Type A"). */
+const TYPE_A = 'The two 3.5 mm adapters have to be Type A. Type B won’t work.'
 
 /* Before the first time, on a WIDI Master or Jack: CME's firmware, as FIRST_TIME says for the Uhost. */
 export const FIRST_TIME_ADAPTER = 'Before the first time: update the adapter in CME’s free WIDI app, then close the WIDI app.'
@@ -1057,13 +1234,40 @@ export function notAnsweringLine(unit, adapter = null) {
   const name = UNITS[unit] || 'unit'
   /* A footswitch picked as the adapter (notAnAdapter): what it is, and where to go instead. */
   if (notAnAdapter(adapter)) return `${adapterSaid(adapter)} is a MIDI footswitch, not an adapter for your ${name}. Pick the Bluetooth MIDI adapter plugged into the ${name} instead.`
-  /* Not for an FM3, which is never offered one (FM3_NEVER) and keeps its own line. */
-  if (isWidiMaster(adapter) && unit !== 'fm3') {
-    const both = `A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT${unit === 'axefx3' ? ' (not THRU)' : ''}, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug.`
-    return `WIDI Master connected, but the ${name} isn’t answering. ${both}${unit === 'axefx3' ? '' : ' And check that MIDI Thru is off.'}`
+  /* On every unit, the FM3 too since 15 November 2026: no adapter is ruled out for one any more, so its owner gets the WIDI Master's own two plugs like anybody. */
+  if (isWidiMaster(adapter)) {
+    return `WIDI Master connected, but the ${name} isn’t answering. ${masterBoth(unit)}${unit === 'axefx3' ? '' : ' And check that MIDI Thru is off.'}`
   }
-  if (unit === 'axefx3') return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
+  /*
+   * "The white one" is the Uhost's cable's (the C2MIDI Pro's, the U2MIDI
+   * Pro's): said only to a Uhost, by its name. A WIDI Jack's cables and
+   * Yamaha's MD-BT01, a way on the page since 15 November 2026, have no
+   * white plug, nor has an adapter the app has no name for.
+   */
+  if (unit === 'axefx3') {
+    return adapterKind(adapter) === 'uhost'
+      ? `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
+      : `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: one in MIDI IN and one in MIDI OUT, not THRU.`
+  }
   return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`
+}
+
+/**
+ * PHONE & COMPUTER'S UNIT CARD, the adapter connected and the unit silent.
+ * shared/link-chain, which the computer app draws from too, has two lines
+ * for it: a WIDI Master's own, and "the black plug is in its MIDI IN and the
+ * white in MIDI OUT", which is the Uhost's cable. Any other adapter (a WIDI
+ * Jack, Yamaha's MD-BT01, one the app has no name for) has neither color,
+ * so the phone says this in its place (screens/Settings). Null where
+ * link-chain's own line is the right one.
+ *
+ * @param {string|null} unitName  the unit's name as the card writes it
+ * @param {string|null} adapter   the adapter's name
+ */
+export const quietCardLine = (unitName, adapter) => {
+  const kind = adapterKind(adapter)
+  if (kind === 'uhost' || kind === 'master') return null
+  return `${unitName || 'Your unit'} isn’t answering through the adapter. Check it is on, and that both of the adapter’s MIDI plugs are in: one in MIDI IN and one in MIDI OUT.`
 }
 
 /*

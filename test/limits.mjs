@@ -3732,11 +3732,20 @@ export function run(test) {
     assert.match(body, /no computer/, 'the guide does not say Bluetooth needs no computer')
     assert.match(body, /full version/, 'the guide does not say Bluetooth comes with the full version')
 
-    /* THE FM3: what overheated, never to use it, why, even on USB power, and to unplug. */
+    /*
+     * THE FM3: that an adapter may overheat, at the owner's own risk, what
+     * overheated, even on USB power, what stays cool, and to unplug. A
+     * warning since 15 November 2026 ("Instead of saying NEVER use a
+     * different Bluetooth device, just have a warning that devices on the
+     * FM3 may overheat and to use at their own risk", Justin): it said
+     * "never use the C2MIDI Pro or a WIDI Master" until then.
+     */
     const fm3 = html.slice(html.indexOf('id="fm3"'), html.indexOf('</div>', html.indexOf('id="fm3"')))
     assert.ok(fm3.length > 100, 'the FM3 warning has no box of its own')
-    assert.match(body, /On an FM3, never use the C2MIDI Pro or a WIDI Master: both got very hot on one\./, 'the guide does not warn FM3 owners off what overheated')
-    assert.match(body, /Its MIDI OUT runs any adapter that draws power from it hot, even on USB power\./, 'the guide does not say why, or that USB power does not stop it')
+    assert.match(body, /On an FM3, a Bluetooth adapter may overheat: use one at your own risk\./, 'the guide does not warn FM3 owners that an adapter may overheat, at their own risk')
+    assert.match(body, /The C2MIDI Pro and a WIDI Master both got very hot on one, and FM3 owners report heat with other adapters that draw power from its MIDI OUT, even on USB power\./, 'the guide does not say what overheated on an FM3')
+    assert.match(body, /The U2MIDI Pro runs on USB power only, and stays cool\./, 'the guide does not say what stays cool on an FM3')
+    assert.ok(!/\bnever\b/i.test(fm3), 'the FM3 warning still rules an adapter out')
     assert.match(body, /If anything on an FM3 gets warm, unplug it at once\./, 'the guide does not tell FM3 owners to unplug anything that gets hot')
     assert.ok(!/B0GVXTX5D1|c2midi-pro|widi-master/.test(fm3), 'the FM3 warning gives somewhere to buy what overheated')
     assert.match(body, /FM3: the WIDI Uhost, a CME U2MIDI Pro/, 'the FM3’s parts are not the U2MIDI Pro')
@@ -3813,7 +3822,7 @@ export function run(test) {
      * tried, which is the Developer page's), the FM3's warning, and the
      * guide for what to buy. Short, because the parts are the guide's.
      */
-    const { BLUETOOTH_WAYS, NOT_FOR_FM3, TRIED_NOTES } = await import('../shared/bluetooth-gear.mjs')
+    const { BLUETOOTH_WAYS, FM3_SHORT, TRIED_NOTES } = await import('../shared/bluetooth-gear.mjs')
     const notice = read('public/bluetooth.html')
     const page = notice.replace(/<!--[\s\S]*?-->/g, '')
     const said = page.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
@@ -3848,7 +3857,7 @@ export function run(test) {
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
     assert.match(said, /It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4\./, '/bluetooth does not say which units it is offered on')
     assert.ok(!/\btried\b|\btested\b/i.test(said), '/bluetooth says where it was tried')
-    assert.ok(said.replace(/\s+/g, ' ').includes(NOT_FOR_FM3), '/bluetooth does not carry the FM3’s warning word for word')
+    assert.ok(said.replace(/\s+/g, ' ').includes(FM3_SHORT), '/bluetooth does not carry the FM3’s warning word for word')
     assert.ok(!/beta/i.test(said), '/bluetooth still calls Bluetooth a beta')
     assert.match(page, /href="\/bluetooth-guide\.html"/, '/bluetooth does not lead on to the setup guide')
     assert.match(page, /href="\/downloads"/, '/bluetooth does not link the desktop app')

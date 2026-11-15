@@ -177,8 +177,8 @@ export function cablesFirst(list, { unit = null, units = null, skip = null } = {
 /**
  * THE CABLES PLUGGED IN NOW THAT COULD BE THE UNIT PICKED'S: cablesIn, less
  * one named for another unit (anotherUnit) and any `refused` by its name
- * (for an FM3, the C2MIDI Pro: shared/bluetooth-gear neverOnFm3, passed in,
- * so this file imports nothing). Connect's own rule (cablesFirst) is this,
+ * (passed in, so this file imports nothing; none is today: until 15
+ * November 2026 a C2MIDI Pro was, for an FM3). Connect's own rule (cablesFirst) is this,
  * less what Connect cannot take without a question; the Bluetooth page's
  * "Use the USB cable" (lib/bluetooth cablesToOffer) is this for a tap, with
  * a Bluetooth adapter up beside it and a cable let go of by hand included:
@@ -197,12 +197,12 @@ export function cablesFor(list, { unit = null, units = null, refused = null } = 
  * Two or more, and nothing new among them, is a real question, and the page
  * asks it with a list.
  *
- * NEVER BY ITSELF ONE `refused` for the unit picked: for an FM3, the WIDI
- * Master, the C2MIDI Pro and the other adapters never offered for one
- * (shared/bluetooth-gear neverOnFm3, passed in by lib/bluetooth pickRule).
- * It is still listed, and still counts as one of the choices, so the
- * question is the same; only the answer is left to a tap, under the red
- * FM3 note. A cable is not refused here: it is the unit itself.
+ * NEVER BY ITSELF ONE `refused` (passed in by lib/bluetooth pickRule): a
+ * MIDI footswitch, which is not an adapter at all. It is still listed, and
+ * still counts as one of the choices, so the question is the same; only
+ * the answer is left to a tap. (Until 15 November 2026 the adapters ruled
+ * out for an FM3 were refused here too.) A cable is not refused here: it is
+ * the unit itself.
  */
 export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null, taken = null, letGoOf = null } = {}) {
   /* A cable named for another unit than the one picked is listed, never chosen for the player (anotherUnit, above). */
@@ -276,9 +276,8 @@ const OWN_PORT = /\b(iphone|ipad)\b[^]*\bbluetooth\s*$/i
  *   - iPhone (`os` 'ios'): a port on Apple's Bluetooth driver that is
  *     connected now (`offline: false`), never the iPhone's own port;
  *   - Android: a scan result, seen nearby;
- *   - none `refused`: for an FM3, the adapters never offered for one
- *     (shared/bluetooth-gear neverOnFm3), passed in, so this file imports
- *     nothing.
+ *   - none `refused`: a MIDI footswitch (shared/bluetooth-gear
+ *     notAnAdapter), passed in, so this file imports nothing.
  *
  * Exactly one, or null: two or more is a real question, and Use a different
  * adapter asks it with the list.

@@ -385,7 +385,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
         AND BLUETOOTH, which the full version unlocks too, said where it is
         sold, in one short line: the two ways, Bluetooth first, and what a
         computer adds (BLUETOOTH_PAYWALL, shared/bluetooth-gear.mjs). Every
-        part each unit takes, and the two never for an FM3, one tap under it
+        part each unit takes, and the FM3’s heat warning, one tap under it
         (BLUETOOTH_PARTS): names to look up, nothing to buy here. Only on a
         copy that opens it to customers (lib/ble-rule.js, by the version
         built into the copy) and on a device that can do it: a line on any

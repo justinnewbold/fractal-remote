@@ -124,7 +124,9 @@ export function run(test) {
     /* The cable's steps when asked about the cable, the adapter's when asked about the adapter, the kept way's otherwise; Forget stays the kept one's. */
     const page = flat(code(read('mobile/src/screens/Bluetooth.js')))
     assert.match(page, /export function BluetoothTrouble\(\{ onReport = null, way = null \}\)/)
-    assert.match(page, /const cableWay = way === 'cable' \|\| \(way !== 'adapter' && cable\) const steps = cableWay \?/)
+    assert.match(page, /const cableWay = way === 'cable' \|\| \(way !== 'adapter' && cable\) (?:\/\*[^*]*\*\/ )?const tabs = cableWay \|\| !b\.unit \? \[\] : adapterTabsFor\(b\.unit, \{ other: true \}\) const \[tab, setTab\] = useAdapterTab\(tabs, b\.adapter\)/)
+    /* The cable's list is its own: no adapter tabs over it (15 November 2026), and the adapter's lines only on the other branch. */
+    assert.match(page, /const own = troubleFor\(b\.unit, tab \|\| 'other', deviceNoun\(\)\) const steps = cableWay \?/)
   })
 
   test('the shared fixes are short: no step past forty words, and the browser draws the same ones', async () => {

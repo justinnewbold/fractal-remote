@@ -12,8 +12,16 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-15",
     "day": "15 November 2026",
-    "version": "1.90.78",
+    "version": "1.90.79",
     "lines": [
+      {
+        "text": "Bluetooth setup and troubleshooting are now by unit and by adapter. Pick your unit, then tap your adapter’s tab, and you see only the parts, steps and fixes for that pair instead of one long list for all of them. The Yamaha MD-BT01 has its own tab on an FM3, FM9 and Axe-Fx III.",
+        "only": null
+      },
+      {
+        "text": "On an FM3, the app no longer says never to use other Bluetooth adapters. It warns that an adapter may overheat on an FM3 and is used at your own risk, and it now lets you connect whichever adapter you have. The WIDI Uhost with a CME U2MIDI Pro is still the one that stays cool.",
+        "only": null
+      },
       {
         "text": "In the chain editor, Add now answers under the block you tapped: where the new block went, or that its row is full and what to do instead. Before, a full row was said at the top of the chain, off the screen, and nothing seemed to happen.",
         "only": null
