@@ -48,6 +48,7 @@ import {
   UNDOING,
   UNDO_MOVED_AFTER,
   UNIT_QUIET,
+  UNIT_QUIET_BEFORE,
   UNDO_LABEL,
   YOUR_CHAIN,
   buildBlocked,
@@ -388,7 +389,13 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
    * own way may have reached the unit. Over Bluetooth the wire holds the
    * same line itself (bleWire chainSeen).
    */
-  const where = async (n) => (ofNumber() !== n ? 'moved' : unitOnPreset(n))
+  /* The screen's own number counts as a move only when it names a real preset: a unit gone quiet shows -1 there, which is not another preset, and then the unit is asked (and "unknown" is the answer if it will not say). */
+  const where = async (n) => {
+    const here = ofNumber()
+    return Number.isInteger(here) && here >= 0 && here !== n ? 'moved' : unitOnPreset(n)
+  }
+  /* What stopped a run, in words: the app's own reason when it stopped the step itself (said once, as it is), else the step and the unit's or the link's reason; "read again" only where the chain was. */
+  const stoppedWords = (res, gone, read) => (res.ok ? null : gone.unsent ? res.error : stoppedLine(res.failed, res.error, read))
   const held = (n, gone, call) => async (...args) => {
     gone.unsent = true
     const on = gone.moved ? 'moved' : await where(n)
@@ -426,8 +433,13 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     if (busy || !picks.length) return
     setSaid(null)
     setBusy(CHECKING_EMPTY)
-    /* The preset this is for, taken BEFORE its chain is read: the plan is made from that read, and every step is held to this number. */
+    /* The preset this is for, taken BEFORE its chain is read: the plan is made from that read, and every step is held to this number. With no preset known there is nothing to hold them to. */
     const n = ofNumber()
+    if (!Number.isInteger(n) || n < 0) {
+      setBusy(null)
+      setSaid(READ_FAILED)
+      return
+    }
     let cells
     try {
       cells = await gridCells()
@@ -471,7 +483,17 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       logDebug('chain', 'quick build', `the preset changed (${tried} of ${plan.steps.length} steps may have gone); nothing read back`)
       if (!alive.current) return
       setBusy(null)
-      setSaid(tried === 0 ? PRESET_MOVED_BEFORE : gone.moved ? PRESET_MOVED : PRESET_MOVED_AFTER)
+      /* "After the build was sent" only of a run that finished: one that stopped on the way, whatever stopped it, was not all sent. */
+      setSaid(tried === 0 ? PRESET_MOVED_BEFORE : gone.moved || !res.ok ? PRESET_MOVED : PRESET_MOVED_AFTER)
+      return
+    }
+    /* Would not say which preset it is on, and not one step went: nothing was built, and no result is drawn for it. */
+    if (on !== 'same' && tried === 0) {
+      followPresetAfterChainWrite()
+      logDebug('chain', 'quick build', 'the unit did not say which preset it is on; nothing sent')
+      if (!alive.current) return
+      setBusy(null)
+      setSaid(UNIT_QUIET_BEFORE)
       return
     }
     /* Null when the unit did not answer: what landed is then not known, which is not the same as nothing landing (whatLanded). And where it would not say which preset it is on, nothing is read back as this preset's at all. */
@@ -496,7 +518,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     setDone({
       plan,
       landed,
-      stopped: res.ok ? null : stoppedLine(res.failed, res.error),
+      stopped: stoppedWords(res, gone, after !== null),
       undo: undo.length ? undo : null,
       /* What Undo says it takes out: the blocks the read back shows. Where it did not come, no number: what was sent is not what the unit said it holds. */
       count: landed.unread ? 0 : landed.landed.filter((p) => !p.end).length,
@@ -560,7 +582,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
       if (!alive.current) return
       setBusy(null)
       setDone({ ...d, undo: null })
-      setUndoSaid({ bad: true, text: gone.moved ? PRESET_MOVED : UNDO_MOVED_AFTER })
+      setUndoSaid({ bad: true, text: gone.moved || !res.ok ? PRESET_MOVED : UNDO_MOVED_AFTER })
       return
     }
     /* Null when the unit did not answer, or would not say which preset it is on: then nothing is said to be out. */
@@ -579,7 +601,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     /* The blocks out is half of it: the wiring the preset had before has to be back too, or it is a preset with no sound. */
     const unjoined = after === null ? null : undoUnjoined(d.plan, after, d.ran)
     const words = !res.ok
-      ? { bad: true, text: stoppedLine(res.failed, res.error) }
+      ? { bad: true, text: stoppedWords(res, gone, after !== null) }
       : after === null
         ? { bad: true, text: UNDO_NOT_READ }
         : still.length

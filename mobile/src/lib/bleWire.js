@@ -2989,13 +2989,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * Asked here, off the clock, the move is counted before the read vouches
    * for anything; a unit that will not say is not vouched for either.
    */
-  async function gen3StillHere(at) {
+  async function gen3PresetAsked(when) {
     const got = await presetNow('editRead')
     if (!got || got === SKIPPED || rejected(got) || !Number.isInteger(got.number)) {
-      say('the unit did not say which preset it is on after the chain was read; the read is not used')
+      say(`the unit did not say which preset it is on ${when} the chain was read; the read is not used`)
       throw failure(`The ${spec.name} didn’t say which preset it is on, so the app can’t tell whose chain it read. Try again in a moment.`, 504)
     }
     notePreset(got, true)
+  }
+  /* The question at the end means something only if the preset was known at the start: on a connection that has not learned it yet, it is asked first. */
+  const gen3KnownFirst = () => (last.preset === null ? gen3PresetAsked('before') : null)
+  async function gen3StillHere(at) {
+    await gen3PresetAsked('after')
     if (moves !== at) {
       say('the scene or preset changed while the chain was being read; the read is not used')
       throw movedInRead()
@@ -3070,6 +3075,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return inGrid(async () => {
       /* (A grid kept is one read at this same count, so the chain has been seen at it: chainSeen.) */
       if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < STRUCTURE_FRESH_MS) return gridKept.value
+      await gen3KnownFirst()
       const at = moves
       const started = time.now()
       const asked = liveWanted()
@@ -3087,6 +3093,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const source = grid ? 'live' : 'preset'
       if (!grid) {
         grid = await gen3DumpGrid()
+        /* Is the unit still on the preset these were read from? Asked BEFORE anything is made of the two reads together: a live answer from one preset laid against the next one's grid would settle the proof on nothing, and write "DISAGREES" in the log he reads it from. */
+        await gen3StillHere(at)
         if (asked) {
           const { proof, said } = gridProof(gridProved, live, grid)
           gridProved = proof
@@ -3097,8 +3105,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
           }
         }
       }
-      /* Is the unit still on the preset this was read from? Asked, since a gen-3 unit does not say (gen3StillHere); refused if not. */
-      await gen3StillHere(at)
+      /* (And where the live read was believed, asked here: a gen-3 unit does not say it has moved, gen3StillHere.) */
+      if (source === 'live') await gen3StillHere(at)
       const cells = grid.cells.map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, name: c.isShunt ? `Shunt ${c.effectId - SHUNT_FROM + 1}` : blockNamed(c.effectId), isShunt: c.isShunt, fromRows: c.fromRows }))
       const value = { rows: grid.rows, cols: grid.cols, cells, source }
       gridKept = { value, at: time.now(), moves }
@@ -3245,6 +3253,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       const holds = slots[slot - 1]
       say(holds === code ? `${what}: the AM4 says so` : `${what}: the AM4 says slot ${slot} holds ${holds ? am4Named(holds) : 'nothing'}`)
+      /* And what was just read is not kept: whoever asks next which preset the AM4 is on (a build asks before its every step) is answered by the unit, not by this answer a moment old. */
+      structure = null
       return holds === code ? { ok: true } : { ok: false, refused: `slot ${slot} holds ${holds ? am4Named(holds) : 'nothing'}` }
     })
   }

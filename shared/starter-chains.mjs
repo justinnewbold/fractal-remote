@@ -152,7 +152,7 @@ export const notJoinedLine = (count, row, col) =>
   `${blocksWord(count)} in row ${rowLabel(row)}, but the row is not joined from the input to the output: it stops at column ${colLabel(col)}. Nothing will sound until it is. Tap Undo to take them back out.`
 /* The chain could not be read back: what landed is not known, and is not guessed. */
 export const NOT_READ_TITLE = 'Sent, but not read back'
-export const NOT_READ = 'The blocks were sent, but the unit did not answer when the app read the chain back, so the app can’t say what landed. Open the preset again to see.'
+export const NOT_READ = 'The unit did not answer when the app went to read the chain back, so the app can’t say what landed. Open the preset again to see.'
 export const NONE_ADDED_TITLE = 'Nothing was added'
 export const NONE_ADDED = 'The unit did not take any of the blocks. The chain has been read again.'
 /* None of the picked blocks is in, and an Input or Output the app placed is: "Nothing was added" over that, beside an Undo, would be two things said at once. */
@@ -185,13 +185,16 @@ export const PRESET_MOVED_AFTER = 'The unit went to another preset right after t
 export const UNDO_MOVED_AFTER = 'The unit went to another preset right after Undo was sent, so the app can’t read whether everything is out. Open that preset again to see.'
 /** The unit would not say which preset it is on between two steps: the app does not go on writing to a preset it cannot name. */
 export const UNIT_QUIET = 'The unit stopped answering part-way, so the app stopped and sent nothing more.'
+/** The same, before a single step went: nothing was sent, and no result is drawn for a build that never began. */
+export const UNIT_QUIET_BEFORE = 'The unit did not say which preset it is on, so nothing was sent. Nothing was changed.'
 
 /** A step that threw part-way: which, and that nothing more went. */
-export const stoppedLine = (step, error) =>
-  `Stopped at “${stepWords(step)}”: ${error || 'no answer'}. Nothing more was sent, and the chain has been read again.`
+/* `read`: whether the chain was read again afterwards, which is said only where it was. The reason is given once, with one full stop. */
+export const stoppedLine = (step, error, read = true) =>
+  `Stopped at “${stepWords(step)}”: ${String(error || 'no answer').replace(/[.\s]+$/, '')}. Nothing more was sent${read ? ', and the chain has been read again' : ''}.`
 
 /* An Undo whose read back did not come: what is still in is not known, and "took them out" is not said. */
-export const UNDO_NOT_READ = 'Undo was sent, but the unit did not answer when the app read the chain back, so the app can’t say it is all out. Open the preset again to see.'
+export const UNDO_NOT_READ = 'Undo was sent, but the unit did not answer when the app went to read the chain back, so the app can’t say it is all out. Open the preset again to see.'
 export const undoneLine = (n) => (n === 1 ? 'Took the block back out.' : n > 1 ? `Took the ${n} blocks back out.` : 'Put the preset back as it was.')
 /* The blocks are out, and the chain read back does not show the wiring the preset had before the build. */
 export const undoNotJoinedLine = (col, n = 0) =>
@@ -219,7 +222,7 @@ export const SHOWN_WORDS = () => [
   missingLine(['Cab']), missingLine(['NAM', 'Cab']), leftLine(['Reverb']), NOT_BARE, NO_PICKS, ENDS_APART, NO_ROOM, NOT_LISTED,
   READ_FAILED, PRESET_MOVED, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'no answer'), undoneLine(1), undoneLine(5),
   undoMissedLine(['Amp']), UNDO_NOT_READ, undoSub(0), undoneLine(0), undoNotJoinedLine(3), undoNotJoinedLine(3, 1), undoNotJoinedLine(3, 4), undoWiringLeftLine(0), undoWiringLeftLine(2), BLOCKS_NOT_READ, TRY_AGAIN,
-  NO_BLOCKS_TITLE, stoppedEarlyLine(), stoppedEarlyLine(['Input 1']), endsPutLine(['Input 1']), endsPutLine(['Input 1', 'Output 1']), PRESET_MOVED_BEFORE, PRESET_MOVED_AFTER, UNDO_MOVED_AFTER, UNIT_QUIET,
+  NO_BLOCKS_TITLE, stoppedEarlyLine(), stoppedEarlyLine(['Input 1']), endsPutLine(['Input 1']), endsPutLine(['Input 1', 'Output 1']), PRESET_MOVED_BEFORE, PRESET_MOVED_AFTER, UNDO_MOVED_AFTER, UNIT_QUIET, UNIT_QUIET_BEFORE, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'The unit did not answer in time.', false),
   notAddedLine(['Cab'], 2, false, 2), endMissingLine(['Output 1'], 2), endMissingLine(['Input 1', 'Output 1'], 1)
 ]
 

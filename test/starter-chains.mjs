@@ -726,6 +726,14 @@ export function run(test) {
     assert.equal(s.buildLabel(1), 'Build this block')
     assert.equal(s.buildLabel(5), 'Build these 5 blocks')
     assert.equal(s.undoSub(5), 'Takes the 5 blocks back out')
+    /* A stop is said with its reason once and one full stop, and "read again" only where the chain was. */
+    const step = { kind: 'place', row: 1, col: 2, name: 'Amp' }
+    assert.equal(s.stoppedLine(step, 'The unit did not answer in time.'), 'Stopped at “put Amp at row 2, column 3”: The unit did not answer in time. Nothing more was sent, and the chain has been read again.')
+    assert.equal(s.stoppedLine(step, 'no answer', false), 'Stopped at “put Amp at row 2, column 3”: no answer. Nothing more was sent.')
+    assert.ok(!/\.\./.test(s.stoppedLine(step, 'It stopped. ')))
+    /* And what was not read back says nothing of how much was sent. */
+    assert.equal(s.NOT_READ, 'The unit did not answer when the app went to read the chain back, so the app can’t say what landed. Open the preset again to see.')
+    assert.equal(s.UNIT_QUIET_BEFORE, 'The unit did not say which preset it is on, so nothing was sent. Nothing was changed.')
     assert.equal(s.startersLine('Axe-Fx III'), 'Chains to start an empty preset from. Kept for your Axe-Fx III.')
     assert.equal(s.EMPTY_LINE, 'Nothing in this preset but input and output.')
     assert.equal(s.startersStatus([{}]), 'Classic rig')

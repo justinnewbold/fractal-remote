@@ -1130,7 +1130,14 @@ what the computer sends for the same edit, and a test holds it there.
     unit name alone, which the demo leaves behind and a VP4 sets too: they
     move only when Quick build has just read a real unit's blocks. THE
     LESSON AGAIN: the fix for "a preset change slips through" had its own
-    way for one to slip through.
+    way for one to slip through. And a third read, of THOSE fixes, found
+    the edges of the new "will not say" answer: a -1 on the screen (a unit
+    gone quiet) taken for another preset; "after the build was sent" said
+    of a run that had stopped; a result card, "the chain has been read
+    again" and all, for a build of which nothing was sent or read; a chain
+    read on a new connection, before the wire knew the unit's preset, with
+    nothing for its closing question to be compared with; and the live
+    read's proof settled by a read that straddled two presets.
   - *What it is.* On a preset with nothing in it but its Input and Output,
     Edit shows Quick build and the starter chains in place of "This preset
     is empty." (components/QuickBuild), and Play one Quick build button

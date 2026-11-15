@@ -19013,7 +19013,8 @@ export function run(test) {
     assert.deepEqual(first.cells.map((c) => [c.name, c.isShunt]), [['Input 1', false], ['Output 1', false]])
     assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [1, 1])
     const sx = await import(SX)
-    assert.deepEqual(t.frames().map(hex), [grid.buildGridRead(0x11), grid.buildGridDump(0x11), sx.buildGetPreset(0x11)].map(hex), 'something other than the two reads, and which preset it is on after them, went out')
+    /* Which preset it is on is asked BEFORE as well, on a connection that has not learned it yet: the question after means something only then. */
+    assert.deepEqual(t.frames().map(hex), [sx.buildGetPreset(0x11), grid.buildGridRead(0x11), grid.buildGridDump(0x11), sx.buildGetPreset(0x11)].map(hex), 'something other than the two reads, and which preset it is on before and after them, went out')
     assert.ok(t.logs.some((l) => /the live grid read agrees with the preset: 2 blocks, each where the preset has it/.test(l)), t.logs.join(' | '))
     assert.ok(t.logs.some((l) => /^the live grid answer, as it came: F0 00 01 74 11 01 2E 00/.test(l)), 'the answer itself is not in the log for the record')
     assert.ok(t.logs.some((l) => /^the grid, read from the preset in \d+\.\d s: 2 blocks$/.test(l)), t.logs.join(' | '))
@@ -19348,6 +19349,20 @@ export function run(test) {
     assert.equal(cellsOf(now.cells), cellsOf(BARE3))
     assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 70 }), { ok: true })
 
+    /* AND A READ THAT STRADDLED TWO PRESETS PROVES NOTHING ABOUT THE LIVE ANSWER: one preset's live answer laid against the next one's grid would settle the question on nothing, with "DISAGREES" in the log. */
+    const fresh = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
+    const first = fresh.wire.request('/preset/grid')
+    first.catch(() => {})
+    for (let i = 0; i < 2000 && fresh.unit.state.dumps === 0; i++) await advance(fresh.clock, 2)
+    fresh.unit.state.preset = 13
+    fresh.unit.state.grid = BARE3.map((c) => ({ ...c }))
+    await assert.rejects(drive(fresh.clock, first), (e) => e.status === 409)
+    assert.ok(!fresh.logs.some((l) => /the live grid read (agrees|DISAGREES)/.test(l)), fresh.logs.filter((l) => /live grid read/.test(l)).join(' | '))
+    await advance(fresh.clock, 2000)
+    fresh.unit.state.grid = CHAIN3.map((c) => ({ ...c, fromRows: [...c.fromRows] }))
+    await fresh.get('/preset/grid')
+    assert.ok(fresh.logs.some((l) => /the live grid read agrees with the preset/.test(l)), 'the live read was never asked again after a read that proved nothing')
+
     /* A unit that will not say which preset it is on is not vouched for either: the read is refused, and so is a write after it. */
     const mute = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
     mute.unit.state.mutePreset = true
@@ -19375,6 +19390,13 @@ export function run(test) {
     a.unit.state.location = 7
     a.unit.state.slots = [0, 0, 0, 0]
     assert.deepEqual(await drive(a.clock, placing), { ok: true, unread: true }, 'another preset’s empty slot was said as the AM4 refusing the block')
+    /* And after a write's read back, the next "which preset are you on?" is asked of the AM4, not answered from that read a moment old (a build asks before its every step). */
+    const b = await onTheLine('am4', CHAIN_OPEN)
+    await seen(b)
+    assert.deepEqual(await sendTo(b, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0x42 }), { ok: true })
+    b.sent.length = 0
+    await b.get('/preset')
+    assert.ok(b.frames().length >= 1, 'the preset an AM4 is on was answered from memory straight after a slot write')
   })
 
   test('a preset stepped to while the cell is being selected does not get the block: asked again between the select and the put', async () => {
