@@ -448,9 +448,9 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   const chainReadHere = chain === 'ok' && !chainNow.elsewhere
   const bareNow = chainReadHere && isBareChain(chainAll)
   const emptyNoteShown = chainReadHere && !chainAll.length && !quickBuildShown
-  /* Save the preset, from Quick build's result: the app's own Save, armed, with its warning at the top of the page. */
+  /* Save the preset, from Quick build's result: the app's own Save, armed, with its warning at the top of the page. Armed and never written: a Save armed before the build would otherwise be confirmed by this tap, with its warning out of sight. */
   const saveFromQuickBuild = () => {
-    saveTo.save()
+    saveTo.arm()
     page.current?.scrollTo({ y: 0, animated: true })
   }
   /* A tool this preset no longer offers (a move to Bluetooth, a chain still on its way) closes. */
@@ -618,7 +618,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       {emptyNoteShown ? <Note>This preset is empty.</Note> : null}
       {/* Quick build and the starter chains, on an empty preset (mock-up 1); its sheet stays up past the build it ends. */}
       {quickBuildShown ? (
-        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} onSave={saveFromQuickBuild} onPlay={onBack} />
+        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} onSave={saveFromQuickBuild} onPlay={onBack} />
       ) : null}
 
       {/*

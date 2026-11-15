@@ -16,9 +16,17 @@
  *   - what cannot be built is refused, never guessed: a cell off the grid,
  *     an FM3's thirteenth column, the one cable nobody has decoded
  *   - the two grid reads come out as the grid that went in, on pretend
- *     answers the codec itself reads the same (test/gen3-grid-fake.mjs)
- *   - the live read is believed only where the preset has borne it out, and
- *     never once it has disagreed
+ *     answers (test/gen3-grid-fake.mjs). The codec reads the pretend PRESET
+ *     the same on every unit, and the pretend LIVE answer's block ids and
+ *     shunts; its cables the same on an FM3 only. On the six-row units the
+ *     pretend live answer lays its cable bits by this app's own guess,
+ *     which the codec's FM9 reading does not share (run on these answers,
+ *     it reads every six-row cable shifted), so a six-row live cable in a
+ *     test here proves the code against its own assumption and nothing
+ *     about a unit
+ *   - the rule the live read WOULD be believed by: only where the preset
+ *     has borne it out, and never once it has disagreed. The app does not
+ *     believe it yet at all (bleWire `liveGrid`, held in test/bluetooth)
  *   - the way out's rules: a grid frame, or an AM4's slot write, goes only
  *     as the one in hand
  */
@@ -77,7 +85,8 @@ const GRIDS = {
  * The pretend answers, by digest, as they were on the day forgefx-midi at
  * the pinned commit read each of them back as the grid above (its
  * parsePresetDump, decodeRawPatch and decodeGen3Body for the preset, its
- * parseGen3GridLayout for the live answer). A change to
+ * parseGen3GridLayout for the live answer: the cells and ids on every unit,
+ * the cables on the FM3's, see the head of this file). A change to
  * test/gen3-grid-fake.mjs moves these, and then the pretend unit is no
  * longer one the codec has been seen to read: check it against the codec
  * again before writing new digests here.

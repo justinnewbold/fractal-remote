@@ -8,13 +8,14 @@
  * so a chain made in the demo never lands on a real unit's list. Kept on
  * this device only.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { sync, useStored } from './store'
 import { isDemo } from './demo'
-import { stageKey } from './device-slug'
+import { DEFAULT_SLUG, stageKey } from './device-slug'
 import { getState, useRig } from './rig'
 import {
   addStarter,
+  adoptStarters,
   keepPalette,
   moveStarter,
   paletteKept,
@@ -42,10 +43,24 @@ export const paletteKeptHere = () => paletteKept(sync, drawer())
 
 const ofSlug = (s) => s.deviceSlug
 
+/**
+ * Chains made with no unit known yet (Settings, on the couch) are filed
+ * under no unit's name, and a unit's own drawer never opened that one. So
+ * the first real unit to be known takes them (shared adoptStarters). Never
+ * in the demo, whose drawer is its own.
+ */
+export function adoptUnlinkedHere(device = getState().deviceSlug) {
+  if (isDemo() || !device || device === DEFAULT_SLUG) return 0
+  return adoptStarters(sync, stageKey(DEFAULT_SLUG, false), stageKey(device, false))
+}
+
 /** This unit's starter chains, the default first, drawn again whenever they change. */
 export function useStarterChains() {
   const rev = useStored()
   const slug = useRig(ofSlug)
+  useEffect(() => {
+    adoptUnlinkedHere(slug)
+  }, [slug])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => starterList(sync, drawer(slug)), [rev, slug])
 }

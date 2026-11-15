@@ -256,10 +256,183 @@ export function run(test) {
     assert.equal(plan.ok, true)
     assert.deepEqual(plan.steps.filter((x) => x.kind === 'place').map((x) => x.col), [1, 2])
     assert.deepEqual(cables(plan).map((c) => c[1]), [0, 1], 'into the two cells it places; the wires after them and the Output already hear the row')
-    assert.deepEqual(plan.undo.slice(-2), [
-      { kind: 'place', row: 1, col: 2, blockId: 1026, name: 'the bare wire' },
-      { kind: 'place', row: 1, col: 1, blockId: 1025, name: 'the bare wire' }
+    /*
+     * THE WAY BACK IS TO THE PRESET AS IT WAS, AND THAT PRESET WAS JOINED.
+     * The whole list, not its tail: no cable is cut (the two the build sent
+     * were the preset's own), each cell gets its bare wire back, and then the
+     * preset's joins at those cells are made again, left to right, the one
+     * out of the last cell included. An Undo that cut what the build sent
+     * left this preset silent under "Took the 2 blocks back out".
+     */
+    assert.deepEqual(plan.prior, [
+      { srcRow: 1, srcCol: 0, destRow: 1 },
+      { srcRow: 1, srcCol: 1, destRow: 1 },
+      { srcRow: 1, srcCol: 2, destRow: 1 }
     ])
+    assert.deepEqual(plan.undo, [
+      { kind: 'place', row: 1, col: 2, blockId: 1026, name: 'the bare wire' },
+      { kind: 'place', row: 1, col: 1, blockId: 1025, name: 'the bare wire' },
+      { kind: 'cable', srcRow: 1, srcCol: 0, destRow: 1, connect: true },
+      { kind: 'cable', srcRow: 1, srcCol: 1, destRow: 1, connect: true },
+      { kind: 'cable', srcRow: 1, srcCol: 2, destRow: 1, connect: true }
+    ])
+    assert.ok(!plan.undo.some((x) => x.kind === 'cable' && x.connect === false), 'the Undo cuts a cable the preset had before the build')
+    /* Run against a unit that drops a cell's cables whenever the cell is written: the build then its Undo leave every join the preset had. */
+    const feeds = new Map(cells.filter((c) => c.fromRows.length).map((c) => [`${c.row}:${c.col}`, new Set(c.fromRows)]))
+    const before = JSON.stringify([...feeds].map(([k, v]) => [k, [...v]]).sort())
+    const wire = {
+      placeBlock: async (r, c) => (feeds.delete(`${r}:${c}`), { ok: true }),
+      clearCell: async (r, c) => (feeds.delete(`${r}:${c}`), { ok: true }),
+      setCable: async (r, c, d, on) => {
+        const k = `${d}:${c + 1}`
+        if (on) feeds.set(k, new Set([...(feeds.get(k) || []), r]))
+        else feeds.get(k)?.delete(r)
+        return { ok: true }
+      }
+    }
+    const { runPlan } = await import('../shared/split-chain.mjs')
+    await runPlan(plan.steps, wire)
+    await runPlan(plan.undo, wire)
+    assert.equal(JSON.stringify([...feeds].filter(([, v]) => v.size).map(([k, v]) => [k, [...v]]).sort()), before, 'the build and its Undo did not leave the preset wired as it was')
+    /* What the read back after an Undo is asked: is the wiring back? */
+    assert.equal(s.undoUnjoined(plan, cells), null)
+    assert.equal(s.undoUnjoined(plan, cells.map((c) => (c.col === 2 ? { ...c, fromRows: [] } : c))), 2, 'a bare wire put back and not joined')
+    assert.equal(s.undoUnjoined(plan, cells.filter((c) => c.col !== 1)), 1, 'a cell left empty')
+    assert.equal(s.undoUnjoined(plan, cells.map((c) => (c.col === 3 ? { ...c, fromRows: [0] } : c))), 3, 'the cell after the last, no longer fed from this row')
+    assert.equal(s.undoUnjoined(plan, cells.map((c) => (c.col === 7 ? { ...c, fromRows: [] } : c))), null, 'a cell the build never touched is not its business')
+    assert.equal(s.undoUnjoined(plan, null), 1)
+    assert.equal(s.undoNotJoinedLine(2), 'Took the blocks back out, but the row is not joined the way it was before: it stops at column 3. Nothing will sound until it is. Join it on the unit, or load the preset again if you have not saved it.')
+    /* A run that stopped after the first place: only that cell, and only the joins at it. */
+    assert.deepEqual(s.undoSteps(plan, 1), [
+      { kind: 'place', row: 1, col: 1, blockId: 1025, name: 'the bare wire' },
+      { kind: 'cable', srcRow: 1, srcCol: 0, destRow: 1, connect: true },
+      { kind: 'cable', srcRow: 1, srcCol: 1, destRow: 1, connect: true }
+    ])
+    assert.equal(s.undoUnjoined(plan, cells.map((c) => (c.col === 3 ? { ...c, fromRows: [] } : c)), 1), null, 'a join at a cell the run never reached')
+  })
+
+  test('an Undo cuts only the cables the build added, and a join the app cannot make again is said, not skipped in silence', async () => {
+    const s = await lib()
+    /* The Input joined to one bare wire, and nothing after it: the build's cable out of the amp is new, the one into it is the preset's. */
+    const half = [...ends(1, 4), { row: 1, col: 1, effectId: 1025, name: 'Shunt', isShunt: true, fromRows: [1] }]
+    const plan = s.planBuild({ cells: half, shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp', 'cab'], FM3).picks, blocks: chainOf(half) })
+    assert.deepEqual(cables(plan).map((c) => c[1]), [0, 1, 2, 3])
+    assert.deepEqual(plan.undo, [
+      { kind: 'cable', srcRow: 1, srcCol: 3, destRow: 1, connect: false },
+      { kind: 'cable', srcRow: 1, srcCol: 2, destRow: 1, connect: false },
+      { kind: 'cable', srcRow: 1, srcCol: 1, destRow: 1, connect: false },
+      { kind: 'clear', row: 1, col: 2, name: 'Cab' },
+      { kind: 'place', row: 1, col: 1, blockId: 1025, name: 'the bare wire' },
+      { kind: 'cable', srcRow: 1, srcCol: 0, destRow: 1, connect: true }
+    ])
+    /* A six-row grid, the chain on its second row, and a bare wire also fed from the TOP row: that cable is one the app cannot make, so it is left out of the Undo and the read back is what says it is missing. */
+    const six = [cell(1, 0, 37, 'Input 1'), cell(1, 13, 42, 'Output 1'), { row: 1, col: 1, effectId: 1030, name: 'Shunt', isShunt: true, fromRows: [0, 1] }]
+    const p6 = s.planBuild({ cells: six, shape: SIX, palette: III, picks: s.resolveChain(['amp'], III).picks, blocks: chainOf(six) })
+    assert.equal(p6.rows, 6)
+    assert.deepEqual(p6.prior, [{ srcRow: 0, srcCol: 0, destRow: 1 }, { srcRow: 1, srcCol: 0, destRow: 1 }])
+    assert.deepEqual(p6.undo.filter((x) => x.kind === 'cable' && x.connect), [{ kind: 'cable', srcRow: 1, srcCol: 0, destRow: 1, connect: true }])
+    assert.equal(s.undoUnjoined(p6, six), null)
+    assert.equal(s.undoUnjoined(p6, six.map((c) => (c.col === 1 ? { ...c, fromRows: [1] } : c))), 1, 'the top row’s feed is gone and nothing said so')
+    /* On four rows the top row is like any other. */
+    const four = [cell(1, 0, 37, 'Input 1'), cell(1, 11, 42, 'Output 1'), { row: 1, col: 1, effectId: 1030, name: 'Shunt', isShunt: true, fromRows: [0, 1] }]
+    const p4 = s.planBuild({ cells: four, shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp'], FM3).picks, blocks: chainOf(four) })
+    assert.deepEqual(p4.undo.filter((x) => x.kind === 'cable' && x.connect).map((x) => x.srcRow), [0, 1])
+    /* An AM4 has no cables: nothing to keep, nothing to join again. */
+    const am4 = s.planBuild({ cells: [], shape: AM4_SHAPE, palette: AM4, picks: s.resolveChain(['amp', 'delay'], AM4).picks, blocks: [] })
+    assert.deepEqual(am4.prior, [])
+    assert.equal(s.undoUnjoined(am4, []), null)
+  })
+
+  test('an Undo is not run over a block the build did not place, and counts what it takes out from what is known', async () => {
+    const s = await lib()
+    const cells = ends(1, 4)
+    const plan = s.planBuild({ cells, shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp', 'cab'], FM3).picks, blocks: chainOf(cells) })
+    const built = [...cells, ...plan.placed.map((p) => cell(p.row, p.col, p.blockId, p.name))]
+    assert.equal(s.undoStale(plan, built), false)
+    assert.equal(s.undoStale(plan, cells), false, 'cells the unit never filled are the build’s own to clear')
+    assert.equal(s.undoStale(plan, built.map((c) => (c.col === 2 ? { ...c, effectId: 1026, isShunt: true } : c))), false, 'a bare wire is not somebody’s block')
+    assert.equal(s.undoStale(plan, built.map((c) => (c.col === 1 ? cell(1, 1, 46, 'Compressor 1') : c))), true, 'a block swapped in since would be taken out')
+    assert.equal(s.undoStale(plan, built.map((c) => (c.col === 2 ? cell(1, 2, 46, 'Compressor 1') : c)), 1), false, 'a cell the run never reached')
+    assert.equal(s.undoStale(plan, built.map((c) => (c.col === 3 ? cell(1, 3, 46, 'Compressor 1') : c))), false, 'a cell the build never placed into')
+    assert.equal(s.undoStale(plan, null), false)
+    assert.equal(s.sentBlocks(plan), 2)
+    assert.equal(s.sentBlocks(plan, 1), 1)
+    assert.equal(s.sentBlocks(plan, 0), 0)
+    /* The ends the app places are not counted as picked blocks. */
+    const bare = s.planBuild({ cells: [], shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp'], FM3).picks, blocks: [] })
+    assert.equal(bare.placed.length, 3)
+    assert.equal(s.sentBlocks(bare), 1)
+    /* And no "0 blocks" is ever said. */
+    assert.equal(s.undoSub(0), 'Puts the preset back as it was')
+    assert.equal(s.undoneLine(0), 'Put the preset back as it was.')
+    assert.equal(s.undoSub(1), 'Takes the block back out')
+    assert.equal(s.undoneLine(2), 'Took the 2 blocks back out.')
+    const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
+    assert.match(qb, /count: landed\.unread \? sentBlocks\(plan, res\.done\) : landed\.landed\.filter/)
+    /* The Undo reads the chain first, refuses over a swapped block, and only then writes; its read back asks after the wiring too. */
+    assert.match(qb, /now = await gridCells\(\)[\s\S]*undoStale\(d\.plan, now, d\.ran\)[\s\S]*UNDO_STALE[\s\S]*beginChainWrite\(\)[\s\S]*runPlan\(d\.undo/)
+    assert.match(qb, /const unjoined = after === null \? null : undoUnjoined\(d\.plan, after, d\.ran\)/)
+    assert.match(qb, /: unjoined !== null \? \{ bad: true, text: undoNotJoinedLine\(unjoined\) \} : \{ bad: false, text: undoneLine\(d\.count\) \}/)
+  })
+
+  test('a preset with nowhere to build says why, and a list of blocks that was not read is not a unit with no blocks', async () => {
+    const s = await lib()
+    const apart = [cell(0, 0, 37, 'Input 1'), cell(2, 11, 42, 'Output 1')]
+    assert.equal(s.buildBlocked({ cells: apart, shape: FM3_SHAPE, palette: FM3, blocks: chainOf(apart) }), s.ENDS_APART)
+    assert.equal(s.buildRoom({ cells: apart, shape: FM3_SHAPE, palette: FM3, blocks: chainOf(apart) }), 0)
+    const tight = [cell(1, 0, 37, 'Input 1'), cell(1, 1, 42, 'Output 1')]
+    assert.equal(s.buildBlocked({ cells: tight, shape: FM3_SHAPE, palette: FM3, blocks: chainOf(tight) }), s.NO_ROOM)
+    assert.equal(s.buildBlocked({ cells: ends(), shape: FM3_SHAPE, palette: FM3, blocks: chainOf(ends()) }), null)
+    assert.equal(s.buildBlocked({ cells: [], shape: AM4_SHAPE, palette: AM4, blocks: [] }), null)
+    const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
+    assert.match(qb, /const blocked = palette \? buildBlocked\(\{ cells: \[\], shape, palette, blocks: chain \}\) : null/)
+    assert.match(qb, /disabled=\{palette === null \|\| !!blocked\} onPress=\{\(\) => openWith\(\[\]\)\}/)
+    assert.match(qb, /disabled=\{palette === null \|\| !!blocked\} onPress=\{\(\) => openWith\(c\.blocks\)\}/)
+    assert.match(qb, /\) : blocked \? \( <Note tone="warn">\{blocked\}<\/Note> \) : \( <ChainPicker/)
+    assert.match(qb, /const start = palette && !blocked \? startFrom\(blocks \|\| \[\], palette, room\) : \{ picks: \[\], missing: \[\], left: \[\] \}/)
+    /* A read that failed leaves the list unread, says so, and offers to ask again: never an empty list, which reads as "This unit has no Drive, Amp…". */
+    assert.ok(!/setPalette\(\[\]\)/.test(qb), 'a failed read of the unit’s blocks is kept as an empty list')
+    assert.match(qb, /catch \(err\) \{ logDebug\('chain', 'quick build: block list'[^}]*\) if \(!stop\) setListFailed\(true\) \}/)
+    assert.match(qb, /if \(!wanted \|\| palette !== null \|\| listFailed\) return undefined/)
+    assert.equal((qb.match(/<Note tone="warn">\{BLOCKS_NOT_READ\}<\/Note> <Press label=\{TRY_AGAIN\} onPress=\{\(\) => setListFailed\(false\)\} \/>/g) || []).length, 2, 'said on the page and in the sheet')
+  })
+
+  test('chains kept with no unit known go to the first unit that is, and a picked block the list lacks can still be tapped out', async () => {
+    const s = await lib()
+    const st = store()
+    const a = s.addStarter(st, 'device', { name: 'Clean + Verb', blocks: ['amp', 'reverb'] })
+    const b = s.addStarter(st, 'device', { name: 'Lead', blocks: ['drive', 'amp', 'delay'] })
+    s.setDefaultStarter(st, 'device', b.chain.id)
+    s.addStarter(st, 'fm3', { name: 'Already here', blocks: ['amp'] })
+    assert.equal(s.adoptStarters(st, 'device', 'fm3'), 2)
+    assert.deepEqual(s.starterList(st, 'fm3').map((c) => [c.name, c.isDefault]), [['Lead', true], ['Classic rig', false], ['Already here', false], ['Clean + Verb', false]])
+    assert.deepEqual(s.starterList(st, 'fm3').find((c) => c.name === 'Lead').blocks, ['drive', 'amp', 'delay'])
+    assert.equal(s.starterList(st, 'device').length, 1, 'nothing is left where no unit will look')
+    assert.equal(s.adoptStarters(st, 'device', 'fm3'), 0, 'once')
+    assert.equal(a.ok, true)
+    /* A unit's own default is not taken from it, and what does not fit stays where it was. */
+    const full = store()
+    for (let i = 0; i < 11; i++) s.addStarter(full, 'am4', { name: `Mine ${i}`, blocks: ['amp'] })
+    const mine = s.starterList(full, 'am4').find((c) => c.name === 'Mine 3')
+    s.setDefaultStarter(full, 'am4', mine.id)
+    const c1 = s.addStarter(full, 'device', { name: 'Couch 1', blocks: ['amp'] })
+    s.addStarter(full, 'device', { name: 'Couch 2', blocks: ['amp'] })
+    s.setDefaultStarter(full, 'device', c1.chain.id)
+    assert.equal(s.adoptStarters(full, 'device', 'am4'), 1)
+    assert.equal(s.starterList(full, 'am4').find((c) => c.isDefault).name, 'Mine 3')
+    assert.equal(s.startersKept(full, 'am4'), 12)
+    assert.deepEqual(s.starterList(full, 'device').map((c) => c.name), ['Classic rig', 'Couch 2'])
+    for (const [from, to] of [['device', 'device'], ['', 'fm3'], ['device', ''], [null, 'fm3']]) assert.equal(s.adoptStarters(st, from, to), 0)
+    const here = code(read('mobile/src/lib/starterChainsHere.js')).replace(/\s+/g, ' ')
+    assert.match(here, /if \(isDemo\(\) \|\| !device \|\| device === DEFAULT_SLUG\) return 0 return adoptStarters\(sync, stageKey\(DEFAULT_SLUG, false\), stageKey\(device, false\)\)/)
+    assert.match(here, /useEffect\(\(\) => \{ adoptUnlinkedHere\(slug\) \}, \[slug\]\)/)
+
+    /* NAM written into a chain against the plain list, opened later against an AM4's own, which has none: it has a chip, with its place, to tap it out, and no second one to add. */
+    const chips = s.chipsFor(AM4, ['nam', 'amp', 'nam'])
+    assert.deepEqual(chips.filter((c) => c.family === 'nam').map((c) => [c.nth, c.place, c.label]), [[1, 1, 'NAM'], [2, 3, 'NAM 2']])
+    assert.deepEqual(s.pickToggled(['nam', 'amp', 'nam'], 'nam', 1), ['amp', 'nam'])
+    assert.equal(s.chipsFor(AM4, ['amp']).some((c) => c.family === 'nam'), false, 'a family the unit lacks is offered')
+    assert.equal(s.chipsFor(AM4, ['input', 'amp']).some((c) => c.family === 'input'), false)
   })
 
   test('Quick build on a six-row grid with the Input on the top row: built there, no cables at all, and it says so', async () => {
@@ -400,12 +573,32 @@ export function run(test) {
     /* One block the unit did not take: the others are "in", and "connected" only if the read shows the row joined past the empty cell. */
     const some = s.whatLanded(plan, joinedRow().filter((c) => c.effectId !== 66))
     assert.equal(some.tone, 'warn')
-    assert.equal(some.text, 'Reverb was not added. The unit did not take it, which usually means the preset has no room left for it (CPU). The other 4 blocks are in.')
-    assert.equal(some.joined, false)
+    assert.equal(some.text, 'Reverb was not added. The unit did not take it, which usually means the preset has no room left for it (CPU). The other 4 blocks are in. The row is not joined from the input to the output: it stops at column 6. Nothing will sound until it is.', 'an empty cell breaks the row, and the break was worked out and then not said')
+    assert.deepEqual([some.joined, some.stops], [false, 5])
     const carried = s.whatLanded(plan, joinedRow().map((c) => (c.effectId === 66 ? cell(1, c.col, 1030, 'Shunt 7', { isShunt: true, fromRows: [1] }) : c)))
     assert.equal(carried.text, 'Reverb was not added. The unit did not take it, which usually means the preset has no room left for it (CPU). The other 4 blocks are in and connected.')
+    assert.equal(carried.stops, null)
     const none = s.whatLanded(plan, cells)
     assert.deepEqual([none.none, none.title, none.joined], [true, s.NONE_ADDED_TITLE, false])
+    /* A preset with no Input or Output, where the app places both: the ends in and none of the picked blocks is "nothing was added", never "the other 0 blocks are in"; and a missing end has its own words, never the CPU sentence. */
+    const ownEnds = s.planBuild({ cells: [], shape: FM3_SHAPE, palette: FM3, picks: s.resolveChain(['amp', 'cab'], FM3).picks, blocks: [] })
+    const endsIn = ownEnds.placed.filter((p) => p.end).map((p) => cell(p.row, p.col, p.blockId, p.name))
+    const onlyEnds = s.whatLanded(ownEnds, endsIn)
+    assert.deepEqual([onlyEnds.none, onlyEnds.title, onlyEnds.text], [true, s.NONE_ADDED_TITLE, s.NONE_ADDED])
+    assert.equal(onlyEnds.landed.length, 2, 'the ends that landed are still known, for the Undo')
+    const noOut = s.whatLanded(ownEnds, ownEnds.placed.filter((p) => p.family !== 'output').map((p) => cell(p.row, p.col, p.blockId, p.name, { fromRows: [1] })))
+    assert.equal(noOut.title, 'Output 1 was not added')
+    assert.equal(noOut.text, 'Output 1 was not added, so the row is not joined from the input to the output. Nothing will sound until it is. The 2 blocks are in.')
+    assert.ok(!/CPU/.test(noOut.text))
+    const both = s.whatLanded(ownEnds, ownEnds.placed.filter((p) => p.family !== 'output' && p.family !== 'cab').map((p) => cell(p.row, p.col, p.blockId, p.name)))
+    assert.match(both.title, /^Cab(?: 1)? was not added$/)
+    assert.match(both.text, /\(CPU\)\. The other block is in\. The row is not joined from the input to the output: it stops at column 2\. Nothing will sound until it is\. Output 1 was not added either\.$/)
+    for (const w of [s.ENDS_APART, s.builtLine({ count: 2, row: 1, why: 'ends' })]) assert.ok(!/Edit chain/.test(w), `${w}: names a tool that is not there over Bluetooth`)
+    assert.equal(s.NOTHING_SAVED_ON_UNIT, 'Nothing is saved until you save the preset on the unit itself.')
+    const qbs = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
+    assert.equal((qbs.match(/\{saves \? NOTHING_SAVED : NOTHING_SAVED_ON_UNIT\}/g) || []).length, 2)
+    assert.ok(!/\{NOTHING_SAVED\}/.test(qbs), 'the Save line is shown where the app has no Save')
+    assert.match(code(read('mobile/src/screens/Edit.js')).replace(/\s+/g, ' '), /saves=\{!viaBle \|\| caps\?\.supportsSave === true\}/)
     assert.equal(s.whatLanded(plan, [...cells, all[0]], 1).all, true, 'a run that stopped asks only after what was sent')
 
     /* NO READ AT ALL is not "nothing landed": what is in the preset is not known, and is not guessed either way. */
@@ -470,7 +663,7 @@ export function run(test) {
     }
     const qb = code(read('mobile/src/components/QuickBuild.js'))
     assert.match(qb, /import \{ blockCatalog, clearCell, gridCells, placeBlock, setCable \} from '\.\.\/lib\/device'/)
-    assert.match(qb, /runPlan\(plan\.steps, wire\(plan\)\)/, 'the build runs the plan through split-chain’s runPlan')
+    assert.match(qb, /runPlan\(plan\.steps, wire\(plan, n, gone\)\)/, 'the build runs the plan through split-chain’s runPlan')
     assert.match(qb, /beginChainWrite\(\)[\s\S]*runPlan\(plan\.steps[\s\S]*endChainWrite\(\{ refresh: false \}\)[\s\S]*refreshBlocks\(\{ quiet: true \}\)[\s\S]*gridCells\(\)[\s\S]*whatLanded\(/, 'guarded, read back, then said')
     assert.match(qb, /ofNumber\(\) !== d\.n[\s\S]*UNDO_STALE/, 'an Undo on another preset is refused')
   })
@@ -513,7 +706,11 @@ export function run(test) {
     /* The computer's curated capabilities: gridRouting, slotModel, no gridEdit. */
     assert.equal(withGridEdit({ slotModel: 'grid', gridRouting: true }).gridEdit, true, 'an FM3, FM9 or Axe-Fx III')
     assert.equal(withGridEdit({ slotModel: 'linear', slotCount: 4, gridRouting: false }).gridEdit, true, 'an AM4')
-    assert.equal(withGridEdit({ slotModel: 'grid', gridRouting: false }).gridEdit, false, 'a unit the computer cannot place on')
+    /* An Axe-Fx II: its driver places blocks and lays no cables, so a row built there could not be joined. A no, until the plan can build without cables on a grid. */
+    assert.equal(withGridEdit({ slotModel: 'grid', gridRouting: false }).gridEdit, false, 'an Axe-Fx II')
+    /* An Axe-Fx Standard or Ultra: linear, 48 slots, and no way to place a block at all. "Linear and not a VP4" is not an AM4. */
+    assert.equal(withGridEdit({ slotModel: 'linear', slotCount: 48, gridRouting: false }).gridEdit, false, 'a gen-1 unit was offered Quick build, and every block it sent would be refused')
+    assert.equal(withGridEdit({ slotModel: 'linear', gridRouting: false }).gridEdit, false, 'a linear unit that does not say four slots')
     assert.equal(withGridEdit({ slotModel: 'linear', gridRouting: false }, { vp4: true }).gridEdit, false, 'never a VP4')
     assert.equal(withGridEdit({ slotModel: 'grid' }, { demo: true }).gridEdit, true, 'the demo answers every route')
     assert.equal(withGridEdit({ slotModel: 'linear' }, { demo: true, vp4: true }).gridEdit, false, 'but not on its VP4')
@@ -533,6 +730,14 @@ export function run(test) {
     assert.deepEqual(chainFromZero([{ col: 2 }, { col: 4 }], linear).map((b) => b.col), [1, 3], 'slot 1 empty: still one along')
     assert.deepEqual(chainFromZero(am4, linear, { demo: true }).map((b) => b.col), [1, 2, 3, 4])
     assert.deepEqual(chainFromZero(am4, linear, { vp4: true }).map((b) => b.col), [1, 2, 3, 4])
+    /* AND ITS ONE ROW IS ROW 0, as its grid read says and as a linear unit's shape has it: left on row 1, the chain editor drew a second, empty lane over a full AM4. */
+    assert.deepEqual(chainFromZero(am4, linear).map((b) => b.row), [0, 0, 0, 0])
+    assert.deepEqual(chainFromZero(am4, linear, { demo: true }).map((b) => b.row), [1, 1, 1, 1])
+    assert.deepEqual(chainFromZero([{ slug: 'x', row: 3, col: 2 }], { slotModel: 'grid' }).map((b) => b.row), [3], 'a grid unit’s rows are its own')
+    const { lanesShown, gridShape } = await import('../mobile/src/lib/grid-plan.js')
+    const full = chainFromZero(am4.map((b, i) => ({ ...b, effectId: 100 + i, name: 'Amp' })), linear)
+    assert.equal(gridShape(linear).rows, 1)
+    assert.equal(lanesShown(full, linear).length, 1, 'a full AM4 through the computer shows a lane of free slots it does not have')
     const grid = [{ col: 0 }, { col: 5 }]
     assert.equal(chainFromZero(grid, { slotModel: 'grid' }), grid)
     const device = read('mobile/src/lib/device.js')

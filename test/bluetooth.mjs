@@ -983,6 +983,7 @@ async function onTheLine(kind, options = {}) {
       namKnobs: options.namKnobs,
       save: options.save,
       chain: options.chain,
+      liveGrid: options.liveGrid,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -18874,6 +18875,8 @@ export function run(test) {
    * grid afterwards is what the request asked for.
    */
   const CHAIN_OPEN = { edit: () => true, chain: () => true }
+  /* With the live grid read believed once the preset has borne it out: what nothing in the app asks for yet (the wire's `liveGrid`). */
+  const LIVE_OPEN = { ...CHAIN_OPEN, liveGrid: true }
   const BARE3 = [
     { row: 1, col: 0, effectId: 37, fromRows: [] },
     { row: 1, col: 11, effectId: 42, fromRows: [] }
@@ -18889,6 +18892,12 @@ export function run(test) {
   const cellsOf = (cells) => JSON.stringify([...cells].sort((a, b) => a.col - b.col || a.row - b.row).map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, fromRows: c.fromRows })))
   const sendTo = (t, method, path, body) => drive(t.clock, t.wire.request(path, { method, body: JSON.stringify(body ?? null) }))
   const gridFrames = (t, grid) => t.frames().filter((f) => grid.gridShaped(f, f[4]))
+  /* The chain read, as whoever changes it reads it first (a write is refused until it has been, since the last scene or preset change), and the slate wiped so a test counts only what its own writes sent. */
+  const seen = async (t) => {
+    await t.get('/preset/grid')
+    t.sent.length = 0
+    if (t.unit.state.gridHeard) t.unit.state.gridHeard.length = 0
+  }
 
   test('the chain’s four routes are answered only where the chain is open to the account, with Edit open: anybody else gets “not over Bluetooth” and nothing is sent', async () => {
     const grid = await import(GRID)
@@ -18994,7 +19003,7 @@ export function run(test) {
 
   test('the grid is read from the preset until a preset with a cable has borne the live read out, and live after that', async () => {
     const grid = await import(GRID)
-    const t = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    const t = await onTheLine('fm3', { grid: BARE3, ...LIVE_OPEN })
     /* A bare preset: both reads, the preset's answer handed on, and nothing proven about cables yet. */
     const first = await t.get('/preset/grid')
     assert.equal(cellsOf(first.cells), cellsOf(BARE3))
@@ -19069,7 +19078,7 @@ export function run(test) {
       { row: 4, col: 13, effectId: 42, fromRows: [3, 4] }
     ]
     /* 3.125 bytes a millisecond is 31,250 baud. */
-    const t = await onTheLine('axefx3', { grid: III, catalog: catalogFor('axefx3'), rate: 3.125, ...CHAIN_OPEN })
+    const t = await onTheLine('axefx3', { grid: III, catalog: catalogFor('axefx3'), rate: 3.125, ...LIVE_OPEN })
     const started = t.clock.now()
     const got = await t.get('/preset/grid')
     assert.equal(cellsOf(got.cells), cellsOf(III))
@@ -19133,6 +19142,7 @@ export function run(test) {
     for (const [kind, model] of [['fm3', 0x11], ['fm9', 0x12], ['axefx3', 0x10]]) {
       /* `needsSelect`: a unit that puts the block where its cursor is, as a real FM3 does, so a put with no select before it lands in the wrong cell. */
       const t = await onTheLine(kind, { grid: BARE3.map((c) => ({ ...c, col: c.effectId === 42 ? (kind === 'fm3' ? 11 : 13) : c.col })), needsSelect: true, ...CHAIN_OPEN })
+      await seen(t)
       const answer = await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 3, blockId: 118 })
       assert.deepEqual(answer, { ok: true })
       assert.deepEqual(t.frames().map(hex), [grid.buildGridSelect(model, 2, 3), grid.buildGridPut(model, 2, 3, 118)].map(hex), `${kind}: not the computer’s two messages, in its order`)
@@ -19156,6 +19166,7 @@ export function run(test) {
 
   test('a block the unit has no room for is answered, not thrown: ok false with the unit’s reason, and the rest of a plan goes on', async () => {
     const t = await onTheLine('fm3', { grid: BARE3, refuseBlock: 66, refuseCode: 0x05, ...CHAIN_OPEN })
+    await seen(t)
     assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 2, blockId: 118 }), { ok: true })
     const no = await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 3, blockId: 66 })
     assert.deepEqual(no, { ok: false, refused: 'there is no such block' })
@@ -19216,6 +19227,7 @@ export function run(test) {
         { row: 2, col: 1, effectId: 58, fromRows: [] }
       ]
       const t = await onTheLine(kind, { grid: start, ...CHAIN_OPEN })
+      await seen(t)
       assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2, connect: true }), { ok: true })
       assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 3 }), { ok: true }, 'a cable with no `connect` is not joined, as on the computer')
       assert.deepEqual(t.frames().map(hex), [grid.buildGridCable(model, 2, 1, 2, true), grid.buildGridCable(model, 2, 1, 3, true)].map(hex))
@@ -19232,6 +19244,7 @@ export function run(test) {
 
   test('a block meant for one preset is never put in the next: a preset or scene change first, and the write is not sent', async () => {
     const t = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    await seen(t)
     /* Asked, and the preset changed before its turn came. */
     const placing = t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 2, blockId: 118 }) })
     placing.catch(() => {})
@@ -19241,20 +19254,147 @@ export function run(test) {
     assert.equal(t.unit.state.gridHeard.length, 0, 'a block went into the preset after the one it was meant for')
     assert.equal(t.unit.state.grid.some((c) => c.effectId === 118), false)
     /* The same for a cable. */
+    await advance(t.clock, 1000)
+    await seen(t)
     const cabling = t.wire.request('/preset/grid/cable', { method: 'POST', body: JSON.stringify({ srcRow: 2, srcCol: 1, destRow: 2 }) })
     cabling.catch(() => {})
     const scene = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) })
     await assert.rejects(drive(t.clock, cabling), (e) => e.status === 409)
     await drive(t.clock, scene)
     assert.equal(t.unit.state.gridHeard.length, 0)
-    /* And after it, the next one goes as usual. */
+    /* And after it, with the chain read again, the next one goes as usual. */
+    await advance(t.clock, 1000)
+    await seen(t)
     assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 2, blockId: 118 }), { ok: true })
     assert.equal(t.unit.state.gridHeard.length, 2)
+  })
+
+  test('a write is taken only for the chain as it was last read: not before a read, and not after a scene or preset change until it is read again', async () => {
+    for (const kind of ['fm3', 'am4']) {
+      const t = await onTheLine(kind, kind === 'am4' ? CHAIN_OPEN : { grid: BARE3, ...CHAIN_OPEN })
+      const body = kind === 'am4' ? { row: 1, col: 4, blockId: 0x42 } : { row: 2, col: 2, blockId: 118 }
+      const refused = (e) => e.status === 409 && e.bluetooth === true && /The scene or preset changed since the app read the chain\. Try it again\./.test(e.message)
+      /* Nothing read on this connection yet. */
+      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', body), refused, kind)
+      if (kind !== 'am4') await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2 }), refused)
+      assert.equal(t.sent.length, 0, `${kind}: something was sent for a chain nobody had read`)
+      assert.ok(t.logs.some((l) => /^not sent, the chain has not been read since the scene or preset last changed: /.test(l)), t.logs.join(' | '))
+      /* Read, and it goes. */
+      await seen(t)
+      assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', body), { ok: true }, kind)
+      /* A PLAN IS MANY REQUESTS: the unit stepped to another preset by a footswitch after one of them, and the next is its own request with the new count. It is refused all the same, with nothing sent. */
+      await advance(t.clock, 2000)
+      t.sent.length = 0
+      t.wire.heardShort([0xc0, 5])
+      const next = kind === 'am4' ? { row: 1, col: 3, blockId: 0x46 } : { row: 2, col: 3, blockId: 58 }
+      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', next), refused, `${kind}: the rest of a plan went into the preset the unit was stepped to`)
+      assert.equal(kind === 'am4' ? t.frames().filter((f) => f.length === 23 && f[5] === 0x01 && f[6] === 0x4e).length : gridFrames(t, await import(GRID)).length, 0)
+      /* Read again, then it goes. */
+      await advance(t.clock, 2000)
+      await seen(t)
+      assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', next), { ok: true }, kind)
+      /* A GRID READ ACROSS A MOVE VOUCHES FOR NOTHING: the unit stepped on while the chain was being read, and what came back may be either preset's. (A gen-3 unit's read is two questions and seconds long; an AM4's is answered from what the app holds.) */
+      if (kind === 'am4') continue
+      await advance(t.clock, 2000)
+      const reading = t.wire.request('/preset/grid')
+      reading.catch(() => {})
+      const before = t.sent.length
+      for (let i = 0; i < 400 && t.sent.length === before; i++) await advance(t.clock, 2)
+      assert.ok(t.sent.length > before, `${kind}: the read never began`)
+      t.wire.heardShort([0xc0, 7])
+      await drive(t.clock, reading).catch(() => {})
+      await advance(t.clock, 2000)
+      t.sent.length = 0
+      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', kind === 'am4' ? { row: 1, col: 2, blockId: 0x46 } : { row: 2, col: 4, blockId: 62 }), refused, `${kind}: a chain read while the preset changed was taken as the new preset’s`)
+    }
+  })
+
+  test('a preset stepped to while the cell is being selected does not get the block: asked again between the select and the put', async () => {
+    const grid = await import(GRID)
+    const t = await onTheLine('fm3', { grid: BARE3, needsSelect: true, ...CHAIN_OPEN })
+    await seen(t)
+    const placing = t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 3, blockId: 118 }) })
+    placing.catch(() => {})
+    for (let i = 0; i < 400 && t.unit.state.gridHeard.length < 1; i++) await advance(t.clock, 2)
+    assert.equal(t.unit.state.gridHeard.length, 1, 'the select never went')
+    t.wire.heardShort([0xc0, 5])
+    await assert.rejects(drive(t.clock, placing), (e) => e.status === 409 && /The scene or preset changed before that was sent/.test(e.message))
+    await advance(t.clock, 5000)
+    assert.deepEqual(gridFrames(t, grid).map(hex), [hex(grid.buildGridSelect(0x11, 2, 3))], 'the put followed the select into another preset')
+    assert.equal(t.unit.state.grid.some((c) => c.effectId === 118), false)
+    assert.ok(t.logs.some((l) => /^not sent, the scene or preset changed first: Drive(?: 1)? into row 2, column 3$/.test(l)), t.logs.join(' | '))
+  })
+
+  test('an AM4’s slots read back after the preset has changed are not taken as the write’s answer', async () => {
+    const t = await onTheLine('am4', CHAIN_OPEN)
+    await seen(t)
+    const placing = t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 1, col: 4, blockId: 0x42 }) })
+    for (let i = 0; i < 400 && t.unit.state.slots[3] !== 0x42; i++) await advance(t.clock, 2)
+    assert.equal(t.unit.state.slots[3], 0x42, 'the slot write never went')
+    /* The unit is stepped to another preset while the app waits to read the slots back: what it reads then is that preset's. */
+    t.wire.heardShort([0xc0, 9])
+    t.unit.state.slots = [0x3a, 0, 0, 0]
+    assert.deepEqual(await drive(t.clock, placing), { ok: true, unread: true })
+    assert.ok(t.logs.some((l) => /^Reverb into slot 4: the scene or preset changed before the slots were read back, so they are not taken as its answer$/.test(l)), t.logs.join(' | '))
+    assert.ok(!t.logs.some((l) => /Reverb into slot 4: the AM4 says/.test(l)))
+  })
+
+  test('the preset is not asked for once the chain has closed, though the live read before it was answered', async () => {
+    const door = { open: true }
+    const t = await onTheLine('fm3', { grid: CHAIN3, edit: () => true, chain: () => door.open })
+    const asking = t.wire.request('/preset/grid')
+    asking.catch(() => {})
+    for (let i = 0; i < 400 && t.unit.state.lives < 1; i++) await advance(t.clock, 2)
+    assert.equal(t.unit.state.lives, 1)
+    door.open = false
+    await assert.rejects(drive(t.clock, asking), (e) => e.status === 501 || e.unsupported === true)
+    await advance(t.clock, 5000)
+    assert.equal(t.unit.state.dumps, 0, 'the whole preset was asked of a unit for an account the chain is closed to')
+  })
+
+  test('the live grid read is taken and written in the log, and never believed, as the app makes the wire', async () => {
+    /* A preset with cables and a shunt: everything the proof asks for, in one answer. Still the preset's own grid is what is answered, every time. */
+    const t = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
+    for (let i = 0; i < 3; i++) {
+      const got = await t.get('/preset/grid')
+      assert.deepEqual([got.source, cellsOf(got.cells)], ['preset', cellsOf(CHAIN3)])
+      await advance(t.clock, 1000)
+    }
+    assert.equal(t.unit.state.dumps, 3, 'a grid was answered from the live read')
+    /* Asked only while the log still wants it: once both have been laid side by side and agree, not again. */
+    assert.equal(t.unit.state.lives, 1)
+    assert.ok(t.logs.some((l) => /^the live grid answer, as it came: F0 00 01 74 11 01 2E 00/.test(l)))
+    assert.ok(t.logs.some((l) => /cable bit 4 is the top row/.test(l) && /\(the preset has: r2c1 37, r2c2 118 from 2, r2c3 58 from 2, r3c3 1024 from 2, r2c4 62 from 2\+3, r2c12 42\)$/.test(l)), t.logs.join(' | '))
+    /* A bare preset settles nothing about cables, so it is asked again beside the next read. */
+    const bare = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    for (let i = 0; i < 3; i++) {
+      assert.equal((await bare.get('/preset/grid')).source, 'preset')
+      await advance(bare.clock, 1000)
+    }
+    assert.deepEqual([bare.unit.state.lives, bare.unit.state.dumps], [3, 3])
+    /* A unit that says nothing to the live read is asked twice, and not kept waiting on a third. */
+    const mute = await onTheLine('fm3', { grid: CHAIN3, noLive: true, ...CHAIN_OPEN })
+    for (let i = 0; i < 4; i++) {
+      assert.equal((await mute.get('/preset/grid')).source, 'preset')
+      await advance(mute.clock, 1000)
+    }
+    assert.deepEqual([mute.unit.state.lives, mute.unit.state.dumps], [2, 4])
+    /* THE LIVE ANSWER IS IN THE LOG EVEN WHERE THE PRESET NEVER COMES (a unit that does not send its preset down this wire): it is then the only thing his log has to go on. */
+    const none = await onTheLine('fm3', { grid: CHAIN3, noDump: true, ...CHAIN_OPEN })
+    await assert.rejects(none.get('/preset/grid'), (e) => e.status === 504)
+    assert.ok(none.logs.some((l) => /^the live grid answer, as it came: F0 00 01 74 11 01 2E 00/.test(l)), none.logs.join(' | '))
+    /* And nothing in the app hands the wire the word that would have it believed. */
+    assert.ok(!/liveGrid/.test(code('mobile/src/lib/bluetooth.js')), 'lib/bluetooth turns the live grid read on')
+    for (const f of ['mobile/src/lib/bleLink.js', 'mobile/src/lib/device.js', 'mobile/src/lib/features.js']) assert.ok(!/liveGrid/.test(code(f)), f)
+    const wire = code('mobile/src/lib/bleWire.js').replace(/\s+/g, ' ')
+    assert.match(wire, /let grid = liveGrid === true \? gridFromLive\(live, gridProved\) : null/)
   })
 
   test('grid jobs go one at a time, each with only its own messages allowed out, however many are asked at once', async () => {
     const grid = await import(GRID)
     const t = await onTheLine('fm3', { grid: BARE3, needsSelect: true, ...CHAIN_OPEN })
+    await seen(t)
+    await advance(t.clock, 1000)
     const asks = [
       t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 2, blockId: 118 }) }),
       t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 3, blockId: 58 }) }),
@@ -19314,6 +19454,7 @@ export function run(test) {
     assert.equal(t.unit.state.frozen, false)
     /* An AM4 that takes the message and changes nothing: the slot itself says so. */
     const u = await onTheLine('am4', { slotIgnored: true, ...CHAIN_OPEN })
+    await u.get('/preset/grid')
     assert.deepEqual(await sendTo(u, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0x42 }), { ok: false, refused: 'slot 4 holds nothing' })
     assert.deepEqual(await sendTo(u, 'PUT', '/preset/grid/cell', { row: 1, col: 1, blockId: 0x42 }), { ok: false, refused: 'slot 1 holds Amp' })
     assert.equal(u.unit.state.frozen, false)

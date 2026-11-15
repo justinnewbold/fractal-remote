@@ -614,7 +614,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -2921,6 +2921,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (movedSince, and moved() drops the ones still waiting): a block meant
    * for one preset never lands in the next.
    *
+   * AND A WRITE IS TAKEN ONLY FOR THE CHAIN AS IT WAS LAST READ (chainSeen):
+   * the grid has to have been read since the last scene or preset change,
+   * or the write is refused before anything is sent. A plan is several
+   * requests, each its own, and a preset stepped to by a footswitch after
+   * its second step would otherwise get the other seven, each taking the
+   * new count as its own. Whoever changes the chain reads it first, so this
+   * costs them nothing; after a move they read it again.
+   *
    * A REFUSAL IS ANSWERED, NOT THROWN: {ok: false}, as the computer answers
    * one, so a plan of several steps goes on to the rest (a unit with no room
    * left for the fifth block still gets the first four joined up) and
@@ -2940,6 +2948,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let gridProved = noProof()
   let gridSaid = ''
   let liveTold = false
+  let liveSilent = 0
+  /*
+   * THE LIVE READ IS TAKEN AND WRITTEN IN THE LOG, AND NOT BELIEVED, until
+   * a unit's own log has shown what it says (`liveGrid`, which nothing in
+   * the app hands the wire yet; the tests do, so the path stays run). Its
+   * layout is the codec's reading of two recordings, an Axe-Fx III's has
+   * never been captured, and lib/gen3-grid's proof can be satisfied by one
+   * chain on one row. A grid the app acts on (an Undo puts a shunt's id
+   * back) is the preset's own, the read the computer uses. So until then
+   * it is asked only while the log still wants it: until the proof has
+   * settled either way, and not again after two silences.
+   */
+  const liveSettled = () => gridProved.cells === false || gridProved.rowBit === false || (gridProved.cells === true && typeof gridProved.rowBit === 'number')
+  const liveWanted = () => liveGrid === true || (liveSilent < 2 && !liveSettled())
+  /* The count of scene and preset changes the chain was last read at (null: not read on this connection). */
+  let gridSeenAt = null
+  function chainSeen(what) {
+    if (gridSeenAt === moves) return
+    say(`not sent, the chain has not been read since the scene or preset last changed: ${what}`)
+    throw failure('The scene or preset changed since the app read the chain. Try it again.', 409)
+  }
   /* Kept for a moment, and only while nothing has moved: another preset's is another grid (`moves`), and a write to this one makes it read again (chainChanged). */
   let gridKept = null
   function chainChanged() {
@@ -2967,6 +2996,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* The preset as it is being edited, whole, for the grid in it: the read the computer app uses. */
   async function gen3DumpGrid() {
+    /* The request for the preset is no grid frame, so the way out does not hold it to the job in hand: asked here, as the chain's own frames are asked there. */
+    if (!chainOn()) throw unsupported()
     const frames = []
     let head = false
     const started = time.now()
@@ -3005,29 +3036,37 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   function gen3Grid() {
     return inGrid(async () => {
+      /* (A grid kept is one read at this same count, so the chain has been seen at it: chainSeen.) */
       if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < STRUCTURE_FRESH_MS) return gridKept.value
       const at = moves
       const started = time.now()
-      const { frame: liveFrame, live } = await gen3LiveGrid()
-      let grid = gridFromLive(live, gridProved)
+      const asked = liveWanted()
+      const { frame: liveFrame, live } = asked ? await gen3LiveGrid() : { frame: null, live: null }
+      if (asked) liveSilent = liveFrame ? 0 : liveSilent + 1
+      /* The live answer itself, once a connection and before the preset is asked for (which a unit may not send down this wire at all): what settles its layout on a unit nobody has read it from. */
+      if (liveFrame && !liveTold) {
+        liveTold = true
+        say(`the live grid answer, as it came: ${toHex(liveFrame)}`)
+      }
+      let grid = liveGrid === true ? gridFromLive(live, gridProved) : null
       const source = grid ? 'live' : 'preset'
       if (!grid) {
         grid = await gen3DumpGrid()
-        const { proof, said } = gridProof(gridProved, live, grid)
-        gridProved = proof
-        if (said !== gridSaid) {
-          gridSaid = said
-          say(said)
-        }
-        /* The live answer itself, once a connection, beside the first preset it was checked against: what settles its layout on a unit nobody has read it from. */
-        if (liveFrame && !liveTold) {
-          liveTold = true
-          say(`the live grid answer, as it came: ${toHex(liveFrame)}`)
+        if (asked) {
+          const { proof, said } = gridProof(gridProved, live, grid)
+          gridProved = proof
+          if (said !== gridSaid) {
+            gridSaid = said
+            /* With the preset's own grid beside it, so the two can be laid side by side by hand where they disagree. */
+            say(`${said} (the preset has: ${grid.cells.map((c) => `r${c.row + 1}c${c.col + 1} ${c.effectId}${c.fromRows.length ? ` from ${c.fromRows.map((r) => r + 1).join('+')}` : ''}`).join(', ') || 'nothing'})`)
+          }
         }
       }
       const cells = grid.cells.map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, name: c.isShunt ? `Shunt ${c.effectId - SHUNT_FROM + 1}` : blockNamed(c.effectId), isShunt: c.isShunt, fromRows: c.fromRows }))
       const value = { rows: grid.rows, cols: grid.cols, cells, source }
       if (moves === at) gridKept = { value, at: time.now(), moves }
+      /* What a write is then held to (chainSeen): the count this read began at, so a grid read across a move vouches for nothing. */
+      gridSeenAt = at
       const shunts = cells.filter((c) => c.isShunt).length
       say(`the grid, read ${source === 'live' ? 'live' : 'from the preset'} in ${((time.now() - started) / 1000).toFixed(1)} s: ${cells.length - shunts} block${cells.length - shunts === 1 ? '' : 's'}${shunts ? `, ${shunts} shunt${shunts === 1 ? '' : 's'}` : ''}`)
       return value
@@ -3052,6 +3091,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!cellOnGrid(model, row, col)) throw badInput(`The ${spec.name}’s grid has no row ${row}, column ${col}.`)
     if (!placeable(blockId)) throw badInput(`Block ${blockId} is not one the app places on the ${spec.name}.`)
     const what = blockId === 0 ? `row ${row}, column ${col} emptied` : `${blockId >= SHUNT_FROM ? 'a shunt' : blockNamed(blockId)} into row ${row}, column ${col}`
+    chainSeen(what)
     return inGrid(async () => {
       movedSince(at, what)
       const select = buildGridSelect(model, row, col)
@@ -3060,7 +3100,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       try {
         answer = await withFrames([select, put], async () => {
           const first = await fire(select, `row ${row}, column ${col} selected`, EDIT_WRITE)
-          return rejected(first) ? first : fire(put, what, EDIT_WRITE)
+          if (rejected(first)) return first
+          /* Asked again between the two: a preset stepped to while the cell was being selected would otherwise get the block (moved() drops only what is already waiting, and the put is not yet). The select alone moves a cursor and nothing else. */
+          movedSince(at, what)
+          return fire(put, what, EDIT_WRITE)
         })
       } finally {
         chainChanged()
@@ -3083,6 +3126,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       throw badInput(undecoded ? `A cable out of the top row from column ${srcCol} is one the app can’t make on the ${spec.name}. Use another row.` : `The ${spec.name}’s grid has no cable from row ${srcRow}, column ${srcCol} to row ${destRow} of the next column.`)
     }
     const what = `row ${srcRow}, column ${srcCol} ${join ? 'joined to' : 'parted from'} row ${destRow} of column ${srcCol + 1}`
+    chainSeen(what)
     return inGrid(async () => {
       movedSince(at, what)
       let answer
@@ -3105,8 +3149,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /** GET /preset/grid on an AM4: its four slots in a line, as the computer answers it (row 0, slot 1 at column 0). */
   async function am4Grid() {
+    const at = moves
     const slots = await am4SlotsNow(false)
     if (!slots) throw timedOut()
+    gridSeenAt = at
     const cells = []
     slots.forEach((code, i) => {
       if (code) cells.push({ row: 0, col: i, effectId: code, name: am4Named(code), isShunt: false, fromRows: [] })
@@ -3127,6 +3173,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const out = buildAm4Slot(slot, code)
     if (!out) throw badInput(Number.isInteger(slot) && slot >= 1 && slot <= AM4_SLOTS ? `Block ${code} is not one the app places on the AM4.` : `The AM4 has no slot ${slot}.`)
     const what = code === 0 ? `slot ${slot} emptied` : `${am4Named(code)} into slot ${slot}`
+    chainSeen(what)
     return inGrid(async () => {
       movedSince(at, what)
       let answer
@@ -3140,6 +3187,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const slots = await am4SlotsNow(true)
       if (!slots) {
         say(`${what}: the AM4 did not say what its slots hold afterwards`)
+        return { ok: true, unread: true }
+      }
+      /* A preset stepped to since: these are another preset's slots, and say nothing of where the write went. */
+      if (moves !== at) {
+        say(`${what}: the scene or preset changed before the slots were read back, so they are not taken as its answer`)
         return { ok: true, unread: true }
       }
       const holds = slots[slot - 1]

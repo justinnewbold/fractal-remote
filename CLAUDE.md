@@ -1083,6 +1083,32 @@ what the computer sends for the same edit, and a test holds it there.
   chain." Then, of the four pictures (in the session's scratchpad, not the
   repository): "The four screens are good. I need everything with the
   chain builder to work over Bluetooth also" (15 November 2026).
+  - *What an independent read found before it went out, all fixed, each
+    with a test seen to fail without its fix (15 November 2026).* THE UNDO
+    LEFT A PRESET SILENT: the usual empty preset is an Input, a row of bare
+    wires joined end to end, and an Output; the build sends its cables over
+    those joins, and the Undo cut every cable the build had sent. It now
+    cuts only the cables the build ADDED, gives each cell its bare wire
+    back, and joins the preset's own cables again (`plan.prior`,
+    `undoSteps`), and its read back asks after the wiring too
+    (`undoUnjoined`). A PRESET CHANGED BY A FOOTSWITCH PART-WAY got the
+    rest of the build: the screen's own preset number is frozen while the
+    chain is written, so the rig asks the unit where news came in
+    (`leftPresetInChainWrite`), each step asks first, and the run stops
+    with nothing said of a chain that is no longer the one on screen
+    (`PRESET_MOVED`). An Undo is not run over a block swapped into one of
+    its cells since (`undoStale`, read fresh first). A block the unit
+    refused in the middle of the row is said as a row with no sound; a
+    missing Input or Output has its own words, never the CPU sentence;
+    "0 blocks" is never said. A preset with its Input and Output on
+    different rows says so in place of a greyed-out picker
+    (`buildBlocked`). A list of blocks that could not be read says the
+    unit did not answer, with Try again, never "This unit has no Drive…".
+    Chains made in Settings with no unit linked go to the first unit that
+    links (`adoptStarters`); they were kept and never seen again. Save the
+    preset only ever ARMS the save (`saveTo.arm`). Where the app has no
+    Save on the connection the sheet says to save on the unit. No words
+    name Edit chain, which is not there over Bluetooth.
   - *What it is.* On a preset with nothing in it but its Input and Output,
     Edit shows Quick build and the starter chains in place of "This preset
     is empty." (components/QuickBuild), and Play one Quick build button
@@ -1120,10 +1146,13 @@ what the computer sends for the same edit, and a test holds it there.
   - *THE COMPUTER NEVER SENT `gridEdit`.* ForgeFX's drivers carry it, but
     the capabilities it serves are a curated subset that leaves it out, so
     the phone says it itself from what is there (lib/chainShape
-    `withGridEdit`, asked in lib/device `detect`): `gridRouting` (gen-3
-    and Axe-Fx II) or a linear unit that is not a VP4 (the AM4); the demo
-    every unit but its VP4. A wire that says `gridEdit` itself is believed
-    as it is.
+    `withGridEdit`, asked in lib/device `detect`): `gridRouting` (the
+    gen-3 units) or a linear unit of FOUR slots that is not a VP4 (the
+    AM4); the demo every unit but its VP4. NOT an Axe-Fx II (its driver
+    places blocks and lays no cables, so a row could not be joined: a no
+    until the plan can build a grid row with no cables) and NOT an Axe-Fx
+    Standard or Ultra (linear, 48 slots, no placing at all). A wire that
+    says `gridEdit` itself is believed as it is.
   - *OVER BLUETOOTH IT IS THE SAME SCREENS.* They reach the unit through
     five calls of lib/device and nothing else (blockCatalog, gridCells,
     placeBlock, clearCell, setCable) and never ask which wire is under
@@ -1138,7 +1167,12 @@ what the computer sends for the same edit, and a test holds it there.
     am4.ts placedBlocks answers slots 1 to 4 and the Bluetooth wire the
     same, so through the computer the phone's chain editor called slot 1
     "slot 2", and taking out the block in the first slot cleared the
-    second. Not the demo, whose AM4 counts from zero.
+    second. Not the demo, whose AM4 counts from zero. ITS ROW IS PUT TO
+    ZERO TOO: both answer `row: 1`, a linear unit's one row is row 0, and
+    left at 1 the chain editor drew a second, empty lane over a full AM4,
+    where an Add went over the block already in that slot. The browser's
+    zeroBasedChain moves the column only: check it for the same lane the
+    next time the browser's chain editor is opened (a computer release).
   - *NOT PROVEN ON A UNIT:* nobody has built a chain this way on a real
     unit yet, nor run its Undo; on a six-row unit (FM9, Axe-Fx III) with
     the Input on the top row it builds there but lays no cables (that row's
@@ -1303,26 +1337,34 @@ where the chain is open).
 - **A write asked before a scene or preset change is never sent after it**
   (`movedSince`, and `moved()` drops the ones waiting), and grid jobs go
   one at a time (`inGrid`).
-- **TWO WAYS TO READ THE GRID, and the fast one is believed only where the
-  slow one has borne it out on that connection** (gen3-grid `gridProof`,
-  whose comment has all of it). The preset whole (the edit buffer, the
-  read the computer app uses, proven on all three units) is 24,680 bytes
-  from an FM3 or FM9 and 49,336 from an Axe-Fx III: eight seconds and
-  sixteen down an adapter on the MIDI jacks. The live read (01 2E 00) is
-  one answer of 755 bytes. The codec reads the live answer two ways (an
-  FM3's, an FM9's) which turn out to be one layout, its FM9 reading takes
-  only seven of the twelve bits of a block's id (so it cannot name a
-  Mixer or a NAM), and an Axe-Fx III's live answer has never been
-  captured. So a grid read takes BOTH until the two have agreed on where
-  the blocks are and on which bit is which row's cable, which takes a
-  preset with a cable in it: the first chain built on a connection is
-  read from the preset before and after, and the live read takes over
-  from the next. One disagreement and the live read is not used again on
-  that connection. The log has the live answer itself once a connection
-  and what was borne out ("the live grid read agrees with the preset: …",
-  or "DISAGREES … at row r, column c"): READ THOSE LINES FIRST in his
-  first log from each unit, they settle the layout on units nobody has
-  read it from.
+- **A write is taken only for the chain as it was last read** (bleWire
+  `chainSeen`): the grid has to have been read since the last scene or
+  preset change, or a place or a cable is refused with nothing sent. A
+  plan is many requests, each its own, and a footswitch can step the unit
+  to another preset between any two; without this the rest of a build
+  went into that preset. And the block is asked about again between its
+  two messages (select, then put), and an AM4's slots read back after a
+  move are not taken as the write's answer.
+- **TWO WAYS TO READ THE GRID, AND THE FAST ONE IS NOT BELIEVED YET.** The
+  preset whole (the edit buffer, the read the computer app uses, proven on
+  all three units through a computer) is 24,680 bytes from an FM3 or FM9
+  and 49,336 from an Axe-Fx III: eight seconds and sixteen down an adapter
+  on the MIDI jacks, a moment on a USB cable. EVERY GRID THE APP ACTS ON
+  IS THAT ONE. The live read (01 2E 00, one answer of 755 bytes) is taken
+  beside it and laid against it in the log, and nothing more, until a
+  unit's log has shown what it says: its layout is the codec's reading of
+  two recordings, an Axe-Fx III's has never been captured, and the rule it
+  would be believed by (gen3-grid `gridProof`, kept and tested behind the
+  wire's `liveGrid`, which nothing in the app hands it) can be satisfied
+  by one chain on one row. gen3-grid's own comment lists what that rule
+  needs before it is switched on. So a build over an adapter on the MIDI
+  jacks reads the whole preset before and after: slow, and the unit's own
+  answer. The log has the live answer itself once a connection (written
+  BEFORE the preset is asked for, so it is there even from a unit that
+  does not send its preset down that wire) and what the two agreed on,
+  with the preset's own grid beside it ("the live grid read agrees with
+  the preset: … (the preset has: r2c1 37, …)", or "DISAGREES … at row r,
+  column c"): READ THOSE LINES FIRST in his first log from each unit.
 - **The switch** is `CHAIN_OVER_BLUETOOTH_FOR_EVERYONE` in features.js,
   false (lib/bluetooth `chainOverBluetooth`, handed to the wire as
   `chain`, which also wants Edit open). OPENING IT TO CUSTOMERS IS A STORE

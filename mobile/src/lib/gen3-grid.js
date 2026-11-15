@@ -57,16 +57,27 @@
  * numbered over 127 (a Mixer, a NAM), and where the six rows' cable bits sit
  * is not something anybody has checked.
  *
- * SO THE LIVE READ IS BELIEVED ONLY WHERE THE DUMP HAS BORNE IT OUT ON THIS
- * CONNECTION (`gridProof`, kept by bleWire): a grid read takes both, until
- * the two have agreed on where the blocks are and which they are AND on
- * which bit is which row's cable, which takes a preset with a cable in it
- * (so the first chain built on a connection is read from the dump before
- * and after, and the live read takes over from the next). A live answer
- * holding a shunt, before one has been read both ways, is not guessed at:
- * the dump is read again, and that settles what a shunt's number is as a
- * block id for the rest of the connection. One disagreement on where a
- * block is, and the live read is not used again.
+ * SO THE LIVE READ IS NOT BELIEVED YET, ANYWHERE. As the app makes the wire
+ * (bleWire `liveGrid`, which nothing hands it), every grid the app acts on
+ * is the dump's. The live read is taken beside it and laid against it in
+ * the log (`gridProof`), so a unit's own log settles the layout, and is
+ * not asked again once it has (or after two silences).
+ *
+ * `gridProof` and `gridFromLive` are the rule it WOULD be believed by, kept
+ * and tested for the day it is switched on: where the dump has borne it out
+ * on that connection, on where the blocks are and which they are AND on
+ * which bit is which row's cable, with a shunt's number settled the same
+ * way and one disagreement ending it. BEFORE THAT DAY the rule needs more
+ * than it has, as an independent read found (15 November 2026): a chain
+ * along ONE row fits exactly one "which bit is the top row" whatever the
+ * unit's real order, so the cable rule wants cables out of two rows; ONE
+ * shunt agrees with itself, so a shunt's number wants two shunts in
+ * different columns; block ids over 127 want a proof that had one in it (an
+ * FM9's decode reads seven bits of twelve); the codec's FM9 reading puts
+ * the cable byte three bits lower than its FM3 one, which this search
+ * cannot reach; and once proven, nothing here checks it again, so the
+ * preset should still be read after a write. A wrong shunt id from a live
+ * read would be SENT, by an Undo putting a bare wire back.
  *
  * Nothing here is Fractal's code or anybody else's: the container (three
  * bytes to a 16-bit word, a CRC, a Huffman-coded body) is unpacked by the

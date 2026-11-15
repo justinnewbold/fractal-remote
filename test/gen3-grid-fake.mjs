@@ -105,8 +105,10 @@ export function makeDump(model, cells, { name = 'TEST', chunks = MODEL_CHUNKS[mo
 /**
  * The frame a unit answers the live grid read with, holding this grid.
  * `rowBit` is the bit of a cell's cable byte that names the top row (4 is
- * what an FM3 was seen to use); `shuntBase` what a shunt's block id is over
- * its number in this answer.
+ * what an FM3 was seen to use; the 2 a six-row unit gets here is a guess
+ * nobody has checked on one, and not where the codec's FM9 reading puts
+ * its cable byte); `shuntBase` what a shunt's block id is over its number
+ * in this answer.
  */
 export function makeLive(model, cells, { rowBit = model === 0x11 ? 4 : 2, shuntBase = 1024, total = 755 } = {}) {
   const rows = MODEL_ROWS[model]

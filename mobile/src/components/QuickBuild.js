@@ -3,7 +3,7 @@ import { Image, Pressable, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { blockCatalog, clearCell, gridCells, placeBlock, setCable } from '../lib/device'
-import { beginChainWrite, endChainWrite, getState, refreshBlocks } from '../lib/rig'
+import { beginChainWrite, endChainWrite, followPresetAfterChainWrite, getState, leftPresetInChainWrite, refreshBlocks } from '../lib/rig'
 import { logDebug } from '../lib/debugLog'
 import { gridShape } from '../lib/grid-plan'
 import { UNDO_STALE, runPlan, stepWords } from '../lib/split-chain'
@@ -16,6 +16,7 @@ import { addStarterHere, keepPaletteHere, roomForStarterHere, useStarterChains }
 import {
   BACK_TO_PLAY,
   BLOCKS_HEAD,
+  BLOCKS_NOT_READ,
   CANCEL_BUTTON,
   CHAIN_NONE_YET,
   CHECKING_EMPTY,
@@ -30,18 +31,22 @@ import {
   MORE_CHIP,
   NAME_LABEL,
   NOTHING_SAVED,
+  NOTHING_SAVED_ON_UNIT,
   QUICK_BUILD_HOW,
   QUICK_BUILD_SUB,
   QUICK_BUILD_TITLE,
   READING_BACK,
   READING_BLOCKS,
+  PRESET_MOVED,
   READ_FAILED,
   SAVE_PRESET,
   STARTERS_FULL,
   STARTER_NAME_MAX,
+  TRY_AGAIN,
   UNDOING,
   UNDO_LABEL,
   YOUR_CHAIN,
+  buildBlocked,
   buildLabel,
   buildRoom,
   chainFull,
@@ -55,11 +60,15 @@ import {
   UNDO_NOT_READ,
   planBuild,
   resolveChain,
+  sentBlocks,
   stillIn,
   stoppedLine,
   undoMissedLine,
+  undoNotJoinedLine,
+  undoStale,
   undoSteps,
   undoSub,
+  undoUnjoined,
   undoneLine,
   whatLanded
 } from '../lib/starter-chains'
@@ -277,9 +286,11 @@ const startFrom = (blocks, palette, room) => {
  * nothing but the ends (shared isBareChain); the sheet stays open past it,
  * since the build is what ends it. `chain` is the chain read, for the room
  * the row has before the grid is read; `pending` is Edit's own "there is
- * something to save here", which is where Save is offered.
+ * something to save here", which is where Save is offered; `saves` whether
+ * the app has a Save at all on this connection (over Bluetooth it may not),
+ * so the line under the sheet never points at a button that is not there.
  */
-export default function QuickBuild({ bare, caps, chain, pending = false, onSave, onPlay }) {
+export default function QuickBuild({ bare, caps, chain, pending = false, saves = true, onSave, onPlay }) {
   const starters = useStarterChains()
   const [palette, setPalette] = useState(null)
   const [open, setOpen] = useState(false)
@@ -301,12 +312,23 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
 
   const shape = gridShape(caps)
   const room = palette ? Math.max(0, buildRoom({ cells: [], shape, palette, blocks: chain })) : 0
+  /* Why nothing can be built on this preset at all (its Input and Output on different rows, no free cell between them), in words: said in place of a picker with every block greyed out over an empty row. */
+  const blocked = palette ? buildBlocked({ cells: [], shape, palette, blocks: chain }) : null
 
-  /* The unit's own list, once for each unit (a new link brings new capabilities), and kept for a picker with no unit linked. */
-  useEffect(() => setPalette(null), [caps])
+  /*
+   * The unit's own list, once for each unit (a new link brings new
+   * capabilities), and kept for a picker with no unit linked. A read that
+   * FAILED is not a unit with no blocks: the list stays unread (null), the
+   * page says the unit did not answer, and Try again asks once more.
+   */
+  const [listFailed, setListFailed] = useState(false)
+  useEffect(() => {
+    setPalette(null)
+    setListFailed(false)
+  }, [caps])
   const wanted = bare || open
   useEffect(() => {
-    if (!wanted || palette !== null) return undefined
+    if (!wanted || palette !== null || listFailed) return undefined
     let stop = false
     ;(async () => {
       try {
@@ -314,17 +336,19 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
         if (stop) return
         setPalette(list)
         keepPaletteHere(list)
-      } catch {
-        if (!stop) setPalette([])
+      } catch (err) {
+        logDebug('chain', 'quick build: block list', err?.message || String(err))
+        if (!stop) setListFailed(true)
       }
     })()
     return () => {
       stop = true
     }
-  }, [wanted, palette])
+  }, [wanted, palette, listFailed])
 
   const openWith = (blocks) => {
-    const start = startFrom(blocks || [], palette || [], room)
+    /* Against a list that was read, and a preset that can be built on: otherwise every block would be "missing" or "left out" for a reason that is not the unit's. */
+    const start = palette && !blocked ? startFrom(blocks || [], palette, room) : { picks: [], missing: [], left: [] }
     setPicks(start.picks)
     setSaid(start.missing.length || start.left.length ? [start.missing.length ? missingLine(start.missing) : null, start.left.length ? leftLine(start.left) : null].filter(Boolean).join(' ') : null)
     setDone(null)
@@ -345,18 +369,39 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
     setOpen(false)
   }
 
+  /*
+   * A plan is many requests, and the unit can be stepped to another preset
+   * between any two (a footswitch). So each step asks first whether the
+   * unit is still on the preset the plan was made for (`n`), and the first
+   * that finds it is not stops the run (runPlan stops at a throw) and says
+   * so in `gone`. The preset on the screen is not enough to go by: while
+   * the chain is being written its news is noted and not followed, so the
+   * rig is asked, and it asks the unit where news has come in
+   * (leftPresetInChainWrite). The wire holds the same over Bluetooth, sooner
+   * than the screen can know (bleWire chainSeen).
+   */
+  const held = (n, gone, call) => async (...args) => {
+    if (gone.moved || ofNumber() !== n || (await leftPresetInChainWrite(n))) {
+      gone.moved = true
+      throw new Error(PRESET_MOVED)
+    }
+    return call(...args)
+  }
+  /* After a run: whether the unit is on another preset now. */
+  const leftFor = async (n, gone) => gone.moved || ofNumber() !== n || (await leftPresetInChainWrite(n))
+
   /* The five calls, with each step said while it goes and written in the log. */
-  const wire = (plan) => ({
-    placeBlock: (row, col, blockId) => {
+  const wire = (plan, n, gone) => ({
+    placeBlock: held(n, gone, (row, col, blockId) => {
       const step = plan.steps.find((s) => s.kind === 'place' && s.row === row && s.col === col && s.blockId === blockId)
       if (alive.current) setBusy(placingLine(step?.name))
       return placeBlock(row, col, blockId)
-    },
-    clearCell: (row, col) => clearCell(row, col),
-    setCable: (srcRow, srcCol, destRow, connect) => {
+    }),
+    clearCell: held(n, gone, (row, col) => clearCell(row, col)),
+    setCable: held(n, gone, (srcRow, srcCol, destRow, connect) => {
       if (alive.current && connect) setBusy(JOINING)
       return setCable(srcRow, srcCol, destRow, connect)
-    }
+    })
   })
 
   const logSteps = (label, steps, res) =>
@@ -386,15 +431,26 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
       return
     }
     const n = ofNumber()
+    const gone = { moved: false }
     beginChainWrite()
     let res
     try {
-      res = await runPlan(plan.steps, wire(plan))
+      res = await runPlan(plan.steps, wire(plan, n, gone))
     } catch (err) {
       res = { ok: false, done: 0, failed: plan.steps[0], error: err?.message || String(err) }
     }
     logSteps('quick build', plan.steps, res)
+    const left = await leftFor(n, gone)
     endChainWrite({ refresh: false })
+    /* On another preset now: the chain that would be read back is not the one this was built in, so nothing is said of it and no Undo is offered. The news the chain write noted is followed, so the screen shows the preset the unit is on. */
+    if (left) {
+      followPresetAfterChainWrite()
+      logDebug('chain', 'quick build', 'the preset changed part-way; nothing read back')
+      if (!alive.current) return
+      setBusy(null)
+      setSaid(PRESET_MOVED)
+      return
+    }
     if (alive.current) setBusy(READING_BACK)
     await refreshBlocks({ quiet: true })
     /* Null when the unit did not answer: what landed is then not known, which is not the same as nothing landing (whatLanded). */
@@ -414,7 +470,9 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
       landed,
       stopped: res.ok ? null : stoppedLine(res.failed, res.error),
       undo: undo.length ? undo : null,
-      count: landed.landed.filter((p) => !p.end).length,
+      /* What Undo says it takes out: the blocks the read back shows, or where it did not come, the ones that were sent. */
+      count: landed.unread ? sentBlocks(plan, res.done) : landed.landed.filter((p) => !p.end).length,
+      ran: res.done,
       n
     })
   }
@@ -428,15 +486,50 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
       return
     }
     setBusy(UNDOING)
+    /*
+     * The chain as it is now, before anything is taken out: a block swapped
+     * into one of these cells since (at the unit, or from the computer's
+     * window) is not the build's to remove (undoStale). Not read, not run:
+     * the Undo stays, to be tapped again.
+     */
+    let now
+    try {
+      now = await gridCells()
+    } catch (err) {
+      logDebug('chain', 'quick build undo: grid read', err?.message || String(err))
+      if (!alive.current) return
+      setBusy(null)
+      setUndoSaid({ bad: true, text: READ_FAILED })
+      return
+    }
+    if (ofNumber() !== d.n || undoStale(d.plan, now, d.ran)) {
+      logDebug('chain', 'quick build undo', 'the chain has changed since; not run')
+      if (!alive.current) return
+      setBusy(null)
+      setDone({ ...d, undo: null })
+      setUndoSaid({ bad: true, text: UNDO_STALE })
+      return
+    }
+    const gone = { moved: false }
     beginChainWrite()
     let res
     try {
-      res = await runPlan(d.undo, { setCable, placeBlock, clearCell })
+      res = await runPlan(d.undo, { setCable: held(d.n, gone, setCable), placeBlock: held(d.n, gone, placeBlock), clearCell: held(d.n, gone, clearCell) })
     } catch (err) {
       res = { ok: false, done: 0, failed: d.undo[0], error: err?.message || String(err) }
     }
     logSteps('quick build undo', d.undo, res)
+    const left = await leftFor(d.n, gone)
     endChainWrite({ refresh: false })
+    if (left) {
+      followPresetAfterChainWrite()
+      logDebug('chain', 'quick build undo', 'the preset changed part-way; nothing read back')
+      if (!alive.current) return
+      setBusy(null)
+      setDone({ ...d, undo: null })
+      setUndoSaid({ bad: true, text: PRESET_MOVED })
+      return
+    }
     await refreshBlocks({ quiet: true })
     /* Null when the unit did not answer: then nothing is said to be out. */
     let after = null
@@ -446,13 +539,17 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
       logDebug('chain', 'quick build undo: read back', err?.message || String(err))
     }
     const still = after === null ? [] : stillIn(d.plan, after)
+    /* The blocks out is half of it: the wiring the preset had before has to be back too, or it is a preset with no sound. */
+    const unjoined = after === null ? null : undoUnjoined(d.plan, after, d.ran)
     const words = !res.ok
       ? { bad: true, text: stoppedLine(res.failed, res.error) }
       : after === null
         ? { bad: true, text: UNDO_NOT_READ }
         : still.length
           ? { bad: true, text: undoMissedLine(still.map((p) => p.name)) }
-          : { bad: false, text: undoneLine(d.count) }
+          : unjoined !== null
+            ? { bad: true, text: undoNotJoinedLine(unjoined) }
+            : { bad: false, text: undoneLine(d.count) }
     logDebug('chain', 'quick build undo', words.text)
     if (!alive.current) return
     setBusy(null)
@@ -485,7 +582,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
         <Press label={KEEP_STARTER} sub={KEEP_STARTER_SUB} disabled={!picks.length || !!busy} onPress={() => setNaming(true)} />
       )}
       {kept && !kept.bad ? <Text style={{ color: color.ok, fontSize: font.small }}>{kept.text}</Text> : null}
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>{NOTHING_SAVED}</Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small }}>{saves ? NOTHING_SAVED : NOTHING_SAVED_ON_UNIT}</Text>
     </View>
   )
 
@@ -494,7 +591,14 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
       {bare ? (
         <View style={{ gap: space.md }}>
           <Text style={{ color: color.silkDim, fontSize: font.body }}>{EMPTY_LINE}</Text>
-          <Press label={QUICK_BUILD_TITLE} sub={QUICK_BUILD_SUB} tone="signal" on height={TAP + 16} disabled={palette === null} onPress={() => openWith([])} />
+          {listFailed ? (
+            <>
+              <Note tone="warn">{BLOCKS_NOT_READ}</Note>
+              <Press label={TRY_AGAIN} onPress={() => setListFailed(false)} />
+            </>
+          ) : null}
+          {blocked ? <Note tone="warn">{blocked}</Note> : null}
+          <Press label={QUICK_BUILD_TITLE} sub={QUICK_BUILD_SUB} tone="signal" on height={TAP + 16} disabled={palette === null || !!blocked} onPress={() => openWith([])} />
           <Heading>{FROM_A_CHAIN}</Heading>
           {starters.map((c) => (
             <Pressable
@@ -502,7 +606,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
               accessibilityRole="button"
               accessibilityLabel={`${c.name}${c.isDefault ? ', the default' : ''}`}
               accessibilityHint="Opens Quick build with these blocks picked"
-              disabled={palette === null}
+              disabled={palette === null || !!blocked}
               onPress={() => openWith(c.blocks)}
               style={{ gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel }}
             >
@@ -547,13 +651,20 @@ export default function QuickBuild({ bare, caps, chain, pending = false, onSave,
                 }}
               />
             ) : null}
-            <Text style={{ color: color.silkDim, fontSize: font.small }}>{NOTHING_SAVED}</Text>
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{saves ? NOTHING_SAVED : NOTHING_SAVED_ON_UNIT}</Text>
           </View>
         ) : (
           <View style={{ gap: space.md }}>
             {said ? <Note tone="warn">{said}</Note> : null}
-            {palette === null ? (
+            {palette === null && listFailed ? (
+              <>
+                <Note tone="warn">{BLOCKS_NOT_READ}</Note>
+                <Press label={TRY_AGAIN} onPress={() => setListFailed(false)} />
+              </>
+            ) : palette === null ? (
               <Text style={{ color: color.silkDim, fontSize: font.body }}>{READING_BLOCKS}</Text>
+            ) : blocked ? (
+              <Note tone="warn">{blocked}</Note>
             ) : (
               <ChainPicker palette={palette} picks={picks} onPicks={setPicks} room={room} linear={shape.linear} />
             )}

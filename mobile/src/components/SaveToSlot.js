@@ -208,6 +208,16 @@ export function useSaveToSlot() {
     notHere,
     can: !saving && Number.isInteger(preset?.number),
     disarm: () => setArmed(false),
+    /* The warning brought up and nothing written, whatever state Save was in: for a button elsewhere that stands in for the first tap (Quick build's Save the preset). `save` on a Save armed earlier would write at once, on a tap that never showed its warning. */
+    arm: () => {
+      if (notHere) {
+        setArmed(false)
+        setSaid({ tone: 'warn', text: VP4_NO_SAVE })
+        return
+      }
+      setArmed(true)
+      setSaid(null)
+    },
     dismiss: () => setSaid(null)
   }
 }

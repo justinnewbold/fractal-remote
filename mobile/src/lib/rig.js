@@ -720,6 +720,7 @@ export function handleEvent(event) {
   if (ownEcho(kind, kind === 'scene' ? event.index : undefined)) return
   if (chainWrites) {
     chainAsked = true
+    if (kind === 'preset') chainPresetNews = true
     return
   }
   if (kind === 'scene') followScene()
@@ -978,12 +979,50 @@ async function askUnitsPreset(run, how) {
  */
 let chainWrites = 0
 let chainAsked = false
+/* Preset news that came while the chain was being written, and was noted rather than followed (above). */
+let chainPresetNews = false
 export function beginChainWrite() {
   /* Every add, move and remove comes through here, which is why the mark
      goes here rather than on each of them. */
   noteEdited()
   chainChanged()
+  if (!chainWrites) chainPresetNews = false
   chainWrites += 1
+}
+
+/**
+ * WHETHER THE UNIT HAS LEFT PRESET `n` WHILE THE CHAIN WAS BEING WRITTEN.
+ *
+ * A plan of many writes (Quick build) asks this between its steps. The
+ * preset on the screen cannot say: while a chain write is held its news is
+ * noted and not followed, so `state.preset` still names the preset the
+ * plan began on after a footswitch has stepped the unit to the next. So
+ * where preset news has come in, the unit itself is asked which preset it
+ * is on (one small read; an AM4 says "preset" for its own edits, so the
+ * news alone is not a move). No news, nothing asked. A unit that does not
+ * answer is not taken to have moved, and is asked again at the next step.
+ */
+export async function leftPresetInChainWrite(n) {
+  if (!chainPresetNews) return false
+  let fresh = null
+  try {
+    fresh = await device.currentPreset()
+  } catch {
+    return false
+  }
+  const number = fresh?.number
+  if (!Number.isInteger(number)) return false
+  if (number === n) {
+    chainPresetNews = false
+    return false
+  }
+  return true
+}
+
+/** The preset news a chain write noted and did not follow, followed now: what the writer calls once it has found the unit on another preset. */
+export function followPresetAfterChainWrite() {
+  chainPresetNews = false
+  return followPresetNews()
 }
 export function endChainWrite({ refresh = true } = {}) {
   if (!chainWrites) return

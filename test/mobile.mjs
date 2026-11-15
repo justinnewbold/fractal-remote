@@ -2130,7 +2130,30 @@ export function run(test) {
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     /* Every announcement that is not this phone's own echo is held while the
        chain is being written, whatever it would otherwise have read. */
-    assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
+    assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true if \(kind === 'preset'\) chainPresetNews = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
+    /*
+     * Held, and for a preset change NOTED: a plan of many writes (Quick build)
+     * asks between its steps whether the unit has left the preset it began on,
+     * and the preset on screen cannot say, being held. No news, nothing asked;
+     * news, and the unit itself is asked (an AM4 says "preset" for its own
+     * edits); the same number clears the note; a unit that does not answer is
+     * not taken to have moved.
+     */
+    const rigCode = rig.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(rigCode, /export function beginChainWrite\(\) \{ noteEdited\(\) chainChanged\(\) if \(!chainWrites\) chainPresetNews = false chainWrites \+= 1 \}/)
+    assert.match(rigCode, /export async function leftPresetInChainWrite\(n\) \{ if \(!chainPresetNews\) return false let fresh = null try \{ fresh = await device\.currentPreset\(\) \} catch \{ return false \} const number = fresh\?\.number if \(!Number\.isInteger\(number\)\) return false if \(number === n\) \{ chainPresetNews = false return false \} return true \}/)
+    assert.match(rigCode, /export function followPresetAfterChainWrite\(\) \{ chainPresetNews = false return followPresetNews\(\) \}/)
+    const qb = read('mobile/src/components/QuickBuild.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(qb, /const held = \(n, gone, call\) => async \(\.\.\.args\) => \{ if \(gone\.moved \|\| ofNumber\(\) !== n \|\| \(await leftPresetInChainWrite\(n\)\)\) \{ gone\.moved = true throw new Error\(PRESET_MOVED\) \} return call\(\.\.\.args\) \}/, 'a step of a build goes without asking whether the unit is still on its preset')
+    assert.match(qb, /placeBlock: held\(n, gone, [\s\S]*clearCell: held\(n, gone, [\s\S]*setCable: held\(n, gone, /)
+    assert.match(qb, /runPlan\(d\.undo, \{ setCable: held\(d\.n, gone, setCable\), placeBlock: held\(d\.n, gone, placeBlock\), clearCell: held\(d\.n, gone, clearCell\) \}\)/, 'an Undo’s steps are not held to the preset')
+    /* Asked while the chain write is still held, followed once it is not, and then nothing is read back or said of the other preset's chain. */
+    assert.equal((qb.match(/const left = await leftFor\((?:d\.)?n, gone\) endChainWrite\(\{ refresh: false \}\) if \(left\) \{ followPresetAfterChainWrite\(\)/g) || []).length, 2)
+    assert.match(qb, /if \(left\) \{ followPresetAfterChainWrite\(\) logDebug\('chain', 'quick build', 'the preset changed part-way; nothing read back'\) if \(!alive\.current\) return setBusy\(null\) setSaid\(PRESET_MOVED\) return \} if \(alive\.current\) setBusy\(READING_BACK\)/)
+    /* Save the preset from the result only ever arms the save. */
+    assert.match(read('mobile/src/screens/Edit.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' '), /const saveFromQuickBuild = \(\) => \{ saveTo\.arm\(\)/, 'a Save armed before the build is confirmed by a tap that never showed its warning')
+    assert.match(read('mobile/src/components/SaveToSlot.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' '), /arm: \(\) => \{ if \(notHere\) \{ setArmed\(false\) setSaid\(\{ tone: 'warn', text: VP4_NO_SAVE \}\) return \} setArmed\(true\) setSaid\(null\) \},/)
+
     /* And the chain read another client's change waits for is held the same way. */
     assert.match(rig, /gridTimer = null syncChainBusy\(\) if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) readOnceCopyRunsOut\(\) \}/, 'announcements held during a write are lost, or read twice')
