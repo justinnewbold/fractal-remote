@@ -253,7 +253,7 @@ export function run(test) {
     assert.equal(w.useAndBackSub(2), 'Plays it in NAM 2 and returns to its knobs')
     assert.equal(w.getSays('Plexi', { n: 2, held: true, back: 'anything else' }), 'Get Plexi: puts it on the Axe-Fx III, plays it in NAM 2 and goes back to its knobs')
     /* The sheet's own note while the page is up says what it is, in the picker's own plain words. */
-    assert.match(picker, /note=\{browsing && library\.offered \? 'Captures from TONE3000\. One you preview or get plays on the channel this block is on\.' : 'The captures on the unit\. The one picked plays on the channel this block is on\.'\}/)
+    assert.match(picker, /note=\{browsing && library\.offered \? 'Captures from TONE3000\. One you preview or get plays on the channel this block is on\.' : 'The captures on the unit, newest first\. The one picked plays on the channel this block is on\.'\}/)
   })
 
   test('tone3000 quick: Edit reads the block again after the capture list’s page changed its capture: no call dropped, and the unit’s own word believed where the read fails', async () => {
