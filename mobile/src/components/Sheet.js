@@ -73,7 +73,7 @@ let lastFrame = null
  * (components/Knob), and the sheet must not scroll under it. False, which
  * every other sheet is, and it scrolls as it always did.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, still = false, scrollKey = undefined, children }) {
+export default function Sheet({ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -145,7 +145,17 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
               borderColor: paneRim(),
               boxShadow: color.sheetLift,
               paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
-            }, wide ? { width: '100%', maxWidth: wide, alignSelf: 'center' } : null]}
+            }, wide ? { width: '100%', maxWidth: wide, alignSelf: 'center' } : null,
+            /*
+             * `fill`: as high as it may be, whatever is in it. A sheet is as
+             * tall as its rows, from the bottom of the screen up; one with a
+             * find box in its head (the chain editor's list of blocks) shrank
+             * as the rows were narrowed, until the box being typed in and
+             * the one row it had found were both behind the keyboard. Held
+             * at its full height, the head stays at the top of the screen,
+             * over any keyboard.
+             */
+            fill ? { height: highest } : null]}
           >
             {/* The grab handle. It does not drag — it says which way this came
                 from and which way it goes, which is most of what it is for. */}
@@ -202,6 +212,8 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
               key={scrollKey}
               contentContainerStyle={{ padding: space.lg, paddingTop: head ? space.sm : space.lg, gap: space.md }}
               keyboardShouldPersistTaps="handled"
+              /* In a sheet that fills the screen, a drag on the rows puts the keyboard down, so the rows under it can be reached. */
+              keyboardDismissMode={fill ? 'on-drag' : 'none'}
               scrollEnabled={!still}
             >
               {children}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'
 
 import { color, space } from '../lib/theme'
@@ -14,7 +14,9 @@ import Sheet from './Sheet'
  * One button, its name over the block it is on, as a block's list settings
  * are drawn (components/BlockSettings). A tap brings the list up over the
  * page in the app's sheet: the find box stays at the top, the rows scroll
- * under it, and nothing on the page behind moves. A tap on a row picks it
+ * under it, and nothing on the page behind moves. The sheet is held at its
+ * full height (`fill`), so a search that leaves one row does not drop the
+ * find box and that row behind the keyboard. A tap on a row picks it
  * and shuts the list.
  *
  * It draws and asks; what a pick does is the editor's (`onPick`): put the
@@ -47,8 +49,22 @@ export default function BlockMenu({ palette, kinds, chosen = null, title, note =
    * Taken off the page with its list still up (the row filled while it was
    * open, so the words took the menu's place): the keeper is told the list
    * is down, or the next menu drawn under that card would come up by itself.
+   *
+   * ONLY IF ITS OWN LIST WAS UP. A menu left shut under one card goes when
+   * another card's Add is tapped, and that tap has just told the keeper the
+   * list is up, for the other card: told "down" by the menu going, the list
+   * the tap asked for never came.
    */
-  useEffect(() => () => onUp?.(false), [onUp])
+  const wasUp = useRef(false)
+  useEffect(() => {
+    wasUp.current = open
+  })
+  useEffect(
+    () => () => {
+      if (wasUp.current) onUp?.(false)
+    },
+    [onUp]
+  )
   const picked = pickedOf(palette, chosen)
   const rows = blocksListed(palette, kinds, find)
   const close = () => {
@@ -74,6 +90,7 @@ export default function BlockMenu({ palette, kinds, chosen = null, title, note =
         title={title}
         note={note}
         tall
+        fill
         head={
           <TextInput
             value={find}

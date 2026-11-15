@@ -14,7 +14,7 @@
  * comes up by itself; and that a pick still does what it did.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const code = (s) => s.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
@@ -102,7 +102,21 @@ export function run(test) {
     assert.match(menu, /<Press label=\{label\} sub=\{menuSaid\(picked\)\} height=\{52\} disabled=\{disabled\} accessibilityLabel=\{menuLabel\(label, picked\)\} onPress=\{\(\) => \{ setFind\(''\) setOpen\(true\) \}\} \/>/)
     assert.ok(!/Pressable|icon=/.test(menu))
     /* The list is the app's sheet, over the page: nothing under it moves, it scrolls by itself, and it is tall, for a list this long. */
-    assert.match(menu, /<Sheet open=\{open\} onClose=\{close\} title=\{title\} note=\{note\} tall head=\{ <TextInput /)
+    assert.match(menu, /<Sheet open=\{open\} onClose=\{close\} title=\{title\} note=\{note\} tall fill head=\{ <TextInput /)
+    /*
+     * HELD AT ITS FULL HEIGHT (`fill`). A sheet is as tall as its rows, up
+     * from the bottom of the screen: a search that left one row shrank it
+     * until the find box and that row were both behind the keyboard. Its
+     * full height keeps the head at the top of the screen, and a drag on
+     * the rows puts the keyboard down, so the rows under it can be reached.
+     */
+    const whole = flat(code(read('mobile/src/components/Sheet.js')))
+    assert.match(whole, /const highest = tall \? Math\.max\(height \* 0\.8, height - Math\.max\(top, STATUS_AT_LEAST\) - GLASS\) : height \* 0\.8/)
+    assert.match(whole, /fill \? \{ height: highest \} : null\]\}/)
+    assert.match(whole, /keyboardDismissMode=\{fill \? 'on-drag' : 'none'\}/)
+    /* No other sheet asked for it: every other sheet is as tall as what is in it, as it was. */
+    const askers = ['mobile/src/components', 'mobile/src/screens'].flatMap((dir) => readdirSync(new URL(`../${dir}/`, import.meta.url)).filter((f) => f.endsWith('.js')).map((f) => `${dir}/${f}`)).filter((f) => /<Sheet\b[^>]*\bfill\b/.test(flat(code(read(f)))))
+    assert.deepEqual(askers, ['mobile/src/components/BlockMenu.js'])
     /* The find box is the sheet's head, which stays while the rows scroll under it (components/Sheet). */
     assert.match(menu, /head=\{ <TextInput value=\{find\} onChangeText=\{setFind\} placeholder=\{FIND_A_BLOCK\} placeholderTextColor=\{color\.silkFaint\} autoCorrect=\{false\} autoCapitalize="none" accessibilityLabel="Find a block to add" style=\{fieldLook\} \/> \}/)
     const sheet = flat(code(read('mobile/src/components/Sheet.js')))
@@ -130,8 +144,15 @@ export function run(test) {
     assert.match(menu, /const \[own, setOwn\] = useState\(false\) const open = onUp \? !!up : own const setOpen = onUp \|\| setOwn/)
     /* Never up because it was drawn: nothing starts it open. */
     assert.ok(!/startOpen|useState\(true\)|useState\(!!/.test(menu), 'a menu comes up by being drawn')
-    /* Taken off the page with its list up, it tells the keeper the list is down: the next menu under that card stays shut. */
-    assert.match(menu, /useEffect\(\(\) => \(\) => onUp\?\.\(false\), \[onUp\]\)/)
+    /*
+     * Taken off the page with its list up, it tells the keeper the list is
+     * down: the next menu under that card stays shut. ONLY IF ITS OWN LIST
+     * WAS UP: a menu left shut under one card goes when another card's Add
+     * is tapped, and told "down" by that, the list the tap had just asked
+     * for never came (found by a second reader, before it shipped).
+     */
+    assert.match(menu, /const wasUp = useRef\(false\) useEffect\(\(\) => \{ wasUp\.current = open \}\) useEffect\( \(\) => \(\) => \{ if \(wasUp\.current\) onUp\?\.\(false\) \}, \[onUp\] \)/)
+    assert.equal((menu.match(/onUp\?\.\(false\)/g) || []).length, 1, 'the keeper is told the list is down somewhere it is not guarded')
 
     /* THE CARD'S ADD: the tap that opens Add brings the list up, where the row has room; a row with none has the words in the list's place, and no list. */
     assert.match(editor, /const \[listUp, setListUp\] = useState\(false\)/)
