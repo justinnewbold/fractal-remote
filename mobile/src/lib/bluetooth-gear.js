@@ -1041,11 +1041,31 @@ export const tunerQuietLine = (unit) =>
  * a white plug there hears the phone and never the unit (its manual: "Messages
  * received at the MIDI IN port are passed automatically to the MIDI THRU
  * port").
+ *
+ * A WIDI MASTER HAS NO WHITE PLUG, AND ITS SECOND PLUG IS EASY TO LEAVE OUT.
+ * A customer's report (14 November 2026: an Axe-Fx III, an iPhone, a WIDI
+ * Master) showed the adapter connected and not one byte back, through every
+ * Connect again for twenty minutes, and all the app said was "the white one
+ * goes in MIDI OUT": the C2MIDI Pro's colours, on an adapter with two dark
+ * plugs. A WIDI Master is two pieces, the larger one with the light, which
+ * takes its power from MIDI OUT (so it connects to the phone with only that
+ * one in), and a small one on a thin cable for MIDI IN, which CME calls
+ * optional because a keyboard that only sends does not need it. This app
+ * needs both: with the small one out, the unit never hears the phone, and
+ * nothing at all comes back, which is exactly that log. So its line names
+ * its own two plugs. (What that rig really was is not known; this is the
+ * reading that fits a first setup with one adapter.)
  */
+export const isWidiMaster = (adapter) => /widi\s*master/i.test(String(adapter || ''))
 export function notAnsweringLine(unit, adapter = null) {
   const name = UNITS[unit] || 'unit'
   /* A footswitch picked as the adapter (notAnAdapter): what it is, and where to go instead. */
   if (notAnAdapter(adapter)) return `${adapterSaid(adapter)} is a MIDI footswitch, not an adapter for your ${name}. Pick the Bluetooth MIDI adapter plugged into the ${name} instead.`
+  /* Not for an FM3, which is never offered one (FM3_NEVER) and keeps its own line. */
+  if (isWidiMaster(adapter) && unit !== 'fm3') {
+    const both = `A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT${unit === 'axefx3' ? ' (not THRU)' : ''}, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug.`
+    return `WIDI Master connected, but the ${name} isn’t answering. ${both}${unit === 'axefx3' ? '' : ' And check that MIDI Thru is off.'}`
+  }
   if (unit === 'axefx3') return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
   return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`
 }

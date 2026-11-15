@@ -19,7 +19,7 @@ import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
-import { CONNECT_AGAIN } from '../lib/bluetooth-gear'
+import { CONNECT_AGAIN, notAnsweringLine } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
@@ -736,6 +736,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           cable={cable}
           /* The adapter connected and the unit silent: Connect again beside Turn off Bluetooth (not a VP4, which never answers, nor a cable). */
           quiet={!cable && bleUnit !== 'vp4' && !bleAnswered && link?.link === 'connected' && (unitState === 'missing' || unitState === 'silent')}
+          unit={bleUnit}
           onClose={() => setSaying(false)}
           onReport={onReport}
           onBluetoothPage={onBluetoothPage}
@@ -802,16 +803,29 @@ const ofAllBlocks = (s) => s.allBlocks
 /* The Bluetooth page's own button's words (screens/Bluetooth), for the way to it from the pill's note. */
 const DIFFERENT_ADAPTER = 'Use a different adapter'
 
-function Which({ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null }) {
+function Which({ link, cable = false, quiet = false, unit = null, onClose, onReport = null, onBluetoothPage = null }) {
   const adapter = link?.macName || 'the adapter'
-  /* A unit on a USB cable: the cable's words (lib/cableWords cableNote), and the same one way back to the computer, named for it. */
+  /*
+   * A unit on a USB cable: the cable's words (lib/cableWords cableNote), and
+   * the same one way back to the computer, named for it.
+   *
+   * THE ADAPTER CONNECTED AND THE UNIT SILENT (`quiet`) IS NOT "CONNECTED".
+   * A customer's Axe-Fx III never answered through their WIDI Master (14
+   * November 2026), and through twenty minutes of Connect again this note
+   * went on saying "Connected over Bluetooth, through WIDI Master
+   * Bluetooth." What to check was on the Bluetooth page, which they were
+   * not on. So here it is the page's own line (lib/bluetooth-gear
+   * notAnsweringLine: the plugs, by unit and by adapter).
+   */
   const said = cable
     ? cableNote(link)
-    : link?.link === 'connected'
-      ? `Connected over Bluetooth, through ${adapter}.`
-      : link?.link === 'joining'
-        ? `Finding ${adapter}…`
-        : 'Not connected to the Bluetooth adapter.'
+    : quiet
+      ? notAnsweringLine(unit, link?.macName)
+      : link?.link === 'connected'
+        ? `Connected over Bluetooth, through ${adapter}.`
+        : link?.link === 'joining'
+          ? `Finding ${adapter}…`
+          : 'Not connected to the Bluetooth adapter.'
   const off = cable ? CABLE_OFF : 'Turn off Bluetooth'
   /* The two buttons side by side, wrapping on a narrow screen, each its own element to a screen reader. */
   /* Each a capsule of frosted glass on the opaque strip (lib/glass glassControl): its size, padding and words as they were. */

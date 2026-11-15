@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-15",
     "day": "15 November 2026",
-    "version": "1.90.73",
+    "version": "1.90.74",
     "lines": [
+      {
+        "text": "Bluetooth: when your adapter is connected but your unit isn’t answering, the note under the pill on Play now says so, with what to check, instead of saying Connected. For a WIDI Master it names its own two plugs: the larger one in MIDI OUT and the small one in MIDI IN.",
+        "only": null
+      },
       {
         "text": "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion blocks now have their own colors on Play instead of gray. On an FM9, the Vocoder and Tone Match do too.",
         "only": null

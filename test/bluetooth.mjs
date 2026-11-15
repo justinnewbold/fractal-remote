@@ -8452,6 +8452,37 @@ export function run(test) {
     const gearWords = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gearWords.notAnsweringLine('fm9'), 'Adapter connected, but the FM9 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.')
     assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
+    /*
+     * A WIDI MASTER HAS NO WHITE PLUG, AND ITS SMALL ONE IS EASY TO LEAVE
+     * OUT. A customer's report (14 November 2026: an Axe-Fx III, an iPhone,
+     * a WIDI Master): connected, and not one byte back through twenty
+     * minutes of Connect again. "The white one" is the C2MIDI Pro's; a WIDI
+     * Master is a larger plug with the light, which powers it from MIDI OUT
+     * (so it connects with only that one in), and a small one for MIDI IN
+     * that its maker calls optional. With the small one out the unit never
+     * hears the phone. So its line names its own two plugs, by the name the
+     * phone knows the adapter by, on every unit it is offered for.
+     */
+    const master = 'WIDI Master Bluetooth'
+    assert.equal(
+      gearWords.notAnsweringLine('axefx3', master),
+      'WIDI Master connected, but the Axe-Fx III isn’t answering. A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT (not THRU), and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug.'
+    )
+    for (const [unit, name] of [['am4', 'AM4'], ['fm9', 'FM9']]) {
+      assert.equal(
+        gearWords.notAnsweringLine(unit, master),
+        `WIDI Master connected, but the ${name} isn’t answering. A WIDI Master needs both of its plugs in: the larger one, with the light, in MIDI OUT, and the small one in MIDI IN, with its thin cable pushed all the way into the larger plug. And check that MIDI Thru is off.`
+      )
+    }
+    /* By its name however the phone spells it; never another WIDI adapter, whose plugs are not these; and never an FM3, which is not offered one and keeps its own line. */
+    for (const spelt of ['WIDI Master', 'widi master bluetooth', 'WIDIMaster', 'My WIDI Master 2']) assert.equal(gearWords.isWidiMaster(spelt), true, spelt)
+    for (const other of ['WIDI Uhost', 'WIDI Jack Bluetooth', 'WIDI Core', 'WIDI Bud Pro', 'C2MIDI', '', null, undefined]) {
+      assert.equal(gearWords.isWidiMaster(other), false, String(other))
+      assert.equal(gearWords.notAnsweringLine('axefx3', other), gearWords.notAnsweringLine('axefx3'), String(other))
+    }
+    assert.equal(gearWords.notAnsweringLine('fm3', master), gearWords.notAnsweringLine('fm3'))
+    /* No colour of a cable it does not have, and nothing about whether it was tried. */
+    assert.ok(!/white|black|tried/i.test(gearWords.notAnsweringLine('axefx3', master)))
     assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
     /*
      * For the device in hand, changed on purpose on 25 October 2026 from
@@ -8991,7 +9022,7 @@ export function run(test) {
     assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'AM4', computer: 'WIDI Uhost', bluetooth: true }).where, 'over Bluetooth', 'the pill names a computer over Bluetooth')
     assert.match(bar, /\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'a screen reader is not told the link is Bluetooth')
     /* And, since 7 November 2026, `quiet` between them: Connect again while the unit says nothing. */
-    assert.match(bar, /<Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{[^}]*\} onClose=/)
+    assert.match(bar, /<Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{[^}]*\} unit=\{bleUnit\} onClose=/)
     /* A blue in both themes, and plainly not the computer's cyan or the unit's green: at least 20 degrees of hue from each, theme by theme. */
     const theme = src('mobile/src/lib/theme.js')
     const hue = (hex) => {
@@ -9031,7 +9062,7 @@ export function run(test) {
     assert.match(bar, /onPress=\{\(\) => \{ tick\(\) if \(bluetooth\) \{ setSaying\(\(open\) => !open\) return \}/, 'the pill does not open the note over Bluetooth')
     /* With Report a problem beside Turn off Bluetooth since 25 October 2026 (onReport, App's, through the page's gate). */
     /* And `quiet`, for Connect again, since 7 November 2026. */
-    assert.match(bar, /\{saying && bluetooth \? \( <Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{!cable && bleUnit !== 'vp4' && !bleAnswered && link\?\.link === 'connected' && \(unitState === 'missing' \|\| unitState === 'silent'\)\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} onBluetoothPage=\{onBluetoothPage\} \/> \) : null\}/)
+    assert.match(bar, /\{saying && bluetooth \? \( <Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{!cable && bleUnit !== 'vp4' && !bleAnswered && link\?\.link === 'connected' && \(unitState === 'missing' \|\| unitState === 'silent'\)\} unit=\{bleUnit\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} onBluetoothPage=\{onBluetoothPage\} \/> \) : null\}/)
     assert.match(bar, /useEffect\(\(\) => \{ if \(!bluetooth\) setSaying\(false\) \}, \[bluetooth\]\)/, 'the note is left open, to come back by itself when Bluetooth next comes on')
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.ok(ble.length > 0 && ble.includes('Connected over Bluetooth, through'), 'the Bluetooth note is not where this looks')
@@ -10654,7 +10685,7 @@ export function run(test) {
     assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0 \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     /* `quiet` since 7 November 2026: Connect again, its own button too. */
-    assert.match(ble, /function Which\(\{ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
+    assert.match(ble, /function Which\(\{ link, cable = false, quiet = false, unit = null, onClose, onReport = null, onBluetoothPage = null \}\)/)
     assert.match(ble, /\{quiet \? \( <Pressable accessibilityRole="button" accessibilityLabel=\{CONNECT_AGAIN\}/)
     assert.match(ble, /fire\(`press \$\{CONNECT_AGAIN\}`, \(\) => connectBluetoothAgain\(\)\)/)
     /*
@@ -13855,6 +13886,28 @@ export function run(test) {
     assert.ok(!/untried\(|untriedHere|\.tried\b|TRIED_NOTES|feelLine/.test(forPlayers), 'the Bluetooth page says whether the unit was tried')
     assert.ok(!/untried|tried/i.test(flat('mobile/src/components/TopBar.js')), 'Play’s pill says whether the unit was tried')
     assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.`/)
+    /*
+     * AND NEVER "CONNECTED" OVER A UNIT THAT IS NOT ANSWERING. The same
+     * report: Play's note said "Connected over Bluetooth, through WIDI
+     * Master Bluetooth." through every one of those tries, and what to check
+     * was on a page the customer was not on. With the adapter connected and
+     * the unit silent (`quiet`) the note is the page's own line, for the
+     * unit Bluetooth is on and the adapter by its name.
+     */
+    assert.match(flat('mobile/src/components/TopBar.js'), /const said = cable \? cableNote\(link\) : quiet \? notAnsweringLine\(unit, link\?\.macName\) : link\?\.link === 'connected' \? `Connected over Bluetooth, through \$\{adapter\}\.`/)
+    assert.match(flat('mobile/src/components/TopBar.js'), /function Which\(\{ link, cable = false, quiet = false, unit = null, onClose, onReport = null, onBluetoothPage = null \}\)/)
+    assert.match(flat('mobile/src/components/TopBar.js'), /\(unitState === 'missing' \|\| unitState === 'silent'\)\} unit=\{bleUnit\} onClose=/)
+    assert.match(flat('mobile/src/components/TopBar.js'), /import \{ CONNECT_AGAIN, notAnsweringLine \} from '\.\.\/lib\/bluetooth-gear'/)
+    /* The chain card in Settings says the same of a WIDI Master, and every other adapter's line is as it was. */
+    const { linkChain } = await import('../shared/link-chain.mjs')
+    const card = (adapterName) => linkChain({ here: 'phone', via: 'bluetooth', unit: { name: 'Axe-Fx III', state: 'missing' }, adapter: { name: adapterName, link: 'connected' }, phone: {} })
+    const unitBody = (cards) => cards.map((c) => c.body).find((b) => /isn’t answering/.test(b))
+    assert.equal(unitBody(card('WIDI Master Bluetooth')), 'Axe-Fx III isn’t answering through the adapter. Check it is on, and that both of the WIDI Master’s plugs are in: the larger one in MIDI OUT and the small one in MIDI IN.')
+    assert.equal(unitBody(card('WIDI Uhost')), 'Axe-Fx III isn’t answering through the adapter. Check it is on, and the black plug is in its MIDI IN and the white in MIDI OUT.')
+    assert.equal(unitBody(card(undefined)), unitBody(card('WIDI Uhost')))
+    /* One rule for which adapter is a WIDI Master, at both places it is asked. */
+    assert.match(src('shared/link-chain.mjs'), /\/widi\\s\*master\/i\.test\(String\(adapter\.name \|\| ''\)\)/)
+    assert.match(src('shared/bluetooth-gear.mjs'), /export const isWidiMaster = \(adapter\) => \/widi\\s\*master\/i\.test\(String\(adapter \|\| ''\)\)/)
     const limitsPage = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
     assert.ok(limitsPage.length > 100 && !/untried|Note tone="warn"/.test(limitsPage), 'What Bluetooth can’t do opens on a warning that the unit was not tried')
     assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? <Bullet>') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')

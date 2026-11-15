@@ -92,7 +92,10 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
         ? { body: [unit.name || 'Connected', unit.firmware ? `firmware ${unit.firmware}` : null].filter(Boolean).join(' · '), tone: 'good' }
         : unit.state === 'missing'
           ? ble
-            ? { body: `${unitName} isn’t answering through the adapter. Check it is on, and the black plug is in its MIDI IN and the white in MIDI OUT.`, tone: 'bad' }
+            ? /* A WIDI Master has two dark plugs, and the small one is easy to leave out (shared/bluetooth-gear notAnsweringLine says why): its own words. */
+              /widi\s*master/i.test(String(adapter.name || ''))
+              ? { body: `${unitName} isn’t answering through the adapter. Check it is on, and that both of the WIDI Master’s plugs are in: the larger one in MIDI OUT and the small one in MIDI IN.`, tone: 'bad' }
+              : { body: `${unitName} isn’t answering through the adapter. Check it is on, and the black plug is in its MIDI IN and the white in MIDI OUT.`, tone: 'bad' }
             : { body: 'No unit found. Check it is on and its USB cable is in.', tone: 'bad' }
           : unit.state === 'silent'
             ? { body: `${unitName} isn’t answering. Turn it off and on.`, tone: 'bad' }

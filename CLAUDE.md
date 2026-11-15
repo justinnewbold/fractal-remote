@@ -2837,6 +2837,39 @@ took the bytes: neither says a byte left the phone or reached a unit. When
 a report shows 0 bytes, ask which adapter is on the unit before anything
 else.
 
+**And with ONE adapter, zero bytes is the plugs: a customer's report of 14
+November 2026** (an Axe-Fx III, an iPhone on iOS 27.3, a WIDI Master, the
+app at 1.90.69 on store copy 1.90.0, a first setup: one adapter listed, the
+same one every time). Connected, and "nothing at all has come back (0
+bytes)" through four runs and twenty minutes of Connect again, Use a
+different adapter and restarts. Not even the phone's own bytes came back,
+which rules out the white plug in the III's THRU (that echoes). Nothing in
+the wire is new since the versions that answer on Justin's own III. THE
+READING THAT FITS, NOT PROVEN: a WIDI Master is two pieces, a larger plug
+with the light that powers it from MIDI OUT (so it connects to the phone
+with only that one in) and a small one on a thin cable for MIDI IN, which
+CME calls optional. With the small one out, or its cable not seated, the
+unit never hears the phone and nothing ever comes back. What the app got
+wrong, fixed in 1.90.74:
+
+- **The hint named a cable the customer did not have.** "Check both MIDI
+  plugs: the white one goes in MIDI OUT" is the C2MIDI Pro's colours. A
+  WIDI Master's line names its own two plugs now (shared/bluetooth-gear
+  `notAnsweringLine`, `isWidiMaster` by the adapter's name; never an FM3,
+  which is not offered one), and the chain card in Settings the same
+  (shared/link-chain).
+- **Play said "Connected over Bluetooth, through WIDI Master Bluetooth."
+  the whole time.** The note under the pill, where Connect again is, said
+  nothing about the unit; what to check was on the Bluetooth page. With
+  the adapter connected and the unit silent it is that page's line now
+  (components/TopBar `Which`, `quiet`).
+
+A reply was drafted for Justin to send (the two plugs, then unplug the
+adapter for a few seconds, then forget it in the iPhone's Bluetooth
+settings and connect again from the app). If the customer writes back that
+both plugs were in, the next thing to ask for is a log after doing exactly
+that, and whether Axe-Edit reaches the unit over USB at the same time.
+
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by
 `npm run sync:rules` and a test fails if it is stale. Never hand-edit the
