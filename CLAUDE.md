@@ -1447,6 +1447,18 @@ run by test/chain-add.mjs), for every account:
   written too; it is not where the finger is.
 - An Add opened with nowhere to put a block, and a block tapped that was
   not sent, each leave a `[chain]` line that says "not sent".
+- AN INDEPENDENT READ before it went out found the words wrong on an AM4:
+  "Remove a block first" was said after its last slot, where taking a
+  block out makes no room after it. So what to do is worked out, not
+  fixed: removing is offered only where a block after the card can be
+  removed, and Put a block in an empty space only where the chain has a
+  free space (`removableAfter`, `roomAnywhere`). From the same read, not
+  defects by its own count and cheap to put right: a block the unit would
+  not put in an EMPTY SPACE is said under that space; the tick is for the
+  block that was asked for (the cell holds a block AND the unit has that
+  block's id there, where the read carries ids), a cell that holds some
+  other block is said as that, and a block that was in the chain already
+  is said as MOVED, since a unit has one of each.
 
 So when a log shows a tap in the chain editor and no `[chain]` line after
 it, that is a bug in the editor, not something the unit did. Not built:

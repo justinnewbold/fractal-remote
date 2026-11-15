@@ -56,7 +56,7 @@ import {
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
-import { addedWords, addHint, EMPTY_SPACE, freeAfter, noRoomAfter, NOT_SENT, removableAfter } from '../lib/chainAdd'
+import { addedWords, addHint, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
@@ -2179,6 +2179,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     /* Under which card it is said: the one Add was tapped on, else the new block's own. */
     const under = from || `${row}:${col}`
     const name = (palette || []).find((b) => b.page === Number(page))?.name || 'the block'
+    /* Where this very block was before, if it was in the chain already (a search of the list offers those too): a unit has one of each, so that is a move. */
+    const was = placeOf(Number(page))
     beginChainWrite()
     try {
       const r = await placeBlock(row, col, Number(page))
@@ -2186,20 +2188,27 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       await after(r)
       setAddAfter(null)
       logDebug('chain', `${where(row, col)} after the add`, holds(row, col) ? 'holds the block' : 'still empty')
+      /* Where the unit has the block that was asked for, by its own id, off the read just made (nowhere, where the read does not carry ids the list's can be matched to). */
+      const put = placeOf(Number(page))
+      const here = !!put && put.row === row && put.col === col
       if (!holds(row, col)) {
-        const put = placeOf(Number(page))
         logDebug('chain', `block ${page} after the add`, put ? `unit has it at ${where(put.row, put.col)}` : 'unit has it nowhere')
         const words = `The unit did not add it: ${where(row, col)} is still empty${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.${
           put ? ` The unit put it at ${where(put.row, put.col)} instead.` : ''
         }`
         setIssue(words)
-        /* Under the card Add was tapped on too; an empty space has no card to say it under. */
-        if (from) setTold({ at: from, tone: 'warn', text: words })
-      } else setTold({ at: under, tone: 'ok', text: addedWords(name, where(row, col)) })
+        setTold({ at: under, tone: 'warn', text: words })
+      } else if (put && !here) {
+        /* A block is there, and it is not this one: the tick would have been for somebody else's block. */
+        logDebug('chain', `block ${page} after the add`, `unit has it at ${where(put.row, put.col)}, and ${where(row, col)} holds another`)
+        const words = otherWords(name, where(row, col), where(put.row, put.col))
+        setIssue(words)
+        setTold({ at: under, tone: 'warn', text: words })
+      } else setTold({ at: under, tone: 'ok', text: was && here && (was.row !== row || was.col !== col) ? movedWords(name, where(row, col), where(was.row, was.col)) : addedWords(name, where(row, col)) })
     } catch (err) {
       endChainWrite()
       setIssue(err.message)
-      if (from) setTold({ at: from, tone: 'warn', text: err.message })
+      setTold({ at: under, tone: 'warn', text: err.message })
       onError(err.message)
     } finally {
       setBusy(false)
@@ -2214,7 +2223,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     const free = freeAfter(lane, col)
     if (free === null) {
       /* The list is not drawn where there is no room (below), so this is a row that filled up since it was: said under the card, and in the log, never only over the chain. */
-      const words = noRoomAfter({ name, linear, more: removableAfter(lane, col) })
+      const words = noRoomAfter({ name, linear, more: removableAfter(lane, col), elsewhere: roomAnywhere(lanes) })
       logDebug('chain', `add block ${page} after ${where(lane.row, col)}`, NOT_SENT)
       setIssue(words)
       setTold({ at: `${lane.row}:${col}`, tone: 'warn', text: words })
@@ -2360,6 +2369,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       }
     } catch (err) {
       setIssue(err.message)
+      setTold({ at: `${row}:${col}`, tone: 'warn', text: err.message })
       onError(err.message)
     } finally {
       endChainWrite()
@@ -2578,7 +2588,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                       adding={
                         addAfter !== `${lane.row}:${item.col}` ? null : freeAfter(lane, item.col) === null ? (
                           /* Nowhere to put one: the words, in the list's place, so no tap lands on a block that would not be added. */
-                          <Note tone="warn">{noRoomAfter({ name: item.block.name, linear, more: removableAfter(lane, item.col) })}</Note>
+                          <Note tone="warn">{noRoomAfter({ name: item.block.name, linear, more: removableAfter(lane, item.col), elsewhere: roomAnywhere(lanes) })}</Note>
                         ) : (
                           paletteBox(
                             (b) => addAfterCard(lane, item.col, b.page, item.block.name),
@@ -2600,13 +2610,17 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                       <Text style={{ color: color.silkDim, fontSize: font.micro }}>{NEW_BLOCK_NOTE}</Text>
                     </View>
                   ) : (
-                    <Press
-                      caption={whereGap(lane.row, item)}
-                      label={picked ? `Put ${picked.name} here` : 'Empty'}
-                      disabled={busy || !picked}
-                      height={48}
-                      onPress={() => add(lane.row, item.col)}
-                    />
+                    <View style={{ gap: space.sm }}>
+                      <Press
+                        caption={whereGap(lane.row, item)}
+                        label={picked ? `Put ${picked.name} here` : 'Empty'}
+                        disabled={busy || !picked}
+                        height={48}
+                        onPress={() => add(lane.row, item.col)}
+                      />
+                      {/* A block the unit would not put here is said here, under the space that was tapped: it has no card to say it under. */}
+                      <Told note={told && told.at === `${lane.row}:${item.col}` ? told : null} onDismiss={() => setTold(null)} />
+                    </View>
                   )}
                 </View>
               )
@@ -2697,14 +2711,19 @@ function BlockCard({
         </View>
       ) : null}
       {/* What the last Add or Remove on this card did, under it, whether or not its buttons are still open. */}
-      {note ? (
-        /* Done is the answer to the button just pressed, in the bright ink (Note's `strong`); trouble is a warning. */
-        <Note tone={note.tone === 'ok' ? 'hint' : 'warn'} strong={note.tone === 'ok'} onDismiss={onNoteDismiss}>
-          {note.text}
-        </Note>
-      ) : null}
+      <Told note={note} onDismiss={onNoteDismiss} />
       {acting && adding ? adding : null}
     </View>
+  )
+}
+
+/** What the last Add or Remove did, under the card or the empty space it was done on. Done is the answer to the button just pressed, in the bright ink (Note's `strong`); trouble is a warning. Either can be put away. */
+function Told({ note, onDismiss }) {
+  if (!note) return null
+  return (
+    <Note tone={note.tone === 'ok' ? 'hint' : 'warn'} strong={note.tone === 'ok'} onDismiss={onDismiss}>
+      {note.text}
+    </Note>
   )
 }
 

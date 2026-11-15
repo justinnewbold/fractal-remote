@@ -41,20 +41,42 @@ export const removableAfter = (lane, col) => (lane?.blocks || []).some((b) => b.
 /** The line under the list of blocks: where a tapped one will go. "Right after" only where the free space (`free`) is the very next one to the card's (`col`); `at` is that space in the editor's words. */
 export const addHint = ({ name, at, col, free }) => (free === col + 1 ? `Tap a block to put it right after ${name}.` : `Tap a block to put it at ${at}, the first free space after ${name}.`)
 
+/** Whether there is a free space anywhere in the chain: what "Put a block in an empty space" needs before it can be pointed at. */
+export const roomAnywhere = (lanes) => (lanes || []).some((l) => (l?.gaps || []).some((c) => Number.isInteger(c)))
+
 /**
- * In the list's place, where nothing can be added after the card. `more` is
- * whether a block after it could be taken out to make room; `linear` is a
- * unit with one row of slots (an AM4), which has no other row to point at.
+ * In the list's place, where nothing can be added after the card: why, and
+ * what would work, which is not the same everywhere.
+ *
+ * `more` is whether a block after the card could be taken out to make room
+ * (after the last slot of an AM4, or with only an Output after it, none
+ * can: "Remove a block first" was said there, and a player who did was no
+ * further on). `elsewhere` is whether there is a free space anywhere, so
+ * that the editor's other way to add is only pointed at where it has
+ * somewhere to put a block. `linear` is a unit with one row of slots (an
+ * AM4), which has no rows to speak of.
  */
-export const noRoomAfter = ({ name, linear = false, more = false }) =>
-  linear
-    ? `There is no free slot after ${name}. Remove a block first.`
-    : more
-      ? `This row is full after ${name}, so a block can’t be added here. Remove a block after it first, or use “${EMPTY_SPACE}”, under the chain, to add one where there is room.`
-      : `There is no room after ${name} in its row, so a block can’t be added here. Use “${EMPTY_SPACE}”, under the chain, to add one where there is room.`
+export const noRoomAfter = ({ name, linear = false, more = false, elsewhere = false }) => {
+  const why = linear ? `There is no free slot after ${name}.` : more ? `This row is full after ${name}, so a block can’t be added here.` : `There is no room after ${name} in its row, so a block can’t be added here.`
+  const other = `“${EMPTY_SPACE}”, under the chain`
+  const what = more
+    ? elsewhere
+      ? `Remove a block after it first, or use ${other}, to add one where there is room.`
+      : 'Remove a block after it first.'
+    : elsewhere
+      ? `Use ${other}, to add one where there is room.`
+      : `Nothing else is free either: remove a block first, then use ${other}.`
+  return `${why} ${what}`
+}
 
 /** Under the card, once the unit holds the new block: the answer to the button just pressed, with a tick. */
 export const addedWords = (name, at) => `✓ Added ${name} at ${at}.`
+
+/** The same, for a block that was already in the chain (the list offers every block when it is searched): a unit has one of each, so it was moved, and "Added" would have been a second one that is not there. */
+export const movedWords = (name, at, was) => `✓ ${name} is at ${at} now. It was at ${was}: the unit has one ${name}, so it moved.`
+
+/** The cell holds a block, and it is not the one that was asked for. */
+export const otherWords = (name, at, put) => `${at} holds another block, and the unit has ${name} at ${put}. Nothing was added there.`
 
 /** What the log says of an Add that sent nothing. */
 export const NOT_SENT = 'not sent: no free space after it in this row'

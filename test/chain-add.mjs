@@ -40,7 +40,9 @@ export function run(test) {
      * in the last. Add on the block in column 9 and on the one in column 13
      * (as the editor counts them), as he tapped them.
      */
-    const caps = { gridRows: 6, gridCols: 14, gridRouting: true }
+    const caps = { grid: { rows: 6, cols: 14 } }
+    assert.equal(lanesFor([], caps).length, 6)
+    assert.equal(lanesFor([], caps)[0].gaps.length, 14)
     const names = ['Input 1', 'Comp 1', 'Drive 1', 'Amp 1', 'Dyn Dist', 'Tone Match', 'NAM 1', 'NAM 2', 'Vocoder', 'IR Player 1', 'Rotary 1', 'Reverb 1', 'Comp 2', 'Output 1']
     const row = names.map((name, col) => ({ row: 2, col, name, slug: col === 0 ? 'input' : col === 13 ? 'output' : 'amp', effectId: 100 + col }))
     const lane = lanesFor(row, caps).find((l) => l.row === 2)
@@ -61,20 +63,46 @@ export function run(test) {
     assert.equal(c.addHint({ name: 'Rotary 1', at: 'row 3, column 12', col: 10, free: 11 }), 'Tap a block to put it right after Rotary 1.')
     assert.equal(c.addHint({ name: 'Vocoder', at: 'row 3, column 12', col: 8, free: 11 }), 'Tap a block to put it at row 3, column 12, the first free space after Vocoder.')
     /* No room: why, and what to do, in each of the three cases. */
-    assert.equal(c.noRoomAfter({ name: 'Vocoder', more: true }), 'This row is full after Vocoder, so a block can’t be added here. Remove a block after it first, or use “Put a block in an empty space”, under the chain, to add one where there is room.')
-    assert.equal(c.noRoomAfter({ name: 'Comp 2' }), 'There is no room after Comp 2 in its row, so a block can’t be added here. Use “Put a block in an empty space”, under the chain, to add one where there is room.')
-    assert.equal(c.noRoomAfter({ name: 'Delay', linear: true, more: true }), 'There is no free slot after Delay. Remove a block first.')
-    assert.equal(c.noRoomAfter({ name: 'Delay', linear: true }), 'There is no free slot after Delay. Remove a block first.')
+    /*
+     * No room: why, and WHAT WOULD WORK, which is not the same everywhere.
+     * "Remove a block first" was said after the last slot of an AM4, where
+     * taking one out makes no room after it: so removing is offered only
+     * where a block after the card can be removed, and the editor's other
+     * way to add only where it has somewhere to put a block.
+     */
+    assert.equal(c.noRoomAfter({ name: 'Vocoder', more: true, elsewhere: true }), 'This row is full after Vocoder, so a block can’t be added here. Remove a block after it first, or use “Put a block in an empty space”, under the chain, to add one where there is room.')
+    assert.equal(c.noRoomAfter({ name: 'Comp 2', elsewhere: true }), 'There is no room after Comp 2 in its row, so a block can’t be added here. Use “Put a block in an empty space”, under the chain, to add one where there is room.')
+    assert.equal(c.noRoomAfter({ name: 'Vocoder', more: true }), 'This row is full after Vocoder, so a block can’t be added here. Remove a block after it first.')
+    assert.equal(c.noRoomAfter({ name: 'Comp 2' }), 'There is no room after Comp 2 in its row, so a block can’t be added here. Nothing else is free either: remove a block first, then use “Put a block in an empty space”, under the chain.')
+    assert.equal(c.noRoomAfter({ name: 'Drive', linear: true, more: true, elsewhere: true }), 'There is no free slot after Drive. Remove a block after it first, or use “Put a block in an empty space”, under the chain, to add one where there is room.')
+    assert.equal(c.noRoomAfter({ name: 'Drive', linear: true, more: true }), 'There is no free slot after Drive. Remove a block after it first.')
+    assert.equal(c.noRoomAfter({ name: 'Delay', linear: true, elsewhere: true }), 'There is no free slot after Delay. Use “Put a block in an empty space”, under the chain, to add one where there is room.')
+    assert.equal(c.noRoomAfter({ name: 'Delay', linear: true }), 'There is no free slot after Delay. Nothing else is free either: remove a block first, then use “Put a block in an empty space”, under the chain.')
+    /* An AM4 with a block in its last slot: none after it can be taken out, whatever else is in the chain. */
+    const am4 = lanesFor([{ row: 0, col: 0, name: 'Amp', slug: 'amp' }, { row: 0, col: 2, name: 'Drive', slug: 'drive' }, { row: 0, col: 3, name: 'Delay', slug: 'delay' }], { grid: { rows: 1, cols: 4 } })
+    assert.equal(am4.length, 1)
+    assert.equal(c.freeAfter(am4[0], 3), null)
+    assert.equal(c.removableAfter(am4[0], 3), false)
+    assert.equal(c.roomAnywhere(am4), true)
+    assert.doesNotMatch(c.noRoomAfter({ name: 'Delay', linear: true, more: c.removableAfter(am4[0], 3), elsewhere: c.roomAnywhere(am4) }), /[Rr]emove/)
+    assert.equal(c.roomAnywhere(lanesFor(row.filter((b) => b.row === 2), { grid: { rows: 3, cols: 14 } }).filter((l) => l.row === 2)), false)
+    assert.equal(c.roomAnywhere([{ gaps: [] }, { gaps: ['x', null] }]), false)
+    assert.equal(c.roomAnywhere([{ gaps: [] }, { gaps: [4] }]), true)
+    for (const none of [null, undefined, []]) assert.equal(c.roomAnywhere(none), false)
+
     assert.equal(c.addedWords('Wah 1', 'row 3, column 12'), '✓ Added Wah 1 at row 3, column 12.')
+    /* A block that was in the chain already was MOVED (a unit has one of each): "Added" would be a second one that is not there. And a cell that holds some other block is not a tick at all. */
+    assert.equal(c.movedWords('Drive 1', 'row 3, column 12', 'row 3, column 3'), '✓ Drive 1 is at row 3, column 12 now. It was at row 3, column 3: the unit has one Drive 1, so it moved.')
+    assert.equal(c.otherWords('Wah 1', 'row 3, column 12', 'row 2, column 4'), 'row 3, column 12 holds another block, and the unit has Wah 1 at row 2, column 4. Nothing was added there.')
     assert.equal(c.NOT_SENT, 'not sent: no free space after it in this row')
-    for (const said of [c.addHint({ name: 'X', at: 'row 1, column 2', col: 0, free: 1 }), c.addHint({ name: 'X', at: 'row 1, column 3', col: 0, free: 2 }), c.noRoomAfter({ name: 'X', more: true }), c.noRoomAfter({ name: 'X' }), c.noRoomAfter({ name: 'X', linear: true }), c.addedWords('X', 'slot 2')])
+    for (const said of [c.addHint({ name: 'X', at: 'row 1, column 2', col: 0, free: 1 }), c.addHint({ name: 'X', at: 'row 1, column 3', col: 0, free: 2 }), c.noRoomAfter({ name: 'X', more: true }), c.noRoomAfter({ name: 'X' }), c.noRoomAfter({ name: 'X', linear: true }), c.noRoomAfter({ name: 'X', more: true, elsewhere: true }), c.noRoomAfter({ name: 'X', linear: true, elsewhere: true }), c.addedWords('X', 'slot 2'), c.movedWords('X', 'slot 2', 'slot 1'), c.otherWords('X', 'slot 2', 'slot 1')])
       assert.ok(!/this phone|\bbeta\b|\bsoon\b|coming|tried|official|undefined|null/i.test(said), said)
   })
 
   test('chain add: the editor says it under the card that was tapped, draws no list where nothing can be added, and writes down an Add that sends nothing', async () => {
     const c = await lib()
     const editor = flat(code(read('mobile/src/screens/Edit.js')))
-    assert.match(editor, /import \{ addedWords, addHint, EMPTY_SPACE, freeAfter, noRoomAfter, NOT_SENT, removableAfter \} from '\.\.\/lib\/chainAdd'/)
+    assert.match(editor, /import \{ addedWords, addHint, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere \} from '\.\.\/lib\/chainAdd'/)
 
     /* The other way to add is named by its own heading, so the words that point at it cannot drift from it. */
     assert.match(editor, /<Label>\{EMPTY_SPACE\}<\/Label>/)
@@ -83,7 +111,7 @@ export function run(test) {
     /* NO ROOM: the words in the list's place. The list of blocks is drawn only where a tapped one has somewhere to go, and its line says where. */
     assert.match(
       editor,
-      /adding=\{ addAfter !== `\$\{lane\.row\}:\$\{item\.col\}` \? null : freeAfter\(lane, item\.col\) === null \? \( <Note tone="warn">\{noRoomAfter\(\{ name: item\.block\.name, linear, more: removableAfter\(lane, item\.col\) \}\)\}<\/Note> \) : \( paletteBox\( \(b\) => addAfterCard\(lane, item\.col, b\.page, item\.block\.name\), addHint\(\{ name: item\.block\.name, at: where\(lane\.row, freeAfter\(lane, item\.col\)\), col: item\.col, free: freeAfter\(lane, item\.col\) \}\) \) \) \}/
+      /adding=\{ addAfter !== `\$\{lane\.row\}:\$\{item\.col\}` \? null : freeAfter\(lane, item\.col\) === null \? \( <Note tone="warn">\{noRoomAfter\(\{ name: item\.block\.name, linear, more: removableAfter\(lane, item\.col\), elsewhere: roomAnywhere\(lanes\) \}\)\}<\/Note> \) : \( paletteBox\( \(b\) => addAfterCard\(lane, item\.col, b\.page, item\.block\.name\), addHint\(\{ name: item\.block\.name, at: where\(lane\.row, freeAfter\(lane, item\.col\)\), col: item\.col, free: freeAfter\(lane, item\.col\) \}\) \) \) \}/
     )
     assert.doesNotMatch(editor, /put it right after \$\{/, 'the list still says "right after" wherever the block goes')
     assert.doesNotMatch(editor, /No free space after/, 'the old line, said only over the chain, is still there')
@@ -91,22 +119,33 @@ export function run(test) {
     /* SAID UNDER THE CARD: one thing at a time, by the card's own place, drawn whether or not its buttons are open, with a cross. */
     assert.match(editor, /const \[told, setTold\] = useState\(null\)/)
     assert.match(editor, /note=\{told && told\.at === `\$\{lane\.row\}:\$\{item\.col\}` \? told : null\} onNoteDismiss=\{\(\) => setTold\(null\)\}/)
-    assert.match(editor, /\{note \? \( <Note tone=\{note\.tone === 'ok' \? 'hint' : 'warn'\} strong=\{note\.tone === 'ok'\} onDismiss=\{onNoteDismiss\}> \{note\.text\} <\/Note> \) : null\} \{acting && adding \? adding : null\}/)
+    assert.match(editor, /<Told note=\{note\} onDismiss=\{onNoteDismiss\} \/> \{acting && adding \? adding : null\}/)
+    assert.match(editor, /function Told\(\{ note, onDismiss \}\) \{ if \(!note\) return null return \( <Note tone=\{note\.tone === 'ok' \? 'hint' : 'warn'\} strong=\{note\.tone === 'ok'\} onDismiss=\{onDismiss\}> \{note\.text\} <\/Note> \) \}/)
+    /* And under an EMPTY SPACE that was tapped: a block the unit would not put there has no card to be said under. */
+    assert.match(editor, /onPress=\{\(\) => add\(lane\.row, item\.col\)\} \/> <Told note=\{told && told\.at === `\$\{lane\.row\}:\$\{item\.col\}` \? told : null\} onDismiss=\{\(\) => setTold\(null\)\} \/>/)
 
     /* An Add from a card is said under THAT card; one into an empty space, under the new block's own. */
-    assert.match(editor, /const add = async \(row, col, page = choice, from = null\) => \{ if \(page === null \|\| page === undefined\) return chainUndo\.clear\(\) setBusy\(true\) setIssue\(null\) setTold\(null\) const under = from \|\| `\$\{row\}:\$\{col\}` const name = \(palette \|\| \[\]\)\.find\(\(b\) => b\.page === Number\(page\)\)\?\.name \|\| 'the block'/)
+    assert.match(editor, /const add = async \(row, col, page = choice, from = null\) => \{ if \(page === null \|\| page === undefined\) return chainUndo\.clear\(\) setBusy\(true\) setIssue\(null\) setTold\(null\) const under = from \|\| `\$\{row\}:\$\{col\}` const name = \(palette \|\| \[\]\)\.find\(\(b\) => b\.page === Number\(page\)\)\?\.name \|\| 'the block' const was = placeOf\(Number\(page\)\) beginChainWrite\(\)/)
     assert.match(editor, /add\(lane\.row, free, page, `\$\{lane\.row\}:\$\{col\}`\)/)
-    assert.match(editor, /onPress=\{\(\) => add\(lane\.row, item\.col\)\}/)
-    /* Done only where the unit holds the block, by the read after the write; else what the unit did, under the card too. */
-    assert.match(editor, /setIssue\(words\) if \(from\) setTold\(\{ at: from, tone: 'warn', text: words \}\) \} else setTold\(\{ at: under, tone: 'ok', text: addedWords\(name, where\(row, col\)\) \}\)/)
-    assert.match(editor, /if \(!holds\(row, col\)\) \{ const put = placeOf\(Number\(page\)\)/)
-    assert.match(editor, /setIssue\(err\.message\) if \(from\) setTold\(\{ at: from, tone: 'warn', text: err\.message \}\) onError\(err\.message\)/)
-    /* A block the unit would not take out is said under its own card as well. */
+    /*
+     * THE TICK IS FOR THE BLOCK THAT WAS ASKED FOR, by the read after the
+     * write: the cell holds a block, and where the unit says by its own id
+     * where that block is, it is there. A cell still empty, and a cell that
+     * holds some other block, are each said as what they are, under the
+     * card or the space too. A block that was in the chain before is said
+     * as moved.
+     */
+    assert.match(editor, /const put = placeOf\(Number\(page\)\) const here = !!put && put\.row === row && put\.col === col if \(!holds\(row, col\)\) \{/)
+    assert.match(editor, /setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else if \(put && !here\) \{/)
+    assert.match(editor, /const words = otherWords\(name, where\(row, col\), where\(put\.row, put\.col\)\) setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else setTold\(\{ at: under, tone: 'ok', text: was && here && \(was\.row !== row \|\| was\.col !== col\) \? movedWords\(name, where\(row, col\), where\(was\.row, was\.col\)\) : addedWords\(name, where\(row, col\)\) \}\)/)
+    assert.match(editor, /setIssue\(err\.message\) setTold\(\{ at: under, tone: 'warn', text: err\.message \}\) onError\(err\.message\)/)
+    /* A block the unit would not take out, and a remove that failed, are said under that block's own card as well. */
     assert.match(editor, /setIssue\(words\) setTold\(\{ at: `\$\{row\}:\$\{col\}`, tone: 'warn', text: words \}\) \} else if \(putBack\)/)
+    assert.match(editor, /setIssue\(err\.message\) setTold\(\{ at: `\$\{row\}:\$\{col\}`, tone: 'warn', text: err\.message \}\) onError\(err\.message\)/)
 
     /* IN THE LOG: an Add opened where there is no room, and (a row that filled since) a block tapped that was not sent. */
     assert.match(editor, /if \(opening && freeAfter\(lane, item\.col\) === null\) logDebug\('chain', `Add after \$\{item\.block\?\.name\} at \$\{where\(lane\.row, item\.col\)\}`, NOT_SENT\)/)
-    assert.match(editor, /if \(free === null\) \{ const words = noRoomAfter\(\{ name, linear, more: removableAfter\(lane, col\) \}\) logDebug\('chain', `add block \$\{page\} after \$\{where\(lane\.row, col\)\}`, NOT_SENT\) setIssue\(words\) setTold\(\{ at: `\$\{lane\.row\}:\$\{col\}`, tone: 'warn', text: words \}\) return \}/)
+    assert.match(editor, /if \(free === null\) \{ const words = noRoomAfter\(\{ name, linear, more: removableAfter\(lane, col\), elsewhere: roomAnywhere\(lanes\) \}\) logDebug\('chain', `add block \$\{page\} after \$\{where\(lane\.row, col\)\}`, NOT_SENT\) setIssue\(words\) setTold\(\{ at: `\$\{lane\.row\}:\$\{col\}`, tone: 'warn', text: words \}\) return \}/)
 
     /* What was said is put away when something else is done: another card tapped, an Add opened, a write begun. */
     assert.match(editor, /setAddAfter\(null\) setTold\(null\) \}\}/)
