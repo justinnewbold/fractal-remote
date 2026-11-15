@@ -63,7 +63,7 @@ import { useDemoUnit } from '../lib/demo'
 import { coachSeen, markCoach, markWatchTip, turnTaken, watchTipSeen } from '../lib/coach'
 import { nope, thud } from '../lib/feedback'
 import { blockColor } from '../lib/blockColors'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn } from '../lib/blockIcons'
 /*
  * The pictures, cut out of Justin's own mockup of this screen. Assets rather
  * than an icon font on purpose: a font is native code, and native code costs a
@@ -1867,6 +1867,7 @@ export default function Stage({
                   full={shape.names ? pedalName(block) : undefined}
                   nameSize={pedalWords}
                   icon={showIcons ? blockIcon(block.slug) : undefined}
+                  iconOwn={showIcons ? blockIconOwn(block.slug) : undefined}
                   topLeft={state}
                   topRight={block.channel || undefined}
                   mustSay={!!boost}

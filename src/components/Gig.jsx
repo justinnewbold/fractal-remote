@@ -45,7 +45,7 @@ import { cornerFit, mustSayFit } from '../../shared/tile-corners.mjs'
 import { BOOST, boostLabel, boostTitle, boostWord, pedalBoost, pedalUnit } from '../../shared/am4-boost.mjs'
 import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn, pictureWears } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
 import { useSceneNameSizes } from '../lib/sceneNameFit'
 import { useStepLineSize } from '../lib/lineFit'
@@ -1684,6 +1684,7 @@ export default function Gig({
               onToggle={() => toggle(block)}
               onHold={() => setChanEid(block.effectId)}
               icon={icons ? blockIcon(block.slug) : null}
+              own={icons ? blockIconOwn(block.slug) : null}
             />
           ))}
           {/*
@@ -2099,7 +2100,7 @@ const UNLIT_EDGE = 2
  * The hold is answered by Gig, which owns the one channel sheet; the tile
  * only says it was held.
  */
-function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false, boost = null }) {
+function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, own = null, door = false, boost = null }) {
   /* Repaint when the colours change (lib/useLooks). */
   useLooks()
   /* Only where there is something to choose. Not every block is channelled,
@@ -2217,11 +2218,11 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           {icon ? (
             <span
               ref={pictureRef}
-              className="gig-block-icon"
+              /* A white picture is a mask over the lettering colour; the NAM block's is drawn in its own rainbow (lib/blockIcons pictureWears). */
+              {...pictureWears(icon, own)}
               aria-hidden="true"
               /* Kept in its place, unseen, while a word that must be seen is in its place or over it. */
               data-said={shows.middle ? 'yes' : undefined}
-              style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
             />
           ) : null}
           <span className="gig-block-full">{block.name || block.slug}</span>

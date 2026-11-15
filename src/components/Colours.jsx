@@ -30,7 +30,7 @@ import {
   unitFamilies
 } from '../lib/colourPage'
 import { useLooks } from '../lib/useLooks'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn, pictureWears } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { tick } from '../lib/feedback'
 import { deviceKind, onThis } from '../../shared/device-word.mjs'
@@ -117,7 +117,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         >
           <span className="gig-block-name">
             {icon ? (
-              <span className="gig-block-icon" aria-hidden="true" style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }} />
+              <span {...pictureWears(icon, blockIconOwn(f))} aria-hidden="true" />
             ) : null}
             <span>{FAMILY_NAMES[f] || f}</span>
           </span>

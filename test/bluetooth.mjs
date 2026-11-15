@@ -12483,12 +12483,12 @@ export function run(test) {
       for (const family of ['nam', 'irplayer']) assert.ok(look.families[family] || look.byUnit?.gen3?.[family], `${look.id} has no colour for ${family}`)
     }
 
-    /* The picture: one of the app's own, the family each stands in for (the amp's, the cab's), phone only, and no new file. */
+    /* The picture: the IR Player wears the cab's, one of the app's own and no new file. The NAM block wore the amp's and has its own since 1.90.72, drawn by a script (test/nam-icon.mjs). */
     const icons = src('mobile/src/lib/blockIcons.js')
-    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'amp', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' \}\)/)
+    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'nam', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' \}\)/)
     assert.match(icons, /const name = blockIconName\(slug\) \|\| PHONE_ONLY\[String\(slug \|\| ''\)\.toLowerCase\(\)\] \|\| null/)
-    for (const f of ['amp', 'cab']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)))
-    for (const f of ['nam', 'irplayer']) assert.ok(!existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), `a new picture for ${f}`)
+    for (const f of ['nam', 'cab']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)))
+    for (const f of ['irplayer']) assert.ok(!existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), `a new picture for ${f}`)
     /* Not in the shared list, which is inside the computer app: through the computer they stay a New block. */
     const { BLOCK_ICON } = await import('../shared/block-icons.mjs')
     assert.ok(!('nam' in BLOCK_ICON) && !('irplayer' in BLOCK_ICON), 'the computer app’s pictures changed')

@@ -251,7 +251,7 @@ export function run(test) {
     /* Over the picture's own box, across the tile's whole inside, only for a word too wide for its row; and the picture kept in its place, unseen, whenever the word has moved. */
     assert.match(tile, /position: 'absolute', left: 0, right: 0, top: picture \? Math\.max\(0, \(laid\.top \?\? BORDER\) - BORDER\) : 3, height: picture \|\| undefined/)
     assert.match(tile, /opacity: middle \? 1 : 0 \}\}/)
-    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, \.\.\.\(cleared \? \{ opacity: 0 \} : null\)/)
+    assert.match(tile, /\.\.\.\(ownPicture \? null : \{ tintColor: quiet \? foreground : pictureTint \}\), \.\.\.\(cleared \? \{ opacity: 0 \} : null\)/)
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /import \{ cornerFit, mustSayFit \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/)
     assert.match(gig, /const say = mustSayFit\(corners, \{ moved: whole\(word\), movedTop: top \+ Math\.max\(0, \(height - tall\) \/ 2\), lift \}\)/, 'the browser’s word is not placed by the shared rule')

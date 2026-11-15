@@ -21,7 +21,7 @@ import {
   yoursFor
 } from '../lib/colourPage'
 import { shortName } from '../lib/shortName'
-import { blockIcon } from '../lib/blockIcons'
+import { blockIcon, blockIconOwn } from '../lib/blockIcons'
 import { loadIcons } from '../lib/gigSize'
 import { sync } from '../lib/store'
 import { tick } from '../lib/feedback'
@@ -199,6 +199,7 @@ export default function ColourSheet({ target, chain = [], spelt, onClose }) {
                         key={String(lit)}
                         label={shortName(target.slug)}
                         icon={loadIcons(sync) ? blockIcon(target.slug) : undefined}
+                        iconOwn={loadIcons(sync) ? blockIconOwn(target.slug) : undefined}
                         topLeft={lit ? 'On' : 'Off'}
                         effect
                         fill={pick}
