@@ -1421,6 +1421,39 @@ where the chain is open).
   has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
   read it needs exists now.
 
+**In the chain editor, what a tap did is said under the card that was
+tapped, and a tap that sends nothing is in the log.**
+
+> "Not sure if it added the block it was trying to add here. No
+> confirmation after I clicked add. Check the logs" (15 November 2026, an
+> Axe-Fx III through the Raspberry Pi, a row of thirteen blocks)
+
+His log had three taps on a block to add (Wah 1, Drive 1, Formant 1) and
+nothing after any of them: nothing had gone to the unit. Add on a card
+puts the new block in the first free space AFTER that card in its row, the
+row was full from there to its Output, and the editor said "No free space
+after…" in its one line over the chain, a dozen cards up and off the
+screen, and wrote nothing down. Since 1.90.78 (mobile/src/lib/chainAdd.js,
+run by test/chain-add.mjs), for every account:
+
+- Where there is no room after a card, Add shows the words IN THE LIST'S
+  PLACE (why, and what to do: remove a block after it, or use Put a block
+  in an empty space under the chain), so no block can be tapped that would
+  not be added. Where there is room, the line under the list says where
+  the block will go: "right after" only when that is the next space.
+- What an Add did is said under the card it was tapped on ("✓ Added Wah 1
+  at row 3, column 12.", or what the unit did instead), and a block the
+  unit would not take out the same way. The line over the chain is still
+  written too; it is not where the finger is.
+- An Add opened with nowhere to put a block, and a block tapped that was
+  not sent, each leave a `[chain]` line that says "not sent".
+
+So when a log shows a tap in the chain editor and no `[chain]` line after
+it, that is a bug in the editor, not something the unit did. Not built:
+making room (moving the blocks after the card along one) when the free
+space is further down the row. The browser's editor is another design and
+was not looked at for this.
+
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
 1.90.58, and through the computer or the Raspberry Pi since 1.90.59. HIS UNIT HAS KEPT TWO CAPTURES

@@ -13420,7 +13420,8 @@ export function run(test) {
     assert.match(read('mobile/src/components/Grip.js'), /onPanResponderTerminationRequest: \(\) => false/, 'the grip hands the touch back to the page')
     assert.match(editor, /const dragStart = \(row, index\) => \{ onScrollLock\?\.\(true\)/, 'the page can scroll under a drag')
     assert.match(editor, /<ChainEditor blocks=\{chainForEditor\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
-    assert.match(editor, /const free = \(lane\.gaps \|\| \[\]\)\.filter\(\(c\) => c > col\)/, 'Add does not put the new block after the card it was pressed on')
+    assert.match(editor, /const free = freeAfter\(lane, col\)/, 'Add does not put the new block after the card it was pressed on')
+    assert.match(editor, /add\(lane\.row, free, page, `\$\{lane\.row\}:\$\{col\}`\)/, 'Add does not put the new block after the card it was pressed on')
   })
 
   test('Save asks twice, then asks the computer, and says what became of it', async () => {

@@ -56,6 +56,7 @@ import {
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
+import { addedWords, addHint, EMPTY_SPACE, freeAfter, noRoomAfter, NOT_SENT, removableAfter } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
@@ -2082,6 +2083,14 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
   const [busy, setBusy] = useState(false)
   /* Said beside the control that caused it, never at the top of the screen. */
   const [issue, setIssue] = useState(null)
+  /*
+   * AND UNDER THE CARD IT IS ABOUT: { at: "row:col", tone, text }. The line
+   * above is drawn once, over the chain, which on a row of thirteen blocks
+   * is a dozen cards up from the one being worked on: an Add that could not
+   * be made was said there, off the screen (lib/chainAdd has the report).
+   * What an Add or a Remove did is said under its own card as well.
+   */
+  const [told, setTold] = useState(null)
   const [hunt, setHunt] = useState('')
   /*
    * A block being dragged: which lane, which item, how far the finger has
@@ -2161,11 +2170,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    */
   const placeOf = (eid) => (getState().allBlocks || []).find((b) => idOf(b) === eid) || null
 
-  const add = async (row, col, page = choice) => {
+  const add = async (row, col, page = choice, from = null) => {
     if (page === null || page === undefined) return
     chainUndo.clear()
     setBusy(true)
     setIssue(null)
+    setTold(null)
+    /* Under which card it is said: the one Add was tapped on, else the new block's own. */
+    const under = from || `${row}:${col}`
+    const name = (palette || []).find((b) => b.page === Number(page))?.name || 'the block'
     beginChainWrite()
     try {
       const r = await placeBlock(row, col, Number(page))
@@ -2176,15 +2189,17 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       if (!holds(row, col)) {
         const put = placeOf(Number(page))
         logDebug('chain', `block ${page} after the add`, put ? `unit has it at ${where(put.row, put.col)}` : 'unit has it nowhere')
-        setIssue(
-          `The unit did not add it: ${where(row, col)} is still empty${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.${
-            put ? ` The unit put it at ${where(put.row, put.col)} instead.` : ''
-          }`
-        )
-      }
+        const words = `The unit did not add it: ${where(row, col)} is still empty${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.${
+          put ? ` The unit put it at ${where(put.row, put.col)} instead.` : ''
+        }`
+        setIssue(words)
+        /* Under the card Add was tapped on too; an empty space has no card to say it under. */
+        if (from) setTold({ at: from, tone: 'warn', text: words })
+      } else setTold({ at: under, tone: 'ok', text: addedWords(name, where(row, col)) })
     } catch (err) {
       endChainWrite()
       setIssue(err.message)
+      if (from) setTold({ at: from, tone: 'warn', text: err.message })
       onError(err.message)
     } finally {
       setBusy(false)
@@ -2195,13 +2210,17 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    * Add, from a card: the picked block goes into the first free space after
    * that card in its row. "Change Move to Add, to add a new block."
    */
-  const addAfterCard = (lane, col, page) => {
-    const free = (lane.gaps || []).filter((c) => c > col).sort((a, b) => a - b)[0]
-    if (free === undefined) {
-      setIssue(`No free space after ${where(lane.row, col)} in this row.`)
+  const addAfterCard = (lane, col, page, name) => {
+    const free = freeAfter(lane, col)
+    if (free === null) {
+      /* The list is not drawn where there is no room (below), so this is a row that filled up since it was: said under the card, and in the log, never only over the chain. */
+      const words = noRoomAfter({ name, linear, more: removableAfter(lane, col) })
+      logDebug('chain', `add block ${page} after ${where(lane.row, col)}`, NOT_SENT)
+      setIssue(words)
+      setTold({ at: `${lane.row}:${col}`, tone: 'warn', text: words })
       return
     }
-    add(lane.row, free, page)
+    add(lane.row, free, page, `${lane.row}:${col}`)
   }
 
   /**
@@ -2236,6 +2255,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     setSettling({ row: lane.row, from: pos.from, to: pos.to })
     setBusy(true)
     setIssue(null)
+    setTold(null)
     beginChainWrite()
     let last = null
     /*
@@ -2322,6 +2342,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     chainUndo.clear()
     setBusy(true)
     setIssue(null)
+    setTold(null)
     /* What it would take to put it back, read while it is still there. */
     const putBack = await readPutBack(row, col, caps, blocks).catch(() => null)
     beginChainWrite()
@@ -2331,7 +2352,9 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       await after(r)
       logDebug('chain', `${where(row, col)} after the remove`, holds(row, col) ? 'still holds a block' : 'empty now')
       if (holds(row, col)) {
-        setIssue(`The unit did not remove it: ${where(row, col)} still holds a block${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.`)
+        const words = `The unit did not remove it: ${where(row, col)} still holds a block${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.`
+        setIssue(words)
+        setTold({ at: `${row}:${col}`, tone: 'warn', text: words })
       } else if (putBack) {
         chainUndo.offer({ ...putBack, label: `put ${putBack.back.name} back` })
       }
@@ -2537,19 +2560,31 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                       onToggleActions={() => {
                         setActing(acting === `${lane.row}:${item.col}` ? null : `${lane.row}:${item.col}`)
                         setAddAfter(null)
+                        setTold(null)
                       }}
-                      onAdd={() => setAddAfter(addAfter === `${lane.row}:${item.col}` ? null : `${lane.row}:${item.col}`)}
+                      onAdd={() => {
+                        const opening = addAfter !== `${lane.row}:${item.col}`
+                        /* An Add with nowhere to put a block is in the log as it is opened: it sends nothing, and a log with a tap and nothing after it said nothing of why. */
+                        if (opening && freeAfter(lane, item.col) === null) logDebug('chain', `Add after ${item.block?.name} at ${where(lane.row, item.col)}`, NOT_SENT)
+                        setTold(null)
+                        setAddAfter(opening ? `${lane.row}:${item.col}` : null)
+                      }}
+                      note={told && told.at === `${lane.row}:${item.col}` ? told : null}
+                      onNoteDismiss={() => setTold(null)}
                       onRemove={() => confirmRemove(item.block?.name, () => remove(lane.row, item.col))}
                       onDragStart={() => dragStart(lane.row, index)}
                       onDragMove={(dy) => dragMove(lane.row, index, dy)}
                       onDragEnd={() => dragEnd(lane.row, index)}
                       adding={
-                        addAfter === `${lane.row}:${item.col}`
-                          ? paletteBox(
-                              (b) => addAfterCard(lane, item.col, b.page),
-                              `Tap a block to put it right after ${item.block.name}.`
-                            )
-                          : null
+                        addAfter !== `${lane.row}:${item.col}` ? null : freeAfter(lane, item.col) === null ? (
+                          /* Nowhere to put one: the words, in the list's place, so no tap lands on a block that would not be added. */
+                          <Note tone="warn">{noRoomAfter({ name: item.block.name, linear, more: removableAfter(lane, item.col) })}</Note>
+                        ) : (
+                          paletteBox(
+                            (b) => addAfterCard(lane, item.col, b.page, item.block.name),
+                            addHint({ name: item.block.name, at: where(lane.row, freeAfter(lane, item.col)), col: item.col, free: freeAfter(lane, item.col) })
+                          )
+                        )
                       }
                     />
                     </Swipeable>
@@ -2582,7 +2617,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
 
       {/* ---------------------------------------------------- what to place */}
       <View style={{ gap: space.sm }}>
-        <Label>Put a block in an empty space</Label>
+        <Label>{EMPTY_SPACE}</Label>
         {paletteBox(
           (b) => setChoice(b.page === Number(choice) ? null : b.page),
           picked ? `Now tap an empty space to put ${picked.name} in it.` : 'Pick a block, then tap an empty space.'
@@ -2607,6 +2642,8 @@ function BlockCard({
   acting,
   lifted,
   adding,
+  note,
+  onNoteDismiss,
   onToggleActions,
   onAdd,
   onRemove,
@@ -2658,6 +2695,13 @@ function BlockCard({
             style={{ borderColor: color.fault, backgroundColor: tint(color.fault, 0.16) }}
           />
         </View>
+      ) : null}
+      {/* What the last Add or Remove on this card did, under it, whether or not its buttons are still open. */}
+      {note ? (
+        /* Done is the answer to the button just pressed, in the bright ink (Note's `strong`); trouble is a warning. */
+        <Note tone={note.tone === 'ok' ? 'hint' : 'warn'} strong={note.tone === 'ok'} onDismiss={onNoteDismiss}>
+          {note.text}
+        </Note>
       ) : null}
       {acting && adding ? adding : null}
     </View>
