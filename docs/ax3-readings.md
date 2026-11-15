@@ -429,3 +429,30 @@ channels of 14.
   a few minutes later.
 - **Not every block has four channels.** The Crossover has two; the Vocoder,
   Tone Match and the RTA have none, and their whole read is one set.
+
+## The chain editor and NAM blocks, through the Pi (15 November 2026)
+
+> "Chain editing and adding a NAM block to empty preset works."
+
+His Axe-Fx III, the phone on 1.90.76, through the Raspberry Pi 5 on computer
+app 1.90.63. From the log he sent with it:
+
+- **A move.** Preset 385, Cab 1 and NAM 2 swapped in a row: `clear Cab 1
+  from column 8`, `clear NAM 2 from column 7`, `place Cab 1 at column 7`,
+  `place NAM 2 at column 8`, each `ok`, then `Cab 1: column 7 → 6 — landed`
+  and `NAM 2: column 6 → 7 — landed`. Saved to slot 385.
+- **A block into an empty row.** `add block 78 at row 1, column 1 — ok`
+  (Chorus 1), and `row 1, column 1 after the add — holds the block`.
+- **NAM blocks into a preset.** Preset 386: `add block 206 at row 1, column
+  2 — ok` and `holds the block` (NAM 1), saved; then `add block 207 at row
+  2, column 1 — ok` and `holds the block` (NAM 2), saved. The unit takes
+  206 and 207 from the chain editor as it takes any block.
+- **From Play.** `block 206 off — ok`, and scenes 1 and 2.
+- The three taps with nothing after them (Wah 1, Drive 1, Formant 1, on a
+  full row) are the report 1.90.78 answered: an Add with nowhere to go now
+  says so under the card and in the log.
+
+Not in this log: Quick build, the starter chains, anything over Bluetooth,
+and a capture picked for a NAM block (the tap is there, on NAM 2, with the
+app put to sleep straight after it and no line of what it wrote).
+

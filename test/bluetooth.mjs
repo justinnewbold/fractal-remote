@@ -9851,9 +9851,21 @@ export function run(test) {
       'It takes its power from the FM9’s MIDI OUT: with the FM9 on, its lamp flashes. If the lamp stays off, swap the two plugs. It has no other way to be powered.'
     ])
     assert.match(gear.waysFor('axefx3').find((w) => w.key === 'mdbt01').steps[0], /MIDI IN and its MIDI OUT \(not THRU: the phone would only hear itself there\)/)
-    /* Tried: the AM4 through the WIDI Master, the WIDI Jack and the Uhost; the FM3 through the Uhost and the U2MIDI Pro, and, a customer's, the MD-BT01 and the WIDI Jack (Justin, 15 November 2026). Nothing else says it has run. */
+    /*
+     * Tried: the AM4 through the WIDI Master, the WIDI Jack and the Uhost;
+     * the FM3 through the Uhost and the U2MIDI Pro, and, a customer's, the
+     * MD-BT01 and the WIDI Jack (Justin, 15 November 2026); and, from the
+     * app's own anonymous notes read that day, an FM9 through a WIDI Master
+     * and an Axe-Fx III through a WIDI Uhost. Nothing else says it has run,
+     * and no note is from a VP4.
+     */
     const tried = Object.fromEntries(['am4', 'fm3', 'fm9', 'axefx3', 'vp4'].map((u) => [u, gear.waysFor(u).filter((w) => w.tried).map((w) => w.key)]))
-    assert.deepEqual(tried, { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'], fm9: [], axefx3: [], vp4: [] })
+    assert.deepEqual(tried, { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'], fm9: ['master'], axefx3: ['uhost'], vp4: [] })
+    /* The notes are ours and say where each came from: nothing in one is a sentence a customer reads (the Developer page alone draws them). */
+    for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) assert.match(gear.TRIED_NOTES[unit], /The app’s notes to 15 November: /, `${unit}: its note does not say what the app’s own notes show`)
+    assert.equal(gear.TRIED_NOTES.vp4, undefined, 'a VP4 is recorded as run, and no note is from one')
+    /* An Android phone's one note of an AM4 on its own cable does not make the website say "phone or tablet": which copy of the app sent it is not known (test/limits.mjs asks for "cable from an Android"). */
+    assert.ok(!/cable from an Android/i.test(gear.TRIED_NOTES.am4))
     /* The WIDI Master runs on the unit's MIDI OUT alone (CME: "No external power option"): its steps never send anybody to a charger for it. */
     for (const u of ['am4', 'fm9']) assert.match(gear.waysFor(u)[0].steps.join(' '), /It has no other way to be powered\./)
     /* The FM3's U2MIDI Pro: CME's own page, checked on 26 October 2026, and no Amazon link until one has been checked. */
@@ -14091,9 +14103,16 @@ export function run(test) {
     assert.equal(gear.untried('vp4'), true)
     for (const unit of ['am4', 'fm3', 'fm9', 'axefx3', null, 'vp5']) assert.equal(gear.untried(unit), false, String(unit))
     assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'fm9', 'axefx3'])
-    /* Which adapter the Axe-Fx III and the FM9 went through was not said, so no way on them is marked tried. */
-    assert.ok(gear.waysFor('axefx3').every((w) => !w.tried))
-    assert.ok(gear.waysFor('fm9').every((w) => !w.tried))
+    /*
+     * Which adapter the Axe-Fx III and the FM9 went through was not said by
+     * the people who confirmed them, so no way on them was marked. Since 15
+     * November 2026 the app's own notes say one each (an anonymous note has
+     * the adapter's name): a WIDI Master on an FM9, a WIDI Uhost on an
+     * Axe-Fx III. Only those: a way nobody's note names stays unmarked.
+     */
+    assert.deepEqual(gear.waysFor('axefx3').filter((w) => w.tried).map((w) => w.key), ['uhost'])
+    assert.deepEqual(gear.waysFor('fm9').filter((w) => w.tried).map((w) => w.key), ['master'])
+    assert.ok(gear.waysFor('vp4').every((w) => !w.tried))
     assert.ok(gear.waysFor('am4').some((w) => w.tried) && gear.waysFor('fm3').some((w) => w.tried))
     /* The head of every log he is sent still says it, so a report from an untried unit stands out. */
     assert.equal(gear.unitForReport('fm9'), 'FM9')

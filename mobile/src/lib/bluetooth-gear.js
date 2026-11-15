@@ -160,15 +160,28 @@ export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
  * USB MIDI driver), and again on 3 November: "I've already used my iPhone
  * and it does connect." A cable is not a way on the page (TRIED_WAYS has
  * none), so it is kept in the AM4's note, and no other unit has run on one.
+ *
+ * AND FROM THE APP'S OWN NOTES, READ 15 NOVEMBER 2026. "We have the data to
+ * tell what units have been used recently and what Bluetooth devices have
+ * been connected correct? Can we go through the logs to find what has worked
+ * with what devices so far and update our list?" (Justin.) The notes are
+ * What works' (public.gear_reports: anonymous, from the people who said
+ * yes; docs/bluetooth-midi.md has the whole count and how to read it
+ * again). What they add: an FM9 answering through a WIDI Master from an
+ * iPhone, and an Axe-Fx III through a WIDI Uhost from an iPhone, which give
+ * each a way in TRIED_WAYS; the AM4 through a WIDI Jack from both kinds of
+ * phone; and an FM3 by its U2MIDI Pro straight into an iPhone. A note says
+ * the adapter's name and whether the unit answered, never the cable on a
+ * Uhost nor who sent it, and many are his own. No note is from a VP4.
  */
 export const TESTED = ['am4', 'fm3', 'fm9', 'axefx3']
 
 /** What we know of each try, for the Developer page. */
 export const TRIED_NOTES = {
-  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
-  fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it. A customer’s Yamaha MD-BT01 works on one, and a WIDI Jack works but gets hot (Justin, 15 November 2026; which phone was not said).',
-  fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
-  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said. Justin’s own (Mark II, firmware 33.01) from his iPhone, 13 November 2026: Edit’s knobs on the NAM block all work.'
+  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November. The app’s notes to 15 November: it answered through a WIDI Jack from an Android phone (2) and an iPhone (1), and on its own USB cable from an iPhone (1); one note of its own USB cable is an Android phone’s (which copy of the app is not known).',
+  fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it. A customer’s Yamaha MD-BT01 works on one, and a WIDI Jack works but gets hot (Justin, 15 November 2026; which phone was not said). The app’s notes to 15 November: it answered through a WIDI Uhost from an iPhone (2) and by a U2MIDI Pro straight into an iPhone (2); the one note of a WIDI Jack, from an iPhone on 7 November, is of an FM3 not answering.',
+  fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said. The app’s notes to 15 November: it answered through a WIDI Master from an iPhone, 7 November (1 note, after one of it not answering the same day).',
+  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said. Justin’s own (Mark II, firmware 33.01) from his iPhone, 13 November 2026: Edit’s knobs on the NAM block all work. The app’s notes to 15 November: it answered through a WIDI Uhost from an iPhone (2, on 13 and 14 November; the cable on the Uhost is not in a note), and through something an iPhone called “Quad Cortex Bluetooth” (2, on 30 October and 10 November); the one note of a WIDI Master, 14 November, is of it not answering.'
 }
 
 /*
@@ -889,7 +902,8 @@ const powerStep = (name) =>
  * would need adapters for that nobody has had on one.
  */
 /* The WIDI Jack on an AM4 since 28 October 2026: "WIDI jack works perfectly with AM4". On an FM3, a customer's MD-BT01 and WIDI Jack (15 November 2026). */
-const TRIED_WAYS = { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'] }
+/* An FM9 through a WIDI Master and an Axe-Fx III through a WIDI Uhost, each from an iPhone: the app's own notes, read 15 November 2026 (TESTED, above). */
+const TRIED_WAYS = { am4: ['master', 'jack', 'uhost'], fm3: ['uhost', 'mdbt01', 'jack'], fm9: ['master'], axefx3: ['uhost'] }
 
 /** The name on each adapter's tab, and the one for an adapter the app has no way for (Troubleshooting's last tab). */
 export const ADAPTER_TABS = Object.freeze({ master: 'WIDI Master', jack: 'WIDI Jack', uhost: 'WIDI Uhost', mdbt01: 'Yamaha MD-BT01', other: 'Another adapter' })
