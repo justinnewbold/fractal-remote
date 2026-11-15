@@ -2101,7 +2101,7 @@ export function run(test) {
        a wrong row number and a write the unit ignored both leave the asked
        cell empty, and only one of them puts the block in another row. */
     assert.match(flat, /const placeOf = \(eid\) => \(getState\(\)\.allBlocks \|\| \[\]\)\.find\(\(b\) => idOf\(b\) === eid\) \|\| null/, 'nothing looks for a block outside the row it was asked into')
-    assert.match(flat, /The unit put it at \$\{where\(put\.row, put\.col\)\} instead\./, 'an add that landed in another row is called ignored')
+    assert.match(flat, /The unit put it at \$\{where\(got\.put\.row, got\.put\.col\)\} instead\./, 'an add that landed in another row is called ignored')
     assert.match(flat, /if \(put\) return `\$\{m\.block\.name\} is in \$\{where\(put\.row, put\.col\)\}`/, 'a move that landed in another row is called "not in this row"')
     /* And the volume never writes to a block it has not found. */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')

@@ -56,7 +56,7 @@ import {
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
-import { addedWords, addHint, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere } from '../lib/chainAdd'
+import { addedWords, addHint, addOutcome, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere, saidInRun } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
@@ -2188,23 +2188,26 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       await after(r)
       setAddAfter(null)
       logDebug('chain', `${where(row, col)} after the add`, holds(row, col) ? 'holds the block' : 'still empty')
-      /* Where the unit has the block that was asked for, by its own id, off the read just made (nowhere, where the read does not carry ids the list's can be matched to). */
-      const put = placeOf(Number(page))
-      const here = !!put && put.row === row && put.col === col
-      if (!holds(row, col)) {
-        logDebug('chain', `block ${page} after the add`, put ? `unit has it at ${where(put.row, put.col)}` : 'unit has it nowhere')
+      /* What it came to, off the read just made (lib/chainAdd addOutcome): the cell asked first, then where the unit has the block. */
+      const got = addOutcome({ blocks: getState().allBlocks, is: (b) => idOf(b) === Number(page), row, col, was })
+      if (got.kind === 'empty') {
+        logDebug('chain', `block ${page} after the add`, got.put ? `unit has it at ${where(got.put.row, got.put.col)}` : 'unit has it nowhere')
         const words = `The unit did not add it: ${where(row, col)} is still empty${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.${
-          put ? ` The unit put it at ${where(put.row, put.col)} instead.` : ''
+          !got.put ? '' : got.stayed ? ` ${name} is still at ${where(got.put.row, got.put.col)}.` : ` The unit put it at ${where(got.put.row, got.put.col)} instead.`
         }`
         setIssue(words)
         setTold({ at: under, tone: 'warn', text: words })
-      } else if (put && !here) {
+      } else if (got.kind === 'other') {
         /* A block is there, and it is not this one: the tick would have been for somebody else's block. */
-        logDebug('chain', `block ${page} after the add`, `unit has it at ${where(put.row, put.col)}, and ${where(row, col)} holds another`)
-        const words = otherWords(name, where(row, col), where(put.row, put.col))
+        logDebug('chain', `block ${page} after the add`, `unit has it at ${where(got.put.row, got.put.col)}, and ${where(row, col)} holds another`)
+        const words = otherWords(name, where(row, col), where(got.put.row, got.put.col))
         setIssue(words)
         setTold({ at: under, tone: 'warn', text: words })
-      } else setTold({ at: under, tone: 'ok', text: was && here && (was.row !== row || was.col !== col) ? movedWords(name, where(row, col), where(was.row, was.col)) : addedWords(name, where(row, col)) })
+      } else {
+        /* Under the card Add was tapped on, unless that card has just left its cell (a block moved from its own card): then under the block, where it is now. */
+        const gone = from && !holds(...from.split(':').map(Number))
+        setTold({ at: gone ? `${row}:${col}` : under, tone: 'ok', text: got.kind === 'moved' ? movedWords(name, where(row, col), where(was.row, was.col)) : addedWords(name, where(row, col)) })
+      }
     } catch (err) {
       endChainWrite()
       setIssue(err.message)
@@ -2619,7 +2622,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
                         onPress={() => add(lane.row, item.col)}
                       />
                       {/* A block the unit would not put here is said here, under the space that was tapped: it has no card to say it under. */}
-                      <Told note={told && told.at === `${lane.row}:${item.col}` ? told : null} onDismiss={() => setTold(null)} />
+                      <Told note={told && saidInRun(told.at, lane.row, item.col, item.last) ? told : null} onDismiss={() => setTold(null)} />
                     </View>
                   )}
                 </View>

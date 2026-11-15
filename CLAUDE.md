@@ -1459,6 +1459,18 @@ run by test/chain-add.mjs), for every account:
   block's id there, where the read carries ids), a cell that holds some
   other block is said as that, and a block that was in the chain already
   is said as MOVED, since a unit has one of each.
+- A SECOND READ, of those extras, found the tick's own rule wrong twice:
+  it asked where the unit had the block and took the first place it
+  found, so with a block listed in two places (the demo lists a moved
+  block in both) "holds another block. Nothing was added there" was said
+  under the new block's own card; and a block moved from its OWN card had
+  its line filed under the cell it had just left, where nothing draws it.
+  The rule is one function now, `addOutcome` in lib/chainAdd, run whole
+  by the test: the cell is asked first; "moved" only where the block is
+  gone from where it was; a line for a cell that has become part of a run
+  of empty spaces is drawn under that run (`saidInRun`), and a block that
+  left its card has its line under it where it is now. THE LESSON AGAIN:
+  what was added on top of the fix, unasked, is where the next faults were.
 
 So when a log shows a tap in the chain editor and no `[chain]` line after
 it, that is a bug in the editor, not something the unit did. Not built:

@@ -78,5 +78,51 @@ export const movedWords = (name, at, was) => `✓ ${name} is at ${at} now. It wa
 /** The cell holds a block, and it is not the one that was asked for. */
 export const otherWords = (name, at, put) => `${at} holds another block, and the unit has ${name} at ${put}. Nothing was added there.`
 
+/**
+ * WHAT AN ADD CAME TO, off the chain as the unit read it back afterwards.
+ *
+ * `blocks` is that read; `is(block)` says whether a block is the one that
+ * was asked for (by the unit's own id for it); `row` and `col` are the cell
+ * it was asked into; `was` is where that very block sat BEFORE the write,
+ * or null where it was not in the chain.
+ *
+ * - 'empty': the cell holds nothing. `put` is where the unit has the block
+ *   (null where nowhere), and `stayed` whether that is simply where it was
+ *   all along, which is not somewhere the unit "put it instead".
+ * - 'other': the cell holds a block and it is not this one, while the read
+ *   does have this one elsewhere (`put`). No tick for somebody else's block.
+ * - 'moved': the block is in the cell and is gone from where it was: a unit
+ *   has one of each, and the list offers blocks already in the chain when
+ *   it is searched.
+ * - 'added': the block is in the cell. Also where the read carries no id
+ *   the list's can be matched to (the cell holding a block is then all
+ *   there is to go by), and where a read lists the block in both places
+ *   (the demo does): two are on the screen, so "moved" would be untrue.
+ *
+ * THE CELL IS ASKED FIRST. A first cut asked where the unit had the block
+ * and took the first place it found: with the block listed twice that was
+ * the old place, and "holds another block. Nothing was added there" was
+ * said under the new block's own card.
+ */
+export function addOutcome({ blocks, is, row, col, was = null }) {
+  const all = Array.isArray(blocks) ? blocks : []
+  const at = (b, r, c) => b?.row === r && b?.col === c
+  const inCell = all.filter((b) => at(b, row, col))
+  const mine = inCell.some(is)
+  /* Where the read has the block, the first place it lists it: only asked where the cell does not hold it, so it is somewhere else. */
+  const elsewhere = all.find(is) || null
+  if (!inCell.length) return { kind: 'empty', put: elsewhere, stayed: !!(elsewhere && was && at(elsewhere, was.row, was.col)) }
+  if (!mine && elsewhere) return { kind: 'other', put: elsewhere }
+  /* Gone from where it was (which, for a block put back where it already sat, it is not). */
+  const left = !!was && !all.some((b) => is(b) && at(b, was.row, was.col))
+  return { kind: mine && left ? 'moved' : 'added', put: null }
+}
+
+/** Whether what was said for the cell "row:col" (`key`) belongs under the run of empty spaces from `col` to `last` in `row`: a cell that has just been emptied joins the run beside it, which is drawn as one button named by its FIRST column. */
+export const saidInRun = (key, row, col, last) => {
+  const [r, c] = String(key || '').split(':').map(Number)
+  return Number.isInteger(r) && Number.isInteger(c) && r === row && c >= col && c <= last
+}
+
 /** What the log says of an Add that sent nothing. */
 export const NOT_SENT = 'not sent: no free space after it in this row'

@@ -94,6 +94,43 @@ export function run(test) {
     /* A block that was in the chain already was MOVED (a unit has one of each): "Added" would be a second one that is not there. And a cell that holds some other block is not a tick at all. */
     assert.equal(c.movedWords('Drive 1', 'row 3, column 12', 'row 3, column 3'), '✓ Drive 1 is at row 3, column 12 now. It was at row 3, column 3: the unit has one Drive 1, so it moved.')
     assert.equal(c.otherWords('Wah 1', 'row 3, column 12', 'row 2, column 4'), 'row 3, column 12 holds another block, and the unit has Wah 1 at row 2, column 4. Nothing was added there.')
+
+    /*
+     * WHAT AN ADD CAME TO, off the read after it. The cell is asked first:
+     * a first cut asked where the unit had the block and took the first
+     * place it found, which with the block listed twice (the demo lists a
+     * moved block in both places) was the old one, and "holds another
+     * block" was said under the new block's own card.
+     */
+    const is = (b) => b.id === 118
+    const wah = (row, col) => ({ row, col, id: 118 })
+    const amp = (row, col) => ({ row, col, id: 37 })
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(2, 11)], is, row: 2, col: 11 }), { kind: 'added', put: null })
+    /* Nothing in the cell: where the unit has it instead, if anywhere, and whether that is only where it always was. */
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0)], is, row: 2, col: 11 }), { kind: 'empty', put: null, stayed: false })
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(1, 11)], is, row: 2, col: 11 }), { kind: 'empty', put: wah(1, 11), stayed: false })
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(2, 3)], is, row: 2, col: 11, was: { row: 2, col: 3 } }), { kind: 'empty', put: wah(2, 3), stayed: true })
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(1, 5)], is, row: 2, col: 11, was: { row: 2, col: 3 } }), { kind: 'empty', put: wah(1, 5), stayed: false })
+    /* Some other block in the cell, and this one elsewhere: no tick. */
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 11), wah(2, 3)], is, row: 2, col: 11 }), { kind: 'other', put: wah(2, 3) })
+    /* A block in the cell and this one's id nowhere in the read: the read carries no id to go by, and the cell holding a block is all there is. */
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 11)], is, row: 2, col: 11 }), { kind: 'added', put: null })
+    /* It was in the chain, and is gone from there: moved. Still listed there too (two on the screen): added, never "moved", never "another block". */
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(2, 11)], is, row: 2, col: 11, was: { row: 2, col: 3 } }), { kind: 'moved', put: null })
+    assert.deepEqual(c.addOutcome({ blocks: [wah(2, 3), amp(2, 0), wah(2, 11)], is, row: 2, col: 11, was: { row: 2, col: 3 } }), { kind: 'added', put: null })
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 0), wah(2, 11)], is, row: 2, col: 11, was: { row: 2, col: 11 } }), { kind: 'added', put: null }, 'a block put where it already was is not a move')
+    /* It was in the chain, and the read after has it nowhere, with some block in the cell: not "moved", which is said of a block seen where it went. */
+    assert.deepEqual(c.addOutcome({ blocks: [amp(2, 11)], is, row: 2, col: 11, was: { row: 2, col: 3 } }), { kind: 'added', put: null })
+    for (const none of [null, undefined, 'x']) assert.deepEqual(c.addOutcome({ blocks: none, is, row: 0, col: 0 }), { kind: 'empty', put: null, stayed: false })
+
+    /* A note for a cell that is now part of a run of empty spaces is under that run: a cell just emptied joins the run beside it, drawn as one button named by its first column. */
+    assert.equal(c.saidInRun('2:3', 2, 3, 3), true)
+    assert.equal(c.saidInRun('2:4', 2, 3, 6), true)
+    assert.equal(c.saidInRun('2:6', 2, 3, 6), true)
+    assert.equal(c.saidInRun('2:7', 2, 3, 6), false)
+    assert.equal(c.saidInRun('2:2', 2, 3, 6), false)
+    assert.equal(c.saidInRun('1:4', 2, 3, 6), false)
+    for (const none of [null, undefined, '', 'x', '2', '2:x']) assert.equal(c.saidInRun(none, 2, 3, 6), false)
     assert.equal(c.NOT_SENT, 'not sent: no free space after it in this row')
     for (const said of [c.addHint({ name: 'X', at: 'row 1, column 2', col: 0, free: 1 }), c.addHint({ name: 'X', at: 'row 1, column 3', col: 0, free: 2 }), c.noRoomAfter({ name: 'X', more: true }), c.noRoomAfter({ name: 'X' }), c.noRoomAfter({ name: 'X', linear: true }), c.noRoomAfter({ name: 'X', more: true, elsewhere: true }), c.noRoomAfter({ name: 'X', linear: true, elsewhere: true }), c.addedWords('X', 'slot 2'), c.movedWords('X', 'slot 2', 'slot 1'), c.otherWords('X', 'slot 2', 'slot 1')])
       assert.ok(!/this phone|\bbeta\b|\bsoon\b|coming|tried|official|undefined|null/i.test(said), said)
@@ -102,7 +139,7 @@ export function run(test) {
   test('chain add: the editor says it under the card that was tapped, draws no list where nothing can be added, and writes down an Add that sends nothing', async () => {
     const c = await lib()
     const editor = flat(code(read('mobile/src/screens/Edit.js')))
-    assert.match(editor, /import \{ addedWords, addHint, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere \} from '\.\.\/lib\/chainAdd'/)
+    assert.match(editor, /import \{ addedWords, addHint, addOutcome, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere, saidInRun \} from '\.\.\/lib\/chainAdd'/)
 
     /* The other way to add is named by its own heading, so the words that point at it cannot drift from it. */
     assert.match(editor, /<Label>\{EMPTY_SPACE\}<\/Label>/)
@@ -122,22 +159,24 @@ export function run(test) {
     assert.match(editor, /<Told note=\{note\} onDismiss=\{onNoteDismiss\} \/> \{acting && adding \? adding : null\}/)
     assert.match(editor, /function Told\(\{ note, onDismiss \}\) \{ if \(!note\) return null return \( <Note tone=\{note\.tone === 'ok' \? 'hint' : 'warn'\} strong=\{note\.tone === 'ok'\} onDismiss=\{onDismiss\}> \{note\.text\} <\/Note> \) \}/)
     /* And under an EMPTY SPACE that was tapped: a block the unit would not put there has no card to be said under. */
-    assert.match(editor, /onPress=\{\(\) => add\(lane\.row, item\.col\)\} \/> <Told note=\{told && told\.at === `\$\{lane\.row\}:\$\{item\.col\}` \? told : null\} onDismiss=\{\(\) => setTold\(null\)\} \/>/)
+    assert.match(editor, /onPress=\{\(\) => add\(lane\.row, item\.col\)\} \/> <Told note=\{told && saidInRun\(told\.at, lane\.row, item\.col, item\.last\) \? told : null\} onDismiss=\{\(\) => setTold\(null\)\} \/>/)
 
     /* An Add from a card is said under THAT card; one into an empty space, under the new block's own. */
     assert.match(editor, /const add = async \(row, col, page = choice, from = null\) => \{ if \(page === null \|\| page === undefined\) return chainUndo\.clear\(\) setBusy\(true\) setIssue\(null\) setTold\(null\) const under = from \|\| `\$\{row\}:\$\{col\}` const name = \(palette \|\| \[\]\)\.find\(\(b\) => b\.page === Number\(page\)\)\?\.name \|\| 'the block' const was = placeOf\(Number\(page\)\) beginChainWrite\(\)/)
     assert.match(editor, /add\(lane\.row, free, page, `\$\{lane\.row\}:\$\{col\}`\)/)
     /*
      * THE TICK IS FOR THE BLOCK THAT WAS ASKED FOR, by the read after the
-     * write: the cell holds a block, and where the unit says by its own id
-     * where that block is, it is there. A cell still empty, and a cell that
-     * holds some other block, are each said as what they are, under the
-     * card or the space too. A block that was in the chain before is said
-     * as moved.
+     * write, and the rule is lib/chainAdd's (run whole, above): the editor
+     * hands it the read, the unit's own id for the block, the cell and
+     * where the block was before, and says each answer as what it is, under
+     * the card or the space too.
      */
-    assert.match(editor, /const put = placeOf\(Number\(page\)\) const here = !!put && put\.row === row && put\.col === col if \(!holds\(row, col\)\) \{/)
-    assert.match(editor, /setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else if \(put && !here\) \{/)
-    assert.match(editor, /const words = otherWords\(name, where\(row, col\), where\(put\.row, put\.col\)\) setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else setTold\(\{ at: under, tone: 'ok', text: was && here && \(was\.row !== row \|\| was\.col !== col\) \? movedWords\(name, where\(row, col\), where\(was\.row, was\.col\)\) : addedWords\(name, where\(row, col\)\) \}\)/)
+    assert.match(editor, /const got = addOutcome\(\{ blocks: getState\(\)\.allBlocks, is: \(b\) => idOf\(b\) === Number\(page\), row, col, was \}\) if \(got\.kind === 'empty'\) \{/)
+    assert.match(editor, /!got\.put \? '' : got\.stayed \? ` \$\{name\} is still at \$\{where\(got\.put\.row, got\.put\.col\)\}\.` : ` The unit put it at \$\{where\(got\.put\.row, got\.put\.col\)\} instead\.`/)
+    assert.match(editor, /setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else if \(got\.kind === 'other'\) \{/)
+    assert.match(editor, /const words = otherWords\(name, where\(row, col\), where\(got\.put\.row, got\.put\.col\)\) setIssue\(words\) setTold\(\{ at: under, tone: 'warn', text: words \}\) \} else \{/)
+    /* Done is said under the card Add was tapped on, unless that card has just left its cell (its own block moved): then under the block where it is now. */
+    assert.match(editor, /const gone = from && !holds\(\.\.\.from\.split\(':'\)\.map\(Number\)\) setTold\(\{ at: gone \? `\$\{row\}:\$\{col\}` : under, tone: 'ok', text: got\.kind === 'moved' \? movedWords\(name, where\(row, col\), where\(was\.row, was\.col\)\) : addedWords\(name, where\(row, col\)\) \}\)/)
     assert.match(editor, /setIssue\(err\.message\) setTold\(\{ at: under, tone: 'warn', text: err\.message \}\) onError\(err\.message\)/)
     /* A block the unit would not take out, and a remove that failed, are said under that block's own card as well. */
     assert.match(editor, /setIssue\(words\) setTold\(\{ at: `\$\{row\}:\$\{col\}`, tone: 'warn', text: words \}\) \} else if \(putBack\)/)
