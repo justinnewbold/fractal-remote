@@ -127,6 +127,28 @@ import {
 import { presetMissLine } from './bluetooth-gear.js'
 import { PRESET_SETTLE_MS } from './own-echo.js'
 import { NOT_BLOCKS } from './gen3Catalog.js'
+import {
+  GRID_SUB,
+  SHUNT_FROM,
+  buildGridCable,
+  buildGridDump,
+  buildGridPut,
+  buildGridRead,
+  buildGridSelect,
+  cableKnown,
+  cellOnGrid,
+  gridAllowed,
+  gridDumpPart,
+  gridFromLive,
+  gridHand,
+  gridProof,
+  gridShaped,
+  gridSize,
+  noProof,
+  parseGridDump,
+  parseGridLive
+} from './gen3-grid.js'
+import { AM4_PALETTE, AM4_SLOTS, am4SlotAllowed, buildAm4Slot } from './am4-chain.js'
 import { createVp4Wire } from './bleVp4.js'
 
 /* ------------------------------------------------------------------ */
@@ -216,7 +238,18 @@ export const WAIT = {
   gen3ReadAll: 10000,
   /* An Axe-Fx III's captures (lib/nam-install): one slot's head (334 bytes back, a ninth of a second down an adapter), and one message of an upload (650 bytes out and the unit's answer). */
   namSlot: 2500,
-  namChunk: 4000
+  namChunk: 4000,
+  /*
+   * The grid (lib/gen3-grid). The live read is one answer of about 755
+   * bytes, a quarter of a second down an adapter. The preset whole is 24,680
+   * bytes from an FM3 or FM9 and 49,336 from an Axe-Fx III: eight seconds
+   * and sixteen at 31,250 baud, and a Bluetooth link can be slower than the
+   * jack, so the whole is given a minute and a half and timed by its bytes
+   * (the longest the unit may go quiet between two frames is the gap).
+   */
+  gridLive: 2500,
+  gridDumpGap: 2500,
+  gridDumpAll: 90000
 }
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
@@ -442,11 +475,14 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
-    /* A save (lib/bleSave) goes only as the one save being sent, over the location the AM4 has just said it is on (`saving`): never on the lists below, which know no save. */
-    const ok = sysex ? (saveShaped(bytes, MODELS.am4) ? saveAllowed(bytes, MODELS.am4, saving()) : am4Allowed(bytes) || am4EditAllowed(bytes, placed())) : am4ShortAllowed(bytes, learned())
+    /*
+     * A save (lib/bleSave) goes only as the one save being sent, over the location the AM4 has just said it is on (`saving`): never on the lists below, which know no save.
+     * And a block put in a slot (lib/am4-chain) only as the one slot write the wire is sending at this moment (`slotting`), one of the four slots and a block the AM4 itself names: on neither list, and never while nothing of the chain's is going.
+     */
+    const ok = sysex ? (saveShaped(bytes, MODELS.am4) ? saveAllowed(bytes, MODELS.am4, saving()) : am4Allowed(bytes) || am4EditAllowed(bytes, placed()) || am4SlotAllowed(bytes, slotting())) : am4ShortAllowed(bytes, learned())
     if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
       return 'refused'
@@ -483,7 +519,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -536,6 +572,20 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
       }
       return send(bytes) === false ? 'failed' : 'sent'
     }
+    /*
+     * THE GRID (lib/gen3-grid: the live read, a cell selected, a block put
+     * in one, a cable): goes only as, byte for byte, one of the frames of
+     * the grid job the wire has in hand at this moment (`gridding`). Any
+     * other frame of those shapes, or one with no such job going, is
+     * refused. Nothing this file sent before had any of them.
+     */
+    if (gridShaped(bytes, model)) {
+      if (!gridAllowed(bytes, gridding())) {
+        log(`refused to send ${toHex(bytes)}: it is one of the grid’s messages, and not one being sent now`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
@@ -562,8 +612,9 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
  * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; his account's alone: lib/bluetooth), asked at every request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
+ * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -610,6 +661,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const saveOn = () => editOn() && typeof save === 'function' && save() === true
   let savingSlot = null
+  /*
+   * THE CHAIN, READ AS A GRID AND CHANGED FROM HERE (lib/gen3-grid on an
+   * FM3, FM9 or Axe-Fx III; lib/am4-chain on an AM4): open to this account
+   * or not (`chain`, lib/bluetooth: his account until lib/features
+   * CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), where Edit is open, asked at every
+   * request and every send. `chainHand` holds the frames of the one grid
+   * job in hand, for exactly as long as it is being done (lib/gen3-grid
+   * gridHand): the way out passes a frame of the grid's shapes only if it
+   * is one of them, byte for byte.
+   */
+  const chainOn = () => editOn() && typeof chain === 'function' && chain() === true
+  const chainHand = gridHand()
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
@@ -645,8 +708,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null))
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), () => (chainOn() ? chainHand.now() : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1604,10 +1667,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       fc: { model: false, liveState: false },
       tuner: true,
       /* Save from the phone (lib/bleSave), where it is open to this account: asked when the app asks what the unit can do. */
-      supportsSave: saveOn()
+      supportsSave: saveOn(),
+      /* The chain read as a grid and changed from here (lib/gen3-grid, lib/am4-chain), where it is open to this account: the computer app's own word for it. */
+      gridEdit: chainOn()
     }
     if (am4) {
-      return { ...common, slotModel: 'linear', sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
+      return { ...common, slotModel: 'linear', slotCount: AM4_SLOTS, sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
     }
     /*
      * 512 PRESETS ON EVERY GEN 3 UNIT, the Axe-Fx III too, as the computer
@@ -2838,6 +2903,251 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return b
   }
 
+  /* ---------------- the chain: where the blocks are, a block placed, a cable (lib/gen3-grid, lib/am4-chain) ---------------- */
+
+  /*
+   * "I need everything with the chain builder to work over Bluetooth also"
+   * (15 November 2026). Four routes, the computer app's own and answered as
+   * it answers them, only where the chain is open to this account (chainOn):
+   *
+   *   GET  /blocks             the blocks this unit can be given
+   *   GET  /preset/grid        every cell that holds something, and its cables
+   *   PUT  /preset/grid/cell   {row, col, blockId}: a block into a cell (0 empties it), counted from one
+   *   POST /preset/grid/cable  {srcRow, srcCol, destRow, connect}: a cable into the next column (never an AM4, which has none)
+   *
+   * ONE GRID JOB AT A TIME (inGrid), each with its own frames in hand for
+   * the way out (withFrames), in Edit's place in the line, after Play's. A
+   * write asked before a scene or preset change is not sent after it
+   * (movedSince, and moved() drops the ones still waiting): a block meant
+   * for one preset never lands in the next.
+   *
+   * A REFUSAL IS ANSWERED, NOT THROWN: {ok: false}, as the computer answers
+   * one, so a plan of several steps goes on to the rest (a unit with no room
+   * left for the fifth block still gets the first four joined up) and
+   * whoever asked reads the chain back to see what landed.
+   */
+  let gridLane = Promise.resolve()
+  const inGrid = (run) => {
+    const next = gridLane.then(run, run)
+    gridLane = next.then(
+      () => {},
+      () => {}
+    )
+    return next
+  }
+  const withFrames = (frames, run) => chainHand.during(frames, run)
+  /* What the dump has borne out of the live read on this connection (lib/gen3-grid gridProof), and the grid kept a moment. */
+  let gridProved = noProof()
+  let gridSaid = ''
+  let liveTold = false
+  /* Kept for a moment, and only while nothing has moved: another preset's is another grid (`moves`), and a write to this one makes it read again (chainChanged). */
+  let gridKept = null
+  function chainChanged() {
+    gridKept = null
+    statusKept = null
+    forgetEdits()
+    if (am4) structure = null
+    emit({ type: 'changed', scope: 'grid' })
+  }
+  const blockNamed = (eid) => blocks.find((b) => b.page === eid)?.name || `Block ${eid}`
+  const gen3Palette = () =>
+    blocks
+      .filter((b) => Number.isInteger(b.page) && typeof b.slug === 'string' && b.slug && !NOT_BLOCKS.includes(b.page))
+      .map((b) => ({ slug: b.slug, family: b.family || b.slug, instance: Number.isInteger(b.instance) ? b.instance : 1, name: b.name, page: b.page }))
+
+  /* The live read: its answer as it came, and what this app makes of it (null where it makes nothing). */
+  async function gen3LiveGrid() {
+    const out = buildGridRead(model)
+    const got = await withFrames([out], () =>
+      ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridLive, 'where the blocks are', { priority: 'editRead' })
+    )
+    if (!got || got === SKIPPED || rejected(got)) return { frame: null, live: null }
+    return { frame: got.frame, live: parseGridLive(got.frame, model) }
+  }
+
+  /* The preset as it is being edited, whole, for the grid in it: the read the computer app uses. */
+  async function gen3DumpGrid() {
+    const frames = []
+    let head = false
+    const started = time.now()
+    const got = await ask(buildGridDump(model), null, WAIT.gridDumpGap, 'the preset, for where its blocks are', {
+      cap: WAIT.gridDumpAll,
+      priority: 'editRead',
+      collect: (f) => {
+        const part = gridDumpPart(f, model)
+        if (!part || (part === 'head' && head)) return undefined
+        if (part === 'head') head = true
+        else if (!head) return undefined
+        frames.push(f)
+        if (part !== 'foot') return null
+        return parseGridDump(frames, model) || { broken: true }
+      }
+    })
+    if (rejected(got)) throw refusedBy(got.rejected)
+    if (!got || got === SKIPPED) {
+      say(head ? 'gave up on the preset part-way' : `the ${spec.name} did not answer a request for the preset it is on`)
+      throw failure(`The ${spec.name} didn’t send its preset, so the app can’t see where its blocks are. Try again in a moment.`, 504)
+    }
+    if (got.broken) {
+      say('the preset came back damaged; not used')
+      throw failure(`The ${spec.name}’s preset came back damaged, so the app can’t see where its blocks are. Try again in a moment.`, 504)
+    }
+    say(`read the preset for its grid in ${((time.now() - started) / 1000).toFixed(1)} s`)
+    return got
+  }
+
+  /**
+   * GET /preset/grid on a gen-3 unit: the live read where the preset has
+   * borne it out on this connection, the preset itself where it has not
+   * (lib/gen3-grid says why both). Answered as the computer answers it:
+   * rows and columns from zero, a shunt by the block id the unit files it
+   * under, `fromRows` the rows of the column before that feed a cell.
+   */
+  function gen3Grid() {
+    return inGrid(async () => {
+      if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < STRUCTURE_FRESH_MS) return gridKept.value
+      const at = moves
+      const started = time.now()
+      const { frame: liveFrame, live } = await gen3LiveGrid()
+      let grid = gridFromLive(live, gridProved)
+      const source = grid ? 'live' : 'preset'
+      if (!grid) {
+        grid = await gen3DumpGrid()
+        const { proof, said } = gridProof(gridProved, live, grid)
+        gridProved = proof
+        if (said !== gridSaid) {
+          gridSaid = said
+          say(said)
+        }
+        /* The live answer itself, once a connection, beside the first preset it was checked against: what settles its layout on a unit nobody has read it from. */
+        if (liveFrame && !liveTold) {
+          liveTold = true
+          say(`the live grid answer, as it came: ${toHex(liveFrame)}`)
+        }
+      }
+      const cells = grid.cells.map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, name: c.isShunt ? `Shunt ${c.effectId - SHUNT_FROM + 1}` : blockNamed(c.effectId), isShunt: c.isShunt, fromRows: c.fromRows }))
+      const value = { rows: grid.rows, cols: grid.cols, cells, source }
+      if (moves === at) gridKept = { value, at: time.now(), moves }
+      const shunts = cells.filter((c) => c.isShunt).length
+      say(`the grid, read ${source === 'live' ? 'live' : 'from the preset'} in ${((time.now() - started) / 1000).toFixed(1)} s: ${cells.length - shunts} block${cells.length - shunts === 1 ? '' : 's'}${shunts ? `, ${shunts} shunt${shunts === 1 ? '' : 's'}` : ''}`)
+      return value
+    })
+  }
+
+  /* A block id a cell may be sent: 0 for empty, a block this unit's own list names, or a shunt (put back by an Undo). */
+  const placeable = (id) => {
+    if (id === 0) return true
+    if (!Number.isInteger(id) || id < 0) return false
+    const size = gridSize(model)
+    if (id >= SHUNT_FROM) return id < SHUNT_FROM + size.rows * size.cols
+    return !NOT_BLOCKS.includes(id) && blocks.some((b) => b.page === id)
+  }
+
+  /** PUT /preset/grid/cell on a gen-3 unit: "select the cell", then "put the block in it", the computer's own two frames. */
+  async function gen3PlaceCell(body) {
+    const at = moves
+    const row = body?.row
+    const col = body?.col
+    const blockId = body?.blockId
+    if (!cellOnGrid(model, row, col)) throw badInput(`The ${spec.name}’s grid has no row ${row}, column ${col}.`)
+    if (!placeable(blockId)) throw badInput(`Block ${blockId} is not one the app places on the ${spec.name}.`)
+    const what = blockId === 0 ? `row ${row}, column ${col} emptied` : `${blockId >= SHUNT_FROM ? 'a shunt' : blockNamed(blockId)} into row ${row}, column ${col}`
+    return inGrid(async () => {
+      movedSince(at, what)
+      const select = buildGridSelect(model, row, col)
+      const put = buildGridPut(model, row, col, blockId)
+      let answer
+      try {
+        answer = await withFrames([select, put], async () => {
+          const first = await fire(select, `row ${row}, column ${col} selected`, EDIT_WRITE)
+          return rejected(first) ? first : fire(put, what, EDIT_WRITE)
+        })
+      } finally {
+        chainChanged()
+      }
+      return rejected(answer) ? { ok: false, refused: rejectedWords(answer.rejected) } : { ok: true }
+    })
+  }
+
+  /** POST /preset/grid/cable on a gen-3 unit: one cable into the next column, joined or parted. */
+  async function gen3Cable(body) {
+    const at = moves
+    const srcRow = body?.srcRow
+    const srcCol = body?.srcCol
+    const destRow = body?.destRow
+    const join = body?.connect !== false
+    const out = buildGridCable(model, srcRow, srcCol, destRow, join)
+    if (!out) {
+      /* On a six-row grid, out of the top row from an even column is the one cable nobody has decoded (lib/gen3-grid cableKnown). */
+      const undecoded = cellOnGrid(model, srcRow, srcCol + 1) && cellOnGrid(model, destRow, srcCol + 1) && !cableKnown(model, srcRow, srcCol, destRow)
+      throw badInput(undecoded ? `A cable out of the top row from column ${srcCol} is one the app can’t make on the ${spec.name}. Use another row.` : `The ${spec.name}’s grid has no cable from row ${srcRow}, column ${srcCol} to row ${destRow} of the next column.`)
+    }
+    const what = `row ${srcRow}, column ${srcCol} ${join ? 'joined to' : 'parted from'} row ${destRow} of column ${srcCol + 1}`
+    return inGrid(async () => {
+      movedSince(at, what)
+      let answer
+      try {
+        answer = await withFrames([out], () => fire(out, what, EDIT_WRITE))
+      } finally {
+        chainChanged()
+      }
+      return rejected(answer) ? { ok: false, refused: rejectedWords(answer.rejected) } : { ok: true }
+    })
+  }
+
+  const am4Named = (code) => AM4_PALETTE.find((b) => b.page === code)?.name || am4Block(code)?.slug || `0x${Number(code).toString(16)}`
+  /* The AM4's four slots as it has just said them, read again where one answer is not yet believed (believeSlots). */
+  async function am4SlotsNow(fresh) {
+    let s = await readStructure({ priority: 'editRead', fresh })
+    if (s && s !== SKIPPED && !s.slots) s = await readStructure({ priority: 'editRead', fresh: true })
+    return s && s !== SKIPPED && s.slots ? s.slots : null
+  }
+
+  /** GET /preset/grid on an AM4: its four slots in a line, as the computer answers it (row 0, slot 1 at column 0). */
+  async function am4Grid() {
+    const slots = await am4SlotsNow(false)
+    if (!slots) throw timedOut()
+    const cells = []
+    slots.forEach((code, i) => {
+      if (code) cells.push({ row: 0, col: i, effectId: code, name: am4Named(code), isShunt: false, fromRows: [] })
+    })
+    return { rows: 1, cols: AM4_SLOTS, cells, source: 'preset' }
+  }
+
+  /**
+   * PUT /preset/grid/cell on an AM4: a block's code into slot `col` (1 to
+   * 4; the row is not used, as on the computer), 0 to empty it. The AM4
+   * answers this write with nothing, so the preset is read back a moment
+   * later and the slot itself says whether it took.
+   */
+  async function am4PlaceSlot(body) {
+    const at = moves
+    const slot = body?.col
+    const code = body?.blockId
+    const out = buildAm4Slot(slot, code)
+    if (!out) throw badInput(Number.isInteger(slot) && slot >= 1 && slot <= AM4_SLOTS ? `Block ${code} is not one the app places on the AM4.` : `The AM4 has no slot ${slot}.`)
+    const what = code === 0 ? `slot ${slot} emptied` : `${am4Named(code)} into slot ${slot}`
+    return inGrid(async () => {
+      movedSince(at, what)
+      let answer
+      try {
+        answer = await withFrames([out], () => fire(out, what, EDIT_WRITE))
+      } finally {
+        chainChanged()
+      }
+      if (rejected(answer)) return { ok: false, refused: rejectedWords(answer.rejected) }
+      await pause(WAIT.landed)
+      const slots = await am4SlotsNow(true)
+      if (!slots) {
+        say(`${what}: the AM4 did not say what its slots hold afterwards`)
+        return { ok: true, unread: true }
+      }
+      const holds = slots[slot - 1]
+      say(holds === code ? `${what}: the AM4 says so` : `${what}: the AM4 says slot ${slot} holds ${holds ? am4Named(holds) : 'nothing'}`)
+      return holds === code ? { ok: true } : { ok: false, refused: `slot ${slot} holds ${holds ? am4Named(holds) : 'nothing'}` }
+    })
+  }
+
   /*
    * GET /preset/blocks/<eid>/params on a gen-3 unit, as the computer answers
    * it: the block's channel from the status answer, the block read whole, and
@@ -3698,6 +4008,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (method === 'GET' && part.length === 4 && part[1] === 'heads' && isNum(part[2]) && isNum(part[3])) return editRoute(() => namHeads(Number(part[2]), Number(part[3])))
       if (method === 'POST' && part.length === 3 && part[1] === 'slots' && isNum(part[2])) return editRoute(() => namInstall(Number(part[2]), body, opts.onProgress))
       if (method === 'POST' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namPick(Number(part[2]), body))
+    }
+    /* The chain read as a grid and changed from here, only where it is open to this account (chainOn): his alone so far. Nobody else is ever answered, and a wire made without `chain` answers these as it always did, "not over Bluetooth". */
+    if (chainOn()) {
+      if (method === 'GET' && path === '/blocks') return editRoute(async () => (am4 ? AM4_PALETTE.map((b) => ({ ...b })) : gen3Palette()))
+      if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid()))
+      if (method === 'PUT' && path === '/preset/grid/cell') return editRoute(() => (am4 ? am4PlaceSlot(body) : gen3PlaceCell(body)))
+      if (method === 'POST' && path === '/preset/grid/cable' && !am4) return editRoute(() => gen3Cable(body))
     }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect

@@ -32,6 +32,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const SX = '../mobile/src/lib/fractal-sysex.mjs'
 const WIRE = '../mobile/src/lib/bleWire.js'
 const SWITCH = '../mobile/src/lib/bleSwitch.js'
+const GRID = '../mobile/src/lib/gen3-grid.js'
+const AM4_CHAIN = '../mobile/src/lib/am4-chain.js'
+const GRID_FAKE = './gen3-grid-fake.mjs'
 
 const H = (hex) => (String(hex).replace(/[^0-9a-f]/gi, '').match(/../g) || []).map((x) => parseInt(x, 16))
 const hex = (bytes) => bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
@@ -221,7 +224,38 @@ function fakeGen3(sx, o) {
     described: [],
     edits: [],
     /* Every preset it was told to save its edit buffer over (fn 0x01, 26 00), in order. `refuseSave` answers a refusal instead. */
-    saved: []
+    saved: [],
+    /*
+     * ITS GRID (`grid`: the cells it starts with, each {row, col, effectId,
+     * fromRows}, from zero; a shunt is 1024 and up). Without `grid` it is a
+     * unit as the tests always had it: the grid's messages are refused as
+     * not known and the preset is not sent. `selected` is the cell last
+     * selected (sub 0x30); `gridHeard` every grid message it took, in order.
+     */
+    grid: o.grid ? o.grid.map((c) => ({ ...c, fromRows: [...(c.fromRows || [])] })) : null,
+    selected: null,
+    gridHeard: [],
+    dumps: 0,
+    lives: 0
+  }
+  const rowsOf = model === 0x11 ? 4 : 6
+  const colsOf = model === 0x11 ? 12 : 14
+  const cellAt = (row, col) => state.grid.find((c) => c.row === row && c.col === col) || null
+  /* A block put in a cell (0 empties it): the grid, and the list the status read answers from, kept in step. */
+  function putInCell(cell, id) {
+    const row = cell % rowsOf
+    const col = Math.floor(cell / rowsOf)
+    const was = cellAt(row, col)
+    if (was) {
+      state.grid.splice(state.grid.indexOf(was), 1)
+      if (was.effectId < 1024) state.blocks = state.blocks.filter((b) => b.eid !== was.effectId)
+    }
+    if (!id) return
+    /* A block already somewhere else on the grid moves: a unit has one of each. */
+    const elsewhere = state.grid.find((c) => c.effectId === id)
+    if (elsewhere) state.grid.splice(state.grid.indexOf(elsewhere), 1)
+    state.grid.push({ row, col, effectId: id, fromRows: was ? was.fromRows : [] })
+    if (id < 1024 && !state.blocks.some((b) => b.eid === id)) state.blocks.push({ eid: id, bypassed: false, channel: 0 })
   }
   const nameBytes = (name) => {
     const b = [...name].map((c) => c.charCodeAt(0))
@@ -344,6 +378,49 @@ function fakeGen3(sx, o) {
           state.saved.push(v)
           return
         }
+        /*
+         * THE GRID (lib/gen3-grid), where the test gave it one: the live
+         * read answered in one frame (`live`: how its cable bits and shunt
+         * numbers are laid, for a unit whose layout is not the one the app
+         * expects; `noLive`: no answer), a cell selected, a block put in
+         * one (`refuseBlock`: a block id it has no room for, answered with
+         * `refuseCode`; `needsSelect`: put where the cursor is, as a real
+         * FM3 does, not where the message says), a cable joined or parted
+         * (into an empty cell it changes nothing).
+         */
+        if (state.grid && [0x2e, 0x30, 0x32, 0x35].includes(sub)) {
+          state.gridHeard.push([...b])
+          if (sub === 0x2e) {
+            state.lives++
+            if (opt.noLive) return
+            return say(o.gridFake.makeLive(model, opt.liveOf ? opt.liveOf(state.grid) : state.grid, opt.live || {}))
+          }
+          if (sub === 0x30) {
+            state.selected = v
+            return
+          }
+          if (sub === 0x32) {
+            const id = sx.decode14(p[2], p[3])
+            if (opt.refuseBlock !== undefined && opt.refuseBlock === id) return reply(0x64, [0x01, opt.refuseCode ?? 0x0c])
+            return putInCell(opt.needsSelect ? state.selected ?? 0 : sx.decode14(p[6], p[7]), id)
+          }
+          for (let srcCol = 1; srcCol < colsOf; srcCol++) {
+            for (let srcRow = 1; srcRow <= rowsOf; srcRow++) {
+              for (let destRow = 1; destRow <= rowsOf; destRow++) {
+                for (const join of [true, false]) {
+                  const made = o.gridLib.buildGridCable(model, srcRow, srcCol, destRow, join)
+                  if (!made || hex(made) !== hex(b)) continue
+                  const into = cellAt(destRow - 1, srcCol)
+                  if (!into || !cellAt(srcRow - 1, srcCol - 1)) return
+                  into.fromRows = into.fromRows.filter((r) => r !== srcRow - 1)
+                  if (join) into.fromRows = [...into.fromRows, srcRow - 1].sort((x, y) => x - y)
+                  return
+                }
+              }
+            }
+          }
+          return reply(0x64, [0x01, 0x04])
+        }
         if (sub === 0x24) state.scene = v
         else if (sub === 0x16) find(eid).channel = v
         else if (sub === 0x27) {
@@ -406,6 +483,31 @@ function fakeGen3(sx, o) {
           chunk.values[find(eid).channel * (chunk.count / 4) + pid] = sub === 0x52 || !Number.isInteger(x) ? Math.round(x * 65534) : x
           state.edits.push({ eid, pid, sub, value: x })
         } else reply(0x64, [0x01, 0x04])
+        return
+      }
+      /*
+       * The preset it is on, whole (7F 7F): the header, eight chunks (sixteen
+       * from an Axe-Fx III) of 3,082 bytes at about a second each as 5-pin
+       * MIDI carries them, the footer. `noDump`: no answer; `stallDump`:
+       * quiet after the first chunk; `damageDump`: one byte changed on the
+       * way with its frame's own checksum made good, which only the CRC can
+       * tell.
+       */
+      case 0x03: {
+        if (!state.grid || p[0] !== 0x7f || p[1] !== 0x7f) return reply(0x64, [0x03, 0x04])
+        state.dumps++
+        if (opt.noDump) return
+        const frames = o.gridFake.makeDump(model, state.grid)
+        if (opt.damageDump) {
+          const c = frames[2]
+          c[700] ^= 0x01
+          c[c.length - 2] = sx.checksum(c.slice(0, -2))
+        }
+        let at = 6
+        for (let i = 0; i < frames.length; i++) {
+          if (opt.stallDump && i > 1) break
+          at = say(frames[i], at) + (opt.dumpGap ?? 20)
+        }
         return
       }
       default:
@@ -678,6 +780,31 @@ function fakeAm4(sx, o) {
       state.saved.push(sx.am4ReadU32(b, 16))
       return
     }
+    /*
+     * A block put in one of its four slots (lib/am4-chain): taken only as
+     * exactly the frame the computer app sends for it, a slot of the four
+     * and a block it names itself, or nought. `slotIgnored` is an AM4 that
+     * takes the message and changes nothing. Anything else of the kind (a
+     * fifth slot, a code it has no block for) still stops it answering,
+     * below.
+     */
+    const slotWrite = o.am4Chain ? o.am4Chain.readAm4Slot(b) : null
+    if (slotWrite && o.am4Chain.am4SlotCode(slotWrite.code)) {
+      if (state.frozen) return
+      state.slotsHeard = [...(state.slotsHeard || []), slotWrite]
+      if (opt.slotIgnored) return
+      const was = state.slots[slotWrite.slot - 1]
+      state.slots[slotWrite.slot - 1] = slotWrite.code
+      if (was) {
+        state.bypass.delete(was)
+        state.channel.delete(was)
+      }
+      if (slotWrite.code) {
+        state.bypass.set(slotWrite.code, false)
+        state.channel.set(slotWrite.code, 0)
+      }
+      return
+    }
     if (!sx.isAllowedAm4(b) && !editFrame(b)) {
       /* What the real one did with a message it did not expect: stopped answering. */
       state.frozen = true
@@ -797,6 +924,9 @@ function fakeAm4(sx, o) {
 async function onTheLine(kind, options = {}) {
   const sx = await import(SX)
   const { createBleWire } = await import(WIRE)
+  const gridLib = await import(GRID)
+  const gridFake = await import(GRID_FAKE)
+  const am4Chain = await import(AM4_CHAIN)
   const clock = fakeClock()
   const random = seeded(options.seed ?? 7)
   const sent = []
@@ -830,7 +960,7 @@ async function onTheLine(kind, options = {}) {
     }
     return at
   }
-  const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, ...options }) : fakeGen3(sx, { say, clock, model: sx.MODELS[kind], ...options })
+  const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, am4Chain, ...options }) : fakeGen3(sx, { say, clock, model: sx.MODELS[kind], gridLib, gridFake, ...options })
   /*
    * A wire on the line, and `reconnect()` for the next one after the adapter
    * dropped and came back, as bleLink makes it: the unit's answers go to the
@@ -852,6 +982,7 @@ async function onTheLine(kind, options = {}) {
       captures: options.captures,
       namKnobs: options.namKnobs,
       save: options.save,
+      chain: options.chain,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -5518,7 +5649,10 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './nam-install.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3Catalog.js', './nam-install.js', './own-echo.js'])
+    /* The chain's messages (test/gen3-grid.mjs): the frame helpers and nothing else, so they reach a unit only through the wire that builds them. */
+    assert.deepEqual(imports(read('gen3-grid.js')), ['./fractal-sysex.mjs'], 'the grid’s messages import something')
+    assert.deepEqual(imports(read('am4-chain.js')), ['./fractal-sysex.mjs'], 'the AM4’s slot message imports something')
     /* The developer's block reader (test/gen3-describe.mjs): the frame helpers and nothing else, so it reaches the unit only through the wire it is handed to. */
     assert.deepEqual(imports(read('gen3-describe.js')), ['./fractal-sysex.mjs'], 'the block reader imports something')
     assert.deepEqual(imports(read('own-echo.js')), [], 'Play’s settle waits import something')
@@ -13706,8 +13840,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, false])
     /* lib/bluetooth hands the wire the level: all of the list for his account (allUnits), the NAM block for everybody. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -18724,5 +18858,468 @@ export function run(test) {
     assert.match(lib, /const readAnsweredAs = \(\) => snapshot\.answeredAs \?\? null/)
     assert.match(lib, /export const useBluetoothAnsweredAs = \(\) => useSyncExternalStore\(subscribeBluetooth, readAnsweredAs, readAnsweredAs\)/)
     assert.ok(!/useBluetooth\(\)/.test(code('mobile/src/components/TopBar.js')), 'the bar redraws for every change on the Bluetooth page')
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* The chain over Bluetooth: the grid read, a block placed, a cable    */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "The four screens are good. I need everything with the chain builder to
+   * work over Bluetooth also" (15 November 2026). Four routes, the computer
+   * app's own, answered by the wire only where the chain is open to the
+   * account (`chain`, with Edit open). Run here against a pretend unit with
+   * a grid: every frame that went out is held to the phone's builders
+   * (which test/gen3-grid.mjs holds to the pinned codec), and the unit's
+   * grid afterwards is what the request asked for.
+   */
+  const CHAIN_OPEN = { edit: () => true, chain: () => true }
+  const BARE3 = [
+    { row: 1, col: 0, effectId: 37, fromRows: [] },
+    { row: 1, col: 11, effectId: 42, fromRows: [] }
+  ]
+  const CHAIN3 = [
+    { row: 1, col: 0, effectId: 37, fromRows: [] },
+    { row: 1, col: 1, effectId: 118, fromRows: [1] },
+    { row: 1, col: 2, effectId: 58, fromRows: [1] },
+    { row: 2, col: 2, effectId: 1024, fromRows: [1] },
+    { row: 1, col: 3, effectId: 62, fromRows: [1, 2] },
+    { row: 1, col: 11, effectId: 42, fromRows: [] }
+  ]
+  const cellsOf = (cells) => JSON.stringify([...cells].sort((a, b) => a.col - b.col || a.row - b.row).map((c) => ({ row: c.row, col: c.col, effectId: c.effectId, fromRows: c.fromRows })))
+  const sendTo = (t, method, path, body) => drive(t.clock, t.wire.request(path, { method, body: JSON.stringify(body ?? null) }))
+  const gridFrames = (t, grid) => t.frames().filter((f) => grid.gridShaped(f, f[4]))
+
+  test('the chain’s four routes are answered only where the chain is open to the account, with Edit open: anybody else gets “not over Bluetooth” and nothing is sent', async () => {
+    const grid = await import(GRID)
+    for (const kind of ['fm3', 'fm9', 'axefx3', 'am4']) {
+      for (const options of [{}, { edit: () => true }, { chain: () => true }, { edit: () => false, chain: () => true }, { edit: () => true, chain: () => false }, { edit: () => true, chain: true }]) {
+        const t = await onTheLine(kind, { grid: BARE3, ...options })
+        const caps = (await t.get('/device/detect')).capabilities
+        assert.equal(caps.gridEdit, false, `${kind}: the app was told the chain can be changed`)
+        t.sent.length = 0
+        for (const [method, path, body] of [['GET', '/blocks'], ['GET', '/preset/grid'], ['PUT', '/preset/grid/cell', { row: 2, col: 2, blockId: kind === 'am4' ? 0x42 : 58 }], ['POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2, connect: true }]]) {
+          await assert.rejects(sendTo(t, method, path, body), (e) => e.status === 501 && e.unsupported === true && e.bluetooth === true, `${kind} ${method} ${path}`)
+        }
+        assert.equal(t.sent.length, 0, `${kind}: something was sent for a chain that is not open`)
+        if (kind !== 'am4') assert.equal(gridFrames(t, grid).length, 0)
+      }
+    }
+    for (const kind of ['fm3', 'fm9', 'axefx3', 'am4']) {
+      const t = await onTheLine(kind, { grid: BARE3, ...CHAIN_OPEN })
+      const caps = (await t.get('/device/detect')).capabilities
+      assert.equal(caps.gridEdit, true)
+      if (kind === 'am4') assert.deepEqual([caps.slotModel, caps.slotCount], ['linear', 4])
+      else assert.deepEqual(caps.grid, kind === 'fm3' ? { rows: 4, cols: 12 } : { rows: 6, cols: 14 })
+    }
+  })
+
+  test('the way out refuses a grid message that is not the one in hand, and an AM4’s slot write the same, whoever asks', async () => {
+    const { gen3Sender, am4Sender } = await import(WIRE)
+    const grid = await import(GRID)
+    const chain = await import(AM4_CHAIN)
+    const sx = await import(SX)
+    for (const model of [0x11, 0x12, 0x10]) {
+      const out = []
+      const said = []
+      let hand = null
+      const sender = gen3Sender((b) => out.push(b), (l) => said.push(l), model, () => [58], () => null, () => false, () => null, () => null, () => hand)
+      const put = grid.buildGridPut(model, 2, 3, 58)
+      const select = grid.buildGridSelect(model, 2, 3)
+      const cable = grid.buildGridCable(model, 2, 3, 2, true)
+      const read = grid.buildGridRead(model)
+      for (const f of [put, select, cable, read]) assert.equal(sender(f), 'refused', hex(f))
+      assert.equal(out.length, 0)
+      assert.ok(said.every((l) => /it is one of the grid’s messages, and not one being sent now/.test(l)) && said.length === 4)
+      hand = [select, put]
+      assert.equal(sender(select), 'sent')
+      assert.equal(sender(put), 'sent')
+      assert.equal(sender(cable), 'refused', 'a cable went while a block was being placed')
+      assert.equal(sender(grid.buildGridPut(model, 2, 4, 58)), 'refused', 'the cell beside the one in hand was written')
+      assert.equal(sender(grid.buildGridPut(model, 2, 3, 62)), 'refused', 'another block went into the cell in hand')
+      assert.equal(out.length, 2)
+      /* With no `gridding` handed in at all (a caller from before this), nothing of the shape goes. */
+      const old = gen3Sender((b) => out.push(b), () => {}, model)
+      assert.equal(old(put), 'refused')
+      /* And what went before still goes as it went: a scene, the status question, the request for the preset. */
+      for (const f of [sx.buildGetScene(model), sx.buildStatusDump(model), grid.buildGridDump(model)]) assert.equal(old(f), 'sent', hex(f))
+    }
+    const out = []
+    let hand = null
+    const sender = am4Sender((b) => out.push(b), () => {}, () => null, () => [0x3a], () => null, () => hand)
+    const slot = chain.buildAm4Slot(2, 0x42)
+    assert.equal(sender(slot), 'refused')
+    hand = [slot]
+    assert.equal(sender(slot), 'sent')
+    assert.equal(sender(chain.buildAm4Slot(3, 0x42)), 'refused')
+    const fifth = sx.am4Frame({ pidLow: 0xce, pidHigh: 0x13, action: 0x0001, hdr4: 4, payload: sx.am4Float(0x42) })
+    hand = [fifth]
+    assert.equal(sender(fifth), 'refused', 'a fifth slot went to the AM4')
+    assert.equal(am4Sender((b) => out.push(b), () => {})(slot), 'refused')
+    assert.equal(out.length, 1)
+  })
+
+  test('the blocks a unit can be given, over Bluetooth, are its own list: the FM3’s, an Axe-Fx III’s with its NAM, an AM4’s seventeen', async () => {
+    const { catalogFor, NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
+    const chain = await import(AM4_CHAIN)
+    for (const kind of ['fm3', 'fm9', 'axefx3']) {
+      const t = await onTheLine(kind, { grid: BARE3, catalog: catalogFor(kind), ...CHAIN_OPEN })
+      const list = await t.get('/blocks')
+      assert.equal(t.sent.length, 0, 'the list of blocks asked the unit something')
+      assert.ok(list.length >= 60, `${kind}: ${list.length} blocks`)
+      for (const b of list) {
+        assert.ok(typeof b.slug === 'string' && b.slug && typeof b.family === 'string' && b.family && Number.isInteger(b.instance) && b.instance >= 1 && typeof b.name === 'string' && b.name && Number.isInteger(b.page), JSON.stringify(b))
+        assert.ok(!NOT_BLOCKS.includes(b.page), `${kind} offers ${b.page}, which is no block`)
+      }
+      assert.equal(new Set(list.map((b) => b.page)).size, list.length)
+      assert.ok(list.some((b) => b.slug === 'input') && list.some((b) => b.slug === 'output') && list.some((b) => b.slug === 'amp'))
+      assert.equal(list.some((b) => b.page === 206), kind === 'axefx3', `${kind}: NAM`)
+      assert.equal(list.filter((b) => b.family === 'amp').length, kind === 'fm3' ? 1 : 2)
+    }
+    /* An id that is no block a player places (the Axe-Fx III's Performance page, the RTA) is never offered and never placed, even if the list the wire was handed names it. */
+    const odd = await onTheLine('axefx3', { grid: BARE3, catalog: [...catalogFor('axefx3'), { slug: 'perform', family: 'perform', instance: 1, name: 'Perform', page: 201 }, { slug: 'rta', family: 'rta', instance: 1, name: 'RTA', page: 174 }, { slug: '', family: '', instance: 1, name: 'Nameless', page: 250 }, { slug: 'nopage', family: 'nopage', instance: 1, name: 'No page' }], ...CHAIN_OPEN })
+    const offered = await odd.get('/blocks')
+    assert.ok(!offered.some((b) => b.page === 201 || b.page === 174 || b.page === 250 || b.slug === 'nopage'), 'something that is no block was offered')
+    assert.equal(offered.length, (await (await onTheLine('axefx3', { grid: BARE3, catalog: catalogFor('axefx3'), ...CHAIN_OPEN })).get('/blocks')).length)
+    for (const blockId of [201, 174]) await assert.rejects(sendTo(odd, 'PUT', '/preset/grid/cell', { row: 2, col: 2, blockId }), (e) => e.status === 400)
+    assert.equal(odd.sent.length, 0)
+    const t = await onTheLine('am4', CHAIN_OPEN)
+    const list = await t.get('/blocks')
+    assert.equal(t.sent.length, 0)
+    assert.deepEqual(list, chain.AM4_PALETTE.map((b) => ({ ...b })))
+    assert.equal(list.length, 17)
+    list[0].name = 'changed'
+    assert.notEqual((await t.get('/blocks'))[0].name, 'changed', 'the list handed out is the wire’s own copy')
+  })
+
+  test('the grid is read from the preset until a preset with a cable has borne the live read out, and live after that', async () => {
+    const grid = await import(GRID)
+    const t = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    /* A bare preset: both reads, the preset's answer handed on, and nothing proven about cables yet. */
+    const first = await t.get('/preset/grid')
+    assert.equal(cellsOf(first.cells), cellsOf(BARE3))
+    assert.deepEqual([first.rows, first.cols, first.source], [4, 12, 'preset'])
+    assert.deepEqual(first.cells.map((c) => [c.name, c.isShunt]), [['Input 1', false], ['Output 1', false]])
+    assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [1, 1])
+    assert.deepEqual(t.frames().map(hex), [grid.buildGridRead(0x11), grid.buildGridDump(0x11)].map(hex), 'something other than the two reads went out')
+    assert.ok(t.logs.some((l) => /the live grid read agrees with the preset: 2 blocks, each where the preset has it/.test(l)), t.logs.join(' | '))
+    assert.ok(t.logs.some((l) => /^the live grid answer, as it came: F0 00 01 74 11 01 2E 00/.test(l)), 'the answer itself is not in the log for the record')
+    assert.ok(t.logs.some((l) => /^the grid, read from the preset in \d+\.\d s: 2 blocks$/.test(l)), t.logs.join(' | '))
+    /* Asked again a moment later, it is the one kept; after that, both reads again: still nothing proven about cables. */
+    await t.get('/preset/grid')
+    assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [1, 1])
+    await advance(t.clock, 1000)
+    await t.get('/preset/grid')
+    assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [2, 2])
+    /* The unit's preset now has cables and a shunt: read from the preset once more, which bears out the rest. */
+    t.unit.state.grid = CHAIN3.map((c) => ({ ...c, fromRows: [...c.fromRows] }))
+    await advance(t.clock, 1000)
+    const second = await t.get('/preset/grid')
+    assert.equal(second.source, 'preset')
+    assert.equal(cellsOf(second.cells), cellsOf(CHAIN3))
+    assert.deepEqual(second.cells.find((c) => c.isShunt).name, 'Shunt 1')
+    assert.ok(t.logs.some((l) => /cable bit 4 is the top row/.test(l) && /a shunt’s number plus 1024 is its block id/.test(l)), t.logs.join(' | '))
+    assert.equal(t.logs.filter((l) => /^the live grid answer, as it came/.test(l)).length, 1, 'the whole answer was logged more than once a connection')
+    /* From here on: one question, one answer of 755 bytes, and the same grid. */
+    await advance(t.clock, 1000)
+    const before = [t.unit.state.lives, t.unit.state.dumps]
+    const started = t.clock.now()
+    const third = await t.get('/preset/grid')
+    assert.deepEqual([t.unit.state.lives, t.unit.state.dumps], [before[0] + 1, before[1]], 'the preset was read again though the live read is proven')
+    assert.equal(third.source, 'live')
+    assert.equal(cellsOf(third.cells), cellsOf(CHAIN3))
+    assert.deepEqual(third.cells.map((c) => [c.name, c.isShunt]), second.cells.map((c) => [c.name, c.isShunt]))
+    assert.ok(t.clock.now() - started < 1500, `the live read took ${t.clock.now() - started} ms`)
+    /* ANOTHER PRESET IS ANOTHER GRID: asked in the same instant as the preset change, with the last grid still fresh, it is read again and not answered from the one kept. */
+    await advance(t.clock, 1000)
+    await t.get('/preset/grid')
+    const livesBefore = t.unit.state.lives
+    t.unit.state.grid = BARE3.map((c) => ({ ...c }))
+    const moving = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 13 }) })
+    const asking = t.wire.request('/preset/grid')
+    await drive(t.clock, moving)
+    const fourth = await drive(t.clock, asking)
+    assert.equal(cellsOf(fourth.cells), cellsOf(BARE3), 'the last preset’s grid was handed on for the new one')
+    assert.equal(fourth.source, 'live')
+    assert.equal(t.unit.state.lives, livesBefore + 1)
+  })
+
+  test('a grid kept for a moment is not what is answered after a block went in: the read straight after a write is the unit’s', async () => {
+    const t = await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN })
+    const before = await t.get('/preset/grid')
+    assert.equal(before.cells.some((c) => c.effectId === 70), false)
+    const at = t.clock.now()
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 6, blockId: 70 }), { ok: true })
+    const after = await t.get('/preset/grid')
+    assert.ok(t.clock.now() - at < 30000)
+    assert.ok(after.cells.some((c) => c.effectId === 70 && c.row === 1 && c.col === 5), 'the grid from before the write was handed on after it')
+    /* And a cable the same. */
+    assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 4, destRow: 2 }), { ok: true })
+    const cabled = await t.get('/preset/grid')
+    assert.deepEqual(cabled.cells.find((c) => c.effectId === 70).fromRows, [])
+    assert.equal(cellsOf(cabled.cells), cellsOf(t.unit.state.grid))
+  })
+
+  test('an Axe-Fx III’s grid, NAM and all, down a line as slow as 5-pin MIDI: sixteen chunks, and the wait is by bytes, not frames', async () => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const III = [
+      { row: 1, col: 0, effectId: 37, fromRows: [] },
+      { row: 1, col: 1, effectId: 206, fromRows: [1] },
+      { row: 1, col: 2, effectId: 195, fromRows: [1] },
+      { row: 4, col: 13, effectId: 42, fromRows: [3, 4] }
+    ]
+    /* 3.125 bytes a millisecond is 31,250 baud. */
+    const t = await onTheLine('axefx3', { grid: III, catalog: catalogFor('axefx3'), rate: 3.125, ...CHAIN_OPEN })
+    const started = t.clock.now()
+    const got = await t.get('/preset/grid')
+    assert.equal(cellsOf(got.cells), cellsOf(III))
+    assert.deepEqual([got.rows, got.cols, got.source], [6, 14, 'preset'])
+    assert.deepEqual(got.cells.map((c) => c.name), ['Input 1', 'NAM 1', 'IR Player 1', 'Output 1'])
+    const took = t.clock.now() - started
+    assert.ok(took > 15000 && took < 25000, `49,336 bytes at 5-pin speed took ${took} ms`)
+    assert.ok(t.logs.some((l) => /cable bit 2 is the top row/.test(l)), t.logs.join(' | '))
+    /* And then live: a quarter of a second of bytes, not sixteen seconds. */
+    await advance(t.clock, 1000)
+    const again = t.clock.now()
+    const live = await t.get('/preset/grid')
+    assert.equal(live.source, 'live')
+    assert.equal(cellsOf(live.cells), cellsOf(III))
+    assert.ok(t.clock.now() - again < 1000, `${t.clock.now() - again} ms`)
+    assert.equal(t.unit.state.dumps, 1)
+  })
+
+  test('a unit whose live answer is not what the preset says is read from the preset every time, and the log says where they differ', async () => {
+    /* Its live answer has the amp one row up from where the preset has it. */
+    const t = await onTheLine('fm3', { grid: CHAIN3, liveOf: (cells) => cells.map((c) => (c.effectId === 58 ? { ...c, row: 0 } : c)), ...CHAIN_OPEN })
+    for (let i = 0; i < 3; i++) {
+      const got = await t.get('/preset/grid')
+      assert.equal(got.source, 'preset')
+      assert.equal(cellsOf(got.cells), cellsOf(CHAIN3), 'the wrong answer was handed on')
+      await advance(t.clock, 1000)
+    }
+    assert.equal(t.unit.state.dumps, 3)
+    assert.equal(t.logs.filter((l) => /the live grid read DISAGREES with the preset at row \d, column 3: it is not used again on this connection/.test(l)).length, 1, t.logs.join(' | '))
+    /* A unit whose cables do not show in its live answer: every block agrees, and it is still never used. */
+    const u = await onTheLine('fm3', { grid: CHAIN3, liveOf: (cells) => cells.map((c) => ({ ...c, fromRows: [] })), ...CHAIN_OPEN })
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await u.get('/preset/grid')).source, 'preset')
+      await advance(u.clock, 1000)
+    }
+    assert.ok(u.logs.some((l) => /CABLES DO NOT COME OUT AS THE PRESET’S/.test(l)))
+    /* A unit that does not answer the live read at all. */
+    const v = await onTheLine('fm3', { grid: CHAIN3, noLive: true, ...CHAIN_OPEN })
+    const got = await v.get('/preset/grid')
+    assert.deepEqual([got.source, cellsOf(got.cells)], ['preset', cellsOf(CHAIN3)])
+    assert.ok(!v.logs.some((l) => /^the live grid answer, as it came/.test(l)))
+  })
+
+  test('a preset that does not come, comes damaged, or stops part-way is said in words, never read as a grid, and the line is the unit’s until it has gone quiet', async () => {
+    const none = await onTheLine('fm3', { grid: CHAIN3, noDump: true, ...CHAIN_OPEN })
+    await assert.rejects(none.get('/preset/grid'), (e) => e.status === 504 && /The FM3 didn’t send its preset, so the app can’t see where its blocks are/.test(e.message))
+    assert.ok(none.logs.some((l) => /the FM3 did not answer a request for the preset it is on/.test(l)))
+    const hurt = await onTheLine('fm3', { grid: CHAIN3, damageDump: true, ...CHAIN_OPEN })
+    await assert.rejects(hurt.get('/preset/grid'), (e) => e.status === 504 && /came back damaged/.test(e.message))
+    const stall = await onTheLine('fm3', { grid: CHAIN3, stallDump: true, ...CHAIN_OPEN })
+    const asked = stall.get('/preset/grid')
+    asked.catch(() => {})
+    await assert.rejects(asked, (e) => e.status === 504)
+    assert.ok(stall.logs.some((l) => /gave up on the preset part-way/.test(l)), stall.logs.join(' | '))
+    /* And none of the three left a grid behind to be answered from. */
+    for (const t of [none, hurt, stall]) await assert.rejects(t.get('/preset/grid'), (e) => e.status === 504)
+  })
+
+  test('a block is put in a cell by the computer’s own two messages, select then put, and lands where it was sent', async () => {
+    const grid = await import(GRID)
+    for (const [kind, model] of [['fm3', 0x11], ['fm9', 0x12], ['axefx3', 0x10]]) {
+      /* `needsSelect`: a unit that puts the block where its cursor is, as a real FM3 does, so a put with no select before it lands in the wrong cell. */
+      const t = await onTheLine(kind, { grid: BARE3.map((c) => ({ ...c, col: c.effectId === 42 ? (kind === 'fm3' ? 11 : 13) : c.col })), needsSelect: true, ...CHAIN_OPEN })
+      const answer = await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 3, blockId: 118 })
+      assert.deepEqual(answer, { ok: true })
+      assert.deepEqual(t.frames().map(hex), [grid.buildGridSelect(model, 2, 3), grid.buildGridPut(model, 2, 3, 118)].map(hex), `${kind}: not the computer’s two messages, in its order`)
+      assert.deepEqual(t.unit.state.grid.find((c) => c.effectId === 118), { row: 1, col: 2, effectId: 118, fromRows: [] })
+      assert.ok(t.events.some((e) => e.type === 'changed' && e.scope === 'grid'))
+      assert.ok(t.logs.some((l) => /^sent Drive(?: 1)? into row 2, column 3: /.test(l)), t.logs.join(' | '))
+      /* The status read now lists it, so Edit's frames may go to it. */
+      assert.ok((await t.get('/preset/blocks')).some((b) => b.effectId === 118))
+      /* Emptied again: block id 0 into the same cell. */
+      t.sent.length = 0
+      assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 3, blockId: 0 }), { ok: true })
+      assert.deepEqual(t.frames().map(hex), [grid.buildGridSelect(model, 2, 3), grid.buildGridPut(model, 2, 3, 0)].map(hex))
+      assert.equal(t.unit.state.grid.find((c) => c.effectId === 118), undefined)
+      /* A shunt put back, as an Undo does: its own block id. */
+      t.sent.length = 0
+      assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 4, blockId: 1026 }), { ok: true })
+      assert.equal(hex(t.frames()[1]), hex(grid.buildGridPut(model, 2, 4, 1026)))
+      assert.ok(t.unit.state.grid.some((c) => c.effectId === 1026 && c.row === 1 && c.col === 3))
+    }
+  })
+
+  test('a block the unit has no room for is answered, not thrown: ok false with the unit’s reason, and the rest of a plan goes on', async () => {
+    const t = await onTheLine('fm3', { grid: BARE3, refuseBlock: 66, refuseCode: 0x05, ...CHAIN_OPEN })
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 2, blockId: 118 }), { ok: true })
+    const no = await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 3, blockId: 66 })
+    assert.deepEqual(no, { ok: false, refused: 'there is no such block' })
+    assert.equal(t.unit.state.grid.some((c) => c.effectId === 66), false)
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 4, blockId: 70 }), { ok: true })
+    assert.ok(t.unit.state.grid.some((c) => c.effectId === 70))
+    assert.ok(t.logs.some((l) => /the unit refused Reverb(?: 1)? into row 2, column 3: there is no such block/.test(l)), t.logs.join(' | '))
+  })
+
+  test('what is not a cell of this unit, or not a block of its own, is refused before anything is sent', async () => {
+    for (const [kind, rows, cols] of [['fm3', 4, 12], ['fm9', 6, 14], ['axefx3', 6, 14]]) {
+      const t = await onTheLine(kind, { grid: BARE3, ...CHAIN_OPEN })
+      for (const body of [
+        { row: 0, col: 1, blockId: 58 },
+        { row: rows + 1, col: 1, blockId: 58 },
+        { row: 1, col: cols + 1, blockId: 58 },
+        { row: 1, col: 0, blockId: 58 },
+        { row: '2', col: 2, blockId: 58 },
+        { row: 2, col: 2 },
+        { row: 2, col: 2, blockId: 9999 },
+        { row: 2, col: 2, blockId: 201 },
+        { row: 2, col: 2, blockId: 174 },
+        { row: 2, col: 2, blockId: 2 },
+        { row: 2, col: 2, blockId: -1 },
+        { row: 2, col: 2, blockId: 58.5 },
+        { row: 2, col: 2, blockId: 1024 + rows * cols },
+        { row: 2, col: 2, blockId: 16383 },
+        null,
+        {}
+      ]) {
+        await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', body), (e) => e.status === 400 && e.bluetooth === true, `${kind} ${JSON.stringify(body)}`)
+      }
+      for (const body of [{ srcRow: 2, srcCol: cols, destRow: 2 }, { srcRow: 2, srcCol: 0, destRow: 2 }, { srcRow: 0, srcCol: 1, destRow: 2 }, { srcRow: 2, srcCol: 1, destRow: rows + 1 }, { srcRow: 2, srcCol: '1', destRow: 2 }, null, {}]) {
+        await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', body), (e) => e.status === 400, `${kind} ${JSON.stringify(body)}`)
+      }
+      assert.equal(t.sent.length, 0, `${kind}: something was sent for a request that could not be`)
+      assert.equal(t.unit.state.gridHeard.length, 0)
+    }
+    /* The one cable nobody has decoded is said as that, on the two six-row units, and nothing is sent for it. */
+    for (const kind of ['fm9', 'axefx3']) {
+      const t = await onTheLine(kind, { grid: BARE3, ...CHAIN_OPEN })
+      await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 1, srcCol: 2, destRow: 1, connect: true }), (e) => e.status === 400 && /A cable out of the top row from column 2 is one the app can’t make on the (FM9|Axe-Fx III)\. Use another row\./.test(e.message))
+      assert.equal(t.sent.length, 0)
+    }
+    /* An FM3's thirteenth and fourteenth columns, which the codec would let it ask for. */
+    const f = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    for (const col of [13, 14]) await assert.rejects(sendTo(f, 'PUT', '/preset/grid/cell', { row: 1, col, blockId: 58 }), (e) => e.status === 400 && /The FM3’s grid has no row 1, column 1[34]\./.test(e.message))
+    for (const srcCol of [12, 13]) await assert.rejects(sendTo(f, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol, destRow: 2 }), (e) => e.status === 400)
+    assert.equal(f.sent.length, 0)
+  })
+
+  test('a cable is one message, the computer’s own, joined or parted, and the unit’s grid shows it', async () => {
+    const grid = await import(GRID)
+    for (const [kind, model] of [['fm3', 0x11], ['fm9', 0x12], ['axefx3', 0x10]]) {
+      const start = [
+        { row: 1, col: 0, effectId: 37, fromRows: [] },
+        { row: 1, col: 1, effectId: 118, fromRows: [] },
+        { row: 2, col: 1, effectId: 58, fromRows: [] }
+      ]
+      const t = await onTheLine(kind, { grid: start, ...CHAIN_OPEN })
+      assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 2, connect: true }), { ok: true })
+      assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 3 }), { ok: true }, 'a cable with no `connect` is not joined, as on the computer')
+      assert.deepEqual(t.frames().map(hex), [grid.buildGridCable(model, 2, 1, 2, true), grid.buildGridCable(model, 2, 1, 3, true)].map(hex))
+      assert.deepEqual(t.unit.state.grid.find((c) => c.effectId === 118).fromRows, [1])
+      assert.deepEqual(t.unit.state.grid.find((c) => c.effectId === 58).fromRows, [1])
+      t.sent.length = 0
+      assert.deepEqual(await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 2, srcCol: 1, destRow: 3, connect: false }), { ok: true })
+      assert.equal(hex(t.frames()[0]), hex(grid.buildGridCable(model, 2, 1, 3, false)))
+      assert.deepEqual(t.unit.state.grid.find((c) => c.effectId === 58).fromRows, [])
+      assert.equal(t.frames().length, 1)
+      assert.ok(t.logs.some((l) => /^sent row 2, column 1 parted from row 3 of column 2: /.test(l)), t.logs.join(' | '))
+    }
+  })
+
+  test('a block meant for one preset is never put in the next: a preset or scene change first, and the write is not sent', async () => {
+    const t = await onTheLine('fm3', { grid: BARE3, ...CHAIN_OPEN })
+    /* Asked, and the preset changed before its turn came. */
+    const placing = t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 2, blockId: 118 }) })
+    placing.catch(() => {})
+    const moving = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 13 }) })
+    await assert.rejects(drive(t.clock, placing), (e) => e.status === 409 && /The scene or preset changed before that was sent/.test(e.message))
+    await drive(t.clock, moving)
+    assert.equal(t.unit.state.gridHeard.length, 0, 'a block went into the preset after the one it was meant for')
+    assert.equal(t.unit.state.grid.some((c) => c.effectId === 118), false)
+    /* The same for a cable. */
+    const cabling = t.wire.request('/preset/grid/cable', { method: 'POST', body: JSON.stringify({ srcRow: 2, srcCol: 1, destRow: 2 }) })
+    cabling.catch(() => {})
+    const scene = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) })
+    await assert.rejects(drive(t.clock, cabling), (e) => e.status === 409)
+    await drive(t.clock, scene)
+    assert.equal(t.unit.state.gridHeard.length, 0)
+    /* And after it, the next one goes as usual. */
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 2, blockId: 118 }), { ok: true })
+    assert.equal(t.unit.state.gridHeard.length, 2)
+  })
+
+  test('grid jobs go one at a time, each with only its own messages allowed out, however many are asked at once', async () => {
+    const grid = await import(GRID)
+    const t = await onTheLine('fm3', { grid: BARE3, needsSelect: true, ...CHAIN_OPEN })
+    const asks = [
+      t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 2, blockId: 118 }) }),
+      t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 3, blockId: 58 }) }),
+      t.wire.request('/preset/grid/cable', { method: 'POST', body: JSON.stringify({ srcRow: 2, srcCol: 2, destRow: 2 }) }),
+      t.wire.request('/preset/grid/cell', { method: 'PUT', body: JSON.stringify({ row: 2, col: 4, blockId: 62 }) }),
+      t.wire.request('/preset/grid')
+    ]
+    const answers = []
+    for (const a of asks) answers.push(await drive(t.clock, a))
+    assert.deepEqual(answers.slice(0, 4), [{ ok: true }, { ok: true }, { ok: true }, { ok: true }])
+    const sent = gridFrames(t, grid).map(hex)
+    assert.deepEqual(sent, [grid.buildGridSelect(0x11, 2, 2), grid.buildGridPut(0x11, 2, 2, 118), grid.buildGridSelect(0x11, 2, 3), grid.buildGridPut(0x11, 2, 3, 58), grid.buildGridCable(0x11, 2, 2, 2, true), grid.buildGridSelect(0x11, 2, 4), grid.buildGridPut(0x11, 2, 4, 62), grid.buildGridRead(0x11)].map(hex), 'the jobs’ messages were not kept in order, each select straight before its put')
+    assert.ok(!t.logs.some((l) => /refused to send/.test(l)), t.logs.filter((l) => /refused/.test(l)).join(' | '))
+    assert.equal(cellsOf(answers[4].cells), cellsOf(t.unit.state.grid))
+    assert.deepEqual(t.unit.state.grid.find((c) => c.effectId === 58), { row: 1, col: 2, effectId: 58, fromRows: [1] })
+  })
+
+  test('an AM4’s four slots over Bluetooth: read as a line of four, a block put in one by the computer’s own message, and the slot read back to say it took', async () => {
+    const chain = await import(AM4_CHAIN)
+    const sx = await import(SX)
+    const t = await onTheLine('am4', CHAIN_OPEN)
+    const before = await t.get('/preset/grid')
+    assert.deepEqual(before, {
+      rows: 1,
+      cols: 4,
+      cells: [
+        { row: 0, col: 0, effectId: 0x3a, name: 'Amp', isShunt: false, fromRows: [] },
+        { row: 0, col: 1, effectId: 0x76, name: 'Drive', isShunt: false, fromRows: [] },
+        { row: 0, col: 2, effectId: 0x77, name: 'drive', isShunt: false, fromRows: [] }
+      ],
+      source: 'preset'
+    })
+    t.sent.length = 0
+    /* A reverb into the empty fourth slot: the row is not used, as on the computer. */
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0x42 }), { ok: true })
+    assert.equal(hex(t.frames()[0]), hex(chain.buildAm4Slot(4, 0x42)))
+    assert.deepEqual(t.unit.state.slots, [0x3a, 0x76, 0x77, 0x42])
+    assert.ok(t.frames().slice(1).every((f) => hex(f) === hex(sx.buildAm4Structure())), 'something other than the preset question followed the slot write')
+    assert.ok(t.frames().length >= 2, 'the slot was not read back')
+    assert.ok(t.logs.some((l) => l === 'Reverb into slot 4: the AM4 says so'), t.logs.join(' | '))
+    assert.ok(t.events.some((e) => e.type === 'changed' && e.scope === 'grid'))
+    /* Emptied, and another put where a block was. */
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 1, col: 3, blockId: 0 }), { ok: true })
+    assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 7, col: 2, blockId: 0x46 }), { ok: true })
+    assert.deepEqual(t.unit.state.slots, [0x3a, 0x46, 0, 0x42])
+    assert.deepEqual((await t.get('/preset/grid')).cells.map((c) => [c.col, c.name]), [[0, 'Amp'], [1, 'Delay'], [3, 'Reverb']])
+    /* The AM4 was sent nothing it could not expect, and is still answering. */
+    assert.equal(t.unit.state.frozen, false)
+    assert.deepEqual(t.unit.state.unknown, [])
+    /* What is not a slot or a block of its own is refused with nothing sent; an AM4 has no cables at all. */
+    t.sent.length = 0
+    for (const body of [{ row: 1, col: 5, blockId: 0x42 }, { row: 1, col: 0, blockId: 0x42 }, { row: 1, col: 1, blockId: 0x77 }, { row: 1, col: 1, blockId: 206 }, { row: 1, col: 1, blockId: 0x3e }, { row: 1, col: '1', blockId: 0x42 }, { row: 1, col: 1 }, null]) {
+      await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', body), (e) => e.status === 400, JSON.stringify(body))
+    }
+    await assert.rejects(sendTo(t, 'POST', '/preset/grid/cable', { srcRow: 1, srcCol: 1, destRow: 1 }), (e) => e.status === 501)
+    assert.equal(t.sent.length, 0)
+    assert.equal(t.unit.state.frozen, false)
+    /* An AM4 that takes the message and changes nothing: the slot itself says so. */
+    const u = await onTheLine('am4', { slotIgnored: true, ...CHAIN_OPEN })
+    assert.deepEqual(await sendTo(u, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0x42 }), { ok: false, refused: 'slot 4 holds nothing' })
+    assert.deepEqual(await sendTo(u, 'PUT', '/preset/grid/cell', { row: 1, col: 1, blockId: 0x42 }), { ok: false, refused: 'slot 1 holds Amp' })
+    assert.equal(u.unit.state.frozen, false)
+    /* And every frame an AM4 was sent in all of this is on its old list or is a slot write of the four. */
+    for (const w of [t, u]) {
+      for (const f of w.frames()) assert.ok(sx.isAllowedAm4(f) || (chain.readAm4Slot(f) && chain.am4SlotCode(chain.readAm4Slot(f).code)), hex(f))
+    }
   })
 }

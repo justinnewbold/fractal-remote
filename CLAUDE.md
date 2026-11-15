@@ -1012,9 +1012,10 @@ what the computer sends for the same edit, and a test holds it there.
     will tell. Same switches as the names
     (`OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE`,
     `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE`), both false. Not over Bluetooth
-    or a USB cable: there is no chain editor there at all (no message of
-    ours places a block on a grid, and the Bluetooth chain read carries
-    no positions).
+    or a USB cable: the chain EDITOR is not there (the Bluetooth blocks
+    read carries no positions). The messages that place a block and join
+    a cable are, since 1.90.76, for Quick build (see "The chain over
+    Bluetooth", below).
   - *AND THEY HAVE COLOURS IN THE DEFAULT LOOK, since 1.90.73.* "We need
     to build out those block colors because the new ones you added are
     just all gray" (14 November 2026, Play on his Axe-Fx III: DYN, TON,
@@ -1118,7 +1119,8 @@ what the computer sends for the same edit, and a test holds it there.
     New and the website's pages saying so, and never by an update.
   - Bluetooth → What Bluetooth can't do (lib/editWords, screens/Bluetooth
     `DIFFERENT`) still says, for everybody: no moving, adding or removing
-    blocks, no modifiers, renaming or copying a channel, a cab chosen with
+    blocks (true for every account but his since 1.90.76: "The chain over
+    Bluetooth", below), no modifiers, renaming or copying a channel, a cab chosen with
     the computer on the three gen-3 units, and no looper, volume button,
     unit metronome click or Footswitches page. Keep that page true
     whenever one of these is built.
@@ -1172,6 +1174,100 @@ what the computer sends for the same edit, and a test holds it there.
   move to Bluetooth where Edit is closed). The Bluetooth page's editing
   lines follow the same switch (`editingLine`, `limitsLine`): closed, its
   words are exactly what every customer copy has always shown.
+
+**The chain over Bluetooth: a block placed, a cable joined, the grid read.
+Built 15 November 2026, HIS ACCOUNT ONLY, and NOT ONE OF ITS MESSAGES HAS
+GONE TO A UNIT FROM A PHONE YET.**
+
+> "The four screens are good. I need everything with the chain builder to
+> work over Bluetooth also" (15 November 2026, of Quick build and the
+> starter chains, below)
+
+Until then the chain could only be changed through the computer: the phone
+had no message that places a block, and its Bluetooth read of the chain
+(the status read) carries no positions. Since 1.90.76 the wire answers the
+computer app's own four routes over Bluetooth, or the unit's USB cable into
+the phone, for his account (bleWire `chainOn`): GET /blocks, GET
+/preset/grid, PUT /preset/grid/cell and POST /preset/grid/cable. Anything
+that changes the chain through lib/device's `blockCatalog`, `gridCells`,
+`placeBlock`, `clearCell` and `setCable` therefore works on either
+connection with no code of its own for Bluetooth; `caps.gridEdit` says
+whether it may (the computer app's own word, true over Bluetooth only
+where the chain is open).
+
+- **What is sent is the computer's own, byte for byte.** On an FM3, FM9 or
+  Axe-Fx III, mobile/src/lib/gen3-grid.js: "select the cell" (01 30 00)
+  then "put the block in it" (01 32 00, block id 0 empties it), and a
+  cable into the next column (01 35 00, joined or parted). On an AM4,
+  mobile/src/lib/am4-chain.js: the block's code written to one of its four
+  slots. scripts/grid-frames.mjs walks every cell, a spread of block ids
+  and every cable through the PINNED codec and writes the digests
+  (test/gen3-grid-codec.json); test/gen3-grid.mjs walks the phone's
+  builders the same way and holds them to it. A NEW CODEC PIN MEANS
+  RUNNING THAT SCRIPT ON IT, as the knob tables' scripts.
+- **Every frame is held at the way out to the one job in hand** (gen3Sender
+  `gridShaped`/`gridAllowed`, am4Sender `am4SlotAllowed`): a frame of the
+  grid's shapes goes only if it is, byte for byte, one the wire is sending
+  for the grid at that moment, and never for an account the chain is not
+  open to. An AM4's slot write is held to four slots and the seventeen
+  blocks it names itself, or nought: never a fifth slot (one address
+  further answered wrongly on a real AM4 and disturbed another slot), and
+  never a second copy of a block. The AM4's own notes said placing blocks
+  was "deliberately NOT here, ever, over Bluetooth"; this is that, opened
+  on his word, as tightly as anything it is sent.
+- **One cable nobody has decoded: out of a six-row grid's TOP row from an
+  even column** (FM9, Axe-Fx III). The codec refuses to build it and so
+  does the phone (`cableKnown`), in words. So a chain is built on the
+  second row, where factory presets keep theirs.
+- **An FM3 is held to its own twelve columns**, which the codec is not (it
+  lets an FM3 ask for columns 13 and 14).
+- **A refusal is answered, not thrown** ({ok: false, refused}), as the
+  computer answers one, so a plan of several steps goes on (a unit with no
+  room for the fifth block still gets four joined up) and whoever asked
+  reads the chain back. An AM4 answers a slot write with nothing, so the
+  wire reads the preset back and the slot itself says.
+- **A write asked before a scene or preset change is never sent after it**
+  (`movedSince`, and `moved()` drops the ones waiting), and grid jobs go
+  one at a time (`inGrid`).
+- **TWO WAYS TO READ THE GRID, and the fast one is believed only where the
+  slow one has borne it out on that connection** (gen3-grid `gridProof`,
+  whose comment has all of it). The preset whole (the edit buffer, the
+  read the computer app uses, proven on all three units) is 24,680 bytes
+  from an FM3 or FM9 and 49,336 from an Axe-Fx III: eight seconds and
+  sixteen down an adapter on the MIDI jacks. The live read (01 2E 00) is
+  one answer of 755 bytes. The codec reads the live answer two ways (an
+  FM3's, an FM9's) which turn out to be one layout, its FM9 reading takes
+  only seven of the twelve bits of a block's id (so it cannot name a
+  Mixer or a NAM), and an Axe-Fx III's live answer has never been
+  captured. So a grid read takes BOTH until the two have agreed on where
+  the blocks are and on which bit is which row's cable, which takes a
+  preset with a cable in it: the first chain built on a connection is
+  read from the preset before and after, and the live read takes over
+  from the next. One disagreement and the live read is not used again on
+  that connection. The log has the live answer itself once a connection
+  and what was borne out ("the live grid read agrees with the preset: …",
+  or "DISAGREES … at row r, column c"): READ THOSE LINES FIRST in his
+  first log from each unit, they settle the layout on units nobody has
+  read it from.
+- **The switch** is `CHAIN_OVER_BLUETOOTH_FOR_EVERYONE` in features.js,
+  false (lib/bluetooth `chainOverBluetooth`, handed to the wire as
+  `chain`, which also wants Edit open). OPENING IT TO CUSTOMERS IS A STORE
+  VERSION, not the switch alone, as Edit and saving over Bluetooth: every
+  copy out was reviewed with notes that say blocks are not moved, added
+  or removed over Bluetooth, and Bluetooth → What Bluetooth can't do
+  still says so to everybody (true for every account but his until then).
+- **NOT PROVEN ON ANY UNIT:** a block placed, a cell emptied or a cable
+  from the phone; either grid read over an adapter (whether a unit sends
+  its edit buffer down its MIDI jack when asked, and how long a Bluetooth
+  link takes over 49 KB); slot 1's address on an AM4 from here; whether a
+  cable into an EMPTY cell makes the unit carry the signal across it (the
+  browser's Starter chain has always assumed so; the read back after a
+  build is what will show it). His AM4, FM3 and Axe-Fx III are the first
+  checks, each one's first build.
+- **Not built:** the chain EDITOR (move, add or remove one block) over
+  Bluetooth. It draws from the blocks read, which over Bluetooth still
+  has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
+  read it needs exists now.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since

@@ -1,0 +1,32 @@
+{
+  "from": "a17eb4a51d6d86985d8d8040966caa8da295f364",
+  "sums": {
+    "fm3": {
+      "select": "62e5c77c8af2f71daf865dfa3de87d5b82d5ba3ac8f759a9afb9db9aea57d6e3",
+      "put": "e5c949de692dce39f47827100ed75c355f4616c59c5eec8a5920e647980feb70",
+      "cable": "9475387c04bff7cf13cbce4c68856d91d023fd29e39b8a37c79194835a0ad0ec",
+      "cables": 352,
+      "read": "f000017411012e00000000000000000000000000003bf7",
+      "dump": "f000017411037f7f0017f7"
+    },
+    "fm9": {
+      "select": "03893fd6c49bdf534a54b59949123832349e4803dfba2afaf65de491a9a1a959",
+      "put": "5c39ab3770d473462b050e5c903b50e01a1db9c16b84b5d0f8c1e4274627e397",
+      "cable": "81c4871208d67eeccdc975541a8109e45aac8cb47b6da6b3908fab5d4689bc97",
+      "cables": 864,
+      "read": "f000017412012e000000000000000000000000000038f7",
+      "dump": "f000017412037f7f0014f7"
+    },
+    "axefx3": {
+      "select": "db8ce697205c8a879fa60d9aeb30b1af23f0952a70dc4e3469e1cee416da2140",
+      "put": "f444c846645dc11810520307cd7fbbd2303c87ecbabc826a641b93f2a9b4b01c",
+      "cable": "f53e2d5924327d32bff364a5bb42003cd72491ab3b2dde7ec24125c5b455ac1f",
+      "cables": 864,
+      "read": "f000017410012e00000000000000000000000000003af7",
+      "dump": "f000017410037f7f0016f7"
+    },
+    "am4": {
+      "slot": "91ff548316a77e8201a800469fb3b84034c57b8732a60dd856040c3185da2cec"
+    }
+  }
+}

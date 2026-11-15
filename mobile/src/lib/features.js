@@ -385,3 +385,31 @@ export const TONE3000_QUICK_FOR_EVERYONE = false
  * version, and only once he has saved from his phone and said so.
  */
 export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * THE CHAIN, READ AS A GRID AND CHANGED OVER BLUETOOTH OR THE UNIT'S OWN USB
+ * CABLE (lib/gen3-grid on an FM3, FM9 or Axe-Fx III; lib/am4-chain on an
+ * AM4): a block put in a cell or a slot, a cell emptied, a cable joined.
+ *
+ * "The four screens are good. I need everything with the chain builder to
+ * work over Bluetooth also" (Justin, 15 November 2026, of Quick build and
+ * the starter chains). Until then the chain could only be changed through
+ * the computer. What is sent is the computer app's own, byte for byte (the
+ * tests hold every frame to the pinned codec), and every frame of it is
+ * held at the way out to the one job the wire has in hand.
+ *
+ * NOT ONE OF THESE MESSAGES HAS GONE TO A UNIT FROM A PHONE YET: no block
+ * placed, no cable, and neither grid read over an adapter. So it is his
+ * account only (lib/bluetooth chainOverBluetooth): every other account's
+ * Bluetooth answers the four routes "not over Bluetooth" as it always did,
+ * shows nothing new, and a frame of these shapes is refused at the way out.
+ *
+ * OPENING IT TO CUSTOMERS IS A STORE VERSION, not this switch alone: every
+ * copy out was reviewed with notes, and a listing, that say blocks are not
+ * moved, added or removed over Bluetooth (CLAUDE.md, "It is switched on for
+ * customers only in a new store version"), as Edit over Bluetooth itself
+ * was (lib/ble-rule.js EDIT_FROM_STORE). So this says true only in the pull
+ * request of a build pair whose texts say so, keyed to that store version,
+ * and only once he has built a chain from his phone and said so.
+ */
+export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
