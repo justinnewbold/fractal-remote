@@ -988,6 +988,33 @@ what the computer sends for the same edit, and a test holds it there.
     (`ownBlocksOpenTo(link.account?.id)`). It is inside the computer app,
     so it came with a computer release, and a change to the list is one
     too: KEEP IT IN STEP WITH mobile/src/lib/gen3Catalog.js `OWN`.
+  - *AND THE CHAIN EDITOR CAN ADD, MOVE AND REMOVE THEM, HIS ACCOUNT ONLY
+    (1.90.75).* "Looks like NAM blocks and some others are missing from
+    the chain editor when adding new blocks not currently in the chain"
+    (15 November 2026). The editor works through the computer only, and
+    its list of blocks to add is the computer's (GET /blocks), which the
+    engine builds from a codec table that stops before these blocks
+    (forgefx-midi `EFFECT_BASES`: no NAM, IR Player, Vocoder, Crossover,
+    Tone Match or Dynamic Distortion). The engine's route that PUTS a
+    block in a cell takes any effect id, so nothing changed on the
+    computer: the phone adds its own names to the list
+    (mobile/src/lib/ownBlocks.js `ownInPalette`) and the browser the same
+    (shared/own-blocks.mjs), held equal by a test, and a block of theirs
+    that is in the chain is the editor's own to move and remove
+    (`ownInChainEditor`; it was held as a "New block" with nothing to
+    press, which would have left a NAM just added with no way out). Only
+    the editor is handed that copy: Edit, the report and the rest still
+    see the block as they did. NOT PROVEN ON A UNIT: nobody has seen an
+    editor place one of these with that message, and the second of each
+    kind (NAM 2, IR Player 2 to 4, and so on) is the id after the first,
+    never read off a unit. The editor re-reads the chain after every add
+    and says when the unit did not take it, which is how his first try
+    will tell. Same switches as the names
+    (`OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE`,
+    `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE`), both false. Not over Bluetooth
+    or a USB cable: there is no chain editor there at all (no message of
+    ours places a block on a grid, and the Bluetooth chain read carries
+    no positions).
   - *AND THEY HAVE COLOURS IN THE DEFAULT LOOK, since 1.90.73.* "We need
     to build out those block colors because the new ones you added are
     just all gray" (14 November 2026, Play on his Axe-Fx III: DYN, TON,

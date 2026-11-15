@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks } from '../lib/forgefx'
 import { logDebug } from '../lib/debugLog'
 import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-order.mjs'
@@ -20,6 +20,7 @@ import {
   rowLabel
 } from '../../shared/grid-plan.mjs'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, isNewBlock } from '../../shared/new-block.mjs'
+import { ownInChainEditor, ownInPalette } from '../../shared/own-blocks.mjs'
 
 /**
  * A workable starting chain, by block family rather than by number.
@@ -63,7 +64,16 @@ const REMOVE_WARNING = 'Its settings go with it. Adding it again brings it back 
  * that answer as a failure: it re-reads the chain from the unit instead and
  * lets you look.
  */
-export default function GridEditor({ blocks, capabilities, busy, onError, onChanged }) {
+export default function GridEditor({ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false }) {
+  /*
+   * The chain as this editor takes it: an Axe-Fx III's NAM and the other
+   * blocks the engine sends with no name are named and are the editor's own
+   * to move and remove, for the accounts they are shown to
+   * (shared/own-blocks.mjs ownInChainEditor says why, and what is not proven).
+   */
+  const blocks = useMemo(() => ownInChainEditor(asRead, deviceKey, ownOpen), [asRead, deviceKey, ownOpen])
+  /* And the engine's list of blocks to add, with those blocks in it. */
+  const withOwn = (list) => ownInPalette(list, deviceKey, ownOpen)
   // Which card's actions are open, as "row:col". One at a time.
   const [open, setOpen] = useState(null)
   const [moving, setMoving] = useState(null)
@@ -114,7 +124,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
     setPaletteFailed(false)
     try {
       const res = await blockCatalog()
-      const list = Array.isArray(res) ? res : []
+      const list = withOwn(Array.isArray(res) ? res : [])
       setPalette(list)
       if (!list.length) setPaletteFailed(true)
     } catch {
@@ -129,7 +139,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
       try {
         const res = await blockCatalog()
         if (stop) return
-        const list = Array.isArray(res) ? res : []
+        const list = withOwn(Array.isArray(res) ? res : [])
         setPalette(list)
         if (!list.length) setPaletteFailed(true)
       } catch {

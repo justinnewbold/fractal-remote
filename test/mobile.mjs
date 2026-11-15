@@ -2689,7 +2689,9 @@ export function run(test) {
     /* Edit's own list: the blocks the app knows, and one whose knobs the computer answers (lib/ownBlocks `turns`), and no other with no name. The chain editor is still handed the whole chain, which holds every such block's cell. */
     assert.match(edit, /const blocks = useMemo\(\(\) => editBlocks\(chainAll\), \[chainAll\]\)/, 'the phone’s Edit opens and turns blocks it has no name for')
     assert.match(read('mobile/src/lib/device.js').replace(/\s+/g, ' '), /export const editBlocks = \(blocks\) => \(Array\.isArray\(blocks\) \? blocks : \[\]\)\.filter\(\(b\) => b && \(!isNewBlock\(b\) \|\| b\.turns === true\)\)/, 'Edit’s list lets in a block with no name')
-    assert.match(edit, /<ChainEditor blocks=\{chainAll\} /, 'the chain editor is no longer handed the whole chain')
+    assert.match(edit, /<ChainEditor blocks=\{chainForEditor\} /, 'the chain editor is no longer handed the whole chain')
+    /* The whole chain, with only the blocks the phone names for itself made the editor's own (lib/ownBlocks ownInChainEditor): never the list Edit's strip gets, which leaves blocks out. */
+    assert.match(edit, /const chainForEditor = useMemo\(\(\) => ownChainHere\(chainAll\), \[chainAll\]\)/, 'the chain editor is no longer handed the whole chain')
     assert.match(edit, /const modBlocks = useMemo\(\(\) => knownBlocks\(blocks\), \[blocks\]\)/)
     assert.match(edit, /<Modifiers key=\{.*\} blocks=\{modBlocks\} /, 'Modifiers is offered a block the app has no name for')
   })
@@ -2910,6 +2912,113 @@ export function run(test) {
     await three.rig.refreshBlocks()
     assert.equal(three.rig.getState().deviceSlug, 'fm3')
     assert.deepEqual(three.rig.getState().blocks.map((b) => b.effectId), [118, 58])
+  })
+
+  test('the chain editor’s list has a III’s NAM and the other blocks the computer’s list lacks, and one in the chain can be moved and removed, for the accounts they are named for', async () => {
+    /*
+     * "Looks like NAM blocks and some others are missing from the chain
+     * editor when adding new blocks not currently in the chain" (Justin, 15
+     * November 2026). The editor's list is the computer's, built from a
+     * table with no NAM, IR Player, Vocoder, Crossover, Tone Match or
+     * Dynamic Distortion in it; the route that places a block takes any
+     * id. So the phone adds its own names to the list, and a block of
+     * theirs in the chain is the editor's to move and remove.
+     */
+    const { nameOwnBlocks, ownInPalette, ownInChainEditor, OWN_FAMILIES } = await import('../mobile/src/lib/ownBlocks.js')
+    /* The computer's list as its engine builds it: the families it knows, each with the page a block is placed by. */
+    const fromComputer = () => [
+      { page: 58, name: 'Amp 1', slug: 'amp', family: 'amp' },
+      { page: 59, name: 'Amp 2', slug: 'amp', family: 'amp' },
+      { page: 62, name: 'Cab 1', slug: 'cab', family: 'cab' },
+      { page: 118, name: 'Drive 1', slug: 'drive', family: 'drive' }
+    ]
+    const list = fromComputer()
+    const more = ownInPalette(list, 'axefxiii', true)
+    /* The computer's own entries first and untouched, then the unit's own: every one a page, a name and a family, as the editor's buttons want. */
+    assert.deepEqual(more.slice(0, 4), fromComputer())
+    assert.deepEqual(
+      more.slice(4).map((b) => [b.page, b.name, b.slug, b.family]),
+      [
+        [134, 'Vocoder', 'vocoder', 'vocoder'],
+        [142, 'Crossover 1', 'crossover', 'crossover'],
+        [143, 'Crossover 2', 'crossover', 'crossover'],
+        [170, 'Tone Match', 'tonematch', 'tonematch'],
+        [195, 'IR Player 1', 'irplayer', 'irplayer'],
+        [196, 'IR Player 2', 'irplayer', 'irplayer'],
+        [197, 'IR Player 3', 'irplayer', 'irplayer'],
+        [198, 'IR Player 4', 'irplayer', 'irplayer'],
+        [202, 'Dynamic Distortion 1', 'dynadist', 'dynadist'],
+        [203, 'Dynamic Distortion 2', 'dynadist', 'dynadist'],
+        [206, 'NAM 1', 'nam', 'nam'],
+        [207, 'NAM 2', 'nam', 'nam']
+      ]
+    )
+    for (const b of more.slice(4)) assert.deepEqual(Object.keys(b), ['page', 'name', 'slug', 'family'])
+    assert.equal(list.length, 4, 'the computer’s own list was changed in place')
+    /* An FM9 has three of them, and no NAM. */
+    assert.deepEqual(ownInPalette(fromComputer(), 'fm9', true).slice(4).map((b) => b.name), ['Vocoder', 'Crossover 1', 'Crossover 2', 'Tone Match'])
+    /* Nothing twice: a computer app that lists one already keeps its own entry. */
+    const lists206 = [...fromComputer(), { page: 206, name: 'NAM', slug: 'nam', family: 'nam' }]
+    assert.equal(ownInPalette(lists206, 'axefxiii', true).filter((b) => b.page === 206).length, 1)
+    assert.equal(ownInPalette(lists206, 'axefxiii', true).find((b) => b.page === 206).name, 'NAM')
+    /* The very same list back: every other unit, an account it is not open to, a list that failed (empty, so the editor says it could not read it), and anything that is no list. */
+    for (const unit of ['fm3', 'am4', 'vp4', 'axefxii', '', null]) assert.equal(ownInPalette(list, unit, true), list, String(unit))
+    for (const open of [false, undefined, null, 'yes', 1]) assert.equal(ownInPalette(list, 'axefxiii', open), list, String(open))
+    const empty = []
+    assert.equal(ownInPalette(empty, 'axefxiii', true), empty)
+    assert.equal(ownInPalette(null, 'axefxiii', true), null)
+
+    /* IN THE CHAIN: named by the phone, a block is still a New block to everything (unknown), and the editor alone takes it as its own. */
+    const { lanesFor } = await import('../mobile/src/lib/grid-plan.js')
+    const caps = { grid: { rows: 6, cols: 14 } }
+    const chain = nameOwnBlocks(
+      [
+        { slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 1 },
+        { slug: '', name: 'eid_206', effectId: 206, unknown: true, row: 1, col: 2 },
+        { slug: '', name: 'eid_240', effectId: 240, unknown: true, row: 1, col: 3 },
+        { slug: 'cab', name: 'Cab 1', effectId: 62, row: 1, col: 4 }
+      ],
+      'axefxiii',
+      true
+    )
+    const row = (blocks) => lanesFor(blocks, caps).find((l) => l.row === 1)
+    /* As it was: the NAM held, with nothing to press. */
+    assert.deepEqual(row(chain).blocks.map((b) => b.name), ['Amp 1', 'Cab 1'])
+    assert.equal(row(chain).held.length, 2)
+    /* For the editor: the NAM is one of the lane's blocks, by its name, and the stranger nobody has a name for is still held. */
+    const forEditor = ownInChainEditor(chain, true)
+    assert.deepEqual(row(forEditor).blocks.map((b) => [b.name, b.effectId]), [['Amp 1', 58], ['NAM 1', 206], ['Cab 1', 62]])
+    assert.deepEqual(row(forEditor).held.map((b) => b.effectId), [240])
+    /* Only `unknown` moved, on a copy: the chain everything else reads is untouched. */
+    const nam = forEditor.find((b) => b.effectId === 206)
+    assert.deepEqual({ ...nam, unknown: true }, chain.find((b) => b.effectId === 206))
+    assert.equal(chain.find((b) => b.effectId === 206).unknown, true)
+    assert.equal(forEditor.find((b) => b.effectId === 58), chain.find((b) => b.effectId === 58))
+    /* The same chain back where it is not open, and where there is nothing of the phone's own in it. */
+    for (const open of [false, undefined, null, 'yes']) assert.equal(ownInChainEditor(chain, open), chain, String(open))
+    const plain = [{ slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 1 }, { slug: '', name: 'eid_240', effectId: 240, unknown: true, row: 1, col: 3 }]
+    assert.equal(ownInChainEditor(plain, true), plain)
+    /* Never a block that only looks like one: no id, a name from elsewhere, or a family that is not the phone's own. */
+    const fakes = [
+      { slug: 'nam', name: 'NAM 1', unknown: true, onPlay: true, row: 1, col: 1 },
+      { slug: 'nam', name: 'NAM 1', effectId: 206, unknown: true, row: 1, col: 2 },
+      { slug: 'amp', name: 'Amp 9', effectId: 300, unknown: true, onPlay: true, row: 1, col: 3 }
+    ]
+    assert.equal(ownInChainEditor(fakes, true), fakes)
+    assert.deepEqual([...OWN_FAMILIES].sort(), ['crossover', 'dynadist', 'irplayer', 'nam', 'tonematch', 'vocoder'])
+
+    /* Where they are asked: one switch, the names' own, for the list and for the chain; and the editor's list goes through it. */
+    const flatCode = (f) => read(f).replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    const here = flatCode('mobile/src/lib/ownBlocksHere.js')
+    assert.match(here, /const openHere = \(\) => bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE/)
+    assert.match(here, /export const ownPaletteHere = \(list\) => ownInPalette\(list, getState\(\)\.deviceSlug, openHere\(\)\)/)
+    assert.match(here, /export const ownChainHere = \(blocks\) => ownInChainEditor\(blocks, openHere\(\)\)/)
+    const edit = flatCode('mobile/src/screens/Edit.js')
+    assert.match(edit, /const list = ownPaletteHere\(await blockCatalog\(\)\) if \(!stop\) setPalette\(list\)/)
+    assert.equal((edit.match(/blockCatalog\(\)/g) || []).length, 1, 'the list is read somewhere that leaves the unit’s own blocks out')
+    /* Still his account alone: nobody has placed one on a unit yet. */
+    const features = await import('../mobile/src/lib/features.js')
+    assert.equal(features.OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, false)
   })
 
   test('the preset report never says every block is off over a new block that is on', async () => {
@@ -13262,7 +13371,7 @@ export function run(test) {
     assert.match(editor, /<Grip label=\{`Drag \$\{block\.name\}`\}/, 'there is no grip to drag a card by')
     assert.match(read('mobile/src/components/Grip.js'), /onPanResponderTerminationRequest: \(\) => false/, 'the grip hands the touch back to the page')
     assert.match(editor, /const dragStart = \(row, index\) => \{ onScrollLock\?\.\(true\)/, 'the page can scroll under a drag')
-    assert.match(editor, /<ChainEditor blocks=\{chainAll\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
+    assert.match(editor, /<ChainEditor blocks=\{chainForEditor\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
     assert.match(editor, /const free = \(lane\.gaps \|\| \[\]\)\.filter\(\(c\) => c > col\)/, 'Add does not put the new block after the card it was pressed on')
   })
 

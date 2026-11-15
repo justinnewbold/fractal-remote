@@ -5334,6 +5334,9 @@ export default function App() {
                 <GridEditor
                   blocks={blocks}
                   capabilities={device?.capabilities}
+                  /* An Axe-Fx III's NAM and the other blocks the engine has no name for, in the list and in the chain, for the accounts they are shown to (shared/own-blocks.mjs). */
+                  deviceKey={currentDeviceSlug()}
+                  ownOpen={ownBlocksOpenTo(link.account?.id)}
                   busy={busy}
                   onError={setError}
                   onChanged={(summary) => {
@@ -5482,6 +5485,9 @@ export default function App() {
                   <GridEditor
                     blocks={blocks}
                     capabilities={device?.capabilities}
+                    /* The same as the Edit screen's above. */
+                    deviceKey={currentDeviceSlug()}
+                    ownOpen={ownBlocksOpenTo(link.account?.id)}
                     busy={busy}
                     onError={setError}
                     onChanged={(summary) => {
