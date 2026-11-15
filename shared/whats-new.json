@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-15",
+      "version": "1.90.73",
+      "lines": [
+        "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion blocks now have their own colors on Play instead of gray. On an FM9, the Vocoder and Tone Match do too."
+      ]
+    },
+    {
       "date": "2026-11-14",
       "version": "1.90.72",
       "lines": [

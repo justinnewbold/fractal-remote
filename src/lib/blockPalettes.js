@@ -533,8 +533,31 @@ const APPROXIMATE = {
   shunt: { fill: '#555b66', ink: '#ffffff' }
 }
 
-/** Every family the app knew before these colours, fill and letters as they were. */
-export const FRACTAL_REMOTE = Object.freeze({ ...APPROXIMATE, ...VERIFIED_FM3EDIT, ...VERIFIED })
+/*
+ * THE BLOCKS PLAY HAS LEARNED TO SHOW SINCE, which the old table never knew
+ * and so drew in the unknown block's grey: an Axe-Fx III's NAM, IR Player,
+ * Vocoder, Tone Match and Dynamic Distortion (and an FM9's Vocoder and Tone
+ * Match). "We need to build out those block colors because the new ones you
+ * added are just all gray" (Justin, 14 November 2026, with a picture of
+ * Play on his Axe-Fx III: six grey tiles in a row of eleven).
+ *
+ * Each is the colour Axe-Edit III draws that block's picture in, as the
+ * gen-3 table above already holds it for Match my unit (it says where each
+ * was read from): one source, so the two looks cannot come to disagree
+ * about which tile is the Vocoder. White letters like the rest of this
+ * table; every one of them carries white at 4.5:1 or better, and the phone
+ * picks its letters from the colour it actually draws.
+ *
+ * Only by these exact spellings, which are the ones Play's own names come
+ * with (shared/own-blocks.mjs, the phone's lib/ownBlocks): an Axe-Fx II's
+ * "NAM Player" is still the unknown block here, as every name learned
+ * since is (see above).
+ */
+export const LEARNED_ON_PLAY = Object.freeze(['nam', 'irplayer', 'vocoder', 'tonematch', 'dynadist'])
+const FROM_THE_EDITOR = Object.fromEntries(LEARNED_ON_PLAY.map((family) => [family, { fill: PALETTES.gen3[family], ink: '#ffffff' }]))
+
+/** Every family the app knew before these colours, fill and letters as they were, and the blocks Play has learned to show since. */
+export const FRACTAL_REMOTE = Object.freeze({ ...APPROXIMATE, ...FROM_THE_EDITOR, ...VERIFIED_FM3EDIT, ...VERIFIED })
 
 /*
  * And its scenes, which the old lib/sceneColors explained:
