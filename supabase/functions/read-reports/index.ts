@@ -21,11 +21,14 @@
  * three: there is no way to write a report, change one or delete one), 409
  * (three keys kept already) or 502 (the database did not answer).
  *
- * THE KEY. Every request carries `x-reports-key`. In a Claude session it is
- * never typed anywhere: Justin saves it once in the session's secure
- * credential form (host biznwrqeckviawjuhvyg.supabase.co, header
- * x-reports-key), and the network proxy adds it to every request to that
- * host. Here only its SHA-256 is kept (private.report_reader_keys,
+ * THE KEY. Every request carries it, in `x-reports-key` or in Authorization
+ * (with or without "Bearer" before it): the cloud environment's settings
+ * save a network secret as Authorization and offer no other header (16
+ * November 2026), the secure credential form names its own. In a Claude
+ * session it is never typed anywhere: Justin saves it once (host
+ * biznwrqeckviawjuhvyg.supabase.co), and the network proxy adds it to every
+ * request to that host. A Supabase sign-in in Authorization is no kept key:
+ * it is hashed and refused like any other. Here only its SHA-256 is kept (private.report_reader_keys,
  * migrations/20261108_report_readers.sql), every kept hash is compared with
  * the caller's in constant time, and the key is never logged, never
  * answered and never sent on to the database.
@@ -166,6 +169,19 @@ async function known(key: string): Promise<boolean> {
   return among(await rpc('report_reader_hashes', {}), mine)
 }
 
+/**
+ * The key a request carries, from its two headers' values: its own,
+ * x-reports-key, first; else Authorization, less a word before it (Bearer,
+ * Token, Key, ApiKey). Pure, so the request's headers are still only asked
+ * one by one, by name.
+ */
+export function keyOf(own: string | null, authorization: string | null): string {
+  if (own) return own
+  const auth = (authorization || '').trim()
+  const worded = /^(?:bearer|token|key|api-?key)\s+(\S.*)$/i.exec(auth)
+  return worded ? worded[1].trim() : auth
+}
+
 async function enroll(req: Request, key: string): Promise<Response> {
   const secret = env('READ_REPORTS_ENROLL')
   if (secret.length < ENROLL_MIN) {
@@ -186,7 +202,7 @@ async function enroll(req: Request, key: string): Promise<Response> {
     return json({ ok: false, why: 'wrong enrolment token' }, 403)
   }
   if (!keyShapeOk(key)) {
-    return json({ ok: false, why: `no x-reports-key of ${KEY_MIN} to ${KEY_MAX} printable characters came with the request` }, 400)
+    return json({ ok: false, why: `no key (x-reports-key or Authorization) of ${KEY_MIN} to ${KEY_MAX} printable characters came with the request` }, 400)
   }
   try {
     const said = (await rpc('enroll_report_reader', { key_hash: await sha256Hex(key), replace_others: body.replace === true })) as Record<string, unknown> | null
@@ -205,7 +221,7 @@ export async function handle(req: Request): Promise<Response> {
   const asked = route(req.method, req.url)
   if (asked.kind === 'refused' && !asked.read) return json({ ok: false, why: asked.why }, asked.status)
   /* Trimmed by the platform; read here once and never repeated anywhere. */
-  const key = req.headers.get('x-reports-key') || ''
+  const key = keyOf(req.headers.get('x-reports-key'), req.headers.get('authorization'))
   if (asked.kind === 'enroll') return await enroll(req, key)
 
   try {

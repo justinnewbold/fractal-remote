@@ -1061,7 +1061,11 @@ people's sessions too.
 4. **Justin saves the key, in the secure form, never in the chat.** The
    lead asks for it with the credential form: host
    `biznwrqeckviawjuhvyg.supabase.co`, header `x-reports-key`, no word
-   before the value, named "Bug reports key". Justin makes up a long
+   before the value, named "Bug reports key". Or Justin adds it himself in
+   the environment's settings (the environment's name at the top of the
+   session, Edit, Network secrets): that screen asks only for the host and
+   the value and saves it as an `Authorization` header (16 November 2026),
+   which the function takes as well, with or without "Bearer" before it. Justin makes up a long
    password (20 to 256 ordinary characters; a phrase of five or six words
    is fine) and types it there. He never needs it again: nobody reads it
    back, and a forgotten one is simply replaced (below). This can happen
