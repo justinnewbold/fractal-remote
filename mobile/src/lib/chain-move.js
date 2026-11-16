@@ -39,8 +39,10 @@
  *      anything is cleared, in words: out of a six-row unit's top row from
  *      an even column (lib/gen3-grid `cableKnown`), and, through a computer
  *      app older than 1.90.82 on a six-row unit, any join that computer
- *      would send to the wrong cell (lib/gen3-grid `cableAsTheLaw`). Rows 3
- *      and 4, his case, are safe through any computer app.
+ *      would send to the wrong cell (lib/gen3-grid `cableAsTheLaw`). A join
+ *      along row 3 or 4 is the same bytes either way, so his drag on row 3
+ *      goes through his Pi; a move whose blocks also join another row may
+ *      be refused through it.
  *   3. The cells are cleared and the blocks put back as before (no other way
  *      to move a block has been seen on a unit), the grid is read again, and
  *      the row is WRITTEN TO THE LOG BEFORE ANYTHING IS REPAIRED, so his next
@@ -50,30 +52,46 @@
  *      missing the screen says so where the move was made, with "Join the
  *      row" (`joinRow`), which sends what is missing and reads again.
  *   5. A move that fails part-way puts the blocks back where they were and
- *      gets the same rejoin.
+ *      gets the same rejoin; the read after says which blocks are not back,
+ *      and the words never claim they are (`putBackSaid`).
+ *   6. Never a join out of an Output or into an Input: the joins belong to
+ *      the columns, and an Input or Output dragged along the row (or past by
+ *      another block) would otherwise be joined where Fractal's own editors
+ *      never put a cable.
+ *   7. EVERY WRITE IS HELD TO THE PRESET THE MOVE WAS MADE ON (`onPreset`,
+ *      Quick build's rig unitOnPreset at both ends): a footswitch that
+ *      changes preset mid-move stops it there, and nothing more, a join least
+ *      of all, goes into the other preset.
  *
  * MENDING WHAT IS ALREADY CUT (`rowCuts`): a block on the row of an Input,
  * between it and that row's Output, that is fed from NOTHING (so no parallel
  * path feeds it either) is where the row is cut. The chain editor offers
  * "Join the row" for it: a join into each such cell from the cell before it
  * on the same row, where that cell holds a block, a bare wire or the Input.
+ * Only where the app can make EVERY join the cut needs: one it cannot (the
+ * top row's, an old computer app's, or one with an empty cell before it) is
+ * said with its reason and no button, as a drag that needs one is refused.
  * Never on a row with cells fed from another row (a parallel path), never on
  * a unit with no joins to make (an AM4, a VP4, an Axe-Fx II), and never over
- * Bluetooth, where the chain editor is not.
+ * Bluetooth, where the chain editor is not. After it, the row is asked again
+ * (rowCuts on the read joinRow makes), and only a row that reads whole is
+ * called joined again.
  *
- * SETTINGS ARE MEASURED, NEVER WRITTEN BACK. Before and after a move each
- * moved block is read once (`settingsSaid`): a NAM block's capture slot and
- * one knob of every block go in the log, and nothing on the screen says
- * whether they were kept. A saved preset keeps only the blocks in its grid,
- * so a block taken out and put back may come back at its defaults; his next
- * log says.
+ * SETTINGS ARE MEASURED, NEVER WRITTEN BACK, AND ON HIS ACCOUNT ONLY
+ * (`measure`). Before and after a move each moved block is read once
+ * (`settingsSaid`): a NAM block's capture slot and one knob of every block go
+ * in the log, and nothing on the screen says whether they were kept. Two
+ * reads a block is a slower drag, so a customer's is not measured. A saved
+ * preset keeps only the blocks in its grid, so a block taken out and put
+ * back may come back at its defaults; his next log says.
  *
  * COORDINATES are the display ones (rows and columns from nought), as
  * shared/split-chain.mjs. A JOIN is { srcRow, srcCol, destRow }: cell
  * (destRow, srcCol + 1) fed from row srcRow of the column before.
  *
  * This file writes nothing itself: `runMove` and `joinRow` are handed a wire
- * ({ gridCells, clearCell, placeBlock, setCable, readBlock }) by each end.
+ * ({ gridCells, clearCell, placeBlock, setCable, readBlock }) by each end,
+ * and `onPreset` to hold each write to the preset.
  */
 import { colLabel, rowLabel } from './grid-plan.js'
 import { isOlder } from './versions.js'
@@ -173,6 +191,17 @@ export function rowSaid(cells, row, first, last, names = null) {
   return parts.join(', ')
 }
 
+const END_NAME = { input: /^input(\s*\d+)?$/i, output: /^output(\s*\d+)?$/i }
+/* A gen-3 unit's own numbers for them (Input 1–5 and Output 1–4, lib/gen3Catalog), for a read that names neither. */
+const END_IDS = { input: [37, 38, 39, 40, 41], output: [42, 43, 44, 45] }
+/** Whether a cell is the Input (or the Output): the chain read's slug, else the grid read's own name, else the unit's number for it. */
+function isEnd(cell, end, slugs = null) {
+  if (!cell || cell.isShunt) return false
+  const slug = slugs?.get?.(cell.effectId)
+  if (slug) return slug === end
+  return END_NAME[end].test(String(cell.name || '').trim()) || END_IDS[end].includes(cell.effectId)
+}
+
 /** A read worth acting on: an answer with cells in it (an empty one after a move is a read that went wrong, not a grid with nothing in it). */
 async function readCells(wire) {
   try {
@@ -221,12 +250,110 @@ export const cutRowWords = (row, col) => `Row ${rowLabel(row)} isn’t joined at
 export const holeWords = (row, col) =>
   `Row ${rowLabel(row)} has an empty space at column ${colLabel(col)} between its Input and Output, so the sound may stop there. Put a block in it, or move one back.`
 
-/** After "Join the row". */
-export function joinedWords({ row, still, checked }) {
-  if (!checked) return { ok: false, text: `The app sent the joins, but couldn’t read row ${rowLabel(row)} back to check them.` }
+/** A cut cell with nothing before it on the row: no join can be sent into it. */
+export const emptyBeforeWords = (col) => `Column ${colLabel(col - 1)} is empty, so there’s nothing to join column ${colLabel(col)} from.`
+
+/* The unit's own preset, asked before every write (`onPreset`). */
+/** Before anything was sent: the move was not made. */
+export const PRESET_MOVED_BEFORE = 'Nothing was moved: the unit is on another preset now.'
+export const UNIT_QUIET_BEFORE = 'Nothing was moved: the unit didn’t say which preset it’s on. Try again.'
+/** Part-way through a move. */
+export const PRESET_MOVED_MID = 'The unit went to another preset during the move, so the app stopped and sent nothing more to it.'
+export const UNIT_QUIET_MID = 'The unit stopped saying which preset it’s on during the move, so the app stopped there.'
+
+const listed = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`)
+
+/**
+ * WHAT A MOVE THAT FAILED PART-WAY LEFT, in words that claim nothing the read
+ * did not show. "Were put back" only where the read after has every block
+ * taken out back in its own cell; a block that is not is named; with no read
+ * to go by, the app says it tried. Null when there is nothing to add to the
+ * failure's own words (a move with no joins of its own whose blocks all went
+ * back without a throw).
+ */
+export function putBackSaid({ row, res }) {
+  if (!res?.threw) return null
+  const missing = Array.isArray(res.missingBack) ? res.missingBack : []
+  const read = Array.isArray(res.after)
+  const where = `row ${rowLabel(row)}`
+  if (missing.length && read) return `The app tried to put the blocks back, but ${listed(missing)} ${missing.length === 1 ? 'isn’t' : 'aren’t'} back where ${missing.length === 1 ? 'it was' : 'they were'} in ${where}.`
+  if (missing.length) return `The app tried to put the blocks back, but couldn’t put ${listed(missing)} back, and couldn’t read ${where} to check.`
+  if (!read) return Array.isArray(res.plan?.joins) ? `The app tried to put the blocks back, but couldn’t read ${where} back to check them.` : null
+  const cut = Array.isArray(res.plan?.joins) ? firstCut(res.still, row) : null
+  return cut ? putBackCut(cut).trim() : null
+}
+
+/**
+ * EVERYTHING A MOVE LEAVES SAID, for both screens: `issue` over the chain (or
+ * null), `note` under the row ({ text, joins } with Join the row, or null),
+ * and `line` for the browser's history.
+ */
+export function afterMoveSaid({ row, res }) {
+  const joins = Array.isArray(res?.plan?.joins) ? res.plan.joins : null
+  const r = rowLabel(row)
+  if (res?.stopped === 'moved') return { issue: PRESET_MOVED_MID, note: null, line: `A move on row ${r} stopped: the unit went to another preset` }
+  if (res?.threw) {
+    const back = putBackSaid({ row, res })
+    const failure = res.stopped === 'unknown' ? UNIT_QUIET_MID : res.threw.message
+    const missing = Array.isArray(res.missingBack) ? res.missingBack : []
+    const line = missing.length
+      ? `A move on row ${r} failed; ${listed(missing)} ${missing.length === 1 ? 'wasn’t' : 'weren’t'} put back`
+      : Array.isArray(res.after) || !joins
+        ? `A move on row ${r} failed and its blocks were put back`
+        : `A move on row ${r} failed and the app tried to put its blocks back`
+    return { issue: back ? `${failure} ${back}` : failure, note: joins && back ? { text: back, joins } : null, line }
+  }
+  if (!joins) return { issue: null, note: null, line: null }
+  if (res.stopped === 'unknown') return { issue: null, note: { text: `The blocks moved, but the unit stopped saying which preset it’s on, so the app didn’t join row ${r} again.`, joins }, line: null }
+  if (!res.checked) return { issue: null, note: { text: uncheckedAfterMove(row), joins }, line: null }
+  const cut = firstCut(res.still, row)
+  return { issue: null, note: cut ? { text: cutAfterMove(cut), joins } : null, line: null }
+}
+
+/**
+ * After "Join the row": joinRow's own answer. "Joined again" only where the
+ * row was read after, every join asked for is there, and the row asked again
+ * (rowCuts on that read, `cuts`) reads whole. Never "sent" of nothing sent.
+ * `joins`, where given, is what the button is to send next ([] for none).
+ */
+export function joinedWords({ row, still, checked, readBefore = true, sent = 0, failed = null, stopped = null, skipped = [], cuts = null }) {
+  const r = rowLabel(row)
+  if (stopped === 'moved') return { ok: false, text: sent ? `The app stopped joining row ${r}: the unit went to another preset.` : 'No join was sent: the unit is on another preset now.', joins: [] }
+  if (!readBefore) return { ok: false, text: `Nothing was sent: the unit didn’t answer when the app asked how row ${r} is joined. Try again.` }
+  if (stopped === 'unknown') return { ok: false, text: `${sent ? `The app stopped joining row ${r}` : 'No join was sent'}: the unit didn’t say which preset it’s on. Try again.` }
+  if (failed && !sent) return { ok: false, text: `Nothing was sent: ${failed}` }
+  if (!checked) return { ok: false, text: `The app sent the joins, but couldn’t read row ${r} back to check them.` }
   const cut = firstCut(still, row)
-  if (cut) return { ok: false, text: `The app sent the joins, but row ${rowLabel(cut.destRow)} still isn’t joined at column ${colLabel(cut.srcCol + 1)}.` }
-  return { ok: true, text: `Row ${rowLabel(row)} is joined again.` }
+  if (cut) {
+    const at = `row ${rowLabel(cut.destRow)} at column ${colLabel(cut.srcCol + 1)}`
+    if (!sent) {
+      const empty = (skipped || []).find((j) => joinKey(j) === joinKey(cut))
+      return { ok: false, text: `The app couldn’t join ${at}: ${empty ? `column ${colLabel(empty.empty)} is empty.` : 'nothing was sent.'}`, joins: empty ? [] : undefined }
+    }
+    if (failed) return { ok: false, text: `The app sent ${sent} join${sent === 1 ? '' : 's'}, then stopped: ${failed} Row ${rowLabel(cut.destRow)} still isn’t joined at column ${colLabel(cut.srcCol + 1)}.` }
+    return { ok: false, text: `The app sent the joins, but row ${rowLabel(cut.destRow)} still isn’t joined at column ${colLabel(cut.srcCol + 1)}.` }
+  }
+  const left = Array.isArray(cuts) ? cuts.find((c) => c.row === row) || cuts[0] : null
+  if (left) return { ok: false, text: left.text, joins: left.joins, holes: left.holes }
+  return { ok: true, text: `Row ${r} is joined again.` }
+}
+
+/**
+ * WHAT IS SAID UNDER A ROW, from what a write there left (`left`) and what
+ * the last read of the grid found (`found`, rowCuts). A note about another
+ * preset is not this one's (`preset`, the one on screen). An all-clear is
+ * never drawn over a fresh read that finds the row cut; a refusal (a note
+ * with nothing to send) keeps its words and takes the found cut's words and
+ * Join the row under them; otherwise the write's own note stands.
+ */
+export function rowNote(left, found, preset = undefined) {
+  const mine = left && (left.n === undefined || preset === undefined || left.n === preset) ? left : null
+  if (!mine) return found || null
+  if (!found) return mine
+  if (mine.tone === 'ok') return found
+  const sends = (x) => Array.isArray(x?.joins) && x.joins.length > 0
+  if (!sends(mine) && sends(found)) return { ...found, text: `${mine.text} ${found.text}` }
+  return mine
 }
 
 /* ---------------------------------------------------------------- */
@@ -280,6 +407,20 @@ export function planMove({ cells, row, moves, rows = 4, cols = 12, law = false, 
     }
   }
   if (!known) return { ok: false, why: WIRING_UNKNOWN }
+  /*
+   * NEVER OUT OF AN OUTPUT OR INTO AN INPUT. A join belongs to its columns,
+   * not its blocks, so a drag that moves an Output up the row (or a block
+   * past it) would have the app send a cable out of the Output into the
+   * block now after it, and one into an Input moved down. Fractal's editors
+   * draw no such cable, none of the saved presets has one, and nothing has
+   * ever sent one to a unit; neither carries sound the drag asked for. So
+   * the plan leaves them out (and its check after never asks for them).
+   */
+  const dealt = new Map(list.map((m) => [m.to, { effectId: m.id, name: m.name }]))
+  const holdsAfter = (r, c) => (r === row && dealt.has(c) ? dealt.get(c) : cellAt(cells, r, c))
+  const carried = joins.filter((j) => !isEnd(holdsAfter(j.srcRow, j.srcCol), 'output') && !isEnd(holdsAfter(j.destRow, j.srcCol + 1), 'input'))
+  joins.length = 0
+  joins.push(...carried)
   joins.sort(byColumn)
   for (const j of joins) {
     const why = joinWhyNot(j, { rows, law, version })
@@ -315,6 +456,30 @@ export function settingsSaid(read) {
   return parts.length ? parts.join(', ') : 'nothing to say'
 }
 
+/**
+ * WHICH PRESET THE UNIT IS ON, asked before a write (Quick build's rig
+ * unitOnPreset, at both ends): `onPreset()` answers 'same', 'moved' or
+ * 'unknown' (a throw, or anything else, is 'unknown'). Once it has said
+ * 'moved' it is not asked again: nothing more goes to the unit's other
+ * preset. With no `onPreset` (a unit whose joins are not the app's, or a
+ * preset the screen cannot name) every write goes, as before.
+ */
+export function presetHold(onPreset) {
+  let moved = false
+  return async () => {
+    if (typeof onPreset !== 'function') return 'same'
+    if (moved) return 'moved'
+    let on
+    try {
+      on = await onPreset()
+    } catch {
+      on = 'unknown'
+    }
+    if (on === 'moved') moved = true
+    return on === 'same' || on === 'moved' ? on : 'unknown'
+  }
+}
+
 /** Each moved block read once, in order, for the log; a failed read is said as not read. */
 async function measure(moves, wire) {
   const out = new Map()
@@ -333,16 +498,32 @@ async function measure(moves, wire) {
 
 /**
  * Send the joins a read does not show, in order, stopping at the first the
- * link throws on (as runPlan does). Never a join whose two cells are not both
- * there in that read: a join into or out of an empty cell is not the app's to
- * guess at.
+ * link throws on (as runPlan does), and at the first the unit's preset
+ * holds back (`hold`, presetHold). Never a join whose two cells are not
+ * both there in that read: a join into or out of an empty cell is not the
+ * app's to guess at, and is answered as `skipped`, with the empty column.
  */
-async function sendMissing(joins, cells, wire, log) {
-  const missing = missingJoins(cells, joins).filter((j) => cellAt(cells, j.srcRow, j.srcCol) && cellAt(cells, j.destRow, j.srcCol + 1))
+async function sendMissing(joins, cells, wire, log, hold = async () => 'same') {
+  const absent = missingJoins(cells, joins)
+  const missing = []
+  const skipped = []
+  for (const j of absent) {
+    const from = cellAt(cells, j.srcRow, j.srcCol)
+    const into = cellAt(cells, j.destRow, j.srcCol + 1)
+    if (from && into) missing.push(j)
+    else skipped.push({ ...j, empty: into ? j.srcCol : j.srcCol + 1 })
+  }
   let sent = 0
   let refused = 0
   let failed = null
+  let stopped = null
   for (const j of missing) {
+    const on = await hold()
+    if (on !== 'same') {
+      stopped = on
+      log(`join ${joinSaid(j)}`, `not sent: ${on === 'moved' ? 'the unit is on another preset' : 'the unit didn’t say which preset it’s on'}`)
+      break
+    }
     try {
       const r = await wire.setCable(j.srcRow, j.srcCol, j.destRow, true)
       if (r && r.ok === false) refused += 1
@@ -353,10 +534,13 @@ async function sendMissing(joins, cells, wire, log) {
       break
     }
   }
-  return { missing, sent, refused, failed }
+  return { absent, missing, skipped, sent, refused, failed, stopped }
 }
 
 const said = (r) => (r && r.ok === false ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
+
+/** A write held back because the unit is on another preset, or would not say: thrown, so the move stops where it is. */
+const heldBack = (on) => Object.assign(new Error(on === 'moved' ? PRESET_MOVED_MID : UNIT_QUIET_MID), { held: on })
 
 /**
  * Run a planned move against a unit: clear every moved cell, put every block
@@ -364,51 +548,89 @@ const said = (r) => (r && r.ok === false ? 'refused' : r?.ok === true ? 'ok' : '
  * missing, read again, log it again.
  *
  * `wire` is { gridCells, clearCell, placeBlock, setCable, readBlock? };
- * `log(what, detail)` writes a `[chain]` line. Never throws for the unit's
- * sake: a write that throws puts the cleared blocks back where they were,
- * joins them again, and is answered as `threw`.
+ * `log(what, detail)` writes a `[chain]` line; `measure` reads each moved
+ * block before and after, for the log (his account only, at both ends);
+ * `hold` (presetHold) is asked before EVERY write, and `checkedFirst` says
+ * it was asked just now, so the first clear goes without asking again.
+ * Never throws for the unit's sake: a write that throws (or is held back)
+ * puts the cleared blocks back where they were, joins them again, and is
+ * answered as `threw`. Held back because the unit is on ANOTHER preset, it
+ * stops there and sends nothing more at all.
  *
- * Answers { threw, answers, refused, sent, missingAfterMove, still, checked,
- * after }: `still` the joins the last read does not show, `checked` whether
- * there was a last read to go by.
+ * Answers { threw, stopped, answers, refused, sent, missingAfterMove, still,
+ * checked, after, missingBack }: `still` the joins the last read does not
+ * show, `checked` whether there was a last read to go by, `missingBack` the
+ * names of blocks taken out that are not back in their own cells after a
+ * failure (by the last read, else the put-backs that did not go).
  */
-export async function runMove({ plan, moves, wire, log = () => {}, names = null }) {
+export async function runMove({ plan, moves, wire, log = () => {}, names = null, measure: measuring = false, hold = presetHold(null), checkedFirst = false }) {
   const row = plan.row
   const joins = Array.isArray(plan.joins) ? plan.joins : null
   const line = (cells) => rowSaid(cells, row, plan.first, plan.last, names)
   if (joins) log(`move: row ${rowLabel(row)} before: ${line(plan.before)}`)
-  const was = await measure(moves, wire)
+  const was = measuring ? await measure(moves, wire) : new Map()
   for (const m of moves) if (was.has(m.id)) log(`move: ${m.name} before: ${was.get(m.id)}`)
 
   const answers = []
   const cleared = []
+  const notBack = []
   let threw = null
+  let stopped = null
+  let fresh = checkedFirst
+  const go = async () => {
+    if (fresh) {
+      fresh = false
+      return
+    }
+    const on = await hold()
+    if (on !== 'same') throw heldBack(on)
+  }
   try {
     for (const m of moves) {
+      await go()
       cleared.push(m)
       const r = await wire.clearCell(row, m.from)
       answers.push(r)
       log(`clear ${m.name} from column ${colLabel(m.from)}`, said(r))
     }
     for (const m of moves) {
+      await go()
       const r = await wire.placeBlock(row, m.to, m.id)
       answers.push(r)
       log(`place ${m.name} at column ${colLabel(m.to)}`, said(r))
     }
   } catch (err) {
     threw = err instanceof Error ? err : new Error(String(err))
-    /* Every block taken out goes back where it was: the cells it was dealt into are all cells one of them came from. */
+    stopped = threw.held || null
+  }
+  const counted = () => ({ threw, stopped, answers, refused: answers.filter((r) => r && r.ok === false).length })
+
+  if (threw && stopped === 'moved') {
+    /* THE UNIT IS ON ANOTHER PRESET: nothing more goes to it, the blocks are not put back into it, and its grid is not read as this one's. */
+    log(`move on row ${rowLabel(row)}`, `stopped: the unit is on another preset; ${cleared.length ? `${cleared.map((m) => m.name).join(', ')} had been taken out` : 'nothing had been sent'}`)
+    return { ...counted(), joinsRefused: 0, sent: 0, missingAfterMove: null, still: joins ? joins.slice() : [], checked: false, after: null, missingBack: [] }
+  }
+  if (threw) {
+    /* Every block taken out goes back where it was: the cells it was dealt into are all cells one of them came from. Each held to the preset as every write is. */
     for (const m of cleared) {
+      const on = await hold()
+      if (on !== 'same') {
+        notBack.push(m)
+        if (on === 'moved') stopped = 'moved'
+        continue
+      }
       try {
         await wire.placeBlock(row, m.from, m.id)
       } catch {
-        /* The link is gone; the read below says what is there. */
+        notBack.push(m)
       }
     }
-    log(`move: put ${cleared.map((m) => m.name).join(', ') || 'nothing'} back after`, threw.message)
+    log(`move: put ${cleared.map((m) => m.name).join(', ') || 'nothing'} back after`, `${threw.message}${notBack.length ? `; not put back: ${notBack.map((m) => m.name).join(', ')}` : ''}`)
+    if (stopped === 'moved') return { ...counted(), joinsRefused: 0, sent: 0, missingAfterMove: null, still: joins ? joins.slice() : [], checked: false, after: null, missingBack: [] }
   }
 
   const settled = async () => {
+    if (!measuring) return
     const now = await measure(moves, wire)
     for (const m of moves) {
       if (!now.has(m.id)) continue
@@ -417,10 +639,11 @@ export async function runMove({ plan, moves, wire, log = () => {}, names = null 
       log(`move: ${m.name} after: ${then}${before === undefined ? '' : before === then ? ' (the same)' : ` (was ${before})`}`)
     }
   }
-  const counted = { threw, answers, refused: answers.filter((r) => r && r.ok === false).length }
+  /* What a failure left out of its own cell: by the read where there is one, else the put-backs that did not go. */
+  const notHome = (cells) => (threw ? cleared.filter((m) => (cells ? cellAt(cells, row, m.from)?.effectId !== m.id : notBack.includes(m))).map((m) => m.name) : [])
   if (!joins) {
     await settled()
-    return { ...counted, joinsRefused: 0, sent: 0, missingAfterMove: null, still: [], checked: true, after: null }
+    return { ...counted(), joinsRefused: 0, sent: 0, missingAfterMove: null, still: [], checked: true, after: null, missingBack: notHome(null) }
   }
 
   /* THE ROW AS THE UNIT HAS IT BEFORE ANYTHING IS REPAIRED: "fed from row 3" here is a unit that keeps a join through a clear, "fed from nothing" one that drops it. */
@@ -430,38 +653,45 @@ export async function runMove({ plan, moves, wire, log = () => {}, names = null 
   let refused = 0
   let missingAfterMove = null
   if (straight) {
-    const r = await sendMissing(joins, straight, wire, log)
-    missingAfterMove = r.missing.length
+    const r = await sendMissing(joins, straight, wire, log, hold)
+    missingAfterMove = r.absent.length
     sent = r.sent
     refused = r.refused
+    if (r.stopped) stopped = stopped || r.stopped
     log(
       'move: joins',
-      r.missing.length
-        ? `${r.missing.length} not there after the move (${r.missing.map(joinSaid).join('; ')}); sent ${r.sent}${r.refused ? `, ${r.refused} answered “refused”` : ''}${r.failed ? `, stopped: ${r.failed}` : ''}`
+      r.absent.length
+        ? `${r.absent.length} not there after the move (${r.absent.map(joinSaid).join('; ')}); sent ${r.sent}${r.skipped.length ? `, ${r.skipped.length} not sent: a cell is empty` : ''}${r.refused ? `, ${r.refused} answered “refused”` : ''}${r.failed ? `, stopped: ${r.failed}` : ''}${r.stopped ? `, stopped: ${r.stopped === 'moved' ? 'the unit is on another preset' : 'the unit didn’t say which preset it’s on'}` : ''}`
         : `all ${joins.length} still there after the move, none sent`
     )
   } else {
     log('move: joins', 'not checked: the grid could not be read after the move, so none was sent')
   }
+  if (stopped === 'moved') return { ...counted(), joinsRefused: refused, sent, missingAfterMove, still: joins.slice(), checked: false, after: null, missingBack: [] }
   const after = straight && sent ? await readCells(wire) : straight
   if (straight && sent) log(`move: row ${rowLabel(row)} after joining it again: ${line(after)}`)
   const still = after ? missingJoins(after, joins) : joins.slice()
   if (after && still.length) log('move: still not joined', still.map(joinSaid).join('; '))
+  const missingBack = notHome(after)
+  if (missingBack.length) log('move: not back in their own cells', missingBack.join(', '))
   await settled()
-  return { ...counted, joinsRefused: refused, sent, missingAfterMove, still, checked: !!after, after }
+  return { ...counted(), joinsRefused: refused, sent, missingAfterMove, still, checked: !!after, after, missingBack }
 }
 
 /**
  * A DRAG, WHOLE: what both chain editors call. Where the unit's joins are the
  * app's to make (`cables`, lib cablesLaid) the grid is read and the move
  * planned first; a plan that is refused answers { notSent: true, why } and
- * NOTHING IS SENT. Otherwise `starting()` is called once (the phone marks the chain as
- * being written there) and the move is run.
+ * NOTHING IS SENT. Then the unit is asked which preset it is on (`onPreset`,
+ * presetHold), and on another, or not saying, nothing is sent either. Only
+ * then is `starting()` called once (the screens mark the chain as being
+ * written there, and drop the Undo of the last change) and the move run,
+ * every write of it held to that preset.
  *
  * Answers { notSent: true, why } or { notSent: false, plan, ...runMove's
  * answer } (whose `refused` counts the writes the unit answered "refused").
  */
-export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables = true, law = false, version = null, log = () => {}, names = null, starting = () => {} } = {}) {
+export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables = true, law = false, version = null, log = () => {}, names = null, measure = false, onPreset = null, starting = () => {} } = {}) {
   let plan = plainMove(row)
   if (cables) {
     const before = await readCells(wire)
@@ -471,44 +701,53 @@ export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables
       return { notSent: true, why: plan.why, plan }
     }
   }
+  const hold = presetHold(onPreset)
+  const on = await hold()
+  if (on !== 'same') {
+    const why = on === 'moved' ? PRESET_MOVED_BEFORE : UNIT_QUIET_BEFORE
+    log(`move on row ${rowLabel(row)}`, `not sent: ${why}`)
+    return { notSent: true, why, plan, stopped: on }
+  }
   starting()
-  const res = await runMove({ plan, moves, wire, log, names })
+  const res = await runMove({ plan, moves, wire, log, names, measure, hold, checkedFirst: true })
   return { ...res, notSent: false, plan }
 }
 
 /**
- * "JOIN THE ROW": read the grid, send the joins it does not show, read again.
- * `joins` are the move's (after a move left one missing) or a cut row's
- * (`rowCuts`). Answers { sent, still, checked, after } and logs the row
- * before and after.
+ * "JOIN THE ROW": read the grid, send the joins it does not show, read
+ * again, and ask the row again (rowCuts on that read, with `blocks`, `rows`,
+ * `law`, `version` and `holes` as the cut was found by). `joins` are the
+ * move's (after a move left one missing) or a cut row's (`rowCuts`). Every
+ * join is held to the unit's preset (`onPreset`). Answers joinedWords'
+ * input: { row, readBefore, sent, failed, stopped, skipped, still, checked,
+ * after, cuts }, and logs the row before and after.
  */
-export async function joinRow({ row, joins, wire, log = () => {}, names = null }) {
+export async function joinRow({ row, joins, wire, log = () => {}, names = null, blocks = null, rows = 4, law = false, version = null, holes = false, onPreset = null }) {
   const list = (joins || []).filter((j) => j && Number.isInteger(j.srcRow) && Number.isInteger(j.srcCol) && Number.isInteger(j.destRow))
   const cols = list.flatMap((j) => [j.srcCol, j.srcCol + 1])
   const first = cols.length ? Math.min(...cols) : 0
   const last = cols.length ? Math.max(...cols) : 0
   const before = await readCells(wire)
   log(`join the row: row ${rowLabel(row)} before: ${rowSaid(before, row, first, last, names)}`)
-  if (!before) return { sent: 0, still: list, checked: false, after: null }
-  const r = await sendMissing(list, before, wire, log)
-  log('join the row: joins', r.missing.length ? `sent ${r.sent} of ${r.missing.length} (${r.missing.map(joinSaid).join('; ')})${r.refused ? `, ${r.refused} answered “refused”` : ''}${r.failed ? `, stopped: ${r.failed}` : ''}` : 'every one already there, none sent')
+  if (!before) return { row, readBefore: false, sent: 0, failed: null, stopped: null, skipped: [], still: list, checked: false, after: null, cuts: null }
+  const r = await sendMissing(list, before, wire, log, presetHold(onPreset))
+  log(
+    'join the row: joins',
+    r.absent.length
+      ? `sent ${r.sent} of ${r.absent.length} (${r.absent.map(joinSaid).join('; ')})${r.skipped.length ? `, ${r.skipped.length} not sent: a cell is empty` : ''}${r.refused ? `, ${r.refused} answered “refused”` : ''}${r.failed ? `, stopped: ${r.failed}` : ''}${r.stopped ? `, stopped: ${r.stopped === 'moved' ? 'the unit is on another preset' : 'the unit didn’t say which preset it’s on'}` : ''}`
+      : 'every one already there, none sent'
+  )
+  if (r.stopped === 'moved') return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: list, checked: false, after: null, cuts: null }
   const after = r.sent ? await readCells(wire) : before
   log(`join the row: row ${rowLabel(row)} after: ${rowSaid(after, row, first, last, names)}`)
-  return { sent: r.sent, still: after ? missingJoins(after, list) : list, checked: !!after, after }
+  const cuts = after ? rowCuts({ cells: after, blocks: blocks || [], rows, law, version, holes, only: [row] }) : null
+  if (cuts?.length) log(`join the row: row ${rowLabel(row)} asked again`, cuts[0].text)
+  return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: after ? missingJoins(after, list) : list, checked: !!after, after, cuts }
 }
 
 /* ---------------------------------------------------------------- */
 /* A row that is already cut                                         */
 /* ---------------------------------------------------------------- */
-
-const END_NAME = { input: /^input(\s*\d+)?$/i, output: /^output(\s*\d+)?$/i }
-/** Whether a cell is the Input (or the Output): the chain read's slug, else the grid read's own name. */
-function isEnd(cell, end, slugs) {
-  if (!cell || cell.isShunt) return false
-  const slug = slugs.get(cell.effectId)
-  if (slug) return slug === end
-  return END_NAME[end].test(String(cell.name || '').trim())
-}
 
 /**
  * Whether the chain read alone could show a cut row: a block fed from
@@ -542,9 +781,18 @@ export function maybeCut(blocks) {
  * moved out of it): said, never joined, since nobody knows whether a join
  * into an empty cell carries the sound. `only` keeps the rows asked about.
  *
- * Answers [{ row, col, joins, blocked, hole, text }]: `col` the first cut
- * column, `joins` the joins the app can send, `blocked` those it cannot (with
- * why), `text` the words for it.
+ * Join the row is offered only where the app can join EVERY cell that reads
+ * cut. One it cannot (out of the top row's even columns, a join an older
+ * computer app would send to the wrong cell, or a cell with an empty one
+ * before it, where nothing can be joined from) is `blocked`, said with its
+ * reason in the words, and the row gets no button: joining half of it
+ * leaves it as silent as before, and "joined again" over that was the first
+ * cut of this the review found.
+ *
+ * Answers [{ row, col, joins, blocked, hole, holes, text }]: `col` the first
+ * cut column, `joins` what Join the row sends (none while anything is
+ * blocked), `blocked` the joins it cannot make (with why), `holes` whether
+ * empty spaces were counted, `text` the words for it.
  */
 export function rowCuts({ cells, blocks = [], rows = 4, law = false, version = null, holes = false, only = null } = {}) {
   if (!Array.isArray(cells)) return []
@@ -573,8 +821,12 @@ export function rowCuts({ cells, blocks = [], rows = 4, law = false, version = n
       }
       if (feeds(cell).length) continue
       if (first === null) first = col
-      if (!cellAt(cells, r, col - 1)) continue
       const j = { srcRow: r, srcCol: col - 1, destRow: r }
+      /* Nothing before it to join it from: said, unless the empty space is said already. */
+      if (!cellAt(cells, r, col - 1)) {
+        if (!holes) blocked.push({ ...j, why: emptyBeforeWords(col) })
+        continue
+      }
       const why = joinWhyNot(j, { rows, law, version })
       if (why) blocked.push({ ...j, why })
       else joins.push(j)
@@ -582,9 +834,9 @@ export function rowCuts({ cells, blocks = [], rows = 4, law = false, version = n
     if (first === null && hole === null) continue
     /* Said where the sound first stops: a cell fed from nothing, or an empty space, whichever comes first along the row. */
     const cutFirst = first !== null && (hole === null || first < hole)
-    const cutText = first === null ? '' : `${cutRowWords(r, first)}${blocked.length && !joins.length ? ` ${blocked[0].why}` : ''}`
+    const cutText = first === null ? '' : `${cutRowWords(r, first)}${blocked.length ? ` ${blocked[0].why}` : ''}`
     const text = cutFirst ? cutText : `${holeWords(r, hole)}${cutText ? ` ${cutText}` : ''}`
-    out.push({ row: r, col: cutFirst ? first : hole, joins, blocked, hole, text })
+    out.push({ row: r, col: cutFirst ? first : hole, joins: blocked.length ? [] : joins, blocked, hole, holes, text })
   }
   return out
 }

@@ -44,7 +44,8 @@ export async function readPutBack(row, col, capabilities, blocks) {
   return { kind: 'put', back, snap: modelSnapshot(read, { channel: null }) }
 }
 
-export function useChainUndo({ blocks, number, onChanged }) {
+/** `onWrite(row)` is told the row a put-back or take-out is about to write to, before it goes (the chain editor clears what it said under that row). */
+export function useChainUndo({ blocks, number, onChanged, onWrite = null }) {
   const [undo, setUndo] = useState(null)
   const [said, setSaid] = useState(null)
   const [running, setRunning] = useState(false)
@@ -74,6 +75,7 @@ export function useChainUndo({ blocks, number, onChanged }) {
       return
     }
     setRunning(true)
+    onWrite?.(u.kind === 'put' ? u.back.row : u.row)
     let words
     try {
       const steps = u.kind === 'put' ? u.back.steps : u.steps

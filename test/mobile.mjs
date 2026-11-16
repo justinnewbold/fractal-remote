@@ -3682,7 +3682,7 @@ export function run(test) {
     assert.ok(!/ok === false\) (?:\{|throw|return)/.test(run), 'a move is being undone because the unit answered ok:false, which means nothing on this hardware')
     assert.match(
       run,
-      /catch \(err\) \{[\s\S]*?for \(const m of cleared\) \{\s*try \{\s*await wire\.placeBlock\(row, m\.from, m\.id\)/,
+      /catch \(err\) \{[\s\S]*?if \(threw\) \{[\s\S]*?for \(const m of cleared\) \{[^}]*?\}\s*try \{\s*await wire\.placeBlock\(row, m\.from, m\.id\)/,
       'a move that throws part-way leaves the blocks in no cell at all'
     )
     assert.ok(

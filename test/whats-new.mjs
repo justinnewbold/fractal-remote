@@ -116,6 +116,28 @@ export function run(test) {
     if (preset === metronome) assert.match(preset, /^Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, .+ And in the metronome, tapping/, 'the folded line does not say each fix by its own place')
   })
 
+  test('a line folded to keep 16 November 2026 at six keeps every sentence it was published with, and the chain editor’s says what the app does, not that the sound is back', () => {
+    /*
+     * The chain editor's fix came on a day already at six lines. The first cut
+     * folded it in by cutting the Raspberry Pi line's second sentence, already
+     * on the website, and promised the chain was "no longer silent", which no
+     * unit has shown. So each published line is kept whole, the chain
+     * editor's two sentences each go on the end of one, and they say what the
+     * app does (joins the row again and checks it; offers Join the row).
+     */
+    const day = JSON.parse(read('shared/whats-new.json')).days.find((d) => d.date === '2026-11-16')
+    const texts = day.lines.map((l) => (typeof l === 'string' ? l : l.text))
+    for (const published of [
+      'On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open. Before, it waited for the app to be quit, and switching the Pi off at the wall isn’t a quit, so it could sit on an old version.',
+      'In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons.'
+    ]) {
+      assert.ok(texts.some((t) => t.startsWith(published)), `a published line lost a sentence: ${published.slice(0, 60)}…`)
+    }
+    assert.ok(texts.some((t) => t.includes('The chain editor now joins a row again after a move, and checks it.')), 'the chain editor’s move is not said')
+    assert.ok(texts.some((t) => t.includes('A row the chain editor finds cut now offers Join the row.')), 'Join the row is not said')
+    for (const t of texts) assert.ok(!/no longer leaves the chain silent|no longer silent/i.test(t), `a line promises the sound is back: ${t}`)
+  })
+
   test('a line may promise editing over Bluetooth only from the store version that opens it, on the units that version opens, and never on a VP4', () => {
     /*
      * The list reaches every copy by update, the 1.89.3 and 1.89.36 copies

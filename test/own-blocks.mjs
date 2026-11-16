@@ -211,7 +211,7 @@ export function run(test) {
 
     /* Where it is asked: the editor alone, told the unit and the account by the page, at both places it is mounted. */
     const editor = flat(code(read('src/components/GridEditor.jsx')))
-    assert.match(editor, /export default function GridEditor\(\{ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false \}\) \{ const blocks = useMemo\(\(\) => ownInChainEditor\(asRead, deviceKey, ownOpen\), \[asRead, deviceKey, ownOpen\]\) const withOwn = \(list\) => ownInPalette\(list, deviceKey, ownOpen\)/)
+    assert.match(editor, /export default function GridEditor\(\{ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false(?:, admin = false)? \}\) \{ const blocks = useMemo\(\(\) => ownInChainEditor\(asRead, deviceKey, ownOpen\), \[asRead, deviceKey, ownOpen\]\) const withOwn = \(list\) => ownInPalette\(list, deviceKey, ownOpen\)/)
     assert.equal((editor.match(/const list = withOwn\(Array\.isArray\(res\) \? res : \[\]\)/g) || []).length, 2, 'the list is read somewhere that leaves them out')
     assert.equal((editor.match(/await blockCatalog\(\)/g) || []).length, 2)
     assert.ok(!/\basRead\b/.test(editor.slice(editor.indexOf('const withOwn'))), 'the editor reads the chain as it came somewhere')

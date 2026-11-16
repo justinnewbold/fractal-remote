@@ -5338,6 +5338,8 @@ export default function App() {
                   deviceKey={currentDeviceSlug()}
                   ownOpen={ownBlocksOpenTo(link.account?.id)}
                   busy={busy}
+                  /* His account: a move's settings are measured for his log (shared/chain-move.mjs), nobody else's drag slowed by it. */
+                  admin={isAdmin(link.account?.id)}
                   onError={setError}
                   onChanged={(summary) => {
                     record('grid', summary)
@@ -5489,6 +5491,7 @@ export default function App() {
                     deviceKey={currentDeviceSlug()}
                     ownOpen={ownBlocksOpenTo(link.account?.id)}
                     busy={busy}
+                    admin={isAdmin(link.account?.id)}
                     onError={setError}
                     onChanged={(summary) => {
                       record('grid', summary)
