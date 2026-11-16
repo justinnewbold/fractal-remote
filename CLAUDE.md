@@ -4035,7 +4035,11 @@ never touched. It had hit two paying customers too.
   again); and four tests that did not yet hold what they named (the card
   with no Reconnect yet, the moved place written to the phone, `forgot`
   being one unit's and gone at the next choice, and the same name in other
-  capitals). THE LESSON AGAIN: the fixes were read, and that read found
+  capitals). A THIRD READ, of those, found the disarm undone on Android by
+  the page's own Turn on Bluetooth, drawn over the card on its Turn
+  Bluetooth off and on step: it armed the jump again, so the page still
+  left for Play the moment that step worked. It does not arm while the card
+  is up now. THE LESSON AGAIN: the fixes were read, and that read found
   the next faults.
 - **THE PLUGS BY WHAT IS KNOWN, never dropped on bytes alone.** lib/bluetooth
   keeps, per unit and adapter, the day the adapter last answered that unit

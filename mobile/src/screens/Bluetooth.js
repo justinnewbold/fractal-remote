@@ -806,8 +806,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const offOnAndroid = b.trouble === 'bluetooth-off' && !ios
   /* Whether the app is waiting for it to come on: the hint promises the search, or the connection, only while it is (lib/bluetooth useWaitingForBluetooth). */
   const waitingOn = useWaitingForBluetooth()
+  /* Not from the reset card's own step (Turn Bluetooth off and on, on Android): the card says the unit is back, here, as its Reconnect does. */
   const turnOn = () => {
-    arm()
+    if (!fixing) arm()
     turnOnBluetooth()
   }
   /*

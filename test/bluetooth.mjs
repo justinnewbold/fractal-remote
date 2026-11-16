@@ -19977,7 +19977,8 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     /* Turn on Bluetooth: Android only, drawn once Connect or the link has found it off, with what happens next under it. */
     assert.match(page, /const offOnAndroid = b\.trouble === 'bluetooth-off' && !ios/)
-    assert.match(page, /const turnOn = \(\) => \{ arm\(\) turnOnBluetooth\(\) \}/)
+    /* Never armed for Play from the reset card's Bluetooth off-and-on step, where the card says the unit is back. */
+    assert.match(page, /const turnOn = \(\) => \{ if \(!fixing\) arm\(\) turnOnBluetooth\(\) \}/, 'Turn on Bluetooth on the reset card’s own step sends the page to Play, and “answering again” is never seen')
     /* Connect again: the adapter connected, the unit silent, never a VP4 or a cable. */
     assert.match(page, /const offerAgain = quiet && !vp4 && !cable && !footswitch/)
     assert.match(page, /const again = \(\) => \{ arm\(\) connectBluetoothAgain\(\) \}/)
