@@ -901,9 +901,9 @@ what the computer sends for the same edit, and a test holds it there.
     2026, his AX3 from his iPhone, app 1.90.48). That is the first write
     of Edit's to go to a NAM block, and the first knob of Edit's turned on
     any Axe-Fx III: the knob write every gen-3 knob gets (fn 0x01, 52 00
-    for its place) is taken there. A NAM's knob is still never sent the
-    typed way the app falls back to elsewhere (gen3-edit `typedKnobs:
-    false`, "ONE WAY ONLY"): it did not need it. NOT TURNED YET: the NAM
+    for its place) is taken there. A NAM's knob was never sent the typed
+    way, and since 16 November 2026 no gen-3 knob is (gen3-edit "ONE WAY
+    ONLY", below under "What made knobs not take"). NOT TURNED YET: the NAM
     block's six switches (Edit draws none, so there is nothing to tap),
     and every knob of the other five blocks in the list, which is why
     they have a switch of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and
@@ -1406,6 +1406,48 @@ what the computer sends for the same edit, and a test holds it there.
   sent before Edit goes as it went. A request is Edit's only when it says
   so (device.js `EDITING`), so Play's own read of the amp, for its boost,
   stays refused over Bluetooth.
+- **What made knobs not take over Bluetooth, and the rules since (16
+  November 2026).** His logs showed four faults, all fixed with a test seen
+  to fail without each fix:
+  - *A block's read was cut in the wrong place.* His Axe-Fx III sent a NAM
+    block as four channels of 27 values where the list says 18; 18 divides
+    108, so the app took six channels of 18 and read every channel but A
+    from the middle of another (Bass showed 8, Bright Cap 10 pF, and every
+    knob on B or D "didn't take"). A block has four channels at most. A
+    read is cut by the block's own channel count where its list says it
+    (`channels` in lib/axefx3-own-knobs.js, from docs/ax3-readings.md),
+    else by the stride only where that makes four or fewer, else in four
+    (gen3-edit `sliceOf`); the log's read line says the count, the stride
+    and where the channel starts. ForgeFX cuts the same way (gen3.ts
+    #channelSlice, ownBlocks.ts): its matching change is a patch waiting
+    for a pin and a computer release, and until then a NAM block through
+    the computer can still read its B and D from the wrong place.
+  - *The backup write broke settings.* When a knob's check did not read
+    back as asked, the app sent it again as a typed write of its 0-to-1
+    place, and a gen-3 unit takes a typed write in the setting's OWN
+    units: Look-Ahead Time went to its maximum and Bit Reduce to nought on
+    his FM3, after a check that had read nothing at all. Now a check that
+    heard nothing sends nothing more and Edit says "Couldn't check that …
+    took: the unit didn't answer. It may have." (device.js `unverified`,
+    the browser's rule), and EVERY GEN-3 KNOB IS ONE WAY ONLY: its place
+    (52 00), never the typed way (gen3-edit; asked for, the wire answers
+    `{ok: false, unsent: true}` and nothing goes). THROUGH THE COMPUTER the
+    phone still asks for the other way after a miss it heard, and ForgeFX
+    still sends it (setParam), so the same breakage can happen there.
+  - *Whole numbers were drawn as knobs.* What the codec lists as a whole
+    number (forgefx-midi FM3_FAMILY_JOIN_DISCRETE, FM9_ROUNDTRIP_DISCRETE,
+    III_ROUNDTRIP_DISCRETE: Bit Reduce, Number of Taps, a cab's Type) is
+    marked by scripts/gen3-knobs.mjs (a 1 in a seventh place, its range cut
+    to what the list allows), read as the number itself and written as that
+    number, typed, the codec's own frame; the way out passes only a whole
+    number in range there. Bit Reduce at 10 read 0.004 before. Through the
+    computer it still does: ForgeFX does not read those lists.
+  - *Slower than it had to be.* Edit's read of a block gives up 1 s after
+    it went if nothing came back (it waited 2.5 s and held the line; a
+    healthy read is 0.3 to 0.7 s), a read with fewer values than its head
+    said is damaged, and a channel switch drops the 400 ms list of what is
+    in the preset, so the next read is on the new channel. Two checks of
+    one block asked together still make two reads.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
   `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
   others: test/ledger.mjs `editProblems` asks each unit on the rows that
