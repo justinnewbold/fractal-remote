@@ -4189,9 +4189,9 @@ export function run(test) {
     /* And "very laggy": a finger on one knob redrew every mark on every knob
        on the block, sixty times a second. The ring and the pointer are memoised
        so only the knob that moved does any work. */
-    assert.match(knob, /const Ring = memo\(function Ring\(\{ size, lit \}\)/, 'the ring is redrawn for every knob on every touch event')
+    assert.match(knob, /const Ring = memo\(function Ring\(\{ size, lo, hi \}\)/, 'the ring is redrawn for every knob on every touch event')
     assert.match(knob, /const Pointer = memo\(function Pointer\(\{ size, angle \}\)/, 'the pointer is redrawn for every knob on every touch event')
-    assert.match(knob, /<Ring size=\{size\} lit=\{lit\} \/>/, 'the knob does not draw its ring through the memoised part')
+    assert.match(knob, /<Ring size=\{size\} lo=\{lo\} hi=\{hi\} \/>/, 'the knob does not draw its ring through the memoised part')
 
     /* And the screen it lives on honours it. */
     assert.match(edit, /scrollEnabled=\{!held\}/, 'the bench scrolls under its own knobs')

@@ -126,7 +126,7 @@ export const managementArgs = (sql, url = MANAGEMENT_URL) => [
 /** What to say when the function refused the key, in place of a bare 401. */
 const NOT_ALLOWED =
   'The reports key was refused. In a Claude session it is the credential saved for ' +
-  `${PROJECT}.supabase.co with the header x-reports-key, which the network proxy adds, and it has to have been enrolled ` +
+  `${PROJECT}.supabase.co (header x-reports-key, or Authorization as the environment's settings save it), which the network proxy adds, and it has to have been enrolled ` +
   '(supabase/README.md, "Reading the reports without the full-account key"). Elsewhere, set READ_REPORTS_KEY.'
 
 /** A failed call, said from its status and the service's answer only, never the command, and with the secret taken out of anything quoted. */

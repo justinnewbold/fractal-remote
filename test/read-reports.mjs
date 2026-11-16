@@ -60,7 +60,7 @@ async function load(env = {}) {
  * 'fail'), `enrolled(body)` what enroll_report_reader answers, `rows` what
  * either read answers (or 'fail'). Every call and every logged line is kept.
  */
-async function door({ method = 'GET', path = '/read-reports?latest=10', key, body, secret, hashes = [sha(KEY)], enrolled = () => ({ ok: true, why: 'enrolled', keys: 1 }), rows = ROWS } = {}) {
+async function door({ method = 'GET', path = '/read-reports?latest=10', key, auth, body, secret, hashes = [sha(KEY)], enrolled = () => ({ ok: true, why: 'enrolled', keys: 1 }), rows = ROWS } = {}) {
   const calls = []
   const logged = []
   const env = { SUPABASE_URL: PROJECT, SUPABASE_SERVICE_ROLE_KEY: SERVICE, ...(secret === undefined ? {} : { READ_REPORTS_ENROLL: secret }) }
@@ -80,7 +80,7 @@ async function door({ method = 'GET', path = '/read-reports?latest=10', key, bod
   console.error = (...a) => logged.push(a.join(' '))
   try {
     const mod = await import(`${new URL(`../${FN}`, import.meta.url).href}?run=${++runs}`)
-    const headers = { ...(key === undefined ? {} : { 'x-reports-key': key }), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }
+    const headers = { ...(key === undefined ? {} : { 'x-reports-key': key }), ...(auth === undefined ? {} : { Authorization: auth }), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }
     const res = await mod.handle(new Request(`https://functions.test${path}`, { method, headers, ...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }) }))
     const text = await res.text()
     return { status: res.status, text, said: JSON.parse(text), headers: res.headers, calls, logged, rpcs: calls.map((c) => c.url.split('/rpc/')[1]) }
@@ -241,6 +241,31 @@ export function run(test) {
     }
     assert.ok(!/(token|secret|key|given|expected)\s*(===|!==|==|!=)\s*(token|secret|key|given|expected)\b/.test(src), 'two secrets are compared with ===')
     assert.ok(!/\.includes\(\s*mine\s*\)|indexOf\(\s*mine\s*\)/.test(src), 'the hash is looked up with includes')
+  })
+
+  test('read-reports: the key comes in Authorization too, as the environment’s settings save a network secret, with or without Bearer', async () => {
+    /* Bare, or with a word before it: the reports, and the key nowhere. */
+    for (const auth of [KEY, `Bearer ${KEY}`, `bearer  ${KEY}`, `Token ${KEY}`]) {
+      const run = await door({ auth })
+      assert.equal(run.status, 200, `${auth.slice(0, 7)}…: refused`)
+      assert.deepEqual(run.said.reports, ROWS)
+      keyNowhere(run)
+    }
+    /* Its own header first: a kept key in Authorization does not open the door for a wrong one in x-reports-key. */
+    assert.equal((await door({ key: OTHER, auth: `Bearer ${KEY}` })).status, 401)
+    assert.equal((await door({ key: KEY, auth: `Bearer ${OTHER}` })).status, 200)
+    /* A key nobody enrolled, a Supabase sign-in, and nothing at all: refused, and nothing read. */
+    const jwt = `Bearer eyJhbGciOiJIUzI1NiJ9.${'e'.repeat(120)}.${'s'.repeat(43)}`
+    for (const auth of [`Bearer ${OTHER}`, jwt, 'Bearer ', '']) {
+      const run = await door({ auth })
+      assert.equal(run.status, 401, `${auth.slice(0, 12)}…: let in`)
+      assert.ok(!run.rpcs.some((r) => r === 'read_reports_latest' || r === 'read_report'), 'a report was read for a key that is not kept')
+    }
+    /* Enrolled the same way. */
+    const enrolled = await door({ method: 'POST', path: '/read-reports/enroll', auth: `Bearer ${KEY}`, secret: ENROLL, body: { enroll: ENROLL }, hashes: [] })
+    assert.equal(enrolled.status, 200, enrolled.text)
+    assert.ok(enrolled.calls.some((c) => c.body?.key_hash === sha(KEY)), 'the key in Authorization was not the one enrolled')
+    keyNowhere(enrolled)
   })
 
   test('read-reports: the function can only read, only through the four database functions, and never logs or repeats the key', () => {

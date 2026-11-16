@@ -4,11 +4,11 @@
   "days": [
     {
       "date": "2026-11-16",
-      "version": "1.90.89",
+      "version": "1.90.90",
       "lines": [
+        "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a setting that sits in the middle, such as Balance or Pan, lights up from the top.",
         "Over Bluetooth, when your adapter says it’s connected but nothing comes back from your unit, Play now says so, and Fix it step by step opens the Bluetooth page, which walks you through the resets that cure it one at a time: restart the adapter, turn Bluetooth off and on, forget it and pair it again.",
-        "In Edit on an Axe-Fx III, the NAM block’s knobs on channels B, C and D now show and change their own settings. Before, they read from the wrong place and said they didn’t take. Over Bluetooth or a USB cable, whole-number settings such as Bit Reduce now show the number your unit has.",
-        "In Edit on an FM3, FM9 or Axe-Fx III, a knob that didn’t read back as you set it is no longer sent again another way, which could throw a setting such as Bit Reduce to its lowest. And when your unit doesn’t answer, the app says it couldn’t check the change instead of saying it didn’t take.",
+        "In Edit on an FM3, FM9 or Axe-Fx III, a knob that reads back differently isn’t sent again another way (that could throw Bit Reduce to its lowest), an unanswered change says it couldn’t be checked, and the Axe-Fx III’s NAM knobs on channels B, C and D work. Over Bluetooth or USB, whole-number settings read right.",
         "On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open. Before, it waited for the app to be quit, and switching the Pi off at the wall isn’t a quit, so it could sit on an old version.",
         "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons.",
         "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time once you have switched a block on or off. And in the metronome, tapping the same choice again after your unit didn’t take a change now really asks the unit again."

@@ -263,6 +263,12 @@ export const WAIT = {
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
 export const ECHO_MS = 250
+/** A Program Change with the number the app just sent, on any channel, within this, is the app's own come back (as the rig's own-echo window). */
+export const OWN_PC_MS = 1500
+/** An earlier Program Change than the app's last is its own come back only this soon after it went: copies come while the next is going, never a second later. */
+export const OWN_OLDER_PC_MS = 600
+/** Copies of one Program Change this close together are one burst: one change, one line. */
+export const PC_BURST_MS = 300
 /** The AM4 is asked one stored name at a time, at least this far apart. */
 export const NAME_GAP_MS = 600
 /** An answer this late is not taken as an answer to the next question. */
@@ -907,6 +913,104 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const heldFor = (job) => (am4 || !job.opts.match || job.opts.fn === undefined || job.opts.fn === FN.PARAM ? 0 : lateFor(job.opts.fn))
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
+
+  /*
+   * THE APP'S OWN PROGRAM CHANGE, COMING BACK. A customer's FM9 through a
+   * WIDI Master, 16 November 2026: every preset he stepped to wrote "the
+   * unit sent Program Change 12: its preset changed" sixteen times, once a
+   * channel, a few hundred milliseconds after the app had sent Program
+   * Change 12 itself. Sixteen of the log's 400 lines a step, so a report
+   * after twenty-five steps held nothing else; and each copy was news to
+   * the app (the kept chain dropped, a knob turn waiting to go refused).
+   *
+   * The echo guard above is the SysEx one: the last message sent, byte for
+   * byte, for a quarter of a second, kept that short on purpose (the scene
+   * set's answer is its own bytes). A Program Change's job is over in 120
+   * ms and the next question replaces it, and a copy on another channel is
+   * never byte for byte. No Fractal unit answers anything with a Program
+   * Change, so one with the number the app has just sent, on any channel,
+   * within OWN_PC_MS, is the app's own: not news, and not the unit
+   * answering either (something on the rig sends what it hears back out).
+   * The bank goes with it: a Program Change after a bank select on its
+   * channel that names another bank is another preset, and news. EVERY ONE
+   * the app sent in that time is remembered, not the last alone: Next
+   * tapped twice sends the second 120 ms after the first, before the first
+   * one's copies come back (an independent read, before it went out). But
+   * an EARLIER one is the app's own only for OWN_OLDER_PC_MS, and only until
+   * its copies have come back: a controller taking the unit back to it a
+   * second later is a real change (a second read). Copies come back in the
+   * order things were sent, so the oldest send not yet heard is the one a
+   * copy belongs to, and is what its timing is told from. And the bank
+   * selects sent with it, coming back, are the app's own too: not the unit
+   * answering, so a quiet unit stays quiet.
+   *
+   * And copies of one Program Change in a burst are one change: the first
+   * is news, the rest are counted, and the log says once how many came,
+   * on which channels and how long after the app's own.
+   */
+  /* The Program Changes the app sent in the last OWN_PC_MS, oldest first: {low, bank, at, heard}. */
+  let ownPcs = []
+  /* The last bank select (CC 0) heard on each channel, {value, at}: what a Program Change after it names. */
+  const bankHeard = new Map()
+  /* The Program Change being heard again and again, or null: {low, bank, own, count, channels, first, last, sentAt, timer}. */
+  let pcBurst = null
+  const channelList = (set) => {
+    const all = [...set].sort((a, b) => a - b)
+    const runs = []
+    for (const c of all) {
+      const run = runs[runs.length - 1]
+      if (run && c === run[1] + 1) run[1] = c
+      else runs.push([c, c])
+    }
+    return runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(', ')
+  }
+  function endPcBurst() {
+    const b = pcBurst
+    if (!b) return
+    pcBurst = null
+    if (b.timer !== null) time.clearTimeout(b.timer)
+    const many = `${b.count === 1 ? 'once' : `${b.count} times in ${Math.round(b.last - b.first)} ms`}, on channel${b.channels.size === 1 ? '' : 's'} ${channelList(b.channels)}`
+    if (b.own) say(`the app’s own Program Change ${b.low} came back ${many}, from ${Math.round(b.first - b.sentAt)} ms after it was sent: not a preset change`)
+    else if (b.count > 1) say(`Program Change ${b.low} came ${many}: taken as one preset change`)
+  }
+  /* The bank last said on `channel` (1–16) within OWN_PC_MS, or null: what a Program Change on it now is in. */
+  function bankOn(channel, now) {
+    const bank = bankHeard.get(channel)
+    return bank && now - bank.at <= OWN_PC_MS ? bank.value : null
+  }
+  const ownLately = (now) => (ownPcs = ownPcs.filter((e) => now - e.at <= OWN_PC_MS))
+  /**
+   * The app's own Program Change that one on `channel` is a copy of, or
+   * null: the oldest send not heard back yet that fits (an earlier one only
+   * within OWN_OLDER_PC_MS of going), else the newest, which the unit is on,
+   * so another copy of it changes nothing. Not a send the unit has been
+   * heard to move off since (`passed`, a Program Change taken as news): the
+   * unit is not on it, so the same preset again is a change (a controller
+   * back to it was swallowed, and a knob turn waiting in Edit went into
+   * that preset: an independent read, 16 November 2026). A passed send
+   * that has been heard back keeps only while its burst of copies is still
+   * coming (`lastCopy`, within PC_BURST_MS): a controller's change landing
+   * among the app's own copies left the rest of them a second change (a
+   * fourth read). Not a window from the send: a lone copy after the burst
+   * is byte for byte a controller taking the unit back, and is news. One
+   * not heard back yet keeps OWN_OLDER_PC_MS.
+   */
+  function ownPcFor(low, channel, now) {
+    const bank = bankOn(channel, now)
+    const mine = ownLately(now)
+    const newest = mine[mine.length - 1]
+    const fits = (e) => e.low === low && (bank === null || bank === e.bank)
+    for (const e of mine) if (!e.heard && ((e === newest && !e.passed) || now - e.at <= OWN_OLDER_PC_MS) && fits(e)) return e
+    /* A passed send's copies still coming on, the burst a controller's Program Change cut into: its own still (lastCopy). */
+    return newest && fits(newest) && (!newest.passed || (newest.lastCopy !== undefined && now - newest.lastCopy <= PC_BURST_MS)) ? newest : null
+  }
+  /* Its copies have come: the sends before it are over (copies come back in order), and it is not taken for a later change but as the unit's own preset. */
+  function ownPcHeard(e) {
+    e.heard = true
+    ownPcs = ownPcs.filter((x) => x.at >= e.at)
+  }
+  /* A bank select the app sent with one of its Program Changes, come back: CC 0 with its bank, or CC 32 with nought, within OWN_PC_MS. */
+  const ownBankSelect = (msg, now) => (msg[1] === 0x00 || msg[1] === 0x20) && ownLately(now).some((e) => (msg[1] === 0x00 ? msg[2] === e.bank : msg[2] === 0))
   /*
    * A SET THE UNIT ANSWERS WITH THE SET ITSELF, BYTE FOR BYTE. On these
    * units a block's on and off (0A), its channel (0B), the scene (0C) and
@@ -1681,10 +1785,44 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       current.came.short++
       current.came.framed += msg.length - 1
     }
-    if (isEcho(msg, time.now())) return
-    if ((msg[0] & 0xf0) >= 0x80 && (msg[0] & 0xf0) < 0xf0) heardAgain()
-    if ((msg[0] & 0xf0) === 0xc0) {
-      say(`the unit sent Program Change ${msg[1]}: its preset changed`)
+    const now = time.now()
+    const kind = msg[0] & 0xf0
+    const channel = (msg[0] & 0x0f) + 1
+    /* Before the echo guard: the app's own bank select coming back still says which bank a Program Change after it is in. */
+    if (kind === 0xb0 && msg[1] === 0x00 && Number.isInteger(msg[2])) bankHeard.set(channel, { value: msg[2], at: now })
+    if (kind === 0xb0 && ownBankSelect(msg, now)) return
+    if (kind === 0xc0 && Number.isInteger(msg[1])) {
+      const low = msg[1]
+      const bank = bankOn(channel, now)
+      /* A bank select said on this channel since the burst began: the bank this one is in, where it may not be the burst's. One left from before (the app's own, come back) says nothing of it. */
+      const said = bankHeard.get(channel)
+      const fresh = pcBurst && said && said.at > pcBurst.first ? said.value : null
+      /* Another copy in the burst it belongs to: counted, and nothing else. Not one after a bank select that names another bank: that is another preset. */
+      if (pcBurst && pcBurst.low === low && now - pcBurst.last <= PC_BURST_MS && (fresh === null || fresh === pcBurst.bank)) {
+        pcBurst.count++
+        pcBurst.channels.add(channel)
+        pcBurst.last = now
+        if (pcBurst.send) pcBurst.send.lastCopy = now
+        time.clearTimeout(pcBurst.timer)
+        pcBurst.timer = time.setTimeout(endPcBurst, PC_BURST_MS)
+        return
+      }
+      endPcBurst()
+      const mine = ownPcFor(low, channel, now)
+      const own = mine !== null
+      pcBurst = { low, bank: own ? mine.bank : bank, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? mine.at : null, send: mine, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
+      if (own) {
+        mine.lastCopy = now
+        ownPcHeard(mine)
+        return
+      }
+    }
+    if (isEcho(msg, now)) return
+    if (kind >= 0x80 && kind < 0xf0) heardAgain()
+    if (kind === 0xc0) {
+      say(`the unit sent Program Change ${msg[1]} on channel ${channel}: its preset changed`)
+      /* The unit has moved off every send of the app's: none is where it is now (ownPcFor). */
+      for (const e of ownPcs) e.passed = true
       sceneCache = null
       structure = null
       editPlaced = null
@@ -2292,13 +2430,29 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* ---- preset ---- */
 
-  const sendPc = (n) =>
-    ex(buildProgramChange(n, { channel: ways.pcChannel }), {
+  /*
+   * Remembered as it leaves (ownPcs), and forgotten if it never did: a
+   * footswitch's Program Change to the same preset is news then. Once it
+   * has left, the job ends only when its wait is over, so a refusal after
+   * that is a message of the three the adapter would not take, and the
+   * Program Change, last of them, did not go.
+   */
+  const sendPc = (n) => {
+    let mine = null
+    return ex(buildProgramChange(n, { channel: ways.pcChannel }), {
       messages: true,
       ms: WAIT.watch,
       what: `preset ${n} by Program Change`,
-      priority: 'write'
+      priority: 'write',
+      sent: (at) => {
+        mine = { low: n & 0x7f, bank: (n >> 7) & 0x7f, at }
+        ownPcs = [...ownLately(at), mine]
+      }
+    }).catch((err) => {
+      if (mine) ownPcs = ownPcs.filter((e) => e !== mine)
+      throw err
     })
+  }
   const sendSysexPreset = (n) => fire(buildSwitchPreset(model, n), `preset ${n}`)
 
   /* Where the unit is, asked a moment after the switch. */
@@ -5087,6 +5241,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   function close() {
     if (closed) return { unitTunerOwed: unitOwed }
+    /* A burst of Program Changes still being counted is said now, with its timer stopped. */
+    endPcBurst()
     closed = true
     stopPolls()
     if (holdTimer !== null) time.clearTimeout(holdTimer)

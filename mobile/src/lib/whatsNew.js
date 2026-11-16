@@ -12,18 +12,18 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-16",
     "day": "16 November 2026",
-    "version": "1.90.89",
+    "version": "1.90.90",
     "lines": [
+      {
+        "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a setting that sits in the middle, such as Balance or Pan, lights up from the top.",
+        "only": null
+      },
       {
         "text": "Over Bluetooth, when your adapter says it’s connected but nothing comes back from your unit, Play now says so, and Fix it step by step opens the Bluetooth page, which walks you through the resets that cure it one at a time: restart the adapter, turn Bluetooth off and on, forget it and pair it again.",
         "only": null
       },
       {
-        "text": "In Edit on an Axe-Fx III, the NAM block’s knobs on channels B, C and D now show and change their own settings. Before, they read from the wrong place and said they didn’t take. Over Bluetooth or a USB cable, whole-number settings such as Bit Reduce now show the number your unit has.",
-        "only": null
-      },
-      {
-        "text": "In Edit on an FM3, FM9 or Axe-Fx III, a knob that didn’t read back as you set it is no longer sent again another way, which could throw a setting such as Bit Reduce to its lowest. And when your unit doesn’t answer, the app says it couldn’t check the change instead of saying it didn’t take.",
+        "text": "In Edit on an FM3, FM9 or Axe-Fx III, a knob that reads back differently isn’t sent again another way (that could throw Bit Reduce to its lowest), an unanswered change says it couldn’t be checked, and the Axe-Fx III’s NAM knobs on channels B, C and D work. Over Bluetooth or USB, whole-number settings read right.",
         "only": null
       },
       {

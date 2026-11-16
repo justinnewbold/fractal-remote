@@ -269,6 +269,12 @@ export const FILES = [
    */
   { source: '../shared/knob-keys.mjs', target: '../mobile/src/lib/knob-keys.js' },
   /*
+   * Where a knob points: from half past seven, through twelve, to half past
+   * four, and a centred one lit from twelve. Both ends had drawn it a quarter
+   * turn round, the same way, unseen; one copy now.
+   */
+  { source: '../shared/knob-dial.mjs', target: '../mobile/src/lib/knob-dial.js' },
+  /*
    * The troubleshooting guide, so a fix reads the same wherever somebody
    * standing in front of a dead rig happens to look it up.
    *
