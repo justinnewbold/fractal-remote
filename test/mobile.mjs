@@ -22,6 +22,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from '@babel/parser'
 import babelTraverse from '@babel/traverse'
 
+import { compareWithBuild, sameAsStores } from '../scripts/next-store.mjs'
+import { storeVersionProblem, withStoreVersion } from '../scripts/store-version.mjs'
+
 /* CommonJS interop: @babel/traverse's default export is on `.default` under
    some resolutions and is the module itself under others. */
 const traverse = babelTraverse.default || babelTraverse
@@ -820,6 +823,264 @@ export function run(test) {
       assert.ok(!/closed[- ]testing track|closed testing to production/i.test(read(file)), `${file} still says an Android submission goes to closed testing`)
     }
     assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
+  })
+
+  test('the next store version is built with docs/pending in and its own number, and the store copies keep their updates', () => {
+    /*
+     * "Can you do the iphone and android builds as version. 2.0, but leave
+     * the over the air updates at the intervals we are doing now? I want to
+     * test it all on test flight first before a public release but i still
+     * want OTA updates going out in the meantime." And: "dont change the
+     * build number to 2.0.0 on the updartes currently going. only after we
+     * do the native builds" (Justin, 16 November 2026.)
+     *
+     * So nothing of the build is committed: its native work goes in from
+     * docs/pending in the build's checkout (scripts/apply-pending.sh), its
+     * number in the same checkout (scripts/store-version.mjs), Android to
+     * Play's internal testing track (eas.json `testing`), and the update job
+     * publishes each update a second time, patched the same way, for the
+     * build's testers once docs/pending/next-store.json says it is out.
+     */
+    const eas = JSON.parse(read('mobile/eas.json'))
+    /*
+     * THE TESTING SUBMIT PROFILE IS A WAITING PATCH, because @expo/fingerprint
+     * hashes the whole of mobile/eas.json: added to main it alone moved both
+     * phones' fingerprints (16 November 2026), and no update would have
+     * reached a copy in the stores. So on main it is not there, and
+     * play-internal.patch puts it in; once that patch has gone into main on
+     * release day, main has it.
+     */
+    let sent = eas
+    const patch = new URL('../docs/pending/play-internal.patch', import.meta.url)
+    if (existsSync(patch) && !process.env.PENDING_APPLIED) {
+      assert.equal(eas.submit?.testing, undefined, 'mobile/eas.json has the testing submit profile on main, which moves every phone’s fingerprint and stops their updates')
+      const dir = mkdtempSync(join(tmpdir(), 'eas-'))
+      try {
+        mkdirSync(join(dir, 'mobile'))
+        copyFileSync(new URL('../mobile/eas.json', import.meta.url), join(dir, 'mobile/eas.json'))
+        execFileSync('git', ['apply', fileURLToPath(patch)], { cwd: dir, stdio: 'pipe' })
+        sent = JSON.parse(readFileSync(join(dir, 'mobile/eas.json'), 'utf8'))
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+      assert.deepEqual({ ...sent, submit: { ...sent.submit, testing: undefined } }, { ...eas, submit: { ...eas.submit, testing: undefined } }, 'play-internal.patch changes something in eas.json besides adding the testing profile')
+    }
+    assert.equal(sent.submit?.testing?.android?.track, 'internal', 'the testing submit profile does not send Android to Play’s internal testing track')
+    assert.deepEqual(sent.submit?.testing?.ios, sent.submit?.production?.ios, 'the testing submit profile sends the iPhone somewhere other than the production one does (TestFlight)')
+    assert.equal(sent.submit?.production?.android?.track, 'production', 'the production submit profile no longer sends Android to production')
+    assert.equal(eas.cli?.appVersionSource, 'remote', 'the build number is no longer Expo’s own, so a store version set on the runner may come with a build number nobody counts')
+
+    const yml = read('.github/workflows/mobile.yml')
+    for (const [input, kind] of [['next_store', 'boolean'], ['android_testing', 'boolean'], ['store_version', 'string']]) {
+      assert.match(yml, new RegExp(`\\n      ${input}:\\n        description: (['"])[^\\n]+\\1\\n        type: ${kind}\\n`), `mobile.yml has no ${input} box`)
+    }
+    const job = (name) => {
+      const at = yml.indexOf(`\n  ${name}:\n`)
+      assert.ok(at >= 0, `mobile.yml has no ${name} job`)
+      const next = yml.slice(at + 3).search(/\n  [a-z][\w-]*:\n/)
+      return next < 0 ? yml.slice(at) : yml.slice(at, at + 3 + next)
+    }
+    const step = (text, name) => {
+      const at = text.indexOf(`- name: ${name}\n`)
+      assert.ok(at >= 0, `the step "${name}" is gone`)
+      const next = text.slice(at + 2).search(/\n\s*- (name|uses):/)
+      return { at, body: next < 0 ? text.slice(at) : text.slice(at, at + 2 + next) }
+    }
+    const build = job('build')
+    const patched = step(build, 'The next store version’s native work, for this build only'.replace('’', "'"))
+    assert.match(patched.body, /if: \$\{\{ inputs\.next_store \|\| inputs\.android_testing \}\}/, 'the waiting patches go into a build nobody asked to be the next store version, or not into one sent to internal testing (whose submit profile is one of them)')
+    const refused = step(build, 'The internal testing track is for the next store version')
+    assert.match(refused.body, /if: \$\{\{ inputs\.android_testing && !inputs\.next_store && !inputs\.submit_only \}\}\n\s+run: \|\n\s+echo "::error::[^"]+"\n\s+exit 1/, 'a build sent to internal testing without the next store version is not refused, and it would carry every waiting patch with nobody having asked')
+    assert.ok(refused.at < patched.at, 'the internal-testing build is refused only after the patches are in')
+    /* And the other way round: a next store version is never sent to Google Play production, built or resent (an independent read, before the 2.0.0 pair). */
+    const toEveryone = step(build, 'A next store version goes to testers, never to everyone')
+    const guard = toEveryone.body.match(/if: >-\n([\s\S]*?)\n\s+run: \|\n\s+echo "::error::[^"]+"\n\s+exit 1/)
+    assert.ok(guard, 'a next store version sent with the testing box left unticked is not refused')
+    const cond = guard[1].replace(/\s+/g, ' ').trim()
+    assert.equal(cond, "${{ inputs.platform != 'ios' && !inputs.android_testing && ( (inputs.submit && !inputs.submit_only && (inputs.next_store || inputs.store_version != '')) || (inputs.submit_only && hashFiles('docs/pending/next-store.json') != '') ) }}", 'the guard against sending a next store version to everyone has changed: a built one with Send ticked, or a resend while one is out to testers, could reach Google Play production')
+    assert.ok(toEveryone.at < patched.at, 'a next store version sent to everyone is refused only after the patches are in')
+    assert.match(patched.body, /run: bash scripts\/apply-pending\.sh\n/, 'the build does not put the waiting patches in by scripts/apply-pending.sh')
+    const numbered = step(build, 'The version number the stores show, for this build only')
+    assert.match(numbered.body, /if: \$\{\{ inputs\.store_version != '' && !inputs\.submit_only \}\}/, 'the store version is set when it was left empty, or on a submission')
+    assert.match(numbered.body, /STORE_VERSION: \$\{\{ inputs\.store_version \}\}\n\s+run: node scripts\/store-version\.mjs "\$STORE_VERSION"$/, 'the store version is not handed to scripts/store-version.mjs through env')
+    assert.doesNotMatch(yml.replace(/STORE_VERSION: \$\{\{ inputs\.store_version \}\}/, ''), /\$\{\{ inputs\.store_version \}\}/, 'the typed store version is pasted into a script, where a quote in it would run')
+    const install = step(build, 'Install the app\'s own dependencies')
+    const made = step(build, 'Build')
+    assert.ok(patched.at < install.at, 'the waiting patches go in after the packages are installed, so a package a patch brings is not in the build')
+    assert.ok(patched.at < numbered.at && numbered.at < made.at, 'the store version is set after the build has been sent, or before the patches (which may touch app.json)')
+    assert.match(made.body, /\$\{\{ inputs\.submit && \(inputs\.android_testing && '--auto-submit-with-profile=testing' \|\| '--auto-submit'\) \|\| '' \}\}/, 'the Send box does not send Android to internal testing when that box is ticked')
+    assert.match(step(build, 'Send the last build').body, /--profile "\$\{\{ inputs\.android_testing && 'testing' \|\| inputs\.profile \}\}"/, 'Skip building does not send Android to internal testing when that box is ticked')
+
+    const update = job('update')
+    const first = step(update, 'Publish')
+    const second = step(update, 'Publish for the next store version\'s testers')
+    assert.ok(first.at < second.at, 'the testers’ update goes before the store copies’ own, so a failure in it would keep theirs back')
+    assert.match(second.body, /if: \$\{\{ hashFiles\('docs\/pending\/next-store\.json'\) != '' && \(inputs\.update_channel \|\| 'both'\) != 'preview' \}\}/, 'the testers’ update is published with no next store version out, or on a preview-only run')
+    const order = ['bash scripts/apply-pending.sh', '(cd mobile && npm ci)', 'node scripts/next-store.mjs', 'eas update', '--branch production']
+    let last = -1
+    for (const part of order) {
+      const at = second.body.indexOf(part)
+      assert.ok(at > last, `the testers’ update does not run ${part} in its place (patches, packages, the check, then production)`)
+      last = at
+    }
+    assert.doesNotMatch(second.body, /--branch preview|git (commit|push)/, 'the testers’ update reaches the preview branch, or commits what it patched')
+
+    /* docs/pending/next-store.json, once a build is out: its number, the two fingerprints it carries, and its watch's hash. */
+    if (existsSync(new URL('../docs/pending/next-store.json', import.meta.url))) {
+      const next = JSON.parse(read('docs/pending/next-store.json'))
+      assert.equal(storeVersionProblem(next.version, null), null, `docs/pending/next-store.json names ${next.version}, which no store build can be`)
+      for (const p of ['ios', 'android', 'watch']) assert.match(String(next[p]), /^[0-9a-f]{40}$/, `docs/pending/next-store.json has no ${p} ${p === 'watch' ? 'hash' : 'fingerprint'}`)
+      assert.deepEqual(Object.keys(next).sort(), ['android', 'ios', 'version', 'watch'], 'docs/pending/next-store.json holds something nothing reads')
+    }
+
+    /*
+     * AND EVERY PULL REQUEST WHILE ONE IS OUT IS HELD TO IT (web.yml
+     * `testers`): the patches in, the app's packages, then the strict check,
+     * which fails on any of the three. Nothing else would see a change to a
+     * waiting patch alone (an independent read, before the 2.0.0 pair).
+     */
+    const web = read('.github/workflows/web.yml')
+    const testers = web.slice(web.indexOf('\n  testers:\n'), web.indexOf('\n  version:\n'))
+    assert.ok(testers.length > 20, 'web.yml has no testers job, so a change to a waiting patch goes green while a next store version is out')
+    assert.match(testers, /\n    if: github\.event_name == 'pull_request'\n/, 'the testers job does not run on pull requests')
+    assert.match(testers, /if \[ ! -f docs\/pending\/next-store\.json \]; then\n\s+echo "[^"]+"\n\s+exit 0\n\s+fi\n/, 'the testers job passes or fails with no next store version out')
+    let was = -1
+    for (const part of ['set -euo pipefail', 'bash scripts/apply-pending.sh', '(cd mobile && npm ci)', 'node scripts/next-store.mjs --strict']) {
+      const at = testers.indexOf(part)
+      assert.ok(at > was, `the testers job does not run ${part} in its place (patches, packages, then the strict check)`)
+      was = at
+    }
+    assert.match(read('scripts/next-store.mjs'), /\n  if \(strict && !reaches\) process\.exit\(1\)\n/, 'the strict check does not fail when the testers’ build no longer matches')
+  })
+
+  test('a store build’s own number: three numbers, one digit last, never below a store', () => {
+    const live = { ios: '1.90.0', android: '1.90.0' }
+    assert.equal(storeVersionProblem('2.0.0', live), null)
+    assert.equal(storeVersionProblem(' 1.91.3 ', live), null, 'the number is not taken as typed with spaces round it')
+    assert.match(String(storeVersionProblem('1.90.0', live)), /App Store's own number/, 'the App Store’s own number is let through, and Apple refuses its build only after the slot is spent')
+    assert.equal(storeVersionProblem('1.90.0', { ios: '1.89.3', android: '1.90.0' }), null, 'Google Play’s own number is refused, which Play takes (a new build number under it)')
+    for (const [bad, why] of [['2.0', 'not three numbers'], ['', 'not three numbers'], ['v2.0.0', 'not three numbers'], ['2.0.10', 'one digit'], ['1.89.9', 'below 1.90.0']]) {
+      assert.match(String(storeVersionProblem(bad, live)), new RegExp(why), `"${bad}" is not refused for being ${why}`)
+    }
+    assert.match(String(storeVersionProblem('1.90.9', { ios: '1.91.0', android: '1.90.0' })), /App Store/, 'a number below the App Store’s alone is not refused')
+    assert.match(String(storeVersionProblem('1.90.9', { ios: '1.90.0', android: '1.91.0' })), /Google Play/, 'a number below Google Play’s alone is not refused')
+    /* Only the number changes: every other line of app.json is the same. */
+    const app = read('mobile/app.json')
+    const out = JSON.parse(withStoreVersion(app, '2.0.0'))
+    const was = JSON.parse(app)
+    assert.equal(out.expo.version, '2.0.0')
+    assert.deepEqual({ ...out, expo: { ...out.expo, version: was.expo.version } }, was, 'setting the store version changed something else in app.json')
+    assert.throws(() => withStoreVersion('{"expo":{}}', '2.0.0'), /no expo\.version/)
+    /* And the version stays out of the fingerprint, or the number would stop the build taking any update. */
+    assert.match(read('mobile/fingerprint.config.js'), /sourceSkips: SourceSkips\.ExpoConfigVersions/, 'the version number moves the fingerprint again')
+  })
+
+  test('the testers’ update says whether it still matches the build they have', () => {
+    const rec = { version: '2.0.0', ios: 'a'.repeat(40), android: 'b'.repeat(40), watch: 'd'.repeat(40) }
+    const now = { ios: rec.ios, android: rec.android, watch: rec.watch }
+    const same = compareWithBuild(rec, now)
+    assert.equal(same.reaches, true)
+    assert.deepEqual(same.lines.map((l) => l.level), ['notice', 'notice', 'notice'])
+    const moved = compareWithBuild(rec, { ...now, android: 'c'.repeat(40) })
+    assert.equal(moved.reaches, false, 'an Android fingerprint that moved since the build is called a match')
+    assert.equal(moved.lines[1].level, 'warning')
+    assert.match(moved.lines[1].text, /take no update until another build/)
+    const none = compareWithBuild({ version: '2.0.0', ios: rec.ios, watch: rec.watch }, now)
+    assert.equal(none.reaches, false, 'a build with no Android fingerprint written down is called a match')
+    assert.match(none.lines[1].text, /is not known/)
+    /* The watch: no update is matched on it, but a watch in docs/pending that is not the build's is not what goes for review on release day. */
+    const watch = compareWithBuild(rec, { ...now, watch: 'e'.repeat(40) })
+    assert.equal(watch.reaches, false, 'a watch that changed in docs/pending since the build is called a match')
+    assert.match(watch.lines[2].text, /^watch: .*another build/)
+    assert.equal(compareWithBuild({ version: '2.0.0', ios: rec.ios, android: rec.android }, now).reaches, false, 'a build with no watch hash written down is called a match')
+    /* Strict (web.yml's testers job): the same answers, said as errors. */
+    const strict = compareWithBuild(rec, { ...now, ios: 'f'.repeat(40) }, { strict: true })
+    assert.equal(strict.reaches, false)
+    assert.deepEqual(strict.lines.map((l) => l.level), ['error', 'notice', 'notice'], 'a strict check says a moved fingerprint as a warning, which passes')
+    /* And never the store copies' own: the testers' update goes to the branch they listen on too. */
+    const stores = { ios: 'a'.repeat(40), android: '9'.repeat(40), watch: rec.watch }
+    assert.deepEqual(sameAsStores(stores, now), ['ios'], 'a testers’ update with the store copies’ iPhone fingerprint is let through, and every App Store customer would take the waiting patches’ code')
+    assert.deepEqual(sameAsStores({ ios: '8'.repeat(40), android: '9'.repeat(40) }, now), [], 'a testers’ update unlike the store copies is held back')
+    const ns = read('scripts/next-store.mjs')
+    assert.match(ns, /const same = sameAsStores\(stores, now\)\n  if \(same\.length\) \{\n[^\n]+\n    process\.exit\(1\)\n  \}\n  if \(strict && !reaches\) process\.exit\(1\)/, 'a testers’ update that would reach the store copies is not stopped in both modes')
+    assert.match(ns, /execFileSync\('git', \['show', 'HEAD:mobile\/fingerprint\.json'\]/, 'the store copies’ fingerprint is not read from the commit as it was before the patches went in')
+    /* Its watch hash is scripts/fingerprint.mjs's, word for word, or the two would disagree about one watch. */
+    const body = (src, head) => {
+      const at = src.indexOf(head)
+      assert.ok(at >= 0, `${head} is gone`)
+      return src.slice(src.indexOf('{', at), src.indexOf('\n}\n', at) + 2)
+    }
+    assert.equal(body(read('scripts/next-store.mjs'), 'export const watchHash = (root) =>'), body(read('scripts/fingerprint.mjs'), 'const watchHash = () =>'), 'the next store version’s watch hash is no longer worked out the way scripts/fingerprint.mjs works out the watch’s')
+  })
+
+  test('scripts/apply-pending.sh puts the waiting patches in in the README’s order, once, and stops on anything it cannot', () => {
+    const script = fileURLToPath(new URL('../scripts/apply-pending.sh', import.meta.url))
+    const dir = mkdtempSync(join(tmpdir(), 'pending-'))
+    try {
+      const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd: dir, stdio: 'pipe', encoding: 'utf8' })
+      const run = () => {
+        try {
+          return { code: 0, out: execFileSync('bash', [script], { cwd: dir, stdio: 'pipe', encoding: 'utf8' }) }
+        } catch (err) {
+          return { code: err.status, out: `${err.stdout || ''}${err.stderr || ''}` }
+        }
+      }
+      mkdirSync(join(dir, 'docs/pending'), { recursive: true })
+      const table = (...names) => writeFileSync(join(dir, 'docs/pending/README.md'), `# Waiting\n\n| Patch | What | Moves |\n|---|---|---|\n${names.map((n) => `| \`${n}\` | x | y |\n`).join('')}\nNot a row: \`stray.patch\` in a sentence.\n`)
+      writeFileSync(join(dir, 'file.txt'), 'one\n')
+      git('init', '-q')
+      /* Line endings as written, on every runner: Git for Windows turns them to CRLF on a checkout otherwise. */
+      git('config', 'core.autocrlf', 'false')
+      git('add', '-A')
+      git('commit', '-qm', 'base')
+      /* second.patch only applies after first.patch, so the order is the README's or nothing. */
+      writeFileSync(join(dir, 'file.txt'), 'two\n')
+      writeFileSync(join(dir, 'docs/pending/first.patch'), git('diff'))
+      git('commit', '-qam', 'two')
+      writeFileSync(join(dir, 'file.txt'), 'three\n')
+      writeFileSync(join(dir, 'docs/pending/second.patch'), git('diff'))
+      git('reset', '-q', '--hard', 'HEAD~1')
+      assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'one\n')
+
+      table()
+      let r = run()
+      assert.equal(r.code, 1, 'patch files that are not in the README’s table were applied in no known order')
+      assert.match(r.out, /first\.patch is not in docs\/pending\/README\.md's table/)
+
+      table('first.patch', 'second.patch', 'gone.patch')
+      r = run()
+      assert.equal(r.code, 1, 'a patch the README lists and that is not there went unnoticed')
+      assert.match(r.out, /lists gone\.patch, and there is no such file/)
+      assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'one\n', 'patches were applied before every listed one was found to be there')
+
+      table('first.patch', 'second.patch')
+      r = run()
+      assert.equal(r.code, 0, r.out)
+      assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'three\n', 'the waiting patches did not all go in')
+      assert.ok(r.out.indexOf('Applying docs/pending/first.patch') < r.out.indexOf('Applying docs/pending/second.patch'), 'the patches went in out of the README’s order')
+
+      /* A patch already in the tree is said and passed over, never applied twice. */
+      rmSync(join(dir, 'docs/pending/second.patch'))
+      table('first.patch')
+      writeFileSync(join(dir, 'file.txt'), 'two\n')
+      r = run()
+      assert.equal(r.code, 0, r.out)
+      assert.match(r.out, /first\.patch is already in the tree/)
+      assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'two\n')
+
+      writeFileSync(join(dir, 'file.txt'), 'four\n')
+      r = run()
+      assert.equal(r.code, 1, 'a patch that neither applies nor is in the tree went unnoticed')
+      assert.match(r.out, /first\.patch neither applies nor is already in the tree/)
+
+      rmSync(join(dir, 'docs/pending/first.patch'))
+      table()
+      r = run()
+      assert.equal(r.code, 0, r.out)
+      assert.match(r.out, /Nothing waits in docs\/pending/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('Expo’s developer error screen is left out of the Android app, and nothing else goes with it', () => {

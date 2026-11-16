@@ -58,6 +58,35 @@ jobs:
           PENDING_APPLIED=1 npm test
           git checkout -- . && git clean -fdq -e node_modules
 
+  # WHILE A NEXT STORE VERSION IS OUT TO TESTERS (docs/pending/next-store.json
+  # is there), A CHANGE TO WHAT IT CARRIES IS ANOTHER BUILD. Main's own
+  # fingerprint does not see docs/pending, so a pull request that only touches
+  # a waiting patch read "Unchanged" and went green, and the testers would
+  # have taken no update from its merge on, with a warning in a log as the
+  # only sign (an independent read, before the 2.0.0 pair). Here the patches
+  # go in, the app's packages with them, and scripts/next-store.mjs --strict
+  # fails unless the phones' fingerprints and the watch's hash are still the
+  # build's. When the change is wanted all the same, that is Justin's yes to
+  # another build and the new values written into next-store.json on purpose.
+  testers:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: What the next store version's testers have is still what docs/pending carries
+        run: |
+          set -euo pipefail
+          if [ ! -f docs/pending/next-store.json ]; then
+            echo "No next store version is out to testers, so there is nothing to hold it to."
+            exit 0
+          fi
+          bash scripts/apply-pending.sh
+          (cd mobile && npm ci)
+          node scripts/next-store.mjs --strict
+
   version:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
