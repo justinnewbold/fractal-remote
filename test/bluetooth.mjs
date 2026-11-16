@@ -12699,6 +12699,47 @@ export function run(test) {
     assert.deepEqual([twAgain.slot, twAgain.went.late, twAgain.went.tries, uploads(twoWays)], [3, true, 0, [3, 3]])
     const twA = await tap(twoWays, 'tw-a', 'Same Name', { from: 5 })
     assert.deepEqual([twA.slot, twA.went.late], [4, false])
+    /* The same after a remembered slot was refused for another capture: the slot remembered is the one the whole try went into, not the refused one. */
+    const r6Else = await bench()
+    r6Else.u.keepsNothing = true
+    await tap(r6Else, 'r6e-a', 'Same Name', { hash: true })
+    r6Else.u.keepsNothing = false
+    r6Else.u.held.set(3, headBytes('Their Own'))
+    r6Else.u.lateSlot = 4
+    r6Else.u.lateLooks = 2
+    const r6e = await tap(r6Else, 'r6e-a', 'Same Name', {
+      hash: true,
+      before: (how) => {
+        if (!how.second) return
+        r6Else.u.quietSlot = 4
+        r6Else.u.quietSlotTimes = 3
+      }
+    }).then(() => null, (e) => e)
+    assert.deepEqual([r6e?.status, r6e?.tries, uploads(r6Else), notKeptIn('r6e-a')], [504, 1, [3, 3, 4], 4], r6e?.message)
+    r6Else.t.clock.set(r6Else.t.clock.now() + 10000)
+    const r6eAgain = await tap(r6Else, 'r6e-a', 'Same Name', { hash: true })
+    assert.deepEqual([r6eAgain.slot, r6eAgain.went.late, uploads(r6Else)], [4, true, [3, 3, 4]])
+    /* And over a half-sent slot ("Send it again to slot"): the same. */
+    const r6Over = await bench()
+    r6Over.u.silentAt = 5
+    const r6cut = await tap(r6Over, 'r6o-a', 'Short One', { hash: true }).then(() => null, (e) => e)
+    assert.deepEqual([r6cut?.partial, r6cut?.slot], [true, 3])
+    r6Over.u.silentAt = null
+    r6Over.u.lateSlot = 3
+    r6Over.u.lateLooks = 2
+    const r6o = await tap(r6Over, 'r6o-a', 'Short One', {
+      hash: true,
+      again: 3,
+      before: (how) => {
+        if (!how.second) return
+        r6Over.u.quietSlot = 3
+        r6Over.u.quietSlotTimes = 3
+      }
+    }).then(() => null, (e) => e)
+    assert.deepEqual([r6o?.status, r6o?.tries, uploads(r6Over), notKeptIn('r6o-a')], [504, 1, [3, 3], 3], r6o?.message)
+    r6Over.t.clock.set(r6Over.t.clock.now() + 10000)
+    const r6oAgain = await tap(r6Over, 'r6o-a', 'Short One', { hash: true })
+    assert.deepEqual([r6oAgain.slot, r6oAgain.went.late, uploads(r6Over)], [3, true, [3, 3]])
 
     /* Not kept, and the slot then filled where the app never hears of it (on the unit, or Axe-Edit): refused there, so an empty one is looked for in the same tap. The player never picked that slot. */
     const outside = await bench()
@@ -12750,6 +12791,17 @@ export function run(test) {
     partWay.u.silentAt = null
     const over = await tap(partWay, 'cut-a', 'Short One', { again: 3 })
     assert.deepEqual([over.slot, over.went.got.name, uploads(partWay)], [3, 'Short One', [3, 3, 3]])
+    /* And a LATER try that stops part-way, after one that went whole and read empty: stopped part-way wins, and the slot is forgotten, not remembered as one not kept (the next Preview or Get would go there told it was sent before, not over what is there). */
+    const cutSecond = await bench()
+    cutSecond.u.keepsNothing = true
+    const cut2 = await tap(cutSecond, 'cut2-a', 'Short One', {
+      hash: true,
+      before: (how) => {
+        cutSecond.u.silentAt = how.second ? 5 : null
+      }
+    }).then(() => null, (e) => e)
+    assert.deepEqual([cut2?.partial, cut2?.tries, cut2?.slot, uploads(cutSecond)], [true, 1, 3, [3, 3]], cut2?.message)
+    assert.equal(notKeptIn('cut2-a'), null, 'a slot a later try stopped part-way into is remembered as one not kept')
 
     /* What a failure is: refused for something else, or for this capture, over the wire and in the computer's words; stopped part-way; or nothing written. */
     const no = (status, message, more = {}) => Object.assign(new Error(message), { status, ...more })
@@ -12814,6 +12866,9 @@ export function run(test) {
       notKept('steps-x', 5)
       await assert.rejects(captureToSlot({ id: 'steps-y', name: 'Mine', again: 5, find: async () => 9, send: async () => Promise.reject(new Error('Your computer didn’t answer.')) }), /didn’t answer/)
       assert.equal(notKeptIn('steps-x'), null, 'a slot sent over for another capture is still remembered for this one')
+      /* And a send over a half-sent slot that wrote nothing remembers nothing for the capture itself: no try of it went whole. */
+      await assert.rejects(captureToSlot({ id: 'steps-z', name: 'Mine', again: 5, find: async () => 9, send: async () => Promise.reject(no(504, 'The Axe-Fx III didn’t say what is in capture slot 006, asked 3 times. Nothing was sent.', { slot: 5, asked: 3 })) }), (e) => e.status === 504)
+      assert.equal(notKeptIn('steps-z'), null)
       /* No empty slot (or the page gone): nothing sent, nothing placed. */
       calls.length = 0
       const none = await captureToSlot({ id: 'steps-d', name: 'Mine', find: async () => null, send: async (slot) => calls.push(slot) })

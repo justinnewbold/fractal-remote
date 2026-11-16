@@ -167,7 +167,7 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
       went = await send(slot, before !== null)
     } catch (err) {
       if (before === null || !heldElse(err, name)) throw err
-      /* Not its slot any more: something else went in since. Nothing was sent, and the player never picked that slot, so an empty one is looked for now. */
+      /* Not its slot any more: something else is in it now, and that try wrote nothing. The player never picked that slot, so an empty one is looked for now. */
       forgetNotKept(id)
       log(`slot ${namSlotSaid(before)} holds another capture now (${err?.message || 'refused'}); looking for an empty slot`)
       slot = await look()

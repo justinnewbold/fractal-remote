@@ -41,8 +41,9 @@
  * captures often are, cut to 31 characters) the refusal reads as its own,
  * "kept after all", with the other one playing. And so does a search that
  * finds the slot empty for another capture, or a send over it (`claimSlot`):
- * read empty just now, nothing an earlier send left is there, and the slot
- * is the new capture's whatever its send comes to (a third read, the same
+ * read empty just now, or about to be written over, so nothing another
+ * capture's earlier send left there is looked for, and the slot is the new
+ * capture's whatever its send comes to (a third read, the same
  * day: guessing from a failure's words whether it wrote anything went wrong
  * both ways, and the words differ between the wire and the computer).
  * lib/captureSend `captureToSlot` is what reads and writes it, a tap at a
