@@ -1242,6 +1242,13 @@ export const tunerQuietLine = (unit) =>
  * nothing at all comes back, which is exactly that log. So its line names
  * its own two plugs. (What that rig really was is not known; this is the
  * reading that fits a first setup with one adapter.)
+ *
+ * AND NOT WHERE NOTHING AT ALL COMES BACK, past a connection's first
+ * questions (16 November 2026): zero bytes is a stuck link as much as the
+ * plugs, and there the page and Play say nothingBackLine, below, with the
+ * reset steps, which put the plugs where what is known of the adapter puts
+ * them. This line stays for bytes that are no answer (an echo through THRU)
+ * and before the link has asked enough to know.
  */
 export const isWidiMaster = (adapter) => /widi\s*master/i.test(String(adapter || ''))
 export function notAnsweringLine(unit, adapter = null) {

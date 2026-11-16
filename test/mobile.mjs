@@ -4398,7 +4398,10 @@ export function run(test) {
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
       /* Android's own turn-on question and its Bluetooth settings, and the log lines about them (7 November 2026): turnOnBluetooth and the wait return at once anywhere but Android (Platform.OS), and nothing sets 'bluetooth-off' on an iPhone. */
-      ['src/lib/bluetooth.js', /^android\.(bluetooth|intent|settings)\.|asked Android to turn Bluetooth on|^Android would not ask to turn Bluetooth on \(|^opened Android’s Bluetooth settings$|^Android’s Bluetooth settings did not open \(/, 'turnOnBluetooth: Android only, on Platform.OS'],
+      /* And the reset card's Open Bluetooth settings (openBluetoothSettings, 16 November 2026), which returns at once anywhere but Android, and is drawn only where the page has `ios` false. */
+      ['src/lib/bluetooth.js', /^android\.(bluetooth|intent|settings)\.|asked Android to turn Bluetooth on|^Android would not ask to turn Bluetooth on \(|^opened Android’s Bluetooth settings(, from the reset steps)?$|^Android’s Bluetooth settings did not open \(/, 'turnOnBluetooth and openBluetoothSettings: Android only, on Platform.OS'],
+      /* The reset steps' Android lines (16 November 2026): resetSteps picks them by the `os` it is handed, which the Bluetooth page and Troubleshooting pass as Platform.OS. */
+      ['src/lib/bluetooth-gear.js', /^Open Android’s Bluetooth settings, turn Bluetooth off|is listed in Android’s Bluetooth settings, tap the gear beside it|If Android asks to pair, accept\.$/, 'resetSteps: the os the page passes, Platform.OS'],
       /* What we know of each try, drawn only on Developer → App health → Tried, which only his account opens, and never for Apple's reviewer (31 October 2026). */
       ['src/lib/bluetooth-gear.js', /^From an iPhone and an Android phone, 26 October 2026/, 'TRIED_NOTES: on Developer → App health → Tried, his account alone'],
       ['src/screens/Bluetooth.js', /If Android asks to pair, accept\./, 'the Connect hint, behind ios ? … :'],
