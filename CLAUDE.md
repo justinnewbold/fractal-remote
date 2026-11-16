@@ -1911,9 +1911,11 @@ it, about three and a half seconds. Looking for windows cannot see that
 one, so the closing question itself now has a deadline, `ORDER_CLOSE_MS`
 (ORDER_QUIET_MS and 50 ms, so a hold the checks let through goes before
 it): not sent by then, the usual order that once, no miss, nothing kept,
-the grid asked again at the next read, with its own line in the log. The
+the grid asked again at the next read once that question's window has
+passed, with its own line in the log. The
 cost is that a question ahead of it that is slow but does answer loses
-the order for that one read. Edit's live grid read is judged when its
+the order for that one read. (As built it fired on the player's own taps
+too: the fifth read, below.) Edit's live grid read is judged when its
 turn comes, not when Edit asked for it (`unless` in the send queue,
 gen3LiveGrid `held`): it waited in line behind Play, the order's
 read could give up meanwhile, and it then left inside that read's window,
@@ -1923,14 +1925,63 @@ order and kept. The log says when the connection went while the closing
 question was out, or the adapter would not take it (both were said as the
 unit not answering), and a skip names
 whose read left the window open, Edit's or the order's (`gridLateBy`; it
-blamed the order's read for Edit's). The tests now hold where the
-ORDER_QUIET_MS line falls at both checks (about 370 and 300 ms left: asked
-and believed; 440 left at the first: not asked; 540 left at the second:
-not closed), the second check's skip (not a miss, not kept), the order's
-own window and Edit's to within a few milliseconds of their end, and
-Edit's skip near the end of the order's window, as shipped and with the
-live read believed. What a question ahead of the closing one costs Play's
-tiles now is the wait for its turn, ORDER_CLOSE_MS at most.
+blamed the order's read for Edit's). The tests were then said to hold
+where the ORDER_QUIET_MS line falls at both checks (about 370 and 300 ms
+left: asked and believed; 440 left at the first: not asked; 540 left at
+the second: not closed), the second check's skip (not a miss, not kept),
+the order's own window and Edit's to within a few milliseconds of their
+end, and Edit's skip near the end of the order's window, as shipped and
+with the live read believed; and a question ahead of the closing one was
+said to cost Play's tiles ORDER_CLOSE_MS at most. The fifth read found
+three of those looser than said (the second check's line held only
+between about 300 and 540 ms, Edit's window from below only, the order's
+half of `gridLateBy` not at all) and the grid read's own wait behind such
+a question not bounded at all (below).
+
+*And a fifth read, of THOSE fixes, found the deadline given too widely and
+the hold still open one exchange EARLIER (16 November 2026), all fixed,
+each fix and each tightened test seen to fail with it taken out.* The
+closing question's deadline fired on the player's own taps too: taps go
+ahead of Play's reads, a scene whose answer is lost holds the line half a
+second and four block taps as long, so a healthy unit lost the order for
+the visit and the log blamed "another question" for the tap. Now the
+deadline is given only where a question of its own kind (a "which
+preset?", function 0x0D: Play's own, the watch's, a stored slot's name)
+is on the line, or waiting ahead at Play's read priority or above, when
+it is asked (bleWire `presetAhead`), so "(another question was ahead of
+it)" is said only then; anything else ahead is waited for, as before the
+fourth read. And the grid read itself waited behind such a question: the
+status answer starts one waiting the moment it lands, before the order
+looks, so with its answer lost the grid read waited a second and a half,
+and the check after the grid's answer then threw the order away, Play's
+tiles 1.6 to 3 s for nothing (two tests that said "does not hold Play's
+tiles" allowed two seconds). The grid read now has the same deadline on
+the same condition: dropped, it is the usual order that once with its own
+line ("the grid could not be read for the block order in time …"), no
+miss, nothing kept, and asked again once that question's window has
+passed. The cost is the one already taken: a question ahead that answers,
+but slower than ORDER_CLOSE_MS, loses the order for that read. The log
+says "the connection went before the unit could be asked" where the
+closing question never left. The one way still to the second check is a
+"which preset?" that goes ahead of the grid read AFTER the order looked:
+only a save's own question does (asked at a write's place in the line),
+and with its answer lost it holds the grid read a second and a half, and
+the closing question waits without a deadline (a fifth-read gap, left:
+his account, a save made during Play's read, its answer lost; the same as
+before the fourth read). The tests now hold a tap ahead of the grid read
+and of the closing question waited for, the grid read's drop (a question
+on the line, one still waiting its turn, a stored name, one lost from the
+Presets list beside Play), the deadline's value at both places (a question
+ahead answered about 400 ms after it went is waited for, about 480 not),
+the second check's line from both sides through a save's question (about
+380 ms left: believed; 420: not closed) and its skip twice (no miss,
+nothing kept), the order's half of `gridLateBy`, an Edit read held back
+never counted as unanswered, Edit's window from above too (to a few
+milliseconds), and two refusals of the closing question at the way out
+counted as no miss. What a lost "which preset?" ahead costs Play's tiles
+now is ORDER_CLOSE_MS at the grid read or at the closing question (at
+both only where a second one goes on the line while the grid is read),
+except behind a save's question.
 
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**

@@ -286,20 +286,24 @@ export const WAIT = {
  */
 export const ORDER_QUIET_MS = 400
 /*
- * HOW LONG THE ORDER'S CLOSING "WHICH PRESET?" MAY WAIT FOR ITS TURN, after
- * the grid read (gridOrder). The checks before it let through at most
- * ORDER_QUIET_MS of a missed preset answer's late window, which heldFor
- * waits out; this is that and a little over, so a hold of just that long
- * goes before the deadline and does not race it. What waits longer is a
- * question of the same kind put on the line WHILE the grid read was out
- * (the Presets list beside Play naming a stored slot, Play's own preset
- * read): the grid's answer starts it at once, before the order can look,
- * and with its answer lost the closing question was held behind it and
+ * HOW LONG THE ORDER'S GRID READ AND ITS CLOSING "WHICH PRESET?" MAY WAIT
+ * FOR THEIR TURN (gridOrder), where a question of the closing one's own
+ * kind is on the line or ahead of them (presetAhead), and only then. The
+ * checks before them let through at most ORDER_QUIET_MS of a missed preset
+ * answer's late window, which heldFor waits out; this is that and a little
+ * over, so a hold of just that long goes before the deadline and does not
+ * race it. What waits longer is a question of that kind whose answer is
+ * lost (the Presets list beside Play naming a stored slot, Play's own
+ * preset read): with it ahead, the closing question was held behind it and
  * then for the whole of its late window, and Play's tiles with it, three
- * and a half seconds (an independent read, 16 November 2026). Not sent by
- * then: the usual order this time, no miss, nothing kept, asked again at
- * the next read. A question ahead that is slow but does answer costs the
- * order for that one read.
+ * and a half seconds (an independent read, 16 November 2026), and the grid
+ * read a second and a half for an order the check after it then threw
+ * away (a fifth read). Not sent by then: the usual order this time, no
+ * miss, nothing kept, asked again at the next read once that question's
+ * window has passed. A question ahead that is slow but does answer costs
+ * the order for that one read. The player's own taps ahead are waited
+ * for, with no deadline: given one, a scene whose echo was lost, or four
+ * block taps, lost the order for the visit (the same fifth read).
  */
 export const ORDER_CLOSE_MS = ORDER_QUIET_MS + 50
 /* Reads for Play's order that brought back nothing it could use, in a row, before it is not asked again on this connection. */
@@ -2335,6 +2339,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     )
     return next
   }
+  /*
+   * A "WHICH PRESET?" OF THE CLOSING QUESTION'S OWN KIND ON THE LINE OR
+   * AHEAD OF A READ ASKED NOW (the one out, or one waiting at Play's read
+   * priority or above): Play's own preset read, the watch's, or a stored
+   * slot's name from the Presets list beside Play. With its answer lost it
+   * holds what is behind it a second and a half and then through its late
+   * window, so only then are the order's grid read and its closing question
+   * given ORDER_CLOSE_MS. Anything else ahead is waited for, as it always
+   * was: the player's own taps go ahead of Play's reads, a scene whose echo
+   * is lost holds the line half a second, four block taps as long, and with
+   * a deadline every time either lost the order for the visit, the log
+   * blaming "another question" for a tap (a fifth read, 16 November 2026).
+   */
+  const presetAhead = () => {
+    const fn = buildGetPreset(model)[5]
+    return current?.opts?.fn === fn || waiting.some((j) => j.opts?.fn === fn && j.priority <= PRI.read)
+  }
   /* The ids the order is checked on, in number order: never one that is no block (NOT_BLOCKS: an Axe-Fx III lists its Preset FC, 200, and its Performance page, 201, in every status answer, and neither is on the grid). */
   const orderIds = (ids) => ids.filter((id) => !NOT_BLOCKS.includes(id)).sort((a, b) => a - b)
   function keepOrder(key, order) {
@@ -2406,13 +2427,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
        * November 2026). Only where more of the window is left than the wait
        * the order already takes for a preset just changed (ORDER_QUIET_MS):
        * less than that is waited out, as that is, and the order is not lost
-       * for the rest of the visit over a moment (a second read). And looked
-       * at again after the grid's answer, below: a question on the line now
-       * keeps the grid read waiting behind it, and if it goes unanswered its
-       * window opens just as the grid read leaves. A question put on the line
-       * WHILE the grid read is out is neither check's to see (the grid's
-       * answer starts it before the order looks): the closing question's
-       * deadline (ORDER_CLOSE_MS) is what bounds that one.
+       * for the rest of the visit over a moment (a second read).
+       *
+       * A QUESTION OF THAT KIND ON THE LINE OR AHEAD NOW (presetAhead: the
+       * status answer starts one waiting the moment it lands, before the
+       * order looks) holds this read behind it, a second and a half where
+       * its answer is lost, and the check after the grid's answer then threw
+       * the order away, Play's tiles having waited 1.6 to 3 s for nothing (a
+       * fifth read). So the read is given ORDER_CLOSE_MS then, and not sent
+       * by it is the usual order this time, no miss, nothing kept, asked
+       * again at the next read once that question's window has passed.
+       *
+       * Looked at again after the grid's answer, below, for a window that
+       * opened while this read waited: a save's own "which preset?", asked
+       * at a write's place in the line after the order has looked, is the
+       * one way left to that. A question put on the line WHILE the grid
+       * read is out is neither check's to see (the grid's answer starts it
+       * before the order looks): the closing question's deadline bounds it.
        */
       if (lateFor(buildGetPreset(model)[5]) > ORDER_QUIET_MS) {
         say('a late answer to which preset the unit is on may still come, so the grid is not asked now: the usual order this time')
@@ -2422,9 +2453,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       let got = null
       /* Whether the read left the phone: a connection that goes while it is out is not "not sent". */
       let went = false
+      const gridBy = presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS } : {}
       try {
         got = await orderHand.during([out], () =>
           ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order', {
+            ...gridBy,
             sent: () => {
               went = true
             }
@@ -2433,6 +2466,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       } catch (err) {
         /* Refused at the way out (the order closed to this account before its turn came), the adapter gone, or the connection with it. Nothing the unit did, so no miss. */
         if (went && closed && !err?.refused) say('the connection went while the grid read for the block order was out, before its answer: kept the usual order')
+        else if (err?.late) say('the grid could not be read for the block order in time (a question of which preset the unit is on was ahead of it): the usual order this time')
         else say('the grid read for the block order was not sent: kept the usual order')
         return null
       }
@@ -2474,20 +2508,34 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return null
       }
       /*
-       * WITH A DEADLINE (ORDER_CLOSE_MS): the check above sees only a window
-       * already open. A question of its kind put on the line while the grid
-       * read was out went out the moment the grid answered, and with its
-       * answer lost this one was held behind it and then through its whole
-       * late window (an independent read, 16 November 2026). Not sent in
-       * time: the usual order, no miss, nothing kept, asked at the next read.
+       * WITH A DEADLINE (ORDER_CLOSE_MS) WHERE A QUESTION OF ITS KIND IS
+       * AHEAD (presetAhead): the check above sees only a window already
+       * open. A question of its kind put on the line while the grid read was
+       * out went out the moment the grid answered, and with its answer lost
+       * this one was held behind it and then through its whole late window
+       * (an independent read, 16 November 2026). Not sent in time: the usual
+       * order, no miss, nothing kept, asked at the next read. Nothing else
+       * ahead of it is given up on: the player's own taps go first and are
+       * waited for, as they always were (a fifth read).
        */
       let here = null
+      /* Whether it left the phone: a connection that goes while it waits its turn has asked the unit nothing. */
+      let closingWent = false
       try {
-        here = await ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', { deadline: time.now() + ORDER_CLOSE_MS })
+        here = await ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', {
+          ...(presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS } : {}),
+          sent: () => {
+            closingWent = true
+          }
+        })
       } catch (err) {
-        /* The adapter gone while it was asked: nothing the unit did, and not said as if it were. */
+        /* The adapter gone while it was asked, or before its turn came: nothing the unit did, and not said as if it were. */
         if (closed) {
-          say('the connection went while the unit was asked which preset it is on after the grid read for the block order: kept the usual order')
+          say(
+            closingWent
+              ? 'the connection went while the unit was asked which preset it is on after the grid read for the block order: kept the usual order'
+              : 'the connection went before the unit could be asked which preset it is on after the grid read for the block order: kept the usual order'
+          )
           return null
         }
         if (err?.late) {
