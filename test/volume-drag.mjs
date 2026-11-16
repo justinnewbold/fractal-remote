@@ -198,7 +198,10 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
         track?.props.onLayout({ nativeEvent: { layout: { width: 300 } } })
         await draw({ blocks, open: true })
       },
-      sent: () => H.log.filter((l) => l[0] !== 'read' && l[0] !== 'log'),
+      /* What went to the unit, in order: writes, and the confirmed ones. */
+      sent: () => H.log.filter((l) => l[0] === 'write' || l[0] === 'confirmed'),
+      /* How many times Save was told there is something to save. */
+      told: () => H.log.filter((l) => l[0] === 'edited').length,
       said: () => H.log.filter((l) => l[0] === 'log')
     }
   } finally {
@@ -222,7 +225,8 @@ export function run(test) {
     slider.props.onPanResponderRelease()
     await b.wait(20)
     assert.deepEqual(b.errors, [], 'letting go of the slider said there was nothing to move')
-    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10], ['edited']], 'the value the thumb came off on was not confirmed on the Output block, or Save was not told')
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10]], 'the value the thumb came off on was not confirmed on the Output block')
+    assert.ok(b.told() > 0, 'Save was not told')
     assert.deepEqual(b.said(), [], 'the log says the chain has not been read')
   })
 
@@ -236,7 +240,7 @@ export function run(test) {
     slider.props.onPanResponderRelease()
     await b.wait(20)
     assert.deepEqual(b.errors, [])
-    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10], ['edited']], 'the landing confirmed the level from before the last move')
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10]], 'the landing confirmed the level from before the last move')
 
     /* Taken away (a call coming in, the system's own gesture): the same landing. */
     b.H.log.length = 0
@@ -247,7 +251,7 @@ export function run(test) {
     again.props.onPanResponderTerminate()
     await b.wait(20)
     assert.deepEqual(b.errors, [])
-    assert.deepEqual(b.sent(), [['write', 46, 5], ['confirmed', 46, 5], ['edited']])
+    assert.deepEqual(b.sent(), [['write', 46, 5], ['confirmed', 46, 5]])
   })
 
   test('volume: a draw’s after-work that runs late never puts an older level back over the one the thumb has moved to', async () => {
@@ -268,7 +272,7 @@ export function run(test) {
     slider.props.onPanResponderRelease()
     await b.wait(20)
     assert.deepEqual(b.errors, [])
-    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15], ['edited']], 'the level confirmed is one the thumb had already left')
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15]], 'the level confirmed is one the thumb had already left')
     await b.draw({ blocks: OUTPUT, open: true })
     assert.equal(b.slider().props.accessibilityValue.now, 15)
 
@@ -371,13 +375,14 @@ export function run(test) {
     assert.equal(b.slider()?.props.accessibilityValue.now, 5, 'the new block’s level is not shown: a press on the block before it is still being waited for')
     await b.wait(420)
     await b.draw({ blocks: other, open: true })
-    assert.deepEqual(b.sent(), [['write', 46, 1]], 'the press on the old block was landed on the new one, or lit Save for a change nobody made')
+    assert.deepEqual(b.sent(), [['write', 46, 1]], 'the press on the old block was landed on the new one')
+    assert.equal(b.told(), 1, 'Save was lit for a change nobody made on the new block, or never told of the press')
     assert.deepEqual(b.errors, [])
     /* And the next press steps from what the new block holds. */
     b.button('Volume up').props.onPress()
     await b.draw({ blocks: other, open: true })
     await b.wait(420)
-    assert.deepEqual(b.sent().slice(1), [['write', 47, 6], ['confirmed', 47, 6], ['edited']], 'the next press did not step from the new block’s level')
+    assert.deepEqual(b.sent().slice(1), [['write', 47, 6], ['confirmed', 47, 6]], 'the next press did not step from the new block’s level')
   })
 
   test('volume: another preset under the same Output block is another level: read again, and a press still waiting is not confirmed on it', async () => {
@@ -406,6 +411,8 @@ export function run(test) {
     assert.deepEqual(b.sent(), [['write', 46, 1]], 'a press made on the last preset was confirmed on this one')
     assert.equal(b.unit.level, -6)
     assert.deepEqual(b.errors, [])
+    /* Save was told once, at the press, for the preset it was made on: nothing is told for this one, which nobody changed. */
+    assert.equal(b.told(), 1, 'Save was told of a change on a preset nobody changed, or never told of the press')
     /* The same for another unit with the same preset number and the same block. */
     b.H.rig = { deviceSlug: 'fm9', preset: { number: 13 } }
     b.unit.level = 3
@@ -419,6 +426,49 @@ export function run(test) {
     await b.draw({ blocks: OUTPUT, open: true })
     await b.draw({ blocks: [...OUTPUT], open: true })
     assert.equal(b.H.log.filter((l) => l[0] === 'read').length, reads, 'the level is read again with nothing changed')
+  })
+
+  test('volume: a preset change that did not happen (put up at once, then put back) drops the press’s wait, and Save still knows of the level that went', async () => {
+    /*
+     * The watch's Next puts the new preset number up at once; the unit
+     * refuses it, and the old number is put back. The level is the preset's,
+     * so it is dropped and read again both times, and the press's wait to
+     * be confirmed goes with it. The unit is still on the same preset,
+     * holding the level the press sent: it is on the slider again once
+     * read, and Save was told as it was sent.
+     */
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    b.H.rig = { deviceSlug: 'fm3', preset: { number: 13 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    b.H.rig = { deviceSlug: 'fm3', preset: { number: 12 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [['write', 46, 1]])
+    assert.ok(b.told() > 0, 'the unit holds a level Save has never heard of')
+    assert.equal(b.slider()?.props.accessibilityValue.now, 1, 'the level the unit holds is not on the slider')
+    assert.deepEqual(b.errors, [])
+    /* The same for a unit that stops answering for a moment (no preset number), then is back. */
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    b.H.rig = { deviceSlug: 'fm3', preset: { number: -1 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    b.H.rig = { deviceSlug: 'fm3', preset: { number: 12 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.ok(b.told() > 0)
+    assert.equal(b.slider()?.props.accessibilityValue.now, 2)
   })
 
   test('volume: a chain read again while a drag is still being confirmed leaves the slider working, on the level the unit has', async () => {
@@ -451,7 +501,7 @@ export function run(test) {
     b.button('Volume up').props.onPress()
     await b.draw({ blocks: OUTPUT, open: true })
     await b.wait(420)
-    assert.deepEqual(b.sent(), [['write', 46, -5], ['confirmed', 46, -5], ['edited']], 'a press is dropped after the chain was read again')
+    assert.deepEqual(b.sent(), [['write', 46, -5], ['confirmed', 46, -5]], 'a press is dropped after the chain was read again')
   })
 
   test('volume: a drag still going out when the Output block changes is not confirmed on the block that has gone', async () => {
@@ -471,6 +521,7 @@ export function run(test) {
     await b.wait(250)
     await b.draw({ blocks: other, open: true })
     assert.deepEqual(b.sent(), [['write', 46, 10]], 'the old block’s level was confirmed after its block had gone')
+    assert.ok(b.told() > 0, 'a level that went out was never told to Save: its confirm was dropped, and that was the only place Save heard')
     assert.deepEqual(b.errors, [])
     assert.equal(b.slider()?.props.accessibilityValue.now, 5, 'the new block’s level is not shown')
   })
@@ -489,6 +540,7 @@ export function run(test) {
     slider.props.onPanResponderRelease()
     await b.wait(420)
     assert.deepEqual(b.sent(), [], 'a level was sent with none known to count from')
+    assert.equal(b.told(), 0, 'Save was told of a level that was never sent')
     assert.deepEqual(b.errors, [])
   })
 
@@ -508,7 +560,7 @@ export function run(test) {
     await b.wait(150)
     await b.draw({ blocks: OUTPUT, open: true })
     assert.deepEqual(b.errors, [])
-    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15], ['edited']])
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15]])
     assert.equal(b.unit.level, 15)
     assert.equal(b.slider().props.accessibilityValue.now, 15, 'the slider shows the level the unit held when the open asked, under the one it now has')
     /* And a press steps from it. */
@@ -546,7 +598,7 @@ export function run(test) {
     slider.props.onPanResponderRelease()
     await b.wait(20)
     assert.deepEqual(b.errors, [])
-    assert.deepEqual(b.sent(), [['write', 50, 10], ['confirmed', 50, 10], ['edited']], 'the landing went to the Output block of the unit that was there first')
+    assert.deepEqual(b.sent(), [['write', 50, 10], ['confirmed', 50, 10]], 'the landing went to the Output block of the unit that was there first')
   })
 
   test('volume: a press of + and a turn of the screen reader’s dial are written, confirmed once the presses stop, and say nothing', async () => {
@@ -561,7 +613,7 @@ export function run(test) {
     const sent = b.sent()
     assert.deepEqual(sent[0], ['write', 46, 1], 'a press of + did not go to the unit at once')
     assert.deepEqual(sent.filter((l) => l[0] === 'confirmed'), [['confirmed', 46, 0]], 'the burst was not confirmed once, on the value it ended on')
-    assert.ok(sent.some((l) => l[0] === 'edited'), 'Save was not told')
+    assert.ok(b.told() > 0, 'Save was not told')
   })
 
   test('volume: a level the unit will not hold is said where errors are said NOW, with what it holds, and the slider goes back to it', async () => {

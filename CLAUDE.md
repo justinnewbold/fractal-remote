@@ -3570,6 +3570,13 @@ touched (the second review, the same day), and both are closed:
   under the same id included. What it cannot do: the app hears of a
   footswitch a moment after the unit has stepped, and a press confirmed
   inside that moment has already gone to the new preset.
+- **Save is told as the level is sent**, not only once it is confirmed.
+  The key changes for a preset change that did not happen too: the
+  watch's Next puts the new number up at once and a unit that refuses it
+  puts the old one back, and a unit that stops answering for a moment
+  has no number. The level is dropped and read again each time, and a
+  press's wait goes with it; told only at the confirm, Save never heard
+  of a level the unit was left holding (the fourth read of that day).
 - A drag's landing was not marked as landing at all, so a quick close and
   open while it was still going out showed the level the unit held when
   the open asked, and the landing then said nothing (it only speaks for

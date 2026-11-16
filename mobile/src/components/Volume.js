@@ -283,6 +283,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
         /* Drawn, and kept where the landing reads it: the thumb can come off before the screen has drawn this value. */
         show(rounded)
         writer.current.send(rounded)
+        /* Save is told as the level is sent (see the press, below). */
+        noteEdited()
       },
       onPanResponderRelease: () => {
         setDragging(false)
@@ -408,6 +410,17 @@ export default function Volume({ blocks, open, onClose, onError }) {
     const next = nudged(level.current, p, volumeNudge(p) * direction)
     show(next)
     writer.current.send(next)
+    /*
+     * SAVE IS TOLD AS THE LEVEL IS SENT, not only once it has been confirmed.
+     * It is in the unit's edit buffer from the moment it goes, and the wait
+     * to confirm it can be dropped: by another preset, and also by a preset
+     * change that did not happen. The watch's Next puts the new number up
+     * at once, and a unit that refuses it puts the old one back: the level
+     * here is dropped and read again both times, the press's wait goes with
+     * it, and the unit is left holding a level Save had never heard of.
+     * Told here, it is told for the preset the press was made on.
+     */
+    noteEdited()
     clearTimeout(settle.current.timer)
     settle.current.eid = block
     settle.current.timer = setTimeout(settleNow, NUDGE_SETTLE_MS)

@@ -2140,7 +2140,8 @@ export function run(test) {
      */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
     /* And says which block it was a press on, so the read of another block is never held back for it (test/volume-drag.mjs runs a press, then a preset whose Output is another block). */
-    assert.match(vol, /writer\.current\.send\(next\) clearTimeout\(settle\.current\.timer\) settle\.current\.eid = block settle\.current\.timer = setTimeout\(settleNow, NUDGE_SETTLE_MS\)/, 'a press still checks itself on its own')
+    assert.match(vol, /noteEdited\(\) clearTimeout\(settle\.current\.timer\) settle\.current\.eid = block settle\.current\.timer = setTimeout\(settleNow, NUDGE_SETTLE_MS\)/, 'a press still checks itself on its own')
+    assert.match(vol, /show\(next\) writer\.current\.send\(next\)/, 'a press no longer goes to the unit at once')
     assert.match(vol, /if \(settle\.current\.landing\) \{ settle\.current\.again = true return \}/, 'two checks can run at once')
     assert.match(vol, /if \(level\.current !== v\) return if \(!res\.ok\)/, 'a check against a value nobody wants any more can still say didn’t take')
     assert.ok(!/const nudge = async/.test(vol), 'a press waits on its own read-back')
