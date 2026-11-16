@@ -12170,7 +12170,7 @@ export function run(test) {
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ playing: false, done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
-    assert.match(card, /line: tries === 0 \? `In slot \$\{said\} as “\$\{got\.name\}”: the unit kept the last send after all\.` : got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{tries > 1 \? `, on try \$\{tries\}` : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
+    assert.match(card, /line: tries === 0 \? `In slot \$\{said\} as “\$\{got\.name\}”: the unit kept it from an earlier send after all\.` : got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{tries > 1 \? `, on try \$\{tries\}` : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
@@ -12577,8 +12577,8 @@ export function run(test) {
      * unit whose empty slot is searched for as the wire searches, with each
      * capture known by TONE3000's id as the page knows it.
      */
-    const { captureToSlot, heldElse, slotSpent, wroteNothing } = await import('../mobile/src/lib/captureSend.js')
-    const { notKept, notKeptIn, forgetNotKept, place: placeIt, placedNow, slotTried } = await import('../mobile/src/lib/capturePlaced.js')
+    const { captureToSlot, heldElse, slotSpent } = await import('../mobile/src/lib/captureSend.js')
+    const { notKept, notKeptIn, forgetNotKept, place: placeIt, placedNow, claimSlot } = await import('../mobile/src/lib/capturePlaced.js')
     const tap = (b, id, name, more = {}) =>
       captureToSlot({
         id,
@@ -12592,7 +12592,10 @@ export function run(test) {
             slot,
             replace: Number.isInteger(more.again),
             sentBefore,
-            install: (to, words, how) => b.asks(`/nam/slots/${to}`, { method: 'POST', body: { words, replace: how.replace } }),
+            install: (to, words, how) => {
+              more.before?.(how)
+              return b.asks(`/nam/slots/${to}`, { method: 'POST', body: { words, replace: how.replace } })
+            },
             log: (l) => b.logs.push(l)
           })
           /* `lose`: the unit filed it, and the answer never came back (through the computer, its request timed out while the computer went on). */
@@ -12614,8 +12617,8 @@ export function run(test) {
     assert.deepEqual([lateNext.slot, lateNext.went.ok, lateNext.went.got.name, lateNext.went.tries, lateNext.went.late], [3, true, 'Short One', 0, true], 'a capture the unit filed late was not found in its slot')
     assert.deepEqual(uploads(filedLate), [3], 'a second copy was sent to a unit that had kept the first')
     assert.deepEqual([notKeptIn('late-a'), placedNow()['late-a']], [null, { slot: 3, sure: true }])
-    assert.ok(filedLate.logs.includes('tap: sent to slot 004 again, where it was taken and not kept last time'), filedLate.logs.join(' | '))
-    assert.ok(filedLate.logs.some((l) => /^KEPT after all: the slot holds it, from an earlier send of it, which the unit filed after the slot had twice read <EMPTY>\. Nothing was sent$/.test(l)), filedLate.logs.join(' | '))
+    assert.ok(filedLate.logs.includes('tap: sent to slot 004 again, where an earlier send of it went and was not seen kept'), filedLate.logs.join(' | '))
+    assert.ok(filedLate.logs.some((l) => /^KEPT after all: the slot holds it, from an earlier send of it into this slot \(the unit filed it after the slot read <EMPTY>, or that send’s answer never came back\)\. Nothing was sent$/.test(l)), filedLate.logs.join(' | '))
     /* Not told the slot is its own, the same refusal is a refusal: a slot that holds the name from somewhere else is not claimed. */
     await assert.rejects(filedLate.send('Short One'), (e) => e.status === 409)
 
@@ -12642,12 +12645,11 @@ export function run(test) {
     const lostAgain = await tap(lostTwins, 'lost-a', 'Same Name', { from: 5 })
     assert.deepEqual([lostAgain.slot, lostAgain.went.late, lostAgain.went.tries], [4, false, 1], 'a capture was said to be on the unit in a slot another holds')
     assert.equal(placedNow()['lost-b'], undefined, 'a send whose answer was lost was said to be on the unit')
-    /* And one whose send into that slot wrote nothing (its slot never answered): the first's memory of it stands, and the unit filing the first late is found there. */
+    /* And when that slot is found empty for the other capture, what the first remembered of it ends right there, whatever the other's send comes to: here its slot never answers and nothing is written, and the first goes back into the same empty slot by the search. */
     const quietTwins = await bench()
-    quietTwins.u.lateSlot = 3
-    /* Filed late: empty at the send's two looks and at the other capture's search, then as it is. */
-    quietTwins.u.lateLooks = 3
+    quietTwins.u.keepsNothing = true
     await tap(quietTwins, 'qt-a', 'Same Name', { from: 5 })
+    quietTwins.u.keepsNothing = false
     assert.equal(notKeptIn('qt-a'), 3)
     const qtB = await tap(quietTwins, 'qt-b', 'Same Name', {
       from: 9,
@@ -12657,10 +12659,46 @@ export function run(test) {
       }
     }).then(() => null, (e) => e)
     assert.deepEqual([qtB?.status, qtB?.slot, /Nothing was sent\.$/.test(qtB?.message || '')], [504, 3, true], qtB?.message)
-    assert.equal(notKeptIn('qt-a'), 3, 'a send into the slot that wrote nothing forgot what another capture remembered of it')
+    assert.deepEqual([notKeptIn('qt-a'), notKeptIn('qt-b')], [null, null], 'a slot found empty for another capture is still remembered for the one before it')
     quietTwins.t.clock.set(quietTwins.t.clock.now() + 10000)
     const qtAgain = await tap(quietTwins, 'qt-a', 'Same Name', { from: 5 })
-    assert.deepEqual([qtAgain.slot, qtAgain.went.late, qtAgain.went.tries, uploads(quietTwins)], [3, true, 0, [3]])
+    assert.deepEqual([qtAgain.slot, qtAgain.went.late, qtAgain.went.tries, qtAgain.went.got.name, uploads(quietTwins)], [3, false, 1, 'Same Name', [3, 3]])
+    /* And through a SECOND send: the other capture's remembered slot filled from outside, refused there, and the empty one found for it is the slot the first remembers, its answer then lost while the unit filed it. */
+    const lostMoved = await bench()
+    lostMoved.u.keepsNothing = true
+    await tap(lostMoved, 'lm-b', 'Same Name', { from: 9 })
+    lostMoved.u.held.set(3, headBytes('Their Own'))
+    await tap(lostMoved, 'lm-a', 'Same Name', { from: 5 })
+    assert.deepEqual([notKeptIn('lm-b'), notKeptIn('lm-a')], [3, 4])
+    lostMoved.u.keepsNothing = false
+    const lmB = await tap(lostMoved, 'lm-b', 'Same Name', { from: 9, lose: true }).then(() => null, (e) => e)
+    assert.deepEqual([lmB?.message, uploads(lostMoved)], ['Your computer didn’t answer.', [3, 4, 4]], 'the other capture did not go into the slot remembered')
+    assert.equal(notKeptIn('lm-a'), null, 'a slot found empty for another capture on its second send is still remembered for the one before it')
+    const lmAgain = await tap(lostMoved, 'lm-a', 'Same Name', { from: 5 })
+    assert.deepEqual([lmAgain.slot, lmAgain.went.late], [5, false], 'a capture was said to be on the unit in a slot another holds')
+    /* And a try that went whole and read empty, then the next try of the same send failed without stopping part-way: that slot is remembered for it, the other capture's memory of it ended, and the unit filing the first try late is found there. */
+    const twoWays = await bench()
+    twoWays.u.keepsNothing = true
+    await tap(twoWays, 'tw-a', 'Same Name', { from: 5 })
+    twoWays.u.keepsNothing = false
+    twoWays.u.lateSlot = 3
+    twoWays.u.lateLooks = 2
+    const twB = await tap(twoWays, 'tw-b', 'Same Name', {
+      from: 9,
+      hash: true,
+      before: (how) => {
+        if (!how.second) return
+        twoWays.u.quietSlot = 3
+        twoWays.u.quietSlotTimes = 3
+      }
+    }).then(() => null, (e) => e)
+    assert.deepEqual([twB?.status, twB?.tries, twB?.way, uploads(twoWays)], [504, 1, 1, [3, 3]], twB?.message)
+    assert.deepEqual([notKeptIn('tw-a'), notKeptIn('tw-b')], [null, 3], 'a slot a whole try went into is not remembered, or another capture still is')
+    twoWays.t.clock.set(twoWays.t.clock.now() + 10000)
+    const twAgain = await tap(twoWays, 'tw-b', 'Same Name', { from: 9, hash: true })
+    assert.deepEqual([twAgain.slot, twAgain.went.late, twAgain.went.tries, uploads(twoWays)], [3, true, 0, [3, 3]])
+    const twA = await tap(twoWays, 'tw-a', 'Same Name', { from: 5 })
+    assert.deepEqual([twA.slot, twA.went.late], [4, false])
 
     /* Not kept, and the slot then filled where the app never hears of it (on the unit, or Axe-Edit): refused there, so an empty one is looked for in the same tap. The player never picked that slot. */
     const outside = await bench()
@@ -12716,23 +12754,24 @@ export function run(test) {
     /* What a failure is: refused for something else, or for this capture, over the wire and in the computer's words; stopped part-way; or nothing written. */
     const no = (status, message, more = {}) => Object.assign(new Error(message), { status, ...more })
     const failures = [
-      [no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' }), true, true, true],
-      [no(409, 'Capture slot 004 already holds “Mine”. Nothing was sent.', { holds: 'Mine  ' }), false, true, true],
-      [no(409, 'capture slot 004 already holds "Other"; nothing was sent'), true, true, true],
-      [no(409, 'capture slot 004 already holds "Mine"; nothing was sent'), false, true, true],
-      [no(409, 'A capture is being sent to the unit. Try again when it has finished.'), false, false, true],
-      [no(504, 'The Axe-Fx III didn’t say what is in capture slot 004, asked 3 times. Nothing was sent.', { slot: 3, asked: 3 }), false, false, true],
-      [no(502, 'The Axe-Fx III refused the start of the transfer (busy). Nothing was sent.'), false, false, true],
-      [no(503, 'The connection was lost. That was after 0 of 130 messages. Nothing was kept.', { partial: false, slot: 3 }), false, false, true],
-      [no(504, 'the unit stopped answering after 0 of 130 messages. Nothing was kept.'), false, false, true],
-      [no(504, 'The Axe-Fx III stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now: send it again to the same slot.', { partial: true, slot: 3 }), false, true, false],
-      [no(504, 'the unit stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now.'), false, true, false],
-      [no(504, 'Holds “Other”', { holds: 'Other' }), false, false, false],
-      [no(503, 'The connection was lost.', { partial: true, slot: 3 }), false, true, false],
-      [no(503, 'The connection was lost.', { partial: false, slot: 3 }), false, false, true],
-      [Object.assign(new Error('Your computer didn’t answer.')), false, false, false]
+      [no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' }), true, true],
+      [no(409, 'Capture slot 004 already holds “Mine”. Nothing was sent.', { holds: 'Mine  ' }), false, true],
+      [no(409, 'capture slot 004 already holds "Other"; nothing was sent'), true, true],
+      [no(409, 'capture slot 004 already holds "Mine"; nothing was sent'), false, true],
+      [no(409, 'A capture is being sent to the unit. Try again when it has finished.'), false, false],
+      [no(504, 'The Axe-Fx III didn’t say what is in capture slot 004, asked 3 times. Nothing was sent.', { slot: 3, asked: 3 }), false, false],
+      [no(502, 'The Axe-Fx III refused the start of the transfer (busy). Nothing was sent.'), false, false],
+      [no(503, 'The connection was lost. That was after 0 of 130 messages. Nothing was kept.', { partial: false, slot: 3 }), false, false],
+      [no(504, 'the unit stopped answering after 0 of 130 messages. Nothing was kept.'), false, false],
+      [no(504, 'The Axe-Fx III stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now: send it again to the same slot.', { partial: true, slot: 3 }), false, true],
+      [no(504, 'the unit stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now.'), false, true],
+      [no(504, 'Holds “Other”', { holds: 'Other' }), false, false],
+      [no(503, 'The connection was lost.', { partial: true, slot: 3 }), false, true],
+      [no(503, 'The connection was lost.', { partial: false, slot: 3 }), false, false],
+      [Object.assign(new Error('Your computer didn’t answer.')), false, false],
+      [no(409, 'An AM4 answered, not the Axe-Fx III. That was after 40 of 130 messages. Slot 004 may hold part of a capture now: send it again to the same slot.', { partial: true, slot: 3 }), false, true]
     ]
-    assert.deepEqual(failures.map(([err]) => [heldElse(err, 'Mine'), slotSpent(err), wroteNothing(err)]), failures.map(([, a, b, c]) => [a, b, c]))
+    assert.deepEqual(failures.map(([err]) => [heldElse(err, 'Mine'), slotSpent(err)]), failures.map(([, a, b]) => [a, b]))
 
     /* The tap's own steps, with a page that answers as told: the remembered slot first and told so, then an empty one, not told; a half-sent slot never told; a send that sent no capture forgets it. */
     {
@@ -12771,6 +12810,10 @@ export function run(test) {
       notKept('steps-e', 3)
       const full = await captureToSlot({ id: 'steps-e', name: 'Mine', find: async () => null, send: async () => Promise.reject(no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' })) })
       assert.deepEqual([full, notKeptIn('steps-e')], [{ slot: null, went: null }, null])
+      /* A half-sent slot sent over is this capture's too: another's memory of it ends, whatever the send comes to. */
+      notKept('steps-x', 5)
+      await assert.rejects(captureToSlot({ id: 'steps-y', name: 'Mine', again: 5, find: async () => 9, send: async () => Promise.reject(new Error('Your computer didn’t answer.')) }), /didn’t answer/)
+      assert.equal(notKeptIn('steps-x'), null, 'a slot sent over for another capture is still remembered for this one')
       /* No empty slot (or the page gone): nothing sent, nothing placed. */
       calls.length = 0
       const none = await captureToSlot({ id: 'steps-d', name: 'Mine', find: async () => null, send: async (slot) => calls.push(slot) })
@@ -12784,10 +12827,10 @@ export function run(test) {
     notKept('m-8', 10)
     notKept('m-9', 11)
     assert.equal(notKeptIn('m-8'), 10, 'a capture not kept in another slot took this one’s')
-    slotTried(10, 'm-8')
-    assert.equal(notKeptIn('m-8'), 10, 'a capture’s own failed send forgot what it remembered of the slot')
-    slotTried(10, 'm-9')
-    assert.deepEqual([notKeptIn('m-8'), notKeptIn('m-9')], [null, 11], 'another capture’s send into the slot that may have landed left it remembered')
+    claimSlot(10, 'm-8')
+    assert.equal(notKeptIn('m-8'), 10, 'a capture’s own claim on its slot forgot what it remembered of it')
+    claimSlot(10, 'm-9')
+    assert.deepEqual([notKeptIn('m-8'), notKeptIn('m-9')], [null, 11], 'a slot found empty for another capture is still remembered for this one')
     notKept('m-3', 7)
     placeIt('m-4', 8, false)
     assert.equal(notKeptIn('m-3'), 7, 'a capture placed in another slot took this one’s')

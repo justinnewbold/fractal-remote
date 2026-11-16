@@ -57,7 +57,7 @@
  * needs. Nothing here knows a wire from a computer.
  */
 import { NAM_EMPTY, namRecord, namSlotSaid } from './nam-install.js'
-import { forgetNotKept, notKept, notKeptIn, place, slotTried } from './capturePlaced.js'
+import { claimSlot, forgetNotKept, notKept, notKeptIn, place } from './capturePlaced.js'
 
 /** The ways a capture is sent, in the order they are tried: 0x60 in the name's 32nd place each time (namRecord packs nothing else), with the file's hash and then without. `said` is for the log. */
 export const CAPTURE_WAYS = Object.freeze([
@@ -118,12 +118,6 @@ export function slotSpent(err) {
   return err?.status === 409 && (typeof err.holds === 'string' || /already holds/i.test(words))
 }
 
-/** Whether a failed send says it put nothing in its slot: refused, the start refused or unanswered, the slot never answered, or the line gone before the first message. Anything else may have (stopped part-way, or an answer lost while the computer went on). */
-export function wroteNothing(err) {
-  if (err?.status === 409 || err?.partial === false) return true
-  return /nothing was (sent|kept)/i.test(typeof err?.message === 'string' ? err.message : '')
-}
-
 /**
  * One tap's send of one capture: the slot, the send, and what the app
  * remembers after it (lib/capturePlaced). The slot is `again` (where a send
@@ -133,12 +127,14 @@ export function wroteNothing(err) {
  * the remembered slot is forgotten and an empty one is looked for, in the
  * same tap.
  *
- * Where the unit keeps it, it is placed; where it took it and did not keep
- * it, the slot is remembered; a failure forgets the slot only where
- * `slotSpent` says so, and a send that may have put something in its slot
- * (not `wroteNothing`) ends what any OTHER capture remembered of it. ALL OF
- * IT BEFORE ANYTHING ASKS WHETHER THE PAGE IS STILL UP: a send goes on after
- * the page it started on is left.
+ * A slot the search found empty, or a half-sent one sent over, is this
+ * capture's from then on: what any other capture remembered of it ends
+ * (lib/capturePlaced `claimSlot`), whatever the send comes to. Where the
+ * unit keeps it, it is placed; where it took it and did not keep it, the
+ * slot is remembered, and so it is where a later try failed after one that
+ * went whole (`err.tries`); a failure forgets the slot only where
+ * `slotSpent` says so. ALL OF IT BEFORE ANYTHING ASKS WHETHER THE PAGE IS
+ * STILL UP: a send goes on after the page it started on is left.
  *
  * @param {object} c
  * @param {string|number} c.id      TONE3000's id for the capture
@@ -153,32 +149,30 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
   const over = Number.isInteger(again)
   const before = over ? null : notKeptIn(id)
   let slot = over ? again : before
-  /* A send into a slot that failed and may have put something there: what another capture remembered of that slot is no use now. */
-  const sendTo = async (to, sentBefore) => {
-    try {
-      return await send(to, sentBefore)
-    } catch (err) {
-      if (!wroteNothing(err)) slotTried(to, id)
-      throw err
-    }
+  /* An empty slot: read empty just now, so nothing another capture's earlier send left is in it, and it is this one's. */
+  const look = async () => {
+    const found = await find()
+    if (Number.isInteger(found)) claimSlot(found, id)
+    return found
   }
   try {
-    if (before !== null) log(`sent to slot ${namSlotSaid(before)} again, where it was taken and not kept last time`)
+    if (over) claimSlot(again, id)
+    if (before !== null) log(`sent to slot ${namSlotSaid(before)} again, where an earlier send of it went and was not seen kept`)
     if (slot === null) {
-      slot = await find()
+      slot = await look()
       if (!Number.isInteger(slot)) return { slot: null, went: null }
     }
     let went
     try {
-      went = await sendTo(slot, before !== null)
+      went = await send(slot, before !== null)
     } catch (err) {
       if (before === null || !heldElse(err, name)) throw err
       /* Not its slot any more: something else went in since. Nothing was sent, and the player never picked that slot, so an empty one is looked for now. */
       forgetNotKept(id)
       log(`slot ${namSlotSaid(before)} holds another capture now (${err?.message || 'refused'}); looking for an empty slot`)
-      slot = await find()
+      slot = await look()
       if (!Number.isInteger(slot)) return { slot: null, went: null }
-      went = await sendTo(slot, false)
+      went = await send(slot, false)
     }
     if (went?.ok && went.got?.name === NAM_EMPTY) notKept(id, slot)
     else {
@@ -188,6 +182,8 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
     return { slot, went }
   } catch (err) {
     if (slotSpent(err)) forgetNotKept(id)
+    /* A try went whole and the slot read empty after it, then the next try failed without stopping part-way: that slot is where the unit may file it yet, as for one not kept. */
+    else if (err?.tries > 0 && Number.isInteger(slot)) notKept(id, slot)
     throw err
   }
 }
@@ -257,7 +253,7 @@ export async function sendCapture({ text, named, slot, replace = false, sentBefo
       if (tries === 0 && sentBefore === true && heldAlready(err, plain.name)) {
         late = true
         got = { slot, name: plain.name, replaced: null, seconds: 0 }
-        log(`KEPT after all: the slot holds it, from an earlier send of it, which the unit filed after the slot had twice read ${NAM_EMPTY}. Nothing was sent`)
+        log(`KEPT after all: the slot holds it, from an earlier send of it into this slot (the unit filed it after the slot read ${NAM_EMPTY}, or that send’s answer never came back). Nothing was sent`)
         break
       }
       if (tries > 0 && heldAlready(err, plain.name)) {
@@ -266,7 +262,11 @@ export async function sendCapture({ text, named, slot, replace = false, sentBefo
         log(`KEPT, way ${way + 1} (${CAPTURE_WAYS[way].said}): the unit filed it after the slot had twice read ${NAM_EMPTY}, and the next try found it there. Nothing more was sent`)
         break
       }
-      if (err && typeof err === 'object') err.way = i
+      if (err && typeof err === 'object') {
+        err.way = i
+        /* How many tries went whole before this one: the slot read empty after each (lib/captureSend captureToSlot remembers it). */
+        if (tries > 0) err.tries = tries
+      }
       throw err
     }
     tries++

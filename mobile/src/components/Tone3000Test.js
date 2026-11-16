@@ -635,7 +635,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         return
       }
       /* A slot that never said what it holds (asked twice) is not said to hold the capture: the send went, and pointing NAM 1 at it is what finds out. */
-      setSend({ id: m.id, slot, done: true, line: tries === 0 ? `In slot ${said} as “${got.name}”: the unit kept the last send after all.` : got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${tries > 1 ? `, on try ${tries}` : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
+      setSend({ id: m.id, slot, done: true, line: tries === 0 ? `In slot ${said} as “${got.name}”: the unit kept it from an earlier send after all.` : got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${tries > 1 ? `, on try ${tries}` : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
       /* It is on the unit, by the unit's own word: felt as well as seen. */
       if (got.name) thud()
       /* Get stops here: it is on the unit, and what is playing is left alone. */
