@@ -261,8 +261,31 @@ export const WAIT = {
    */
   gridLive: 2500,
   gridDumpGap: 2500,
-  gridDumpAll: 90000
+  gridDumpAll: 90000,
+  /*
+   * The same live read asked for Play's order (gridOrder), inside Play's
+   * own read of the blocks. Six times the quarter second its 754 bytes take
+   * at the jack's speed, and the status read's own wait: a unit that says
+   * nothing holds a tap no longer than an unanswered status read does, and
+   * only twice a connection.
+   */
+  gridOrder: 1500
 }
+
+/*
+ * THE GRID IS NOT ASKED FOR PLAY'S ORDER WHILE A PRESET IS STILL ARRIVING:
+ * within this long of the last preset change this wire counted (a select,
+ * a Program Change heard, a preset the unit said it is on). Play's read of
+ * the blocks comes well after it (OWN_SETTLE_MS from a select of its own,
+ * PRESET_SETTLE_MS from news of one), and a rig that sends Program Changes
+ * back sends its burst within a tenth of a second; a read asked inside it
+ * is drawn in the usual order and the next one asks.
+ */
+export const ORDER_QUIET_MS = 400
+/* Reads for Play's order that brought back nothing it could use, in a row, before it is not asked again on this connection. */
+export const ORDER_MISSES_MOST = 2
+/* Orders kept on one connection, the oldest let go first. */
+const ORDERS_KEPT_MOST = 256
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
 export const ECHO_MS = 250
@@ -633,8 +656,9 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; his account's alone: lib/bluetooth), asked at every request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
+ * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; his account until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -693,6 +717,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const chainOn = () => editOn() && typeof chain === 'function' && chain() === true
   const chainHand = gridHand()
+  /*
+   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (gridOrder): open to this account
+   * or not (`blockOrder`, lib/bluetooth: his account until lib/features
+   * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every
+   * send. Only an FM3, FM9 or Axe-Fx III ever asks it: an AM4's blocks are
+   * its own read (am4Blocks), its four slots in their order already, and a
+   * VP4 has a wire of its own. Not behind Edit's door: it is Play's order.
+   * `orderHand` holds the grid's live read and nothing else, for exactly as
+   * long as that read is being asked: the way out lets that one frame
+   * through, byte for byte, beside whatever the chain has in hand
+   * (`orderOr`). The grid's writes and the preset whole stay the chain's
+   * alone.
+   */
+  const orderOn = () => typeof blockOrder === 'function' && blockOrder() === true
+  const orderHand = gridHand()
+  const orderOr = (chained) => () => {
+    const held = chained()
+    const ordering = orderOn() ? orderHand.now() : null
+    if (!ordering) return held
+    return held ? [...held, ...ordering] : ordering
+  }
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
@@ -729,7 +774,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), () => (chainOn() ? chainHand.now() : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -793,6 +838,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* Scene and preset changes on this connection, and how many of them Play has read the blocks after. */
   let moves = 0
   let movedAt = -Infinity
+  /*
+   * And the preset changes among them, and when the last was counted: the
+   * grid read for Play's order (gridOrder) is not believed across one, nor
+   * asked straight after one. A scene change moves nothing on the grid.
+   */
+  let presetMoves = 0
+  let presetAt = -Infinity
+  function presetMoved() {
+    presetMoves += 1
+    presetAt = time.now()
+  }
   let reread = 0
   let editTimer = null
   function moved() {
@@ -1858,6 +1914,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       structure = null
       editPlaced = null
       moved()
+      presetMoved()
       emit({ type: 'changed', scope: 'preset' })
     }
   }
@@ -1877,7 +1934,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const changed = last.preset !== null && p.number !== last.preset
     if (p.number !== last.preset) {
       sceneCache = null
-      if (last.preset !== null) moved()
+      if (last.preset !== null) {
+        moved()
+        presetMoved()
+      }
       /* A new preset whose name is not known yet has no name, not the last one's. */
       last.name = ''
     }
@@ -2152,13 +2212,166 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Blocks() {
+    /* The count of preset changes before the status read: the grid read for the order is believed only if it is still this when that read ends (gridOrder). */
+    const at = presetMoves
     const list = await statusNow()
     if (rejected(list)) throw refusedBy(list.rejected)
     if (!Array.isArray(list)) throw timedOut()
     /* outlineChain names by effect id and wants the channel as a letter. */
     const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
     sayStrangers(states)
-    return (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+    const order = await gridOrder(list, shown, at)
+    return order ? inGridOrder(shown, order) : shown
+  }
+
+  /*
+   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (orderOn: his account, until
+   * lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE).
+   *
+   * "The order of the Effects doesn't correspond to the real order of the
+   * FM9" (a customer, an FM9 through a WIDI Master). The status read above
+   * comes in effect-id order and carries no positions, so Play and Edit
+   * draw outlineChain's guess. Through the computer the order is the
+   * grid's, column by column, top row first (ForgeFX placedBlocks over the
+   * codec's walk), and the phone keeps it.
+   *
+   * So, where it is open, the grid's live read (lib/gen3-grid, 01 2E 00:
+   * one answer of about 750 bytes) is asked ONCE for each preset and block
+   * list on a connection, after the status read, as Play's own read, and
+   * its cells taken in the order parseGridLive walks them, which is that
+   * same walk. It ORDERS the list and nothing else: no row or column is
+   * handed on, so no other screen sees a thing it did not see before.
+   *
+   * BELIEVED ONLY WHERE IT AGREES. Its blocks have to be exactly the ones
+   * the status read listed (the ids that are no block, NOT_BLOCKS, left out
+   * of both; a shunt, a bare wire, is no block of the grid's), and no
+   * preset change may have come between the status read and its answer. Anything else is the usual
+   * order, with a line in the log saying why: no answer, a refusal, an
+   * answer this app cannot read, other blocks, a preset change. A preset
+   * still arriving is not asked at all (ORDER_QUIET_MS).
+   *
+   * REMEMBERED for the connection by preset and block list (`orderKept`), a
+   * disagreement too, so a preset seen again asks nothing, and a scene
+   * change never asks (Play reads only the status then). After
+   * ORDER_MISSES_MOST reads in a row brought back nothing it could use, it
+   * is not asked again on this connection.
+   *
+   * NOT PROVEN ON A UNIT: no FM3, FM9 or Axe-Fx III has answered this read
+   * down its MIDI jack through an adapter (the answers on record came over
+   * USB to a computer), and an Axe-Fx III's answer has never been seen; the
+   * phone reads it as an FM9's. The check against the status read is what
+   * keeps a wrong reading off the screen.
+   */
+  const orderKept = new Map()
+  let orderMisses = 0
+  let orderGaveUp = false
+  let orderNoPresetSaid = false
+  let orderAnswerSaid = false
+  let orderLane = Promise.resolve()
+  const inOrderLane = (run) => {
+    const next = orderLane.then(run, run)
+    orderLane = next.then(
+      () => {},
+      () => {}
+    )
+    return next
+  }
+  /* The ids the order is checked on, in number order: never one that is no block (NOT_BLOCKS: an Axe-Fx III lists its Preset FC, 200, and its Performance page, 201, in every status answer, and neither is on the grid). */
+  const orderIds = (ids) => ids.filter((id) => !NOT_BLOCKS.includes(id)).sort((a, b) => a - b)
+  function keepOrder(key, order) {
+    orderKept.delete(key)
+    orderKept.set(key, order)
+    while (orderKept.size > ORDERS_KEPT_MOST) orderKept.delete(orderKept.keys().next().value)
+  }
+  /* The list Play draws, put in the grid's order; anything the grid did not place keeps its place after the rest. */
+  function inGridOrder(shown, order) {
+    const rank = new Map(order.map((id, i) => [id, i]))
+    const of = (b) => (rank.has(b.effectId) ? rank.get(b.effectId) : order.length)
+    return [...shown].sort((a, b) => of(a) - of(b))
+  }
+  function orderMissed(why) {
+    orderMisses += 1
+    say(`${why}: kept the usual order`)
+    if (orderMisses >= ORDER_MISSES_MOST && !orderGaveUp) {
+      orderGaveUp = true
+      say(`the grid is not asked for the block order again on this connection: ${ORDER_MISSES_MOST} reads in a row brought back nothing it could use`)
+    }
+  }
+
+  /** The effect ids in the unit's own order for this preset's blocks, or null for the usual order. Never throws. */
+  async function gridOrder(list, shown, at) {
+    if (!orderOn() || shown.length < 2) return null
+    if (!Number.isInteger(last.preset)) {
+      if (!orderNoPresetSaid) {
+        orderNoPresetSaid = true
+        say('the block order: the unit has not said which preset it is on, so the grid is not asked and the usual order is kept')
+      }
+      return null
+    }
+    const ids = orderIds(list.map((b) => b.effectId))
+    const key = `${last.preset}|${ids.join(',')}`
+    if (orderKept.has(key) && presetMoves === at) return orderKept.get(key)
+    return inOrderLane(async () => {
+      if (presetMoves !== at) {
+        say('the preset changed while its blocks were being read: kept the usual order')
+        return null
+      }
+      if (orderKept.has(key)) return orderKept.get(key)
+      if (orderGaveUp) return null
+      if (time.now() - presetAt < ORDER_QUIET_MS) {
+        say('the grid is not asked for the block order while a preset is still arriving: the usual order this time')
+        return null
+      }
+      const out = buildGridRead(model)
+      let got = null
+      try {
+        got = await orderHand.during([out], () =>
+          ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order')
+        )
+      } catch {
+        /* Not sent: refused at the way out (the order closed to this account before its turn came), or the adapter gone. Nothing the unit did, so no miss. */
+        say('the grid read for the block order was not sent: kept the usual order')
+        return null
+      }
+      if (rejected(got)) {
+        orderMissed('the unit refused the grid read for the block order')
+        return null
+      }
+      if (!got || !got.frame) {
+        orderMissed('the grid read for the block order came back with nothing')
+        return null
+      }
+      /* Its answer as it came, once a connection: what settles its layout on a unit nobody has read it from (an Axe-Fx III's never has been). */
+      if (!orderAnswerSaid) {
+        orderAnswerSaid = true
+        say(`the grid’s answer for the block order, as it came: ${toHex(got.frame)}`)
+      }
+      if (presetMoves !== at) {
+        say('the preset changed while the grid was read for the block order: kept the usual order')
+        return null
+      }
+      const live = parseGridLive(got.frame, model)
+      if (!live) {
+        orderMissed('the grid’s answer for the block order is not one this app can read')
+        return null
+      }
+      orderMisses = 0
+      /* Its blocks, in the order it walks them, which is the computer's: column by column, top row first. A shunt (a bare wire) is no block. */
+      const cells = live.cells.filter((c) => c.effectId !== undefined)
+      const onGrid = orderIds(cells.map((c) => c.effectId))
+      if (onGrid.join(',') !== ids.join(',')) {
+        const gridOnly = onGrid.filter((id) => !ids.includes(id))
+        const statusOnly = ids.filter((id) => !onGrid.includes(id))
+        say(`the grid’s blocks don’t match the status read: kept the usual order (preset ${last.preset}; only on the grid: ${gridOnly.join(', ') || 'none'}; only in the status read: ${statusOnly.join(', ') || 'none'})`)
+        keepOrder(key, null)
+        return null
+      }
+      const order = cells.map((c) => c.effectId)
+      say(`block order from the unit’s grid, preset ${last.preset}: ${cells.map((c) => `${blockNamed(c.effectId)} r${c.row + 1}c${c.col + 1}`).join(', ')}`)
+      keepOrder(key, order)
+      return order
+    })
   }
 
   /*
@@ -2551,6 +2764,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* Another preset's blocks: nothing of Edit's goes until the unit has listed them. */
     editPlaced = null
     moved()
+    presetMoved()
     await changePreset(n)
     notePreset({ number: n }, false)
     emit({ type: 'changed', scope: 'preset' })
@@ -3399,6 +3613,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   function chainChanged() {
     gridKept = null
     statusKept = null
+    /* A block moved on the grid keeps its preset's block list: Play's order is read again. */
+    orderKept.clear()
     forgetEdits()
     if (am4) structure = null
     emit({ type: 'changed', scope: 'grid' })

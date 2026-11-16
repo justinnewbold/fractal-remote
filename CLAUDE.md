@@ -1801,6 +1801,46 @@ where the chain is open).
   has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
   read it needs exists now.
 
+**Play's and Edit's blocks in the unit's own order over Bluetooth: built
+16 November 2026, HIS ACCOUNT ONLY.** A customer (an FM9 through a WIDI
+Master, an iPhone): "the order of the Effects doesn't correspond to the
+real order of the FM9". Over Bluetooth or the unit's USB cable the one
+block read is the status read, in effect-id order with no positions, and
+Play and Edit drew outlineChain's usual-order guess; through the computer
+they come column by column off the grid. Now, on an FM3, FM9 or Axe-Fx
+III, after Play's status read the wire asks the grid's live read (01 2E
+00) ONCE per preset and block list on a connection, and uses it to ORDER
+the list and nothing else (bleWire `gridOrder`): column by column, top row
+first, the computer's walk. No row or column is handed on, so no other
+screen sees anything new. It is believed only where its blocks are
+exactly the status read's (NOT_BLOCKS left out of both: a III lists 200
+and 201 in every status answer) and no preset changed between the two
+reads; it is not asked within `ORDER_QUIET_MS` of a preset change (a rig
+that sends Program Changes back), nor before the unit has said which
+preset it is on. No answer, a refusal, one it cannot read or other
+blocks: the usual order and a line saying why; two reads in a row with
+nothing usable and it is not asked again that connection. A scene change
+or a preset seen again asks nothing; a chain changed from the phone is
+read again. Never an AM4 (its slots come in order) or a VP4. The way out
+lets that one frame through, byte for byte, only while the order is open
+to the account at that moment (`orderHand`, `orderOr`); the grid's writes
+and the preset whole stay the chain's. The switch is
+`BLOCK_ORDER_FROM_GRID_FOR_EVERYONE` in features.js, false (lib/bluetooth
+`blockOrderFromGrid`, handed to the wire as `blockOrder`, not behind
+Edit's door); every other account gets today's order and today's bytes,
+which a test holds. READ "block order from the unit's grid, preset n: …"
+or "the grid's blocks don't match the status read: …" FIRST in his next
+log from each unit, beside "the grid's answer for the block order, as it
+came" (once a connection). NOT PROVEN ON A UNIT: an FM3, FM9 or Axe-Fx III
+answering the live read down its MIDI jack through an adapter (every
+answer on record came over USB to a computer), how long it takes there,
+and what an Axe-Fx III's answer looks like (never captured; read as an
+FM9's, and the check against the status read is what keeps a wrong
+reading off the screen). Not known either: a block moved on the unit's
+own front panel with the same blocks in the preset keeps the old order
+until the next connection. It opens to everyone when his log shows it
+agreeing, with its line in What's new then.
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 
