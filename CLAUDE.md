@@ -3001,9 +3001,11 @@ beat and the device makes no sound and no tap, and opens no audio.
     switched at the unit by hand (the first version of this did exactly
     that, and the second review caught it). And it is forgotten as soon
     as the unit takes a switch from anywhere, its arriving included.
-    A unit that refused Off and is not pressed again keeps clicking under
-    a lit Off, with the words gone once the page is left: the retry is
-    the player's to press.
+    A unit that refused Off and is not picked again keeps clicking under
+    a lit Off, and the words "the unit didn't take it" go at the next
+    press of anything on that page (a press of the switch included, which
+    sends nothing) or when the page is left: the retry is the player's to
+    press, on the same pick.
   - **Where the unit's own click is out of the app's hands** (over
     Bluetooth, on an AM4, a unit with no switch) Off silences the device
     and nothing else, so the line says "No sound from this phone" and how
@@ -3556,6 +3558,18 @@ touched (the second review, the same day), and both are closed:
   gone. The wait says which block it is for now (`settle.current.eid`), a
   block that goes takes its waiting press with it, and no press or drag is
   ever counted from a level that is not known.
+- **The level is the preset's, not the block's.** The Output block is the
+  same id in every preset of an FM3, FM9 or Axe-Fx III, and on all three,
+  so the id never said the level under the slider was another preset's: a
+  footswitch to the next preset left the last one's level on the slider,
+  and a press still waiting was confirmed on the new preset, with Save
+  lit. The pop-up keys the level to the unit and the preset number as well
+  (`ofSounding`), drops it and reads it again when either changes, and
+  counts each change (`settle.current.turn`) so that nothing still going
+  out lands on a level that has gone, a block that went and came back
+  under the same id included. What it cannot do: the app hears of a
+  footswitch a moment after the unit has stepped, and a press confirmed
+  inside that moment has already gone to the new preset.
 - A drag's landing was not marked as landing at all, so a quick close and
   open while it was still going out showed the level the unit held when
   the open asked, and the landing then said nothing (it only speaks for

@@ -8,7 +8,7 @@ import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
-import { noteEdited } from '../lib/rig'
+import { noteEdited, useRig } from '../lib/rig'
 import {
   latestWriter,
   NUDGE_SETTLE_MS,
@@ -102,9 +102,28 @@ const noOutput = (present, onError) => {
   )
 }
 
+/*
+ * WHICH PRESET, ON WHICH UNIT, the level under the slider belongs to.
+ *
+ * The Output block's id does not say: it is the same number in every preset
+ * of an FM3, FM9 or Axe-Fx III, and the same on all three. So a preset
+ * stepped to from a footswitch while the pop-up was open left the last
+ * preset's level on the slider, and a press of + still waiting to be
+ * confirmed was confirmed on the NEW preset: its level moved to the old
+ * one's, and Save lit for a change nobody made. The level is the preset's,
+ * so it is dropped and read again when the preset is another one, whatever
+ * the block's id (found by the review, 16 November 2026).
+ *
+ * What it cannot do: the app hears of a footswitch a moment after the unit
+ * has stepped, and a press confirmed inside that moment has already gone to
+ * the new preset.
+ */
+const ofSounding = (s) => `${s.deviceSlug}:${s.preset?.number}`
+
 export default function Volume({ blocks, open, onClose, onError }) {
   const output = (blocks || []).find((b) => b.slug === 'output')
   const eid = idOf(output)
+  const sounding = useRig(ofSounding)
 
   const [param, setParamState] = useState(null)
   const [value, setValue] = useState(null)
@@ -186,9 +205,17 @@ export default function Volume({ blocks, open, onClose, onError }) {
   /*
    * Another preset's Output block is another level: not shown as this one's
    * while this one is read. And a press still waiting to be confirmed was a
-   * press on the block that has gone: its wait is dropped with it, or it
-   * fired later and "confirmed" the new block's own level on it, lighting
-   * Save for a change nobody made.
+   * press on the level that has gone: its wait is dropped with it, or it
+   * fired later and "confirmed" a level on a preset it was never made on,
+   * lighting Save for a change nobody made.
+   *
+   * `turn` is counted up each time, and is how anything still going out
+   * knows the level it was sent for has gone (the landing, below). The
+   * block a wait was for is forgotten too: a block that goes and comes
+   * BACK under the same id (the chain read again while a drag was still
+   * being confirmed) is another turn, and the read of it must not be held
+   * back for a landing from before it went. It was: the slider read "—"
+   * and every press was dropped until the pop-up was closed and opened.
    */
   useEffect(() => {
     setParamState(null)
@@ -196,7 +223,9 @@ export default function Volume({ blocks, open, onClose, onError }) {
     clearTimeout(settle.current.timer)
     settle.current.timer = null
     settle.current.again = false
-  }, [eid])
+    settle.current.eid = null
+    settle.current.turn += 1
+  }, [eid, sounding])
   useEffect(() => {
     if (!open || !Number.isInteger(eid)) return undefined
     let stop = false
@@ -229,7 +258,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
     return () => {
       stop = true
     }
-  }, [open, eid, onError])
+  }, [open, eid, sounding, onError])
 
   /** Where the thumb was when the finger landed, as a value. */
   const from = useRef(0)
@@ -294,11 +323,12 @@ export default function Volume({ blocks, open, onClose, onError }) {
       noOutput(present, say)
       return
     }
+    const turn = settle.current.turn
     try {
       const failed = await writer.current.settled()
       if (failed) say?.(failed.message)
-      /* The block went while the writes were still going out (another unit's preset): this level was the old block's, and is not confirmed on the new one. */
-      if (live.current.eid !== block) return
+      /* The level went while the writes were still going out (another preset, another unit's block, the chain read again): it was the old one's, and is not confirmed on what is there now. */
+      if (settle.current.turn !== turn) return
       const res = await setParamConfirmed(block, p.id, v, p)
       /* The level is a parameter like any other, so the Save button should
          know about it — see rig.noteEdited. */
@@ -331,9 +361,10 @@ export default function Volume({ blocks, open, onClose, onError }) {
   /*
    * `eid` is the block the press or the drag that is landing was made on, so
    * a read of ANOTHER block is never held back for it (the open's read,
-   * above).
+   * above); `turn` counts the levels this pop-up has had under it (the
+   * reset, above).
    */
-  const settle = useRef({ timer: null, landing: false, again: false, eid: null })
+  const settle = useRef({ timer: null, landing: false, again: false, eid: null, turn: 0 })
   useEffect(() => () => clearTimeout(settle.current.timer), [])
   const settleNow = async () => {
     if (settle.current.landing) {

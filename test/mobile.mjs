@@ -6629,14 +6629,37 @@ export function run(test) {
        */
       globalThis.__clickRefuse = 'throw'
       assert.equal((await click.setMetronomeSound('unit', 'fm3')).ok, false)
+      /* An arriving the unit refuses too puts nothing right: the refusal stands. */
+      globalThis.__clickRefuse = true
+      click.useUnitMetronome('fm3', true)
+      globalThis.__clickEffect()
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(unitEnd.writes.slice(9), ['fm3 on refused', 'fm3 on refused'])
+      /* Then one it takes. */
       globalThis.__clickRefuse = false
       click.useUnitMetronome('fm3', true)
       globalThis.__clickEffect()
       await clock.advance(0)
       await settle()
-      assert.deepEqual(unitEnd.writes.slice(9), ['fm3 on refused', 'fm3 on'], 'the unit arriving was not told to click')
+      assert.deepEqual(unitEnd.writes.slice(9), ['fm3 on refused', 'fm3 on refused', 'fm3 on'], 'the unit arriving was not told to click')
       assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: true })
-      assert.equal(unitEnd.writes.length, 11, 'a refusal the unit’s arriving had already put right was sent again')
+      assert.equal(unitEnd.writes.length, 12, 'a refusal the unit’s arriving had already put right was sent again')
+      /* And had the arriving been refused both times, the same pick would still have asked: a refusal is forgotten only by a switch the unit TAKES. */
+      await click.setMetronomeSound('phone', 'fm3')
+      await settle()
+      globalThis.__clickRefuse = true
+      assert.equal((await click.setMetronomeSound('unit', 'fm3')).ok, false)
+      click.useUnitMetronome('fm3', true)
+      globalThis.__clickEffect()
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickRefuse = false
+      const before = unitEnd.writes.length
+      assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: true })
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(unitEnd.writes.slice(before), ['fm3 on'], 'an arriving the unit refused made the app forget what the unit had refused')
 
       /* A unit, or a link, with no click to switch is not one that failed to take it: nothing is remembered, said either way. */
       await click.setMetronomeSound('phone', 'fm3')
@@ -21186,7 +21209,9 @@ export function run(test) {
      */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
     assert.match(vol, /if \(!open \|\| !Number\.isInteger\(eid\)\) return undefined/, 'the Output block is read with the sheet closed')
-    assert.match(vol, /\}, \[open, eid, onError\]\)/, 'opening the sheet does not read the level the unit has now')
+    /* And again when the preset or the unit under it is another one: the Output block is the same id in every preset of a gen-3 unit, so the id alone never said so (test/volume-drag.mjs runs it). */
+    assert.match(vol, /\}, \[open, eid, sounding, onError\]\)/, 'opening the sheet does not read the level the unit has now')
+    assert.match(vol, /const ofSounding = \(s\) => `\$\{s\.deviceSlug\}:\$\{s\.preset\?\.number\}`/)
     assert.match(vol, /<Note>Reading the level…<\/Note>/, 'the sheet says the unit has no level while it is still being read')
     /* Every open: a press worked out from last time's level, or an answer landing after one, puts the wrong level on the unit. */
     assert.match(vol, /\{Number\.isInteger\(eid\) && reading \? \(/, 'the controls work on a re-open before the level has been read')

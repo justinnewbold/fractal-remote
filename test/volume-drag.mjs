@@ -46,7 +46,9 @@ const read = (p) => readFileSync(repo(p), 'utf8')
  * put back over a newer one, and for one commit that was exactly the fault.
  */
 const STANDINS = `
-export const H = { slots: [], i: 0, effects: [], log: [], made: 0, window: { width: 390, height: 844 } }
+export const H = { slots: [], i: 0, effects: [], log: [], made: 0, window: { width: 390, height: 844 }, rig: { deviceSlug: 'fm3', preset: { number: 12 } } }
+/* The rig's store: which unit, and which preset is on it. */
+export const useRig = (pick) => pick(H.rig)
 export function useState(init) {
   const k = H.i++
   if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
@@ -378,6 +380,80 @@ export function run(test) {
     assert.deepEqual(b.sent().slice(1), [['write', 47, 6], ['confirmed', 47, 6], ['edited']], 'the next press did not step from the new block’s level')
   })
 
+  test('volume: another preset under the same Output block is another level: read again, and a press still waiting is not confirmed on it', async () => {
+    /*
+     * On an FM3, FM9 or Axe-Fx III the Output block is the same id in every
+     * preset. A press of +, then a footswitch to the next preset inside the
+     * same second: the wait used to fire and confirm +1 on a preset that
+     * was at −6, with Save lit, and the slider went on showing the last
+     * preset's level.
+     */
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    /* The footswitch: the same block, another preset, holding −6. */
+    b.unit.level = -6
+    b.H.rig = { deviceSlug: 'fm3', preset: { number: 13 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.slider()?.props.accessibilityValue.now, -6, 'the last preset’s level is still on the slider')
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [['write', 46, 1]], 'a press made on the last preset was confirmed on this one')
+    assert.equal(b.unit.level, -6)
+    assert.deepEqual(b.errors, [])
+    /* The same for another unit with the same preset number and the same block. */
+    b.H.rig = { deviceSlug: 'fm9', preset: { number: 13 } }
+    b.unit.level = 3
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(10)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.slider()?.props.accessibilityValue.now, 3, 'another unit’s level is not read')
+    /* And nothing is read again for a draw that changes neither. */
+    const reads = b.H.log.filter((l) => l[0] === 'read').length
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: [...OUTPUT], open: true })
+    assert.equal(b.H.log.filter((l) => l[0] === 'read').length, reads, 'the level is read again with nothing changed')
+  })
+
+  test('volume: a chain read again while a drag is still being confirmed leaves the slider working, on the level the unit has', async () => {
+    /*
+     * The drag's confirm is still out on a slow wire when the chain is
+     * emptied and read again, the Output block back under the same id. The
+     * read of it used to be held back for the landing from before it went:
+     * the slider read "—", and every press was dropped with nothing said,
+     * until the pop-up was closed and opened.
+     */
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.unit.slow = 120
+    b.H.log.length = 0
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    await b.draw({ blocks: [], open: true })
+    b.unit.slow = 0
+    b.unit.levels[46] = -6
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(300)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.slider()?.props.accessibilityValue.now, -6, 'the slider is left with no level after the chain was read again')
+    assert.deepEqual(b.errors, [])
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [['write', 46, -5], ['confirmed', 46, -5], ['edited']], 'a press is dropped after the chain was read again')
+  })
+
   test('volume: a drag still going out when the Output block changes is not confirmed on the block that has gone', async () => {
     const b = await bench()
     await b.open(OUTPUT)
@@ -530,7 +606,7 @@ export function run(test) {
     const now = read('mobile/src/components/Volume.js')
     const fixed = [
       ['const { param: p, eid: block, present, onError: say } = live.current\n    const v = level.current', 'const { param: p } = live.current\n    const v = level.current'],
-      ['if (!Number.isInteger(block)) {\n      noOutput(present, say)\n      return\n    }\n    try {', 'if (!Number.isInteger(eid)) {\n      noOutput(!!output, onError)\n      return\n    }\n    try {'],
+      ['if (!Number.isInteger(block)) {\n      noOutput(present, say)\n      return\n    }\n    const turn = settle.current.turn\n    try {', 'if (!Number.isInteger(eid)) {\n      noOutput(!!output, onError)\n      return\n    }\n    const turn = settle.current.turn\n    try {'],
       ['if (failed) say?.(failed.message)', 'if (failed) onError?.(failed.message)'],
       ['await setParamConfirmed(block, p.id, v, p)', 'await setParamConfirmed(eid, p.id, v, p)']
     ]
