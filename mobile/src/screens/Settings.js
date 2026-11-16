@@ -37,8 +37,8 @@ import MissingPick from '../components/MissingPick'
 import { playingOf } from '../lib/relay-rules'
 import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
-import { setEdgeFlash, setFlashTiming, setMetronome, setMetronomeSound, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
-import { EDGE_WORDS, SOUND_OFF, SOUND_WORDS, deviceSounds, placeNote, soundLine } from '../lib/edgeFlash'
+import { setEdgeFlash, setFlashTiming, setMetronome, setMetronomeSound, useEdgeFlash, useFlashTiming, useInStep, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { EDGE_WORDS, SOUND_OFF, SOUND_WORDS, apartOrInStep, deviceSounds, placeNote, soundLine } from '../lib/edgeFlash'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -546,6 +546,8 @@ export default function Settings({
   const flashTiming = useFlashTiming()
   /* The flash round the edge as a choice, and whether this account is offered it (lib/edgeFlash). */
   const edgeChoice = useEdgeFlash()
+  /* Whether this device's beat is on the unit's right now (lib/beatLock). */
+  const beatInStep = useInStep()
   /* Never with the sound picked Off: there is no click then for the flash to be moved to meet. */
   const phoneMayClick = deviceSounds({ clicks: clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone, offered: edgeChoice.offered, quiet: edgeChoice.quiet })
   /* Which one, and told when it changes. Read as `demoUnit()` this never
@@ -1921,7 +1923,7 @@ export default function Settings({
                 <Section>{EDGE_WORDS.section}</Section>
                 <Press label={edgeChoice.on ? EDGE_WORDS.on : EDGE_WORDS.off} tone="live" on={edgeChoice.on} onPress={() => setEdgeFlash(!edgeChoice.on)} />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}.` : ''}`}
+                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${apartOrInStep(beatInStep)}.` : ''}`}
                 </Text>
               </>
             ) : null}

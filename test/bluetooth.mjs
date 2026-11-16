@@ -11350,6 +11350,74 @@ export function run(test) {
     assert.match((await import(SX)).rejectedWords(0x00), /damaged/)
   })
 
+  test('the unit’s tempo beat is handed on with the moment it came, bare or with its checksum, never just after a tap this device sent, and never from an AM4', async () => {
+    /*
+     * "The metronome is not matching up properly into the sound coming out
+     * of speakers. There's a delay." (Justin, 16 November 2026.) The wire
+     * knew the beat (isBeatPush) and dropped it. Now it hands it on, as an
+     * event with the wire's clock when it came, for whoever is keeping this
+     * device's beat beside the unit (lib/unitBeat). Nothing is sent for it.
+     */
+    for (const unit of ['axefx3', 'fm3', 'fm9']) {
+      const t = await onTheLine(unit, { pushes: true })
+      await advance(t.clock, 2600)
+      const beats = t.events.filter((e) => e.type === 'beat')
+      assert.ok(beats.length >= 4 && beats.length <= 6, `${unit}: ${beats.length} beats handed on in 2.6 s of a beat every half second`)
+      for (const b of beats) assert.equal(typeof b.at, 'number', `${unit}: a beat with no moment`)
+      for (let i = 1; i < beats.length; i++) assert.ok(Math.abs(beats[i].at - beats[i - 1].at - 500) <= 15, `${unit}: beats ${beats[i].at - beats[i - 1].at} ms apart`)
+      assert.deepEqual(t.frames(), [], `${unit}: hearing the beat sent the unit something`)
+      assert.deepEqual(
+        t.events.filter((e) => e.type !== 'beat'),
+        [],
+        `${unit}: a beat was handed on as something else`
+      )
+    }
+
+    /* With the checksum too, as it is taken everywhere else (isBeatPush). */
+    const t = await onTheLine('axefx3')
+    const model = t.sx.MODELS.axefx3
+    const summed = t.sx.buildTap(model)
+    assert.equal(summed.length, 8)
+    t.wire.heard(summed)
+    assert.deepEqual(t.events, [{ type: 'beat', at: t.clock.now() }])
+
+    /* A tap this device sends: the unit's answer in kind, or an adapter's echo of it, is no beat for 400 ms after. */
+    t.events.length = 0
+    await t.post('/tempo/tap', {})
+    const tapped = t.sent[t.sent.length - 1].at
+    t.clock.set(tapped + 399)
+    t.wire.heard(summed)
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, model, 0x10, 0xf7])
+    assert.deepEqual(
+      t.events.filter((e) => e.type === 'beat'),
+      [],
+      'a tap’s own echo was handed on as the unit’s beat'
+    )
+    t.clock.set(tapped + 400)
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, model, 0x10, 0xf7])
+    assert.deepEqual(
+      t.events.filter((e) => e.type === 'beat'),
+      [{ type: 'beat', at: tapped + 400 }]
+    )
+
+    /* Another unit's beat on this adapter is not this unit's. */
+    t.events.length = 0
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, t.sx.MODELS.fm3, 0x10, 0xf7])
+    assert.deepEqual(
+      t.events.filter((e) => e.type === 'beat'),
+      []
+    )
+
+    /* An AM4's function 0x10 is not known to be a beat: nothing is handed on. */
+    const am4 = await onTheLine('am4')
+    am4.events.length = 0
+    am4.wire.heard([0xf0, 0x00, 0x01, 0x74, 0x15, 0x10, 0xf7])
+    assert.deepEqual(
+      am4.events.filter((e) => e.type === 'beat'),
+      []
+    )
+  })
+
   test('a 64 <fn> 00 after a scene, channel or tempo write is still a refusal (damaged): only the tap and the tuner switch are let through', async () => {
     for (const unit of ['axefx3', 'fm3']) {
       const t = await onTheLine(unit, { refusePublished: 0x00 })

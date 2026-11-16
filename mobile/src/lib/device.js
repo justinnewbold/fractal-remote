@@ -584,6 +584,25 @@ export const getScene = () => remoteRequest('/scene')
 /** Current tempo, in BPM. */
 export const getTempo = () => remoteRequest('/tempo')
 
+/*
+ * WHEN THE UNIT'S OWN BEAT LAST FELL (lib/beatLock, lib/unitBeat).
+ *
+ * `unitBeatRoad` says how the beat can be heard here: 'computer', where the
+ * computer app is asked how long ago the unit's last beat was; 'wire', over
+ * Bluetooth or the USB cable, where the beat reaches this device itself and
+ * nothing is asked; null in the demo and on a VP4, which is only ever sent
+ * to. `askUnitBeat` is the computer's question, with this device's clock
+ * read as it leaves and as the answer comes: the answer is only as good as
+ * that round trip is quick, so the two are read here, right beside it.
+ * The computer answers from what it has heard and asks the unit nothing.
+ */
+export const unitBeatRoad = () => (demoDevice() || onVp4 ? null : bluetoothWire() ? 'wire' : 'computer')
+export async function askUnitBeat() {
+  const asked = Date.now()
+  const answer = await remoteRequest('/tempo/beat')
+  return { answer, asked, answered: Date.now() }
+}
+
 /**
  * Every knob on one block, with the range each one moves over.
  *

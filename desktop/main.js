@@ -1526,7 +1526,7 @@ async function installNow() {
    * thing, and after it nobody would appear to be looking.
    */
   const comeBack = boot.comeBackAs({
-    unattended: startHidden,
+    unattended: startHidden || installedUnattended,
     looking: Boolean(win && !win.isDestroyed() && win.isVisible())
   })
   await stopServing()
@@ -1536,8 +1536,9 @@ async function installNow() {
    * download is staged either way, so reopening tries again.
    *
    * On a box set up for nobody, closed is not good enough either — whether
-   * the install was started by the box itself or by somebody who plugged a
-   * screen in, pressed the button and then left: nobody would reopen it, and
+   * the install was started by the box itself (a Pi opened with its window
+   * included: installedUnattended) or by somebody who plugged a screen in,
+   * pressed the button and then left: nobody would reopen it, and
    * the pedalboard would have no remote until it was unplugged. So that copy
    * starts itself again, on the version it has, and the note above makes it
    * say "didn't install" rather than try the same install again. The
@@ -1545,7 +1546,7 @@ async function installNow() {
    * in a folder that goes when this process does.
    */
   setTimeout(() => {
-    if (startHidden) app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) })
+    if (startHidden || installedUnattended) app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) })
     app.exit(0)
   }, INSTALL_DEADLINE_MS)
   /*
@@ -1927,10 +1928,12 @@ function installIfUnattended() {
     hidden: startHidden,
     sinceLaunchMs: uptime() - launchedAt,
     platform: process.platform,
-    env: process.env
+    arch: process.arch,
+    env: process.env,
+    phoneSeen: phoneSeenAt !== null
   })
   if (!verdict.install) {
-    if (startHidden) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
+    if (startHidden || boot.pedalboardBox({ platform: process.platform, arch: process.arch })) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
     return
   }
   installedUnattended = true
@@ -1949,7 +1952,7 @@ function installIfUnattended() {
  */
 function retryUpdateCheck() {
   if (updateRetry || !updates || !boot) return
-  const wait = boot.updateRetryDelay({ hidden: startHidden, kind: update?.kind, sinceLaunchMs: uptime() - launchedAt })
+  const wait = boot.updateRetryDelay({ hidden: startHidden, kind: update?.kind, sinceLaunchMs: uptime() - launchedAt, platform: process.platform, arch: process.arch })
   if (!wait) return
   updateRetry = later(() => {
     updateRetry = null
@@ -1965,7 +1968,7 @@ function retryUpdateCheck() {
  * and installs at the next power-on.
  */
 function networkIsUp() {
-  if (startHidden && update?.kind === 'trouble' && updates) lookNow()
+  if ((startHidden || boot?.pedalboardBox?.({ platform: process.platform, arch: process.arch })) && update?.kind === 'trouble' && updates) lookNow()
 }
 
 /**

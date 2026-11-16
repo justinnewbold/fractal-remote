@@ -124,7 +124,8 @@ async function clickOnTheBench(os = 'ios') {
       export const createAudioPlayer = (src, opts = {}) => {
         const id = made.length
         const p = {
-          id, src, opts, isLoaded: true, currentTime: 0,
+          /* Ready at once, unless a test says when (globalThis.__clickLoadAt, on the bench's clock): the click waits for its players. */
+          id, src, opts, get isLoaded() { return now() >= (globalThis.__clickLoadAt ?? -Infinity) }, currentTime: 0,
           seekTo: async () => { say('seek ' + id) },
           play() { say('play ' + id) },
           pause() { say('pause ' + id) }
@@ -139,6 +140,7 @@ async function clickOnTheBench(os = 'ios') {
     'click.js': 'export default "click"\n',
     'click-pad.js': 'export default "click-pad"\n',
     'device.js': `
+      import { now as __now } from './clock.js'
       export const writes = []
       export let switchAt = null
       export const __answer = (v) => { switchAt = v }
@@ -153,10 +155,14 @@ async function clickOnTheBench(os = 'ios') {
       }
       export let reads = 0
       export const readUnitMetronome = async () => { reads++; return switchAt }
+      /* The unit's own beat (lib/unitBeat): no road to it, so nothing is asked, unless a test says how it is heard (globalThis.__clickBeatRoad) and what the computer answers (globalThis.__clickBeatAsk). Every question is written down. */
+      export const beatAsks = []
+      export const unitBeatRoad = () => globalThis.__clickBeatRoad ?? null
+      export const askUnitBeat = async () => { beatAsks.push(__now()); return globalThis.__clickBeatAsk() }
     `,
-    'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
+    'rig.js': "export const useRig = (pick) => pick({ deviceSlug: globalThis.__clickSlug ?? 'fm3' })\n",
     /* Whose account it is, for what is offered to his alone (the flash as a choice): nobody's, unless a test says so. */
-    'bluetooth.js': 'export const useBluetoothOn = () => false\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
+    'bluetooth.js': 'export const useBluetoothOn = () => globalThis.__clickBluetooth === true\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
     'demo.js': 'export const isDemo = () => false\n',
     'feedback.js': 'export let ticks = 0\nexport const tick = () => { ticks++ }\n',
     'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
@@ -192,7 +198,14 @@ async function clickOnTheBench(os = 'ios') {
     'audioMode.js': read('mobile/src/lib/audioMode.js'),
     /* The flash as a choice: its rules as they are, and its switch off, as it is for every account but his. */
     'edgeFlash.js': read('mobile/src/lib/edgeFlash.js'),
-    'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\n',
+    'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\nexport const BEAT_LOCK_FOR_EVERYONE = false\n',
+    /* The device's beat on the unit's (lib/beatLock): the rules, the hand-off and the follower as they are, on the bench's clock. */
+    'beatLock.js': read('mobile/src/lib/beatLock.js'),
+    'beatBus.js': read('mobile/src/lib/beatBus.js'),
+    'unitBeat.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/unitBeat.js')))
+      .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+      .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+      .replace(/\bDate\.now\(\)/g, '__clock.now()'),
     'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
       .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
       .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
@@ -213,10 +226,11 @@ async function clickOnTheBench(os = 'ios') {
   const audio = await import(at('audio.js'))
   const feedback = await import(at('feedback.js'))
   const disk = await import(at('storage.js'))
+  const bus = await import(at('beatBus.js'))
   const settle = async () => {
     for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
   }
-  return { dir, click, unitEnd, log, clock, audio, feedback, disk, settle }
+  return { dir, click, unitEnd, log, clock, audio, feedback, disk, bus, settle }
 }
 
 /**
@@ -440,7 +454,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['nam-travel.js', 'own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'chainShape.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
+  for (const f of ['beatBus.js', 'nam-travel.js', 'own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'chainShape.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -550,7 +564,9 @@ async function rigOnTheBench(over = {}) {
     const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
     const log = (await import(at('debugLog.js'))).lines
     const ble = await import(at('bleSwitch.js'))
-    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer, log, ble }
+    /* The hand-off a beat the unit sends is passed to (lib/beatBus): the store's own copy of it. */
+    const beat = await import(at('beatBus.js'))
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer, log, ble, beat }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -6103,7 +6119,7 @@ export function run(test) {
     assert.match(m.metronomeNote(unit, 'am4', 120), /only the phone keeps time/)
     /* The phone's own click hears the same rule, from the unit and the link it is on. */
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const choice = useEdgeFlash\(\) (\/\*[^*]*\*\/ )?const sound = deviceSounds\(\{ clicks: clicks\(s, can, heardOn\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/, 'the phone stays silent where the unit cannot click')
+    assert.match(metronome, /const \{ can, heard: heardOn, slug \} = useUnitCan\(\) const choice = useEdgeFlash\(\) (\/\*[^*]*\*\/ )?const sound = deviceSounds\(\{ clicks: clicks\(s, can, heardOn\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/, 'the phone stays silent where the unit cannot click')
     assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
     assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) \{ stopFollowing\(\) return \} switchUnit\(slug, true\)/)
     /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
@@ -6421,6 +6437,477 @@ export function run(test) {
       globalThis.__clickAdmin = false
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  /*
+   * THE DEVICE'S BEAT ON THE UNIT'S (lib/beatLock, lib/unitBeat), on the
+   * click bench: the real follower and the real rules beside the real
+   * click, on the bench's clock. `unit` is a pretend unit beating every
+   * half second from `phase`, and the pretend computer app has heard every
+   * beat and answers at once: how long ago the last one was.
+   */
+  const beatComputer = (clock, unit) => async () => {
+    const now = clock.now()
+    const period = unit.period ?? 500
+    const since = (((now - unit.phase) % period) + period) % period
+    return { answer: unit.beating ? { ok: true, count: 9, age: since, gap: period } : { ok: true, count: 0, age: null, gap: null }, asked: now, answered: now }
+  }
+  /* How far a moment is from the unit's beat, in the half beat either side. */
+  const offBeat = (t, unit, lead = 0) => {
+    const r = (((t + lead - unit.phase) % 500) + 500) % 500
+    return r > 250 ? r - 500 : r
+  }
+  /* Every gap between two beats while a move is made a little at a time: never more than a tenth of a beat short or long (lib/beatLock slewOfBeat). */
+  const evenly = (times, what) => {
+    for (let i = 1; i < times.length; i++) {
+      const g = times[i] - times[i - 1]
+      assert.ok(g >= 450 - 1e-6 && g <= 550 + 1e-6, `two ${what} ${g} ms apart: a beat dropped, doubled or jumped`)
+    }
+  }
+  /* The first of `times` from which every one is on the unit's beat; -1 for none. */
+  const onFrom = (times, unit, lead = 0) => {
+    for (let i = 0; i < times.length; i++) if (times.slice(i).every((t) => Math.abs(offBeat(t, unit, lead)) <= 1)) return i
+    return -1
+  }
+  const noBeatGlobals = () => {
+    globalThis.__clickAdmin = false
+    delete globalThis.__clickBluetooth
+    delete globalThis.__clickSlug
+    delete globalThis.__clickBeatRoad
+    delete globalThis.__clickBeatAsk
+    delete globalThis.__clickLoadAt
+  }
+
+  test('with the unit clicking, the light goes onto the unit’s own beat, says so only while it is so, follows a beat that moves, and stops asking with the click', async () => {
+    /*
+     * "The metronome is not matching up properly into the sound coming out
+     * of speakers. There's a delay." (Justin, 16 November 2026.) The light
+     * kept the unit's tempo from the moment it was switched on, wherever
+     * in the beat that was.
+     */
+    const { dir, click, unitEnd, log, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      const unit = { phase: clock.now() + 137, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+
+      assert.equal(click.useInStep(), false, 'in step before anything was heard')
+      /* What the bench has waiting before any beat is kept (the unit's own switch, watched): the same must be left after. */
+      const idle = clock.pending()
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      const from = clock.now()
+      await clock.advance(5100)
+
+      /* The first light is where the beat began; it goes onto the unit's beat a little each beat, and stays there. */
+      assert.equal(flashes[0], from)
+      assert.ok(flashes.length >= 9, `only ${flashes.length} lights in five seconds`)
+      const on = onFrom(flashes, unit)
+      assert.ok(on >= 1 && on <= 5, `the light took ${on} beats to go onto the unit’s beat (${flashes.map((t) => offBeat(t, unit)).join(', ')})`)
+      evenly(flashes, 'lights')
+      /* Said only once an answer two seconds or more after the first two has agreed with them: the one six seconds in. */
+      assert.equal(click.useInStep(), false, 'in step before an answer seconds later agreed')
+      assert.ok(log.said.some((l) => /this device’s beat goes 137 ms later, onto the unit’s \(known to within 10 ms\), a little each beat/.test(l)), `the log does not say the move: ${log.said.join(' | ')}`)
+      /* Asked a few times quickly, then every few seconds: never once a beat. */
+      assert.equal(unitEnd.beatAsks.length, 4, `asked ${unitEnd.beatAsks.length} times in five seconds`)
+      assert.equal(audio.made.length, 0, 'lining a silent light up opened the sound')
+      await clock.advance(2000)
+      assert.equal(click.useInStep(), true, 'on the unit’s beat and not said to be')
+
+      /* The unit's beat moves (its tempo tapped at the unit): two answers say so, and the light follows it a little each beat. */
+      unit.phase += 200
+      const mark = flashes.length
+      await clock.advance(13000)
+      const after = flashes.slice(mark)
+      assert.ok(onFrom(after, unit) >= 0, 'the light never went onto the moved beat')
+      evenly(flashes, 'lights')
+      assert.ok(log.said.some((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)))
+
+      /* The unit stops sending its beat: the light carries on where it was, and after twenty seconds it is no longer said to be in step. */
+      const lastHeard = unitEnd.beatAsks[unitEnd.beatAsks.length - 1]
+      unit.beating = false
+      const count = flashes.length
+      await clock.advance(lastHeard + 19900 - clock.now())
+      assert.equal(click.useInStep(), true, 'in step was let go of before twenty seconds without a beat')
+      await clock.advance(200)
+      assert.equal(click.useInStep(), false, 'still said to be in step twenty seconds after the unit’s last beat was heard')
+      await clock.advance(8000)
+      const since = flashes.slice(count)
+      for (let i = 1; i < since.length; i++) assert.equal(since[i] - since[i - 1], 500, 'the light jumped with nothing heard')
+
+      /*
+       * Back. After that long a silence the old belief is forgotten, so two
+       * answers have to agree again and a third has to agree with them before
+       * it is said to be in step: not on the first answer back. Then stopped:
+       * nothing more is asked, and it is not in step.
+       */
+      unit.beating = true
+      const back = unitEnd.beatAsks.length
+      while (unitEnd.beatAsks.length === back) await clock.advance(100)
+      assert.equal(click.useInStep(), false, 'in step on the first answer after a long silence')
+      await clock.advance(13000)
+      assert.equal(click.useInStep(), true)
+      const asked = unitEnd.beatAsks.length
+      stop()
+      assert.equal(click.useInStep(), false, 'in step with no beat being kept')
+      await clock.advance(30000)
+      assert.equal(unitEnd.beatAsks.length, asked, 'the computer is asked for the unit’s beat with the click stopped')
+      assert.equal(clock.pending(), idle, 'a timer is left over')
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  for (const [os, lead] of [
+    ['ios', 40],
+    ['android', 100]
+  ]) {
+    test(`on ${os}, with the device clicking beside the unit, the click heard lands on the unit’s beat: it is started ${lead} ms ahead, and the flash is on the beat`, async () => {
+      const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench(os)
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'both' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const unit = { phase: clock.now() + 311, beating: true }
+        globalThis.__clickBeatAsk = beatComputer(clock, unit)
+
+        const flashes = []
+        assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(7500)
+        const plays = audio.calls.filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+        assert.ok(plays.length >= 10, `only ${plays.length} clicks in six seconds`)
+        /* Within a few beats, every click is started `lead` ahead of the unit's beat, so it is HEARD on it; none dropped or doubled getting there. */
+        const on = onFrom(plays, unit, lead)
+        assert.ok(on >= 0 && on <= 6, `the click took ${on} beats to be heard on the unit’s beat`)
+        evenly(plays, 'clicks')
+        /* And the flash, which waits for the sound, is on the beat itself. */
+        assert.ok(onFrom(flashes, unit) >= 0 && onFrom(flashes, unit) <= 6, 'the flash never went onto the unit’s beat')
+        assert.equal(click.useInStep(), true)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+
+  test('a move onto the unit’s beat, early or late, is made a little each beat: never a beat dropped, doubled or jumped', async () => {
+    /*
+     * "A small earlier correction that lands just before a click drops a
+     * whole click" (an independent read of the first cut, which moved the
+     * count at once). Now a move is a tenth of a beat a beat at most.
+     */
+    for (const [why, by] of [
+      ['a quarter of a beat earlier', -240],
+      ['a quarter of a beat later', 240],
+      ['a little earlier, just before a beat', -25]
+    ]) {
+      const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const from = clock.now()
+        const unit = { phase: from + 402, beating: true }
+        globalThis.__clickBeatAsk = beatComputer(clock, unit)
+        const flashes = []
+        assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(6800)
+        assert.ok(onFrom(flashes, unit) >= 0, 'the bench is not where this test needs it')
+        unit.phase += by
+        await clock.advance(9000)
+        evenly(flashes, `lights (${why})`)
+        assert.ok(onFrom(flashes, unit) >= 0, `the light never went onto the beat moved ${why}`)
+        assert.equal(click.useInStep(), true)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('over Bluetooth, with the unit’s click picked, the light goes onto the beat the unit sends down the adapter; never for a unit that sends none', async () => {
+    /*
+     * Over Bluetooth the app cannot switch the unit's click, so it never
+     * counted as clicking, and the beat the adapter brings in was heard by
+     * nobody (an independent read found the whole road unreachable). The
+     * player's choice of Unit is what says the unit may be clicking:
+     * switched on at the unit itself.
+     */
+    for (const slug of ['fm3', 'am4']) {
+      const { dir, click, unitEnd, clock, bus, settle } = await clickOnTheBench('ios')
+      try {
+        globalThis.__clickSlug = slug
+        globalThis.__clickBluetooth = true
+        await click.setMetronome({ on: true, where: 'unit' }, slug)
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'wire'
+        const from = clock.now()
+        const unit = { phase: from + 173, beating: true }
+        const flashes = []
+        assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true, 'nothing keeps time over Bluetooth')
+        const stop = globalThis.__clickEffect()
+        assert.equal(bus.unitBeatListeners(), slug === 'am4' ? 0 : 1, slug === 'am4' ? 'an AM4, which sends no beat, is listened for' : 'nothing listens for the beat the adapter brings in')
+        /* The unit's beats as the adapter hands them on: heard 12 ms after each. */
+        for (let k = 1; k <= 14; k++) {
+          await clock.advance(unit.phase + k * 500 + 12 - clock.now())
+          bus.unitBeatHeard(clock.now())
+        }
+        await clock.advance(1000)
+        evenly(flashes, 'lights')
+        if (slug === 'am4') for (let i = 1; i < flashes.length; i++) assert.equal(flashes[i] - flashes[i - 1], 500, 'an AM4’s light moved')
+        else assert.ok(onFrom(flashes, unit) >= 0, `the light never went onto the unit’s beat over Bluetooth (${flashes.map((t) => offBeat(t, unit)).join(', ')})`)
+        assert.equal(unitEnd.beatAsks.length, 0, 'the computer was asked over Bluetooth')
+        stop()
+        assert.equal(bus.unitBeatListeners(), 0, 'still listening after the click stopped')
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('with the device a little off the unit’s tempo, the light is pulled back every few seconds and is never said to be in step', async () => {
+    /*
+     * Through the computer the device can keep 120 while the unit was tapped
+     * to 122 at its own footswitch. Two answers then agree with each other
+     * every six seconds and the light drifts a tenth of a second between
+     * them: "In step" was said 110 ms off (an independent read). Only a
+     * belief a later answer agrees with, without moving it, is "in step".
+     */
+    for (const period of [491.8, 504.2]) {
+      const { dir, click, unitEnd, log, clock, settle } = await clickOnTheBench('ios')
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const unit = { phase: clock.now() + 211, beating: true, period }
+        globalThis.__clickBeatAsk = beatComputer(clock, unit)
+        assert.equal(click.usePhoneClick(120, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        let said = 0
+        for (let i = 0; i < 80; i++) {
+          await clock.advance(500)
+          if (click.useInStep()) said++
+        }
+        assert.equal(said, 0, `said to be in step ${said} times in forty seconds with the unit at ${(60000 / period).toFixed(1)} and the device at 120`)
+        const moved = log.said.filter((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)).length
+        assert.ok(moved <= 1, `the log said the beat moved ${moved} times`)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('at a slow tempo, "in step" lasts twenty seconds from the unit’s last beat heard, not from when the light caught up with it', async () => {
+    const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      /* 30 BPM: a two-second beat, and the light a second off the unit's, so it takes five beats to get there. */
+      const from = clock.now()
+      const unit = { phase: from + 1010, beating: true, period: 2000 }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      assert.equal(click.usePhoneClick(30, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      /* The answer six seconds in agrees with the first ones: the belief is sure, and the light is still on its way. */
+      while (unitEnd.beatAsks.length < 5) await clock.advance(100)
+      const lastHeard = unitEnd.beatAsks[4]
+      assert.equal(click.useInStep(), false, 'in step with the light still on its way')
+      /* The unit stops sending its beat. */
+      unit.beating = false
+      await clock.advance(lastHeard + 14000 - clock.now())
+      assert.equal(click.useInStep(), true, 'not in step once the light got there')
+      await clock.advance(lastHeard + 20100 - clock.now())
+      assert.equal(click.useInStep(), false, 'still said to be in step twenty seconds after the unit’s last beat was heard')
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('where the unit’s beat is known before the sound is ready, nothing clicks or lights until it is, and the very first click is on the unit’s beat', async () => {
+    for (const lands of [423, 440]) {
+    const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'both' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      /* 440: the click started the moment the sound is ready (400) is heard 40 later, on the unit's beat, so nothing moves. */
+      const from = clock.now()
+      const unit = { phase: from + lands, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      /* The players take 400 ms to load: the unit's beat is asked for twice, and answered, in the meantime. */
+      globalThis.__clickLoadAt = clock.now() + 400
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      const plays = () => audio.calls.filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+      await clock.advance(250)
+      assert.ok(unitEnd.beatAsks.length >= 1, 'the unit’s beat was not asked for while the sound was made ready')
+      assert.deepEqual(plays(), [], 'a click before the sound was ready')
+      assert.deepEqual(flashes, [], 'a light before the beat began')
+      assert.equal(click.useInStep(), false, 'in step with no beat being kept yet')
+      await clock.advance(7000)
+      const started = plays()
+      assert.ok(started.length >= 13, `only ${started.length} clicks in seven seconds`)
+      /* Every one, the first too: started 40 ms ahead of the unit's beat, heard on it. */
+      for (const t of started) assert.ok(Math.abs(offBeat(t, unit, 40)) <= 1, `a click started at ${t} is heard ${offBeat(t, unit, 40)} ms off the unit’s beat`)
+      for (let i = 1; i < started.length; i++) assert.equal(started[i] - started[i - 1], 500, 'a beat was dropped or doubled at the start')
+      for (const t of flashes) assert.ok(Math.abs(offBeat(t, unit)) <= 1, `a flash ${offBeat(t, unit)} ms off the unit’s beat`)
+      if (lands === 440) assert.equal(started[0], from + 400, 'the first click waited a beat with nothing to move')
+      assert.equal(click.useInStep(), true)
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+    }
+  })
+
+  test('through a slow or lopsided road the light still goes to where the unit’s beat most likely is, and is never said to be in step', async () => {
+    /*
+     * The relay is the internet: a window is half the round trip wide each
+     * side, and how lopsided the road is cannot be known. "In step" was said
+     * on a window a third of a beat wide (an independent read); now only
+     * within 20 ms.
+     */
+    for (const [there, back] of [
+      [100, 100],
+      [150, 50]
+    ]) {
+      const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const unit = { phase: clock.now() + 211, beating: true }
+        globalThis.__clickBeatAsk = async () => {
+          const asked = clock.now()
+          await new Promise((r) => clock.setTimeout(r, there))
+          const since = (((clock.now() - unit.phase) % 500) + 500) % 500
+          await new Promise((r) => clock.setTimeout(r, back))
+          return { answer: { ok: true, count: 9, age: since, gap: 500 }, asked, answered: clock.now() }
+        }
+        const flashes = []
+        assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(8000)
+        evenly(flashes, 'lights')
+        /* Where the road is even the middle is the beat itself; lopsided, it is off by half the difference, and that is all. */
+        const off = (back - there) / 2
+        const last = flashes.slice(-4)
+        for (const t of last) assert.ok(Math.abs(offBeat(t, unit) - off) <= 2, `a light ${offBeat(t, unit)} ms off the unit’s beat on a road ${there} there and ${back} back`)
+        assert.equal(click.useInStep(), false, `said to be in step on a window ${(there + back) / 2 + 10} ms wide each side`)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('the unit’s beat is followed only for his account and only beside a unit that is clicking, and a unit that sends none changes nothing', async () => {
+    const { dir, click, unitEnd, log, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'both' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickBeatRoad = 'computer'
+      const unit = { phase: clock.now() + 211, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      const starts = () => audio.calls.filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+
+      /* Every other account: nothing is asked, and the click is where it always was, half a second apart from its start. */
+      globalThis.__clickAdmin = false
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      let stop = globalThis.__clickEffect()
+      await clock.advance(4000)
+      stop()
+      assert.equal(unitEnd.beatAsks.length, 0, 'another account’s device asked for the unit’s beat')
+      const theirs = starts()
+      for (let i = 1; i < theirs.length; i++) assert.equal(theirs[i] - theirs[i - 1], 500, 'another account’s click was moved')
+      assert.equal(click.useInStep(), false)
+
+      /* His, with the click on the device alone: the unit is not clicking, so there is nothing to line up with. */
+      globalThis.__clickAdmin = true
+      await click.setMetronome({ where: 'phone' }, 'fm3')
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      stop = globalThis.__clickEffect()
+      await clock.advance(4000)
+      stop()
+      assert.equal(unitEnd.beatAsks.length, 0, 'a device keeping time alone asked for the unit’s beat')
+
+      /* His, beside the unit, and the unit sends no beat: asked, said why once, and nothing moves. */
+      await click.setMetronome({ where: 'both' }, 'fm3')
+      unit.beating = false
+      audio.calls.length = 0
+      log.said.length = 0
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      stop = globalThis.__clickEffect()
+      await clock.advance(9000)
+      stop()
+      assert.ok(unitEnd.beatAsks.length >= 4, 'his device beside a clicking unit did not ask')
+      const his = starts()
+      assert.ok(his.length >= 16)
+      for (let i = 1; i < his.length; i++) assert.equal(his[i] - his[i - 1], 500, 'the click moved with no beat heard from the unit')
+      assert.equal(click.useInStep(), false, 'said to be in step with a unit that sent no beat')
+      assert.equal(log.said.filter((l) => /not lined up with the unit’s beat: the unit has sent no beat/.test(l)).length, 1, `said: ${log.said.join(' | ')}`)
+      assert.ok(!log.said.some((l) => /this device’s beat moved/.test(l)))
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('a beat the unit sends over Bluetooth or the cable is handed on by the store to whoever follows it, and costs the unit nothing', async () => {
+    const { rig, wire, beat } = await rigOnTheBench()
+    const heard = []
+    const stop = beat.onUnitBeat((at) => heard.push(at))
+    const before = JSON.stringify(rig.getState())
+    rig.handleEvent({ type: 'beat', at: 4242 })
+    rig.handleEvent({ type: 'beat', at: 4742 })
+    assert.deepEqual(heard, [4242, 4742], 'the beat did not reach its listener')
+    assert.deepEqual(wire, [], `a beat made the phone ask the unit something: ${wire.join(', ')}`)
+    assert.equal(JSON.stringify(rig.getState()), before, 'a beat changed what a screen draws')
+    stop()
+    rig.handleEvent({ type: 'beat', at: 5242 })
+    assert.equal(heard.length, 2)
   })
 
   test('the sound picked Off: nothing clicks at either end, the unit is told to stop, and the edge alone lights; a place picked is the sound back', async () => {
@@ -7501,7 +7988,7 @@ export function run(test) {
     const hook = lib.slice(lib.indexOf('export function usePhoneClick'))
     assert.match(hook, /const running = Boolean\(on && beat\)/, 'the phone is kept awake on something other than the click running')
     assert.match(hook, /if \(!on \|\| !beat\) return undefined/, 'the click and the keep-awake no longer start on the same thing')
-    assert.match(hook, /\}, \[on, sound, flash, beat, onBeat\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
+    assert.match(hook, /\}, \[on, sound, flash, beat, onBeat, follow\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
 
     /* No new package: the one the Play screen already uses, so nothing native moves. */
     assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-keep-awake'], 'expo-keep-awake is gone from the phone')
@@ -15417,7 +15904,15 @@ export function run(test) {
      * not true. device.js already wraps that call in a try and falls back, so
      * the demo simply reports no firmware, which is the honest answer.
      */
-    const exempt = new Set(['/device'])
+    /*
+     * AND A SECOND, the same kind of decision: `/tempo/beat` is when the
+     * unit's own beat last fell (lib/beatLock). A simulated unit makes no
+     * sound and has no beat to line up with, and a made-up one would put
+     * the demo's light "in step" with nothing. So the demo is never asked:
+     * unitBeatRoad answers null there, and nothing follows a beat.
+     */
+    const exempt = new Set(['/device', '/tempo/beat'])
+    assert.match(dev, /export const unitBeatRoad = \(\) => \(demoDevice\(\) \|\| onVp4 \? null : /, 'the demo is asked for the unit’s beat')
 
     const missing = [...asked].filter((p) => !exempt.has(p) && !wire.includes(`'${p}'`))
     assert.deepEqual(

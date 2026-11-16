@@ -4,7 +4,7 @@ import { Platform, Text, View, useWindowDimensions } from 'react-native'
 import { color, font, mono, space, TAP } from '../lib/theme'
 import Note from './Note'
 import Press from './Press'
-import { setEdgeFlash, setMetronome, setMetronomeSound, useEdgeFlash, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { setEdgeFlash, setMetronome, setMetronomeSound, useEdgeFlash, useInStep, useMetronome, useUnitHeardOn } from '../lib/metronome'
 import { PLACES, beatMs, clicks, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { EDGE_WORDS, SOUND_WORDS, deviceSounds, soundChoices, soundLine, soundLit } from '../lib/edgeFlash'
 import { useRig } from '../lib/rig'
@@ -87,6 +87,8 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   const [said, setSaid] = useState(null)
   /* The sound and the flash as choices: for an account offered them, in the pop-up, where there is room. */
   const choice = useEdgeFlash()
+  /* Whether this device's beat is on the unit's right now (lib/beatLock): the line says so in place of "can be apart". */
+  const inStep = useInStep()
   const { height: tall } = useWindowDimensions()
   const choices = !compact && choice.offered && tall >= ROOM_FOR_CHOICES
 
@@ -109,7 +111,7 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   /* Said for an account offered the choices wherever it is drawn, the tempo box too: with the sound Off, "clicks out loud" would not be so. */
   const where = choice.offered
     ? choice.quiet || unitCan.can
-      ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, demo, noun: deviceNoun() })
+      ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, demo, noun: deviceNoun(), inStep })
       : unitCan.why
     : unitCan.can
       ? place?.note || ''

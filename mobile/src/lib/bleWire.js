@@ -1594,6 +1594,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return who
   }
 
+  /* When this device last sent a tap (gen3Tap): a beat is not handed on for BEAT_TAP_QUIET_MS after one (the computer app keeps the same quiet, ForgeFX unitBeat.ts). */
+  let tapAt = -Infinity
+  const BEAT_TAP_QUIET_MS = 400
+
   /** What the unit said that nobody was waiting for. */
   function unasked(f, now) {
     /*
@@ -1616,7 +1620,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (tuner.on && tuner.way === 'push') tunerPushed(push)
       return
     }
-    if (isBeatPush(f, model)) return
+    if (isBeatPush(f, model)) {
+      /*
+       * The unit's tempo beat, handed on with the moment it came, for
+       * whoever is keeping this device's beat (lib/unitBeat, lib/beatLock).
+       * Never just after a tap this device sent: the unit's answer to one,
+       * or an adapter's echo of it, is this same message and no beat.
+       * Nothing is sent for it and nothing here acts on it.
+       */
+      if (now - tapAt >= BEAT_TAP_QUIET_MS) emit({ type: 'beat', at: now })
+      return
+    }
     const scene = parseScene(f, model)
     if (scene !== null) return noteScene(scene, true)
     const preset = parsePresetName(f, model)
@@ -2340,6 +2354,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Tap() {
+    tapAt = time.now()
     const r = await fire(buildTap(model), 'a tap')
     if (rejected(r)) throw refusedBy(r.rejected)
     return { ok: true }

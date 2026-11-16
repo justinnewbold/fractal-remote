@@ -45,6 +45,20 @@
 export const BENCH = true
 
 /**
+ * THE DEVICE'S BEAT ON THE UNIT'S BEAT (lib/beatLock, lib/unitBeat), his
+ * account only.
+ *
+ * "The metronome is not matching up properly into the sound coming out of
+ * speakers. There's a delay." (Justin, 16 November 2026.) With the unit
+ * clicking and the device lighting or clicking beside it, the device now
+ * listens for the unit's own beat and moves its own onto it. Whether his
+ * unit sends that beat down its USB port has not been seen: with none
+ * heard, nothing changes and the log says why. `false` is his account
+ * only, as every new thing is; `true` when he has seen it line up.
+ */
+export const BEAT_LOCK_FOR_EVERYONE = false
+
+/**
  * TWO SIDES ON A BIG SCREEN (lib/twoSides, components/Sides), for everyone.
  *
  * ON since 9 November 2026: "Go ahead and flip the switch though to turn

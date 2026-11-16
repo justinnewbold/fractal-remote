@@ -266,6 +266,26 @@ export const INSTALL_WINDOW_MS = 3 * 60 * 1000
  */
 
 /**
+ * A RASPBERRY PI (OR ANOTHER ARM BOARD ON LINUX) IS A PEDALBOARD BOX, WINDOW
+ * OR NO WINDOW.
+ *
+ * "I thought the pi apps auto update?" and "You're telling me I need to
+ * update it myself?" (Justin, 16 November 2026, his Pi 5 still on 1.90.63
+ * with 1.90.82 out). It had the update downloaded and was waiting for a
+ * quit: his Pi opens the app WITH its window, the guide's way, and is
+ * switched off at the wall, which is no quit. The power-on install was only
+ * for a start with no window. On an ARM board on Linux the window is on a
+ * screen on the pedalboard that nobody sits at, so at power-on it is
+ * treated as nobody there: a waiting update goes in then, before anybody is
+ * playing, window or not, and never once a phone has used it that run. A
+ * Mac, a Windows PC and a Linux PC with a window open still wait for a quit
+ * (somebody is in front of them). An ARM computer somebody sits at (a Pi 400
+ * at a desk) can restart itself in its first three minutes, before any phone
+ * has used it: the price of a pedalboard Pi that otherwise never updates.
+ */
+export const pedalboardBox = ({ platform = '', arch = '' } = {}) => platform === 'linux' && /^arm/.test(String(arch))
+
+/**
  * Whether to install a ready update now, with nobody there.
  *
  *   { install: true }
@@ -277,8 +297,16 @@ export const INSTALL_WINDOW_MS = 3 * 60 * 1000
  * the case exactly when there is no AppImage. The AppImage, a Mac and Windows
  * all install without asking anybody anything.
  */
-export function unattendedInstall({ hidden = false, sinceLaunchMs = 0, platform = '', env = {} } = {}) {
-  if (!hidden) return { install: false, why: 'somebody is here to choose' }
+export function unattendedInstall({ hidden = false, sinceLaunchMs = 0, platform = '', arch = '', env = {}, phoneSeen = false } = {}) {
+  if (!hidden && !pedalboardBox({ platform, arch })) return { install: false, why: 'somebody is here to choose' }
+  /*
+   * Never once a phone has used this computer since it started: somebody is
+   * playing through it. A download that lands a minute or two after power-on
+   * (a release out since the last one, or wifi that came up late) would
+   * otherwise restart the box mid-song (an independent read, 16 November
+   * 2026). It waits for the next power-on, or a quit.
+   */
+  if (phoneSeen) return { install: false, why: 'a phone is already using it, so it waits for the next start or a quit' }
   if (sinceLaunchMs > INSTALL_WINDOW_MS) return { install: false, why: 'it installs when the app quits' }
   if (platform === 'linux' && !env.APPIMAGE) {
     return { install: false, why: 'the .deb asks for a password to install, so it waits for a quit' }
@@ -302,8 +330,8 @@ export const UPDATE_RETRY_MS = 30 * 1000
  * the install window the look every few hours takes over again (nextLookMs
  * in lib/updates.mjs).
  */
-export function updateRetryDelay({ hidden = false, kind = null, sinceLaunchMs = 0 } = {}) {
-  if (!hidden || kind !== 'trouble') return null
+export function updateRetryDelay({ hidden = false, kind = null, sinceLaunchMs = 0, platform = '', arch = '' } = {}) {
+  if ((!hidden && !pedalboardBox({ platform, arch })) || kind !== 'trouble') return null
   return sinceLaunchMs < INSTALL_WINDOW_MS ? UPDATE_RETRY_MS : null
 }
 
