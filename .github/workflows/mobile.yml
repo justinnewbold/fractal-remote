@@ -58,6 +58,18 @@ on:
         description: 'Build with the Expo packages as they are, even if Expo has newer patches (keeps this build on the same update line as the store copies before it)'
         type: boolean
         default: false
+      next_store:
+        description: 'Build the next store version: the native work waiting in docs/pending put in for this build only (main is left as it is, so the store copies keep their updates)'
+        type: boolean
+        default: false
+      android_testing:
+        description: "Send Android to Google Play's internal testing track (testers only), not production"
+        type: boolean
+        default: false
+      store_version:
+        description: 'The version number the stores show for this build, such as 2.0.0 (leave empty for the app''s own; the updates keep theirs either way)'
+        type: string
+        default: ''
       update:
         description: 'Publish a JS update instead of building (costs no build slot)'
         type: boolean
@@ -230,6 +242,75 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_SECRET }}
 
+      # THE NEXT STORE VERSION, BUILT WITHOUT TAKING THE STORE COPIES' UPDATES
+      # AWAY. "Can you do the iphone and android builds as version 2.0, but
+      # leave the over the air updates at the intervals we are doing now? I
+      # want to test it all on test flight first before a public release but
+      # i still want OTA updates going out in the meantime." (Justin, 16
+      # November 2026.) Merging docs/pending's native work into main would
+      # move main's fingerprint, and from that merge on no update would reach
+      # a copy in the stores until its owner installed the new one. So the
+      # patches go into this build's checkout only (scripts/apply-pending.sh,
+      # the README's order), main keeps the store copies' fingerprint and
+      # every merge still reaches them, and the update job publishes each
+      # update a second time, with the same patches, for this build's testers
+      # (docs/pending/next-store.json). Before Install, because a patch may
+      # bring a package and its lock.
+      #
+      # Google Play's internal testing track is one of those patches
+      # (play-internal: eas.json is in the fingerprint, so its `testing`
+      # submit profile could not go into main without stopping every
+      # update), so that box wants this one: on a build, ticked as well; on
+      # a submission, the patches come in for the profile and nothing is
+      # built from them.
+      - name: The internal testing track is for the next store version
+        if: ${{ inputs.android_testing && !inputs.next_store && !inputs.submit_only }}
+        run: |
+          echo "::error::Google Play's internal testing track is for the next store version: tick Build the next store version as well."
+          exit 1
+
+      # AND THE OTHER WAY ROUND: a next store version is for testers until
+      # Justin says. "I want to test it all on test flight first before a
+      # public release" (16 November 2026). Without this, Build the next store
+      # version (or a store version number) with Send ticked and the testing
+      # box left alone sends Android with plain --auto-submit, so by the
+      # `production` submit profile to Google Play production, everyone; and
+      # a Skip building resend without the box sends the newest Android
+      # build, which is the testers' one while docs/pending/next-store.json
+      # is there, to the same place (an independent read, before the 2.0.0
+      # pair). The iPhone's only way is TestFlight, which is testers, so an
+      # iPhone run is left alone. On release day there is no new build to
+      # send: Promote release in Play Console.
+      - name: A next store version goes to testers, never to everyone
+        if: >-
+          ${{ inputs.platform != 'ios' && !inputs.android_testing && (
+          (inputs.submit && !inputs.submit_only && (inputs.next_store || inputs.store_version != '')) ||
+          (inputs.submit_only && hashFiles('docs/pending/next-store.json') != '')
+          ) }}
+        run: |
+          echo "::error::A next store version goes to Google Play's internal testing track until it is released: tick Send Android to Google Play's internal testing track (or untick Send)."
+          exit 1
+
+      - name: The next store version's native work, for this build only
+        if: ${{ inputs.next_store || inputs.android_testing }}
+        run: bash scripts/apply-pending.sh
+
+      # AND ITS NUMBER, in this build's copy only. "dont change the build
+      # number to 2.0.0 on the updartes currently going. only after we do the
+      # native builds" (Justin, 16 November 2026.) mobile/app.json's version
+      # is what App Store Connect, TestFlight, Google Play and the copy's own
+      # installedStoreVersion() read; it is written here on the runner and
+      # never committed, so main and every update keep their own number. Left
+      # out of the fingerprint, so it changes nothing about which updates the
+      # build takes. scripts/store-version.mjs refuses anything that is not
+      # three numbers, or is below what a store already has, and then nothing
+      # is built. Read through env, never pasted into the script.
+      - name: The version number the stores show, for this build only
+        if: ${{ inputs.store_version != '' && !inputs.submit_only }}
+        env:
+          STORE_VERSION: ${{ inputs.store_version }}
+        run: node scripts/store-version.mjs "$STORE_VERSION"
+
       - name: Install the app's own dependencies
         working-directory: mobile
         run: npm ci
@@ -338,13 +419,21 @@ jobs:
       #
       # `--latest` is the newest finished build for the platform, which is
       # exactly the one the failed submission was for.
+      #
+      # "Send Android to Google Play's internal testing track" picks the
+      # `testing` submit profile (docs/pending/play-internal.patch, put in
+      # above) in place of `production`: the iPhone the same
+      # (TestFlight, never the App Store without Justin's own submission),
+      # Android to Play's internal testing track, so nothing is public. A
+      # build there is put in production later with Promote release in Play
+      # Console, no new build.
       - name: Send the last build
         if: ${{ inputs.submit_only }}
         working-directory: mobile
         run: |
           eas submit \
             --platform "${{ inputs.platform }}" \
-            --profile "${{ inputs.profile }}" \
+            --profile "${{ inputs.android_testing && 'testing' || inputs.profile }}" \
             --latest \
             --non-interactive
 
@@ -388,7 +477,7 @@ jobs:
             --profile "${{ inputs.profile }}" \
             --non-interactive \
             --no-wait \
-            ${{ inputs.submit && '--auto-submit' || '' }}
+            ${{ inputs.submit && (inputs.android_testing && '--auto-submit-with-profile=testing' || '--auto-submit') || '' }}
 
   # ---------------------------------------------------------------- updating
   #
@@ -481,6 +570,29 @@ jobs:
               --message "${GITHUB_REF_NAME}@$(git rev-parse --short HEAD): $(git log -1 --pretty=%s | cut -c1-80)" \
               --non-interactive
           done
+
+      # AND A SECOND TIME FOR THE NEXT STORE VERSION'S TESTERS, while one is
+      # out (docs/pending/next-store.json, written in the pull request after
+      # its build was started, with the fingerprints that build carries).
+      # Main's own update has gone first, above, so the store copies have
+      # theirs whatever happens here. The same patches as the build, in the
+      # same order (scripts/apply-pending.sh), so the same fingerprint, and
+      # the production branch only: a store build listens on production.
+      # scripts/next-store.mjs says, before publishing, whether what is about
+      # to go out still matches the build the testers have; a patch changed
+      # since that build means they take no update until another build.
+      - name: Publish for the next store version's testers
+        if: ${{ hashFiles('docs/pending/next-store.json') != '' && (inputs.update_channel || 'both') != 'preview' }}
+        run: |
+          set -euo pipefail
+          bash scripts/apply-pending.sh
+          (cd mobile && npm ci)
+          node scripts/next-store.mjs
+          cd mobile
+          eas update \
+            --branch production \
+            --message "next store version, ${GITHUB_REF_NAME}@$(git rev-parse --short HEAD): $(git log -1 --pretty=%s | cut -c1-60)" \
+            --non-interactive
 
       - name: What was published
         run: |

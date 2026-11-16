@@ -15,6 +15,15 @@ When the build is agreed:
     npm test
 
 then bump the version, delete the patch file in the same change, and build.
+
+Or, to put a store version in testers' hands first with main and its updates
+left as they are, build with mobile.yml's "Build the next store version" box,
+which applies every patch here in the table's order in the build's own
+checkout (scripts/apply-pending.sh), and write next-store.json here in the
+pull request after the build, so every update is also published with these
+patches in for those testers. CLAUDE.md, "Or build them for testers first",
+has the whole of it, release day included (which deletes next-store.json
+along with the patch files).
 test/mobile.mjs tries every patch alone against the tree and all of them one
 after another in the table's order (in a copy), so a patch remade for one of
 those must still pass the other.
@@ -25,11 +34,13 @@ those must still pass the other.
 | `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, opens quick edit on a held pedal where the iPhone offers it (its channels in one row over a list of the block's knobs, the Digital Crown turning the one picked; "Hold a pedal for quick edit." under the pedals), and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 | `bluetooth-done.patch` | Puts a Done button on Apple's Bluetooth MIDI Devices screen, top right, where iOS 27 shows only Edit: Apple's screen is drawn inside a screen whose bar is the app's own (`PairingHost`), so Apple's code can no longer take the button off. Edit stays, on the left. The build says so (`pairHasDone`), and the app's words go back from "swipe that screen down" to "then Done". | **iPhone only** (android and the watch do not move) |
 | `tone3000-in-app.patch` | TONE3000's page comes up inside the app instead of in the browser: a web view over the Developer card, with TONE3000's name and a Close button, the way TONE3000's own examples for a phone do it. Its sign-in is kept in the phone's secure storage, on that phone only, and a sign-in's one-time word comes from the phone's secure random numbers. Adds react-native-webview, expo-secure-store and expo-crypto, and nothing else: everything that uses them is already in the tree and does what it did before until a build brings them. His account only, as the card is. | **android and ios** (the watch line does not move) |
+| `play-internal.patch` | Adds a second way to send a build, `testing` in mobile/eas.json: the iPhone to TestFlight exactly as the `production` one does, Android to Google Play's internal testing track (testers only) in place of production. mobile.yml's "Send Android to Google Play's internal testing track" box asks for it. Nothing in the app changes. | **android and ios**, because eas.json is in the fingerprint (the watch line does not move) |
 
-Four patches are waiting: phone-turns (10 November 2026), whose section is
+Five patches are waiting: phone-turns (10 November 2026), whose section is
 next, watch-page-order (11 November 2026), whose section follows it,
 bluetooth-done (14 November 2026), whose section is after that, and
-tone3000-in-app (14 November 2026), whose section is the last of the four.
+tone3000-in-app (14 November 2026), whose section follows that, and
+play-internal (16 November 2026), whose section is the last of the five.
 Before them, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
@@ -922,6 +933,23 @@ account's, until the TONE3000 screen is built where a player meets it.
 That screen, and the privacy page and App Store notes that go with showing
 another company's page and keeping a sign-in to it, are a store version's
 work and not this patch's.
+
+**play-internal.patch, and why it waits.** Justin, 16 November 2026: "Can
+you do the iphone and android builds as version. 2.0, but leave the over the
+air updates at the intervals we are doing now? I want to test it all on test
+flight first before a public release". The iPhone's testers are TestFlight,
+which every build already goes to. Android's have to be Google Play's
+internal testing track, since `production` in eas.json sends a build to
+every Play customer once Google's review passes ("It's all production now",
+10 October 2026). So a second submit profile, `testing`, the same as
+`production` but for Android's track. It could not simply go into main:
+@expo/fingerprint hashes the whole of mobile/eas.json, so the profile
+alone moved both phones' lines (measured: android 27d15e4d to e68219f9, ios
+c16f1c0d to 45bce9d1), and from that merge on no update would have reached
+a copy in the stores. Here it is applied with the rest of this folder, in
+the build's checkout and in the testers' updates, so they carry the same
+fingerprint as each other, and on release day it goes into main with the
+others. Nothing else goes with it.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it
