@@ -21476,7 +21476,8 @@ export function run(test) {
     }
     /* The same adapter back under a new id in Apple's list (adapterBackUnderNewId): what it answered, and the reset card's place, go with it. */
     {
-      const NEW = { ...UHOST, id: 'u2' }
+      /* Its name as the phone reports it this time, in other capitals: both checks of the same adapter back lower-case it, and must agree. */
+      const NEW = { ...UHOST, id: 'u2', name: UHOST.name.toUpperCase() }
       const at = Date.now()
       const four = await bluetoothOnABench({
         mod: { supported: () => true, devices: () => [{ ...UHOST, offline: true }, NEW], addListener: () => ({ remove() {} }) },
@@ -21669,6 +21670,9 @@ export function run(test) {
     /* The card goes the moment the unit answers, and says so where it was, for a moment. */
     assert.match(page, /const backAgain = !!b\.resetBack && connected && unitState === 'present'/)
     assert.match(page, /\{backAgain \? <Text accessibilityLiveRegion="polite" [^>]*>\{resetBack\(b\.unit\)\}<\/Text> : null\}/)
+    /* AND IT IS SEEN: a Connect tapped before the card came up armed the page for Play, which went there the moment a reset worked. The card disarms it; the STRAIGHT TO PLAY effect is the only other thing that reads it, after. */
+    assert.match(page, /useEffect\(\(\) => \{\s*if \(fixing\) asked\.current = false\s*\}, \[fixing\]\)\s*useEffect\(\(\) => \{\s*if \(!asked\.current \|\| said\.tone !== 'ok' \|\| b\.answeredAs\) return/, 'the reset card does not disarm the jump to Play, so “answering again” is never seen after a Connect on the page')
+    assert.equal((page.match(/asked\.current = false/g) || []).length, 2, 'something else disarms the jump to Play')
     /* And it goes by itself after RESET_BACK_MS, in lib/bluetooth, whichever screen is showing: never by a timer of the page's, which ran only while the page was open. */
     assert.ok(!/clearResetBack|BACK_SHOWN_MS/.test(page), 'the page keeps its own timer for “answering again”')
     /* The big line says nothing is coming back, not the plugs. */
@@ -21785,6 +21789,10 @@ export function run(test) {
             assert.equal(press(gear.RESET_RECONNECT)[0].props.onPress, go, `${at}: Reconnect does not reconnect`)
             assert.equal(press(gear.RESET_RECONNECT)[0].props.sub, 'its line', at)
           }
+          /* Until the adapter has been gone about 15 seconds the page hands the card no Reconnect (fixReconnect null): none is drawn, and the card still draws its step. */
+          const early = ResetCard({ unit: 'fm3', steps, at: s.key, reconnect: null, onStill: still, onSettings: os === 'ios' ? null : settings, onReport: report })
+          assert.equal(walkTree(early, (e) => e.type === 'Press' && e.props.label === gear.RESET_RECONNECT).length, 0, `${at}: a Reconnect with nothing to do`)
+          assert.equal(textOf(early.children[1]), `Step ${i + 1} of ${steps.length}: ${s.title}`, `${at}: with no Reconnect the card lost its step`)
           /* Still nothing to the next on all but the last, which is the report. */
           if (i === steps.length - 1) {
             assert.equal(s.key, 'report', at)
@@ -22085,6 +22093,7 @@ export function run(test) {
       try {
         await p.ble.findAdapters({ cableFirst: false })
         carried(p.ble, 'Reconnect through Apple’s screen')
+        assert.equal(JSON.parse(p.disk.get('fractal.bluetooth.reset')).adapter, 'u2', 'the card’s place moved to the new id only in memory: closing the app starts it again')
         assert.ok(p.log.some((l) => l.includes('WIDI Uhost is the same adapter as before, under a new id')), p.log.join(' | '))
       } finally {
         p.done()
@@ -22112,6 +22121,39 @@ export function run(test) {
         assert.equal(p.ble.letGoOfKeptAdapter(), true)
         await p.ble.findAdapters({ cableFirst: false })
         fresh(p.ble, 'Use a different adapter')
+      } finally {
+        p.done()
+      }
+    }
+    /* FORGOTTEN FOR ANOTHER UNIT (what was forgotten is the unit's own): the FM3's Uhost forgotten by Connect, the AM4 picked, a Uhost chosen for it. */
+    {
+      const m = movingModule([{ ...U1, offline: true }, U2])
+      const p = await onBench({ mod: m.mod, disk: { ...keptFm3(), ...heardDisk, ...cardAt('forget', ['restart', 'bluetooth']) } })
+      try {
+        p.ble.forgetAdapter()
+        p.ble.setBluetoothUnit('am4')
+        p.ble.chooseAdapter(U2)
+        assert.equal(p.ble.adapterCameBack('u1', 'u2'), false, 'the FM3’s forgotten adapter taken back for the AM4')
+        assert.equal(p.ble.adapterHeard('fm3', 'u2').answered, null, 'the FM3’s record went onto the AM4’s adapter')
+      } finally {
+        p.done()
+      }
+    }
+    /* AND ONLY UNTIL THE NEXT CHOICE: another adapter chosen, then the FM3 left with none (its Forget from the AM4's page) and a Uhost chosen for it. */
+    {
+      const U3 = { ...U1, id: 'u3' }
+      const m = movingModule([{ ...U1, offline: true }])
+      const p = await onBench({ mod: m.mod, disk: { ...keptFm3(), ...heardDisk } })
+      try {
+        p.ble.forgetAdapter()
+        p.ble.chooseAdapter({ id: 'w9', name: 'WIDI Master', driver: BT_DRIVER, offline: false })
+        p.ble.setBluetoothUnit('am4')
+        p.ble.forgetAdapterFor('fm3')
+        p.ble.setBluetoothUnit('fm3')
+        m.list = [{ ...U1, offline: true }, U3]
+        p.ble.chooseAdapter(U3)
+        assert.equal(p.ble.adapterCameBack('u1', 'u3'), false, 'a forget from two choices ago taken as the same adapter back')
+        assert.equal(p.ble.adapterHeard('fm3', 'u3').answered, null, 'a forget from two choices ago gave its record to a later Uhost')
       } finally {
         p.done()
       }
@@ -22188,10 +22230,37 @@ export function run(test) {
         assert.deepEqual(p.ble.resetDone(), ['restart', 'bluetooth', 'forget', 'reopen'], 'closing the app is not counted among the steps done')
         assert.ok(p.log.includes('ble reset steps: the app was opened again; next, “Switch off other Bluetooth gear nearby”'), p.log.join(' | '))
         /* And the unit answering now says so in the log, with closing the app among the steps done. */
+        /* Saved so: the next launch does not count the same opening again. */
+        assert.equal(JSON.parse(p.disk.get('fractal.bluetooth.reset')).step, 'nearby', 'the step after “Close the app” was not written down')
+        kept = Object.fromEntries(p.disk)
         p.ble.unitAnswered()
         assert.ok(p.log.some((l) => l.includes('the FM3 answers again, with the reset steps on “Switch off other Bluetooth gear nearby” (done before it: “Restart the adapter”, “Turn Bluetooth off and on”, “Forget it and pair it again”, “Close the app and open it again”)')), p.log.join(' | '))
       } finally {
         p.done()
+      }
+    }
+    {
+      const p = await onBench({ mod: movingModule([U1]).mod, disk: kept })
+      try {
+        assert.equal(p.ble.resetStepNow(CARD_KEYS), 'nearby')
+        assert.ok(!p.log.some((l) => l.includes('the app was opened again')), 'one opening of the app counted twice')
+      } finally {
+        p.done()
+      }
+    }
+    /* LEFT ON "Close the app" AND NEVER FINISHED: past RESET_KEEP_MS it is nobody's, says nothing at launch, and goes from the phone, at this launch and every one after. */
+    {
+      let disk = { ...keptFm3(), ...cardAt('reopen', ['restart', 'bluetooth', 'forget'], Date.now() - 2 * 24 * 60 * 60 * 1000) }
+      for (const launch of [1, 2]) {
+        const p = await onBench({ mod: movingModule([U1]).mod, disk })
+        try {
+          assert.ok(!p.log.some((l) => l.includes('the app was opened again')), `launch ${launch}: a reset two days old said to be under way`)
+          assert.equal(p.ble.resetStepNow(CARD_KEYS), 'restart', `launch ${launch}`)
+          assert.equal(JSON.parse(p.disk.get('fractal.bluetooth.reset') ?? 'null'), null, `launch ${launch}: a place two days old kept on the phone`)
+          disk = Object.fromEntries(p.disk)
+        } finally {
+          p.done()
+        }
       }
     }
     /* Any other step is restored as it was. */

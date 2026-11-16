@@ -840,6 +840,18 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const arm = () => {
     asked.current = true
   }
+  /*
+   * THE RESET CARD TOOK THIS SESSION OVER: the card says the unit is back,
+   * here (backAgain), not Play. A Connect tapped before the card came up
+   * left the page armed, so the moment a reset worked the page went to Play
+   * and "answering again" was never seen. A Connect tapped after it (Stop
+   * then Connect, Use a different adapter) arms again. `fixing` wants the
+   * unit not answering, so it is never true in the render where said.tone
+   * turns 'ok': the two effects never race.
+   */
+  useEffect(() => {
+    if (fixing) asked.current = false
+  }, [fixing])
   useEffect(() => {
     if (!asked.current || said.tone !== 'ok' || b.answeredAs) return
     asked.current = false

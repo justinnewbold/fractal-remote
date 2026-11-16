@@ -4025,6 +4025,18 @@ never touched. It had hit two paying customers too.
   answered before" (nothing is seeded, so that was false for every
   customer): "First time with the WIDI Uhost on your FM3? Check its plugs
   first."
+  A SECOND READ, OF THOSE FIXES, found six more, fixed the same way: a
+  place left on Close the app and never finished logged "the app was opened
+  again" at every launch for good (a place past `RESET_KEEP_MS` now goes
+  from the phone, and the step after Close the app is saved, not only
+  held); a Connect tapped on the page before the card came up still sent
+  the page to Play the moment a reset worked, so "answering again" was
+  never seen (the card disarms that jump; a Connect after it arms it
+  again); and four tests that did not yet hold what they named (the card
+  with no Reconnect yet, the moved place written to the phone, `forgot`
+  being one unit's and gone at the next choice, and the same name in other
+  capitals). THE LESSON AGAIN: the fixes were read, and that read found
+  the next faults.
 - **THE PLUGS BY WHAT IS KNOWN, never dropped on bytes alone.** lib/bluetooth
   keeps, per unit and adapter, the day the adapter last answered that unit
   (`adapterHeard`, under its own key `fractal.bluetooth.heard`: keptAdapter

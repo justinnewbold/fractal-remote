@@ -911,15 +911,25 @@ export async function restoreBluetooth() {
   }
   try {
     const memo = await AsyncStorage.getItem(RESET_KEY)
-    const r = settleReset(memo ? JSON.parse(memo) : null)
+    const kept = settleReset(memo ? JSON.parse(memo) : null)
+    /*
+     * A place older than RESET_KEEP_MS is nobody's any more, and goes from
+     * the phone too: nothing else would ever clear it (the unit answering
+     * clears only a place still in date), and one left on 'reopen' wrote
+     * "the app was opened again" into the log at every launch for good,
+     * so every report after it said a reset was under way.
+     */
+    const r = kept && Date.now() - kept.at < RESET_KEEP_MS ? kept : null
+    if (kept && !r) keepReset(null)
     /*
      * CLOSING THE APP WAS THE STEP IT WAS ON ("Close the app and open it
      * again"): opening it is that step done, so the card goes on to the one
      * after it (resetSteps puts 'nearby' straight after 'reopen'), never the
-     * same step again under "These steps pick up where you left off".
+     * same step again under "These steps pick up where you left off". Saved
+     * so, so the next launch does not count the same opening again.
      */
     if (r && r.step === 'reopen') {
-      now = { ...now, reset: { ...r, step: 'nearby', done: [...r.done.filter((k) => k !== 'reopen'), 'reopen'] } }
+      keepReset({ ...r, step: 'nearby', done: [...r.done.filter((k) => k !== 'reopen'), 'reopen'] })
       logDebug('ble', `reset steps: the app was opened again; next, “${RESET_TITLES.nearby}”`)
     } else now = { ...now, reset: r }
   } catch {
