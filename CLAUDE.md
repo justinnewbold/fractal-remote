@@ -1983,6 +1983,29 @@ now is ORDER_CLOSE_MS at the grid read or at the closing question (at
 both only where a second one goes on the line while the grid is read),
 except behind a save's question.
 
+*And a sixth read, of THOSE fixes, found the deadline still spent on the
+player's taps (16 November 2026), fixed, each fix and test seen to fail
+with it taken out.* The deadline counted the whole line, and taps go ahead
+of every read: with a "which preset?" in the line that DOES answer (Play's
+own, or the Presets list beside Play naming slots, which always has one
+out), four block taps or a scene whose answer is lost used it up before
+that question had even gone, so a healthy unit lost the order for the
+visit, at the grid read as well as at the closing question. Now it gives
+up only on a "which preset?" on the line that has gone unanswered for
+ORDER_CLOSE_MS from when IT went (bleWire `presetHolds`, handed to the
+send queue as `stillFor`); taps, scene and tempo reads, a read held for a
+late answer to its own kind, and a "which preset?" that answers in time
+are all waited for. A drop is still the usual order that once, no miss,
+nothing kept and no late window opened. The tests now also hold the
+priority half of `presetAhead` (a save's question waiting at a write's
+place gives the deadline, the watch's on the line gives it, Edit's waiting
+behind Play's reads does not) and a dropped grid read leaving the next
+visit free to ask. Left, as the fifth read said: a save's own question
+that goes ahead AFTER the order looked gets no deadline, so with its
+answer lost Play's tiles wait about one and a half to four seconds; and a
+lost question of another kind ahead costs its own wait (about 0.7 s for a
+scene or tempo read), with the order kept.
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 

@@ -300,12 +300,20 @@ export const ORDER_QUIET_MS = 400
  * read a second and a half for an order the check after it then threw
  * away (a fifth read). Not sent by then: the usual order this time, no
  * miss, nothing kept, asked again at the next read once that question's
- * window has passed. A question ahead that is slow but does answer costs
- * the order for that one read. The player's own taps ahead are waited
- * for, with no deadline: given one, a scene whose echo was lost, or four
- * block taps, lost the order for the visit (the same fifth read).
+ * window has passed. A question of that kind ahead that is slow but does
+ * answer costs the order for that one read.
+ *
+ * IT IS COUNTED ONLY WHILE A QUESTION OF THAT KIND HOLDS THE LINE
+ * (gridOrder `presetHolds`), never on the line as a whole: one on the line
+ * has ORDER_CLOSE_MS of its own wait from when it went, and everything
+ * else ahead, the player's own taps among them, is waited for. Counted on
+ * the whole line, four block taps or a scene whose echo was lost ahead of a
+ * healthy "which preset?" used it up before that question had even gone,
+ * and the order was lost for the visit (a fifth read, and a sixth).
  */
 export const ORDER_CLOSE_MS = ORDER_QUIET_MS + 50
+/* While something other than a "which preset?" holds the line at the order's deadline, how long until the line is looked at again. */
+const ORDER_LOOK_MS = 20
 /* Reads for Play's order that brought back nothing it could use, in a row, before it is not asked again on this connection. */
 export const ORDER_MISSES_MOST = 2
 /* Orders kept on one connection, the oldest let go first. */
@@ -1262,14 +1270,28 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return new Promise((resolve, reject) => {
       const job = { out, opts, priority, resolve, reject, back: null, deadline }
       if (deadline !== null) {
-        job.late = time.setTimeout(() => {
+        /*
+         * Whoever asked may say, at the deadline, that what holds the line
+         * is not what the deadline is for (`stillFor`: how much longer to
+         * wait before looking again, 0 to give up now). Play's order gives
+         * up only on a "which preset?" that holds the line (gridOrder
+         * presetHolds); anything else ahead is waited for. Such a job is
+         * not dropped at its turn either (pump).
+         */
+        const due = () => {
           job.late = undefined
           const i = waiting.indexOf(job)
           if (i < 0) return
+          const more = typeof opts.stillFor === 'function' ? opts.stillFor() : 0
+          if (more > 0) {
+            job.late = time.setTimeout(due, more)
+            return
+          }
           waiting.splice(i, 1)
           say(`not sent, still waiting for the line at its deadline: ${opts.what || 'a message'}`)
           reject(tooLate())
-        }, deadline - time.now())
+        }
+        job.late = time.setTimeout(due, deadline - time.now())
       }
       const at = waiting.findIndex((j) => j.priority > priority)
       waiting.splice(at < 0 ? waiting.length : at, 0, job)
@@ -1348,8 +1370,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       time.clearTimeout(job.late)
       job.late = undefined
     }
-    /* Its turn came after its deadline: dropped, and the next in line goes. */
-    if (job.deadline !== null && job.deadline !== undefined && time.now() >= job.deadline) {
+    /* Its turn came after its deadline: dropped, and the next in line goes. Not one whose asker judges the line at the deadline (`stillFor`): its turn coming is the line being free. */
+    if (job.deadline !== null && job.deadline !== undefined && time.now() >= job.deadline && typeof job.opts.stillFor !== 'function') {
       say(`not sent, its turn came after its deadline: ${job.opts.what || 'a message'}`)
       job.reject(tooLate())
       return pump()
@@ -2351,11 +2373,40 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * is lost holds the line half a second, four block taps as long, and with
    * a deadline every time either lost the order for the visit, the log
    * blaming "another question" for a tap (a fifth read, 16 November 2026).
+   * And once given, the deadline counts only while such a question holds
+   * the line (presetHolds, below), so taps beside one are waited for too (a
+   * sixth read).
+   *
+   * BY PRIORITY: the one on the line counts whoever asked it (the watch's
+   * poll, a save's, Edit's: it holds the line all the same). One waiting
+   * counts only at Play's read priority or above (a save's question waits
+   * at a write's place, ahead of the read); Edit's own waits behind Play's
+   * reads, so it is never ahead of this one.
    */
   const presetAhead = () => {
     const fn = buildGetPreset(model)[5]
     return current?.opts?.fn === fn || waiting.some((j) => j.opts?.fn === fn && j.priority <= PRI.read)
   }
+  /*
+   * AT THE DEADLINE, WHETHER A "WHICH PRESET?" IS WHAT HOLDS THE LINE
+   * (`stillFor` on the order's two reads: 0 gives up, more looks again that
+   * much later). The deadline counted the whole line, and the player's taps
+   * go ahead of Play's reads: with a healthy "which preset?" in the line
+   * (Play's own, or the Presets list beside Play naming slots, which always
+   * has one out) four block taps or a scene whose answer is lost used up
+   * ORDER_CLOSE_MS before that question had even gone, and a healthy unit
+   * lost the order for the visit (a sixth read, 16 November 2026). So one
+   * on the line has ORDER_CLOSE_MS of its own wait, from when it went, and
+   * is given up on only when that has passed with no answer. Anything else
+   * on the line, or nothing on it while the line is held (a tap, a scene or
+   * tempo read, a read of any kind held for a late answer to its kind, a
+   * capture), is waited for, and the line looked at again ORDER_LOOK_MS
+   * later. (A "which preset?" held at the head for a late answer to its kind
+   * is not given up on either: the checks before both reads leave less of
+   * such a window than ORDER_CLOSE_MS, and one that goes unanswered while
+   * this waits is given up on at ORDER_CLOSE_MS, before its window opens.)
+   */
+  const presetHolds = () => (current?.opts?.fn === buildGetPreset(model)[5] ? Math.max(0, current.started + ORDER_CLOSE_MS - time.now()) : ORDER_LOOK_MS)
   /* The ids the order is checked on, in number order: never one that is no block (NOT_BLOCKS: an Axe-Fx III lists its Preset FC, 200, and its Performance page, 201, in every status answer, and neither is on the grid). */
   const orderIds = (ids) => ids.filter((id) => !NOT_BLOCKS.includes(id)).sort((a, b) => a - b)
   function keepOrder(key, order) {
@@ -2434,9 +2485,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
        * order looks) holds this read behind it, a second and a half where
        * its answer is lost, and the check after the grid's answer then threw
        * the order away, Play's tiles having waited 1.6 to 3 s for nothing (a
-       * fifth read). So the read is given ORDER_CLOSE_MS then, and not sent
-       * by it is the usual order this time, no miss, nothing kept, asked
-       * again at the next read once that question's window has passed.
+       * fifth read). So the read is given ORDER_CLOSE_MS then, counted only
+       * while such a question holds the line (presetHolds: the player's taps
+       * and anything else ahead are waited for, a sixth read), and not sent
+       * by it is the usual order this time, no miss, nothing kept, no late
+       * window opened (nothing went), asked again at the next read once that
+       * question's window has passed.
        *
        * Looked at again after the grid's answer, below, for a window that
        * opened while this read waited: a save's own "which preset?", asked
@@ -2453,7 +2507,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       let got = null
       /* Whether the read left the phone: a connection that goes while it is out is not "not sent". */
       let went = false
-      const gridBy = presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS } : {}
+      const gridBy = presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS, stillFor: presetHolds } : {}
       try {
         got = await orderHand.during([out], () =>
           ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order', {
@@ -2516,14 +2570,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
        * (an independent read, 16 November 2026). Not sent in time: the usual
        * order, no miss, nothing kept, asked at the next read. Nothing else
        * ahead of it is given up on: the player's own taps go first and are
-       * waited for, as they always were (a fifth read).
+       * waited for, as they always were (a fifth read), and so are they
+       * beside a "which preset?" that answers in time, since the deadline
+       * counts only while one holds the line (presetHolds, a sixth read).
        */
       let here = null
       /* Whether it left the phone: a connection that goes while it waits its turn has asked the unit nothing. */
       let closingWent = false
       try {
         here = await ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', {
-          ...(presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS } : {}),
+          ...(presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS, stillFor: presetHolds } : {}),
           sent: () => {
             closingWent = true
           }

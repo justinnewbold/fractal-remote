@@ -24284,6 +24284,14 @@ export function run(test) {
       assert.equal(g.logs.includes(GRID_LATE), !believed, g.logs.join(' | '))
       assert.equal(g.unit.state.lives, believed ? 1 : 0)
       await drive(g.clock, named)
+      if (!believed) {
+        /* Dropped, the grid read never went, so it opened no late window: the next visit, a second later, asks the grid and believes it. */
+        await advance(g.clock, 1000)
+        g.logs.length = 0
+        assert.deepEqual(idsOf(await g.get('/preset/blocks')), GRID_ORDER_FM3, 'a grid read that was never sent held the next one back: ' + g.logs.join(' | '))
+        assert.equal(g.unit.state.lives, 1)
+        assert.ok(!g.logs.some((l) => /grid read .*may still be answered/.test(l)), g.logs.join(' | '))
+      }
       /* Ahead of the closing question: asked while the grid read is out, so it goes the moment the grid answers. */
       const c = await played('fm3', { grid: ORDER_FM3, ...ORDER_OPEN })
       slowName(c, ms)
@@ -24326,6 +24334,202 @@ export function run(test) {
         assert.ok(!t.logs.some((l) => /^not sent, .*deadline: (the preset|where the blocks are, for their order)$/.test(l)), `${why}, ahead of the ${ahead}: ` + t.logs.join(' | '))
         for (const p of taps) await drive(t.clock, p)
       }
+  })
+
+  /* Edit open and saving over Bluetooth: a save's own "which preset?" goes at a write's place in the line. */
+  const SAVE_OPEN = { edit: () => true, save: () => true }
+
+  /*
+   * THE DEADLINE COUNTS ONLY WHILE A "WHICH PRESET?" HOLDS THE LINE. Given
+   * where one is ahead, it counted the whole line, and taps go ahead of
+   * every read: with a healthy "which preset?" in the line (Play's own,
+   * asked beside the blocks; the Presets list beside Play naming slots,
+   * which always has one name out) four block taps or a scene whose answer
+   * is lost used up ORDER_CLOSE_MS before that question had even gone, and
+   * a healthy unit lost the order for the visit, the log blaming the
+   * question for the taps (a sixth read, 16 November 2026).
+   */
+  test('a tap of the player’s beside a “which preset?” that answers, ahead of the grid read or the closing question, is waited for and the order believed: Play’s own preset read, or the Presets list beside Play naming slots, with four block taps or a scene whose answer is lost', async () => {
+    const cases = [
+      ['a scene whose answer is lost', SCENE_LOST_TAP, (t) => [t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) })]],
+      ['four block taps', {}, (t) => [46, 118, 94, 58].map((id) => t.wire.request(`/preset/blocks/${id}/bypass`, { method: 'POST', body: JSON.stringify({ bypassed: true }) }))]
+    ]
+    for (const beside of ['Play’s own preset read', 'the Presets list naming slots'])
+      for (const ahead of ['grid read', 'closing question'])
+        for (const [why, more, tap] of cases) {
+          const said = `${why} beside ${beside}, ahead of the ${ahead}`
+          const t = await played('fm3', { grid: ORDER_FM3, ...more, ...ORDER_OPEN })
+          let stop = false
+          const drainer =
+            beside === 'the Presets list naming slots'
+              ? (async () => {
+                  for (let n = 100; n < 400 && !stop; n++) await t.wire.request(`/presets/${n}`).then((v) => v, (e) => e)
+                })()
+              : null
+          await advance(t.clock, 1000)
+          t.logs.length = 0
+          const from = t.sent.length
+          const blocks = t.wire.request('/preset/blocks')
+          if (ahead === 'grid read') {
+            for (let i = 0; i < 400 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x13); i++) await advance(t.clock, 1)
+            await flush()
+            assert.ok(!t.sent.slice(from).some(isGridRead), `${said}: the grid read went before the taps`)
+          } else await untilGridRead(t, from)
+          const preset = drainer ? null : t.wire.request('/preset').then((v) => v, (e) => e)
+          const taps = tap(t).map((p) => p.then((v) => v, (e) => e))
+          assert.deepEqual(idsOf(await drive(t.clock, blocks)), GRID_ORDER_FM3, `${said}: the order was lost: ` + t.logs.join(' | '))
+          assert.equal(t.unit.state.lives, 1)
+          for (const l of [CLOSE_LATE, GRID_LATE]) assert.ok(!t.logs.includes(l), `${said}: ` + t.logs.join(' | '))
+          assert.ok(!t.logs.some((l) => /^not sent, .*deadline: (the preset|where the blocks are, for their order)$/.test(l)), `${said}: ` + t.logs.join(' | '))
+          /* A "which preset?" besides the order's own was in the line: one before the grid read, or one beside the closing question after it. */
+          const at = t.sent.findIndex((s, i) => i >= from && isGridRead(s))
+          const presets = (list) => list.filter((s) => s.bytes[5] === 0x0d).length
+          if (ahead === 'grid read') assert.ok(presets(t.sent.slice(from, at)) >= 1, `${said}: no "which preset?" went ahead of the grid read`)
+          else assert.ok(presets(t.sent.slice(at)) >= 2, `${said}: no "which preset?" went beside the closing question`)
+          if (preset) await drive(t.clock, preset)
+          for (const p of taps) await drive(t.clock, p)
+          stop = true
+          if (drainer) await drive(t.clock, drainer)
+        }
+  })
+
+  test('a deadline given for a “which preset?” ahead is not spent on a read of another kind held for its own late answer: the order waits it out behind the tempo and is believed', async () => {
+    for (const ahead of ['grid read', 'closing question']) {
+      const t = await played('fm3', { grid: ORDER_FM3, ...ORDER_OPEN })
+      await advance(t.clock, 1000)
+      /* The first tempo read asked is not answered: its kind is held for a late answer, and the second waits at the head of the line for it. */
+      const hear = t.unit.hear
+      let lose = true
+      t.unit.hear = (b) => {
+        if (lose && b[0] === 0xf0 && b[5] === 0x14) {
+          lose = false
+          return
+        }
+        return hear(b)
+      }
+      t.logs.length = 0
+      const from = t.sent.length
+      const blocks = t.wire.request('/preset/blocks')
+      if (ahead === 'grid read') await flush()
+      else await untilGridRead(t, from)
+      const asked = [t.wire.request('/tempo'), t.wire.request('/tempo'), t.wire.request('/preset')].map((p) => p.then((v) => v, (e) => e))
+      assert.deepEqual(idsOf(await drive(t.clock, blocks)), GRID_ORDER_FM3, `ahead of the ${ahead}: the order was given up on behind a held tempo read: ` + t.logs.join(' | '))
+      assert.equal(lose, false, 'no tempo answer was lost')
+      assert.equal(t.unit.state.lives, 1)
+      for (const l of [CLOSE_LATE, GRID_LATE]) assert.ok(!t.logs.includes(l), `ahead of the ${ahead}: ` + t.logs.join(' | '))
+      for (const p of asked) await drive(t.clock, p)
+    }
+  })
+
+  /*
+   * WHICH "WHICH PRESET?" GIVES A DEADLINE, BY PRIORITY (presetAhead). One on
+   * the line counts whoever asked it: the watch's poll holds the line as
+   * Play's own does. One waiting counts at Play's read priority or above: a
+   * save's question waits at a write's place, ahead of the grid read. Edit's
+   * own waits behind Play's reads, so it is never ahead, and gives none.
+   */
+  test('a save’s “which preset?” waiting ahead of the grid read at a write’s place gives it the deadline: its answer lost, the read is dropped ORDER_CLOSE_MS after that question went', async () => {
+    const { ORDER_CLOSE_MS } = await import(WIRE)
+    const t = await played('fm3', { grid: ORDER_FM3, ...SAVE_OPEN, ...ORDER_OPEN })
+    await advance(t.clock, 1000)
+    t.logs.length = 0
+    const from = t.sent.length
+    const blocks = t.wire.request('/preset/blocks')
+    await flush()
+    /* Both asked while the status read is out: the tap and the save's question go first when it answers. */
+    const tap = t.wire.request('/preset/blocks/46/bypass', { method: 'POST', body: JSON.stringify({ bypassed: true }) }).then((v) => v, (e) => e)
+    t.unit.state.mutePreset = true
+    const save = t.wire.storePreset(12).then((v) => v, (e) => e)
+    for (let i = 0; i < 400 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x0d); i++) await advance(t.clock, 1)
+    t.unit.state.mutePreset = false
+    const went = t.sent.slice(from).find((s) => s.bytes[5] === 0x0d)
+    assert.ok(went, 'the save’s question never went')
+    assert.deepEqual(idsOf(await drive(t.clock, blocks)), USUAL_FM3)
+    const after = t.clock.now() - went.at
+    assert.ok(after >= ORDER_CLOSE_MS && after <= ORDER_CLOSE_MS + 30, `dropped ${after} ms after the save’s question went: ` + t.logs.join(' | '))
+    assert.ok(!t.sent.slice(from).some(isGridRead), 'the grid read went behind a lost save’s question')
+    assert.equal(t.unit.state.lives, 0)
+    assert.ok(t.logs.includes(GRID_LATE), t.logs.join(' | '))
+    assert.ok(!t.logs.includes(SECOND_SKIP), t.logs.join(' | '))
+    await drive(t.clock, save)
+    await drive(t.clock, tap)
+  })
+
+  test('the watch’s own “which preset?” on the line when the order looks gives the grid read the deadline: its answer lost, Play’s tiles wait out the preset’s quiet time and ORDER_CLOSE_MS, no more', async () => {
+    const { ORDER_CLOSE_MS, ORDER_QUIET_MS } = await import(WIRE)
+    const t = await played('fm3', { grid: ORDER_FM3, ...ORDER_OPEN })
+    await advance(t.clock, 3000)
+    /* Stepped to another preset by its footswitch, as Play hears of it: the order waits out the rest of ORDER_QUIET_MS before it looks. */
+    t.unit.state.preset = 13
+    t.unit.state.grid = OTHER_FM3.map((c) => ({ ...c }))
+    await t.get('/preset')
+    t.logs.length = 0
+    const from = t.sent.length
+    const at = t.clock.now()
+    const blocks = t.wire.request('/preset/blocks')
+    for (let i = 0; i < 400 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x13); i++) await advance(t.clock, 1)
+    await advance(t.clock, Math.max(0, t.line.lastDone - t.clock.now()) + 1)
+    /* The status read answered: the watch asks the scene, then which preset, while the order waits. That answer is lost. */
+    t.unit.state.mutePreset = true
+    t.wire.startPolls()
+    for (let i = 0; i < 400 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x0d); i++) await advance(t.clock, 1)
+    const poll = t.sent.slice(from).find((s) => s.bytes[5] === 0x0d)
+    assert.ok(poll && poll.at - at < ORDER_QUIET_MS - 50, 'the watch’s question did not go while the order waited')
+    assert.deepEqual(idsOf(await drive(t.clock, blocks)), USUAL_FM3)
+    const took = t.clock.now() - at
+    t.unit.state.mutePreset = false
+    t.wire.stopPolls()
+    assert.ok(took <= ORDER_QUIET_MS + ORDER_CLOSE_MS + 30, `Play’s tiles waited ${took} ms behind the watch’s lost question: ` + t.logs.join(' | '))
+    assert.ok(!t.sent.slice(from).some(isGridRead))
+    assert.equal(t.unit.state.lives, 0)
+    assert.ok(t.logs.includes(GRID_LATE), t.logs.join(' | '))
+    await advance(t.clock, 5000)
+  })
+
+  test('Edit’s own “which preset?”, waiting behind Play’s reads when the order looks, gives the grid read no deadline: a save asked after it, its question answered slowly, is waited for and the order believed', async () => {
+    const { ORDER_CLOSE_MS } = await import(WIRE)
+    const t = await played('fm3', { grid: ORDER_FM3, ...CHAIN_OPEN, ...SAVE_OPEN, ...ORDER_OPEN })
+    await advance(t.clock, 1000)
+    t.logs.length = 0
+    const from = t.sent.length
+    /* Edit's read of the chain goes first, as far as the preset whole; Play's blocks are asked while that is out, and Edit's closing question is asked behind Play's status read when it ends. */
+    const edit = t.wire.request('/preset/grid').then((v) => v, (e) => e)
+    for (let i = 0; i < 4000 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x03); i++) await advance(t.clock, 1)
+    await flush()
+    assert.ok(t.sent.slice(from).some((s) => s.bytes[5] === 0x03), 'Edit’s read of the preset never went')
+    const lives = t.unit.state.lives
+    const blocks = t.wire.request('/preset/blocks')
+    for (let i = 0; i < 20000 && !t.sent.slice(from).some((s) => s.bytes[5] === 0x13); i++) await advance(t.clock, 1)
+    await flush()
+    /* Play's scene read, asked while the status read is out: on the line when the order looks, so the grid read waits behind it. */
+    const scene = t.wire.request('/scene').then((v) => v, (e) => e)
+    const s0 = t.sent.length
+    for (let i = 0; i < 400 && !t.sent.slice(s0).some((s) => s.bytes[5] === 0x0c); i++) await advance(t.clock, 1)
+    await flush()
+    assert.ok(!t.sent.slice(s0).some((s) => s.bytes[5] === 0x0d), 'Edit’s question went ahead of Play’s reads')
+    /* The save, asked now: its question goes ahead of the grid read and is answered 600 ms after it went. */
+    const hear = t.unit.hear
+    let slow = true
+    t.unit.hear = (b) => {
+      if (slow && b[0] === 0xf0 && b[5] === 0x0d) {
+        slow = false
+        t.clock.setTimeout(() => hear(b), 600)
+        return
+      }
+      return hear(b)
+    }
+    const save = t.wire.storePreset(12).then((v) => v, (e) => e)
+    assert.deepEqual(idsOf(await drive(t.clock, blocks)), GRID_ORDER_FM3, 'the order was given up on behind a save’s question that answered: ' + t.logs.join(' | '))
+    assert.equal(slow, false, 'the save’s question was not the one slowed')
+    /* Edit's question waited behind the order's grid read: the one "which preset?" ahead of that read was the save's. */
+    const grid = t.sent.findLastIndex(isGridRead)
+    assert.equal(t.sent.slice(s0, grid).filter((s) => s.bytes[5] === 0x0d).length, 1, 'Edit’s question went ahead of the order’s grid read')
+    assert.ok(600 > ORDER_CLOSE_MS)
+    assert.equal(t.unit.state.lives, lives + 1)
+    for (const l of [CLOSE_LATE, GRID_LATE]) assert.ok(!t.logs.includes(l), t.logs.join(' | '))
+    await drive(t.clock, scene)
+    assert.deepEqual(await drive(t.clock, save), { ok: true, number: 12 })
+    await drive(t.clock, edit)
   })
 
   /*
@@ -24380,7 +24584,6 @@ export function run(test) {
    * holds the grid read half a second more, which brings the window left at
    * the second check down to where the line is drawn.
    */
-  const SAVE_OPEN = { edit: () => true, save: () => true }
   const saveGoesAhead = async (t, { tap = false } = {}) => {
     await advance(t.clock, 1000)
     t.logs.length = 0
