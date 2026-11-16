@@ -3167,6 +3167,149 @@ export function run(test) {
     assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }])
   })
 
+  /*
+   * A customer's FM9 through a WIDI Master, 16 November 2026: every step to
+   * a preset wrote "the unit sent Program Change 12: its preset changed"
+   * sixteen times, a few hundred milliseconds after the app had sent 12
+   * itself, and each copy was news (moved, a waiting knob turn refused).
+   */
+  const PC_OWN = /^the app’s own Program Change (\d+) came back (.+), from (\d+) ms after it was sent: not a preset change$/
+  const pcNews = (t) => t.logs.filter((l) => /^the unit sent Program Change /.test(l))
+  const sixteen = async (t, n, gap = 6) => {
+    for (let ch = 0; ch < 16; ch++) {
+      t.wire.heardShort([0xc0 | ch, n])
+      await advance(t.clock, gap)
+    }
+  }
+
+  test('THE APP’S OWN PROGRAM CHANGE BACK ON ALL SIXTEEN CHANNELS, after its job is over: no news, no line each, one line that says what came', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    await t.post('/preset/select', { number: 12 })
+    t.events.splice(0)
+    await advance(t.clock, 140)
+    /* Past the SysEx guard's memory: the select's job is over and a question has gone since. */
+    const asking = t.wire.request('/preset')
+    await sixteen(t, 12)
+    await drive(t.clock, asking)
+    await advance(t.clock, 400)
+    assert.deepEqual(t.events.filter((e) => e.type === 'changed'), [], 'the app’s own Program Change came back as news')
+    assert.deepEqual(pcNews(t), [], 'a copy was written as the unit changing preset')
+    const said = t.logs.filter((l) => PC_OWN.test(l))
+    assert.equal(said.length, 1, t.logs.join(' | '))
+    const [, n, many, after] = said[0].match(PC_OWN)
+    assert.equal(n, '12')
+    assert.equal(many, '16 times in 90 ms, on channels 1–16')
+    assert.ok(+after >= 140 && +after < 400, `${after} ms after`)
+  })
+
+  test('a knob turn waiting to go is not refused by the app’s own Program Change coming back', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    await t.post('/preset/select', { number: 12 })
+    await advance(t.clock, 300)
+    t.events.splice(0)
+    const before = t.logs.length
+    await sixteen(t, 12, 2)
+    await advance(t.clock, 400)
+    assert.ok(!t.logs.slice(before).some((l) => /changed before that was sent|its preset changed/.test(l)), t.logs.slice(before).join(' | '))
+    assert.deepEqual(t.events, [])
+  })
+
+  test('a Program Change the app did not send, sixteen times over: one preset change, one line for it and one for the copies', async () => {
+    const t = await onTheLine('fm9')
+    await advance(t.clock, 300)
+    t.events.splice(0)
+    await sixteen(t, 5)
+    await advance(t.clock, 400)
+    assert.deepEqual(t.events.filter((e) => e.type === 'changed'), [{ type: 'changed', scope: 'preset' }], 'sixteen copies were sixteen preset changes')
+    assert.deepEqual(pcNews(t), ['the unit sent Program Change 5 on channel 1: its preset changed'])
+    assert.ok(t.logs.includes('Program Change 5 came 16 times in 90 ms, on channels 1–16: taken as one preset change'), t.logs.join(' | '))
+    /* Once the burst is over, the same number again is news again: pressed twice on the unit. */
+    t.events.splice(0)
+    t.wire.heardShort([0xc0, 5])
+    assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }])
+    /* A different number inside a burst is its own change at once. */
+    t.events.splice(0)
+    t.wire.heardShort([0xc1, 6])
+    assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }])
+    assert.ok(pcNews(t).includes('the unit sent Program Change 6 on channel 2: its preset changed'))
+    /* A burst cut short by another number is said there and then, not lost. */
+    await advance(t.clock, 400)
+    await sixteen(t, 7)
+    t.wire.heardShort([0xc0, 8])
+    assert.ok(t.logs.includes('Program Change 7 came 16 times in 90 ms, on channels 1–16: taken as one preset change'), t.logs.join(' | '))
+    await advance(t.clock, 400)
+    assert.equal(t.logs.filter((l) => /^Program Change 7 came /.test(l)).length, 1)
+  })
+
+  test('the app’s own Program Change is its own for a second and a half, on its own bank; another bank or later is news', async () => {
+    for (const [why, before, wait, news] of [
+      ['the same bank said first', [[0xb3, 0x00, 0x00]], 200, false],
+      ['no bank said', [], 1400, false],
+      ['another bank said first (preset 140, not 12)', [[0xb3, 0x00, 0x01]], 200, true],
+      ['after a second and a half', [], 1600, true]
+    ]) {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 12 })
+      t.events.splice(0)
+      const sentAt = t.sent.find((s) => s.bytes[0] === 0xc0)?.at
+      assert.ok(Number.isFinite(sentAt), 'no Program Change went')
+      await advance(t.clock, sentAt + wait - t.clock.now())
+      for (const m of before) t.wire.heardShort(m)
+      t.wire.heardShort([0xc3, 12])
+      assert.deepEqual(t.events, news ? [{ type: 'changed', scope: 'preset' }] : [], why)
+    }
+    /* Preset 140 is bank 1, Program Change 12: its own bank coming back first is its own, bank 0 is preset 12 and news. */
+    for (const [bank, news] of [[1, false], [0, true]]) {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 140 })
+      t.events.splice(0)
+      await advance(t.clock, 200)
+      t.wire.heardShort([0xb0, 0x00, bank])
+      t.wire.heardShort([0xc0, 12])
+      assert.deepEqual(t.events, news ? [{ type: 'changed', scope: 'preset' }] : [], `bank ${bank} after the app sent 140`)
+    }
+  })
+
+  test('the app’s own Program Change coming back is not the unit answering: a quiet unit stays quiet', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    t.wire.startPolls()
+    await advance(t.clock, 2500)
+    t.unit.opt.silent = true
+    await advance(t.clock, 8000)
+    assert.ok(t.logs.some((l) => /has not answered 3 questions in a row/.test(l)), 'the quiet is not logged')
+    const selecting = t.post('/preset/select', { number: 12 })
+    selecting.catch(() => {})
+    for (let i = 0; i < 400 && !t.sent.some((s) => s.bytes[0] === 0xc0); i++) await advance(t.clock, 2)
+    assert.ok(t.sent.some((s) => s.bytes[0] === 0xc0), 'no Program Change went')
+    await advance(t.clock, 150)
+    await sixteen(t, 12, 2)
+    assert.ok(!t.logs.some((l) => /answers again/.test(l)), 'the app’s own Program Change was taken for the unit answering')
+    await drive(t.clock, selecting).catch(() => {})
+    t.wire.stopPolls()
+  })
+
+  test('a Program Change the adapter would not take is not the app’s own: the same number from the unit straight after is news', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    t.line.refuses = (b) => b[0] === 0xc0
+    await assert.rejects(t.post('/preset/select', { number: 12 }))
+    t.line.refuses = null
+    await advance(t.clock, 300)
+    t.events.splice(0)
+    t.wire.heardShort([0xc0, 12])
+    assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }])
+  })
+
+  test('copies still coming in when the connection closes are said as it closes', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    await t.post('/preset/select', { number: 12 })
+    await sixteen(t, 12, 1)
+    assert.equal(t.logs.filter((l) => PC_OWN.test(l)).length, 0, 'said before the copies had stopped')
+    t.wire.close()
+    assert.equal(t.logs.filter((l) => PC_OWN.test(l)).length, 1, t.logs.join(' | '))
+    await advance(t.clock, 1000)
+    assert.equal(t.logs.filter((l) => PC_OWN.test(l)).length, 1, 'said twice')
+  })
+
   test('the check panel: every read, with the bytes out and back in hex', async () => {
     const t = await onTheLine('fm3')
     const result = await drive(t.clock, t.wire.check('all'))
