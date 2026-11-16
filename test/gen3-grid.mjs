@@ -100,6 +100,19 @@ const FAKE_DIGESTS = {
 }
 
 export function run(test) {
+  test('a whole preset’s size, for Quick build’s bar: 49,336 bytes from an Axe-Fx III (as his came over a WIDI Master), 24,680 from an FM3 or FM9, and none for a unit whose count is not known', async () => {
+    const g = await import(GRID)
+    const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
+    assert.deepEqual([g.dumpBytes(0x10), g.dumpBytes(0x11), g.dumpBytes(0x12)], [49336, 24680, 24680])
+    for (const none of [sx.MODELS.am4, 0x14, undefined, null]) assert.equal(g.dumpBytes(none), null, String(none))
+    for (const [model, chunks] of Object.entries(g.DUMP_CHUNKS)) {
+      assert.equal(g.dumpBytes(Number(model)), g.DUMP.HEAD_BYTES + chunks * g.DUMP.CHUNK_BYTES + g.DUMP.FOOT_BYTES)
+      /* The pretend unit's preset, head to foot, is that many bytes: the bar's whole is what a unit sends. */
+      assert.equal(makeDump(Number(model), []).reduce((n, f) => n + f.length, 0), g.dumpBytes(Number(model)), model)
+    }
+    assert.deepEqual(Object.keys(g.DUMP_CHUNKS).map(Number).sort(), [0x10, 0x11, 0x12])
+  })
+
   test('every grid message the phone builds is the one the computer app’s codec builds, over every cell and cable', async () => {
     const g = await import(GRID)
     const c = await import(AM4_CHAIN)
@@ -192,7 +205,7 @@ export function run(test) {
     assert.equal(hex(g.buildGridCable(0x10, 2, 1, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 00 41 60 03 f7')
     assert.equal(hex(g.buildGridCable(0x10, 2, 2, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 03 43 20 42 f7')
     assert.equal(hex(g.buildGridCable(0x10, 2, 3, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 06 44 60 00 f7')
-    /* And along row 3, where Quick build puts a chain on a six-row unit, the law's bytes and these are the same, column after column: an older computer app sends the same bytes there. (Whether a unit joins that row has not been seen.) */
+    /* And along row 3, where Quick build puts a chain on a six-row unit, the law's bytes and these are the same, column after column: an older computer app sends the same bytes there. (A unit has joined that row once: his Axe-Fx III from the phone over a WIDI Master, report 913f344a.) */
     for (let srcCol = 1; srcCol <= 13; srcCol++) {
       assert.deepEqual(g.buildGridCable(0x10, 3, srcCol, 3, true).slice(21, 24), law(3, srcCol, 3), `row 3, column ${srcCol}`)
       assert.deepEqual(g.buildGridCable(0x12, 4, srcCol, 4, true).slice(21, 24), law(4, srcCol, 4), `row 4, column ${srcCol}`)

@@ -207,6 +207,20 @@ function fakeGen3(sx, o) {
      * that silence again.
      */
     setsAnswered: true,
+    /*
+     * GRID WRITES ANSWERED WITH THEMSELVES, each on its own (a number is the
+     * delay in ms, `true` the usual): `selectAnswered`, a cell selected (01
+     * 30), as Justin's Axe-Fx III answered the third select of his first Quick
+     * build over a WIDI Master, 104 ms after it went (report 913f344a, 16
+     * November 2026); `cableAnswered`, a cable joined or parted (01 35), and
+     * `putZeroAnswered`, a cell emptied (a put of block 0, an Undo's), which
+     * nobody has seen either way. Off, the pretend unit takes them in silence,
+     * as it always did; a put of a real block is never answered so, which his
+     * log shows.
+     */
+    selectAnswered: false,
+    cableAnswered: false,
+    putZeroAnswered: false,
     ...o
   }
   const state = {
@@ -418,13 +432,19 @@ function fakeGen3(sx, o) {
             if (opt.noLive) return
             return say(o.gridFake.makeLive(model, opt.liveOf ? opt.liveOf(state.grid) : state.grid, opt.live || {}))
           }
+          /* A write answered with itself (`selectAnswered` and the rest): its own bytes, once, after the delay asked for. */
+          const itself = (answered) => {
+            if (answered) say([...b], answered === true ? undefined : answered)
+          }
           if (sub === 0x30) {
             state.selected = v
+            itself(opt.selectAnswered)
             return
           }
           if (sub === 0x32) {
             const id = sx.decode14(p[2], p[3])
             if (opt.refuseBlock !== undefined && opt.refuseBlock === id) return reply(0x64, [0x01, opt.refuseCode ?? 0x0c])
+            if (id === 0) itself(opt.putZeroAnswered)
             return putInCell(opt.needsSelect ? state.selected ?? 0 : sx.decode14(p[6], p[7]), id)
           }
           for (let srcCol = 1; srcCol < colsOf; srcCol++) {
@@ -433,6 +453,7 @@ function fakeGen3(sx, o) {
                 for (const join of [true, false]) {
                   const made = o.gridLib.buildGridCable(model, srcRow, srcCol, destRow, join)
                   if (!made || hex(made) !== hex(b)) continue
+                  itself(opt.cableAnswered)
                   const into = cellAt(destRow - 1, srcCol)
                   if (!into || !cellAt(srcRow - 1, srcCol - 1)) return
                   into.fromRows = into.fromRows.filter((r) => r !== srcRow - 1)
@@ -520,7 +541,8 @@ function fakeGen3(sx, o) {
         if (!state.grid || p[0] !== 0x7f || p[1] !== 0x7f) return reply(0x64, [0x03, 0x04])
         state.dumps++
         if (opt.noDump) return
-        const frames = o.gridFake.makeDump(model, state.grid)
+        /* `dumpChunks`: a preset in another number of chunks than the unit's usual (the codec counts them, it does not assert them). */
+        const frames = o.gridFake.makeDump(model, state.grid, opt.dumpChunks ? { chunks: opt.dumpChunks } : undefined)
         if (opt.damageDump) {
           const c = frames[2]
           c[700] ^= 0x01
@@ -2602,7 +2624,7 @@ export function run(test) {
       assert.ok(!t.logs.some((l) => /no answer to the blocks/.test(l)), `${unit}: after a block was switched, an empty preset read as the unit not answering: ${t.logs.slice(-4).join(' | ')}`)
       assert.equal(t.sent.slice(asked).filter((x) => x.bytes[5] === 0x13).length, 1)
 
-      /* A PLUG IN THRU: the echo and the answer both come back, two copies of each set, and the second is an echo. The alarm still rings, on writes alone. */
+      /* A PLUG IN THRU: the echo and the answer both come back, two copies of each set, and the second is an echo. The alarm still rings, on the copies of the questions asked around the sets (the ways learned, the checks after). */
       const thru = await onTheLine(unit, { thru: true, publishedChannel: true, publishedTempo: true })
       await tapsOn(thru)
       assert.ok(thruLine(thru), `${unit}: with a plug in THRU, nobody was told`)
@@ -2683,6 +2705,11 @@ export function run(test) {
     /* The rule, in the file: only the first copy, only of a set, and never on an AM4. */
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.ok(wire.includes('if (ownEcho && copy === 1 && answersItself(f)) return echoes++'), 'the first copy of a set is not let through before the count')
+    /* And only a copy of a question goes on to the alarm (questionEchoes): a write's copy stops at `echoes`. */
+    const bare = code('mobile/src/lib/bleWire.js').replace(/\s+/g, ' ')
+    assert.ok(bare.includes('echoes++ if (ownEcho && !lastSent.asked) return questionEchoes++'), 'a copy of a write is counted toward the alarm')
+    assert.ok(bare.includes('if (questionEchoes >= 3 && !thruTold) {'), 'the alarm goes by every copy, writes and all')
+    assert.ok(bare.includes('asked: job.priority !== PRI.write && job.priority !== PRI.editWrite }'), 'what was sent is not marked a question or a write')
     assert.ok(wire.includes('const copy = sentAs >= 0 ? ++lastSent.copies[sentAs] : 0'))
     assert.match(wire, /const answersItself = \(m\) => !am4 && Array\.isArray\(m\) && m\[4\] === model && \(\(\(m\[5\] === FN\.BYPASS \|\| m\[5\] === FN\.CHANNEL\) && m\.length === 11 && m\[8\] !== 0x7f\) \|\| \(m\[5\] === FN\.TEMPO && m\.length === 10 && !\(m\[6\] === 0x7f && m\[7\] === 0x7f\)\)\)/)
   })
@@ -2717,7 +2744,8 @@ export function run(test) {
     const loop = await onTheLine('fm3', { thru: true, silent: true })
     await assert.rejects(loop.get('/preset/blocks'), 'a looping plug with no unit was read as an empty preset')
     const wire = flat('mobile/src/lib/bleWire.js')
-    assert.match(wire, /if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{ job\.sames = \(job\.sames \|\| 0\) \+ 1 if \(echoes === 0 \|\| job\.sames >= 2\) \{ job\.back = f return end\(job, job\.opts\.same\) \} \}/)
+    /* Since report 913f344a, by the copies of QUESTIONS that have come back (questionEchoes): a write the unit answers with itself never makes an empty preset wait for a copy that does not come. */
+    assert.match(wire, /if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{ job\.sames = \(job\.sames \|\| 0\) \+ 1 if \(questionEchoes === 0 \|\| job\.sames >= 2\) \{ job\.back = f return end\(job, job\.opts\.same\) \} \}/)
     /* Only the blocks question says what its own bytes mean: nothing else is ever answered by an echo. */
     assert.equal(wire.match(/\bsame: /g).length, 1)
     assert.match(wire, /ask\(buildStatusDump\(model\), \(f\) => parseStatusDump\(f, model\), WAIT\.status, 'the blocks', \{ priority, same: \[\] \}\)/)
@@ -21490,6 +21518,287 @@ export function run(test) {
       assert.equal(t.frames().length, 1)
       assert.ok(t.logs.some((l) => /^sent row 2, column 1 parted from row 3 of column 2: /.test(l)), t.logs.join(' | '))
     }
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* Report 913f344a: his first Quick build over Bluetooth               */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * Justin's Axe-Fx III through a WIDI Master, 16 November 2026: Input,
+   * Drive, Amp, Cab, Chorus and Output on row 3 of empty preset 390, joined,
+   * "6 in, 0 not; connected" on the read back. These are the seventeen grid
+   * messages his log says went, in order.
+   */
+  const QB_LOG = [
+    'F0 00 01 74 10 01 30 00 00 00 00 00 02 00 00 00 00 00 00 00 00 26 F7',
+    'F0 00 01 74 10 01 32 00 25 00 00 00 02 00 00 00 00 00 00 00 00 01 F7',
+    'F0 00 01 74 10 01 30 00 00 00 00 00 08 00 00 00 00 00 00 00 00 2C F7',
+    'F0 00 01 74 10 01 32 00 76 00 00 00 08 00 00 00 00 00 00 00 00 58 F7',
+    'F0 00 01 74 10 01 30 00 00 00 00 00 0E 00 00 00 00 00 00 00 00 2A F7',
+    'F0 00 01 74 10 01 32 00 3A 00 00 00 0E 00 00 00 00 00 00 00 00 12 F7',
+    'F0 00 01 74 10 01 30 00 00 00 00 00 14 00 00 00 00 00 00 00 00 30 F7',
+    'F0 00 01 74 10 01 32 00 3E 00 00 00 14 00 00 00 00 00 00 00 00 0C F7',
+    'F0 00 01 74 10 01 30 00 00 00 00 00 1A 00 00 00 00 00 00 00 00 3E F7',
+    'F0 00 01 74 10 01 32 00 4E 00 00 00 1A 00 00 00 00 00 00 00 00 72 F7',
+    'F0 00 01 74 10 01 30 00 00 00 00 00 20 00 00 00 00 00 00 00 00 04 F7',
+    'F0 00 01 74 10 01 32 00 2A 00 00 00 20 00 00 00 00 00 00 00 00 2C F7',
+    'F0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 01 02 00 21 F7',
+    'F0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 04 03 40 65 F7',
+    'F0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 07 05 00 20 F7',
+    'F0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 0A 06 40 6E F7',
+    'F0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 0D 08 00 27 F7'
+  ]
+  const thruSaid = (t) => t.logs.find((l) => /is echoing what it receives/.test(l))
+  /*
+   * Quick build as components/QuickBuild runs it, on the real plan
+   * (shared/starter-chains): the grid read, the plan, and every step asked
+   * after "which preset are you on?" (held); then the blocks and the grid
+   * read back. `undo` then runs its Undo the same way. Each step's display
+   * coordinates go to the wire counted from one (lib/grid-plan toWireCell).
+   */
+  async function quickBuildOnTheWire(t, picks, { undo = false } = {}) {
+    const s = await import('../shared/starter-chains.mjs')
+    const { gridShape } = await import('../shared/grid-plan.mjs')
+    const caps = (await t.get('/device/detect')).capabilities
+    const palette = await t.get('/blocks')
+    const cells = (await t.get('/preset/grid')).cells
+    const plan = s.planBuild({ cells, shape: gridShape(caps), palette, picks: s.resolveChain(picks, palette).picks, blocks: [] })
+    assert.ok(plan.ok, plan.why)
+    const run = async (steps) => {
+      for (const step of steps) {
+        await t.get('/preset')
+        const answer =
+          step.kind === 'cable'
+            ? await sendTo(t, 'POST', '/preset/grid/cable', { srcRow: step.srcRow + 1, srcCol: step.srcCol + 1, destRow: step.destRow + 1, connect: step.connect })
+            : await sendTo(t, 'PUT', '/preset/grid/cell', { row: step.row + 1, col: step.col + 1, blockId: step.kind === 'place' ? step.blockId : 0 })
+        assert.deepEqual(answer, { ok: true }, `${step.kind} at row ${step.row ?? step.srcRow}, column ${step.col ?? step.srcCol}`)
+      }
+      await t.get('/preset')
+    }
+    const sentFrom = t.sent.length
+    await run(plan.steps)
+    const built = t.sent.slice(sentFrom).map((x) => x.bytes)
+    await t.get('/preset/blocks')
+    const back = (await t.get('/preset/grid')).cells
+    if (!undo) return { plan, built, back }
+    /* The Undo: the grid read first (undoStale), then its steps, then the blocks, which is the read an emptied preset answers with its own question's bytes. */
+    await t.get('/preset/grid')
+    await run(s.undoSteps(plan))
+    await advance(t.clock, 300)
+    const asked = t.logs.length
+    let blocksAfter
+    try {
+      blocksAfter = await t.get('/preset/blocks')
+    } catch (err) {
+      blocksAfter = err
+    }
+    const after = (await t.get('/preset/grid')).cells
+    return { plan, built, back, blocksAfter, blocksSaid: t.logs.slice(asked), after }
+  }
+
+  test('report 913f344a: Quick build’s writes answered with themselves (the select, as his Axe-Fx III did; a cable; an Undo’s put of block 0) never ring the MIDI THRU alarm, and the emptied preset reads as empty', async () => {
+    const grid = await import(GRID)
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    for (const [name, opts, own] of [
+      ['nothing answered with itself', {}, () => false],
+      ['the select answered, 104 ms after it went', { selectAnswered: 104 }, (f) => f[6] === 0x30],
+      ['a cable answered', { cableAnswered: 104 }, (f) => f[6] === 0x35],
+      ['an emptied cell answered', { putZeroAnswered: 104 }, (f) => f[6] === 0x32 && f[8] === 0 && f[9] === 0]
+    ]) {
+      const t = await onTheLine('axefx3', { grid: [], catalog: catalogFor('axefx3'), ...CHAIN_OPEN, ...opts })
+      /* Preset 390 as his log has it: "the preset has: nothing". */
+      t.unit.state.blocks.length = 0
+      /* Every whole message that reaches the wire, as it reaches it. */
+      const cameBack = []
+      const heard = t.wire.heard
+      t.wire.heard = (f) => {
+        cameBack.push(f)
+        return heard(f)
+      }
+      const r = await quickBuildOnTheWire(t, ['drive', 'amp', 'cab', 'chorus'], { undo: true })
+      /* HIS BUILD, frame for frame: the seventeen messages of the log, and the row read back joined. */
+      assert.deepEqual(r.built.filter((f) => grid.gridShaped(f, f[4])).map(hex), QB_LOG, `${name}: not the build his log has`)
+      assert.deepEqual(r.back.filter((c) => c.row === 2).map((c) => [c.col, c.effectId, c.fromRows]), [[0, 37, []], [1, 118, [2]], [2, 58, [2]], [3, 62, [2]], [4, 78, [2]], [5, 42, [2]]], name)
+      /* THE PRETEND UNIT REALLY ANSWERED THOSE WRITES WITH THEMSELVES, or nothing below proves anything: twelve selects (six built, six undone), ten cables (five joined, five parted), six cells emptied. */
+      const copies = cameBack.filter((f) => f[5] === 0x01 && own(f) && t.sent.some((x) => hex(x.bytes) === hex(f)))
+      assert.equal(copies.length, [0, 12, 10, 6][['nothing answered with itself', 'the select answered, 104 ms after it went', 'a cable answered', 'an emptied cell answered'].indexOf(name)], `${name}: the pretend unit did not answer its writes with themselves`)
+      /* No alarm over a rig wired right, and the Undo's own read of the emptied preset is the empty chain it is. */
+      assert.equal(thruSaid(t), undefined, `${name}: a rig wired right was told about MIDI THRU: ${t.logs.filter((l) => /echo|copy/.test(l)).join(' | ')}`)
+      assert.ok(Array.isArray(r.blocksAfter), `${name}: the emptied preset read as ${r.blocksAfter?.status} ${r.blocksAfter?.message}`)
+      assert.deepEqual(r.blocksAfter.filter((b) => !b.fixed), [], name)
+      assert.ok(!r.blocksSaid.some((l) => /no answer to the blocks/.test(l)), `${name}: ${r.blocksSaid.join(' | ')}`)
+      assert.deepEqual(r.after, [], `${name}: the Undo left the preset holding something`)
+    }
+  })
+
+  test('a plug in THRU, or MIDI Thru on, is still named by the copies of the questions: an Axe-Fx III wired so never answers, and an FM3 or FM9 is named during a build', async () => {
+    /* The III: its answers leave by OUT, so a plug in THRU gives the phone its own probes back and nothing else. */
+    const iii = await onTheLine('axefx3', { thru: true, silent: true })
+    for (let i = 0; i < 4; i++) await iii.get('/device/detect')
+    assert.equal(thruSaid(iii), 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT')
+    /* An FM3 or FM9 with its MIDI Thru setting turned on after the chain was read: the build's own questions ("which preset are you on?", asked before every step) name it before it is over. */
+    for (const unit of ['fm3', 'fm9']) {
+      for (const opts of [{}, { selectAnswered: 104 }]) {
+        const t = await onTheLine(unit, { grid: [], ...CHAIN_OPEN, ...opts })
+        t.unit.state.blocks.length = 0
+        await t.get('/preset/grid')
+        assert.equal(thruSaid(t), undefined)
+        t.unit.opt.thru = true
+        const atBuild = t.logs.length
+        await quickBuildOnTheWire(t, ['drive', 'amp', 'cab'])
+        const said = t.logs.slice(atBuild)
+        const at = said.indexOf('the unit is echoing what it receives: MIDI Thru is on')
+        assert.ok(at >= 0, `${unit} ${JSON.stringify(opts)}: MIDI Thru on was not named during the build`)
+        /* And the line after it names the copy that rang it: one of this unit's own questions. */
+        assert.match(said[at + 1], new RegExp(`^the copy that made it three: F0 00 01 74 ${hex([t.sx.MODELS[unit]])} [0-9A-F ]+ F7, copy \\d of it, \\d+ ms after it went$`), `${unit}: ${said[at + 1]}`)
+      }
+    }
+  })
+
+  test('the log says which copy took the echo count off nought, and which made it three: the message, which copy of it, and how long after it went', async () => {
+    /* MIDI Thru turned on once the connection has said hello, so its first copy is in this log. */
+    const t = await onTheLine('fm3')
+    t.unit.opt.thru = true
+    for (let i = 0; i < 3; i++) await t.get('/scene')
+    const first = t.logs.filter((l) => /^the first copy of a question to come back on this connection: /.test(l))
+    assert.equal(first.length, 1, t.logs.join(' | '))
+    assert.match(first[0], /^the first copy of a question to come back on this connection: F0 00 01 74 11 [0-9A-F ]+ F7, copy 1 of it, \d+ ms after it went$/)
+    const alarm = t.logs.indexOf('the unit is echoing what it receives: MIDI Thru is on')
+    assert.ok(alarm > t.logs.indexOf(first[0]))
+    assert.match(t.logs[alarm + 1], /^the copy that made it three: F0 00 01 74 11 [0-9A-F ]+ F7, copy 1 of it, \d+ ms after it went$/)
+    /* Each once a connection, however much more comes back. */
+    for (let i = 0; i < 3; i++) await t.get('/scene')
+    assert.equal(t.logs.filter((l) => /^the copy that made it three: /.test(l)).length, 1)
+    assert.equal(t.logs.filter((l) => /^the first copy of a question to come back/.test(l)).length, 1)
+    /* A rig wired right writes neither, after a build whose selects the unit answers with themselves. */
+    const right = await onTheLine('axefx3', { grid: [], ...CHAIN_OPEN, selectAnswered: 104 })
+    right.unit.state.blocks.length = 0
+    await quickBuildOnTheWire(right, ['amp'])
+    assert.ok(!right.logs.some((l) => /^the (first copy of a question|copy that made it three)/.test(l)), right.logs.join(' | '))
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* Quick build's card: how far the preset's read has got               */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "We need better feedback. Let him know the chain is building correctly,
+   * like a spinning circle or dots that are moving or something, as
+   * sometimes it feels like it's just frozen" (report 913f344a: two reads of
+   * the whole preset, 25 s each, with one line of text that did not move).
+   * The read is collected frame by frame; `onProgress` is told the bytes
+   * kept against the size known for the unit, and nothing else changes.
+   */
+  const III_GRID = [
+    { row: 2, col: 0, effectId: 37, fromRows: [] },
+    { row: 2, col: 1, effectId: 58, fromRows: [2] },
+    { row: 2, col: 13, effectId: 42, fromRows: [2] }
+  ]
+  const readTold = async (t, onProgress) => drive(t.clock, t.wire.request('/preset/grid', onProgress ? { onProgress } : {}))
+
+  test('the preset read for the grid tells how far it has got, frame by frame, and changes nothing it sends or reads', async () => {
+    const grid = await import(GRID)
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    for (const [unit, of] of [['axefx3', 49336], ['fm3', 24680], ['fm9', 24680]]) {
+      const told = []
+      const t = await onTheLine(unit, { grid: III_GRID.filter((c) => unit !== 'fm3' || c.col < 12), catalog: catalogFor(unit), ...CHAIN_OPEN })
+      const got = await readTold(t, (p) => told.push(p))
+      const sent = t.frames().map(hex)
+      /* First when asked, 0 of the whole; then once a frame (head, chunks, foot), rising every time and short of the whole until the foot; the whole at the foot. */
+      const chunks = unit === 'axefx3' ? 16 : 8
+      assert.equal(told.length, chunks + 3, `${unit}: ${told.length} tells`)
+      assert.deepEqual(told[0], { got: 0, of }, unit)
+      for (let i = 1; i < told.length; i++) {
+        assert.equal(told[i].of, of)
+        assert.ok(told[i].got > told[i - 1].got, `${unit}: the bar went back or stood still at ${i}`)
+      }
+      assert.ok(told.slice(0, -1).every((p) => p.got < of), `${unit}: the bar filled before the foot`)
+      assert.deepEqual(told.at(-1), { got: of, of })
+      assert.equal(grid.dumpBytes(t.sx.MODELS[unit]), of)
+      /* The same grid, and the same messages to the unit, told or not. */
+      const plain = await onTheLine(unit, { grid: III_GRID.filter((c) => unit !== 'fm3' || c.col < 12), catalog: catalogFor(unit), ...CHAIN_OPEN })
+      assert.deepEqual(await readTold(plain), got, unit)
+      assert.deepEqual(plain.frames().map(hex), sent, unit)
+    }
+  })
+
+  test('the bar never says the read is done before it is, and nothing the screen does can break the read', async () => {
+    /* A preset in more chunks than the unit's usual (the codec counts them): held short of the whole until the foot. */
+    const long = await onTheLine('axefx3', { grid: III_GRID, ...CHAIN_OPEN, dumpChunks: 17 })
+    const told = []
+    const got = await readTold(long, (p) => told.push(p))
+    assert.equal(cellsOf(got.cells), cellsOf(III_GRID))
+    assert.equal(told.length, 17 + 3)
+    assert.ok(told.slice(0, -1).every((p) => p.got <= 49335 && p.of === 49336), JSON.stringify(told.slice(-3)))
+    assert.deepEqual(told.at(-1), { got: 49336, of: 49336 })
+    /* A screen that has gone and throws on every word: the grid still comes, and the same messages went. */
+    const throwing = await onTheLine('axefx3', { grid: III_GRID, ...CHAIN_OPEN })
+    let calls = 0
+    const read = await readTold(throwing, () => {
+      calls += 1
+      throw new Error('the screen has gone')
+    })
+    assert.ok(calls > 3)
+    assert.equal(cellsOf(read.cells), cellsOf(III_GRID))
+    const plain = await onTheLine('axefx3', { grid: III_GRID, ...CHAIN_OPEN })
+    await readTold(plain)
+    assert.deepEqual(throwing.frames().map(hex), plain.frames().map(hex))
+    /* A grid kept from a moment ago tells nothing (nothing is read), and an AM4's chain, one small answer, nothing either. */
+    const kept = []
+    await readTold(throwing, (p) => kept.push(p))
+    assert.deepEqual(kept, [])
+    const am4 = await onTheLine('am4', { ...CHAIN_OPEN })
+    const am4Told = []
+    await readTold(am4, (p) => am4Told.push(p))
+    assert.deepEqual(am4Told, [])
+    /* Where the live read is believed (what nothing in the app asks for yet), no preset is read and nothing is told. */
+    const fm3 = await onTheLine('fm3', { grid: CHAIN3, ...LIVE_OPEN })
+    await readTold(fm3)
+    await advance(fm3.clock, 1000)
+    const live = []
+    const fast = await readTold(fm3, (p) => live.push(p))
+    assert.equal(fast.source, 'live')
+    assert.deepEqual(live, [], 'the live read told the bar something')
+    /* And in the file: the word goes to the preset's read alone. */
+    const wire = code('mobile/src/lib/bleWire.js').replace(/\s+/g, ' ')
+    assert.match(wire, /return editRoute\(\(\) => \(am4 \? am4Grid\(\) : gen3Grid\(opts\?\.onProgress\)\)\)/)
+    assert.match(wire, /grid = await gen3DumpGrid\(onProgress\)/)
+    assert.ok(!/gen3LiveGrid\([^)]*onProgress/.test(wire), 'the live read is handed the bar')
+  })
+
+  test('Quick build says a build takes half a minute only where the chain is read down a Bluetooth adapter: a gen-3 unit’s own detect answer, never an AM4, the USB cable or the computer', async () => {
+    const { gridReadTakesLong } = await import(SWITCH)
+    for (const unit of ['axefx3', 'fm3', 'fm9', 'am4']) {
+      const t = await onTheLine(unit, { grid: [], ...CHAIN_OPEN })
+      const caps = (await t.get('/device/detect')).capabilities
+      assert.equal(gridReadTakesLong(caps, false), unit !== 'am4', `${unit}: ${JSON.stringify(caps)}`)
+      /* On the unit's own USB cable into the phone, the same wire, the preset comes in a moment. */
+      assert.equal(gridReadTakesLong(caps, true), false, unit)
+    }
+    /* Through the computer: its capabilities say the grid, and no Bluetooth. */
+    assert.equal(gridReadTakesLong({ slotModel: 'grid', gridRouting: true, gridEdit: true, grid: { rows: 6, cols: 14 } }, false), false)
+    assert.equal(gridReadTakesLong(null, false), false)
+    assert.match(code('mobile/src/screens/Edit.js').replace(/\s+/g, ' '), /takesLong=\{gridReadTakesLong\(caps, onCable\)\}/)
+  })
+
+  test('the card names the unit as the rig does, from the detect answer, never from the capabilities, which carry no name', async () => {
+    const s = await import('../shared/starter-chains.mjs')
+    for (const [unit, name] of [['axefx3', 'Axe-Fx III'], ['fm3', 'FM3'], ['fm9', 'FM9']]) {
+      const t = await onTheLine(unit, { grid: [], ...CHAIN_OPEN })
+      const detect = await t.get('/device/detect')
+      /* The rig's own rule for its deviceName (lib/rig), on the wire's own answer. */
+      assert.equal(s.readingFrom(detect.short || detect.name || ''), `Reading the preset from your ${name}…`)
+      assert.equal(detect.capabilities.short, undefined)
+      assert.equal(detect.capabilities.name, undefined)
+    }
+    assert.match(code('mobile/src/lib/rig.js'), /deviceName: caps\?\.short \|\| caps\?\.name \|\| '',/)
+    assert.match(code('mobile/src/lib/rig.js'), /capabilities: caps\?\.capabilities \?\? null,/)
+    const qb = code('mobile/src/components/QuickBuild.js').replace(/\s+/g, ' ')
+    assert.match(qb, /const ofDeviceName = \(s\) => s\.deviceName/)
+    assert.match(qb, /const unitName = useRig\(ofDeviceName\)/)
+    assert.match(qb, /<BuildProgress stage=\{stage\} line=\{busy\} unit=\{unitName\} takesLong=\{takesLong\} \/>/)
+    assert.ok(!/caps\?\.(short|name)/.test(qb), 'the card names the unit from the capabilities, which say "your unit"')
   })
 
   test('a block meant for one preset is never put in the next: a preset or scene change first, and the write is not sent', async () => {

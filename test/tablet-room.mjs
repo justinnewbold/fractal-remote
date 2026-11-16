@@ -184,7 +184,7 @@ export function run(test) {
 
   test('tablet room: only the Unlock sheet comes up wider, and a sheet without `wide` is exactly the sheet it was', () => {
     const sheet = flat(read('mobile/src/components/Sheet.js'))
-    assert.match(sheet, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, children \}\)/)
+    assert.match(sheet, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children \}\)/)
     /* And `fill` (15 November 2026, the chain editor's list of blocks): its full height whatever is in it, and nothing for a sheet that does not ask. */
     assert.match(sheet, /\}, wide \? \{ width: '100%', maxWidth: wide, alignSelf: 'center' \} : null, fill \? \{ height: highest \} : null\]\}/, 'a sheet without `wide` or `fill` is drawn with something more')
     const users = []

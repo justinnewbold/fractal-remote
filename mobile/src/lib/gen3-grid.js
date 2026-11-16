@@ -65,8 +65,11 @@
  * OLDER COMPUTER APP STILL SENDS THE LAW'S, which is why Quick build puts a
  * chain on a six-row unit's THIRD row (shared/starter-chains `homeRow`):
  * a cable along row 3 is the same bytes either way, so that row does not
- * depend on which computer app is sending. (Whether a unit joins it is the
- * next thing his log will say: no cable of these has been seen to take.)
+ * depend on which computer app is sending. A UNIT HAS JOINED IT ONCE: his
+ * Axe-Fx III, from the phone over a WIDI Master, five cables along row 3
+ * and the read back "6 in, 0 not; connected" (report 913f344a, 16 November
+ * 2026). A III only, that adapter only, that row only; the 162 cables that
+ * changed are still not seen.
  *
  * ONE CABLE IS STILL REFUSED: out of a six-row grid's TOP row from an even
  * column (`cableKnown`). The codec refuses it as "not decoded", the computer
@@ -82,8 +85,12 @@
  * a table at 0x104 of the unpacked body, two 16-bit words a cell, the block
  * id and a word with one bit for each row of the column before that feeds
  * it. But it is the WHOLE preset: 24,680 bytes from an FM3 or FM9, 49,336
- * from an Axe-Fx III, which down a Bluetooth adapter on the MIDI jacks
- * (3,125 bytes a second) is eight seconds and sixteen.
+ * from an Axe-Fx III. Down a Bluetooth adapter on the MIDI jacks the jack's
+ * own pace (3,125 bytes a second) would make that eight seconds and
+ * sixteen; MEASURED on his Axe-Fx III through a WIDI Master (report
+ * 913f344a, 16 November 2026) it took 25.0 s and 25.9 s, about 2,000 bytes
+ * a second, and the log cannot say whether the adapter or the unit set that
+ * pace. An FM3's or FM9's has not been timed over an adapter.
  *
  * The live read (fn 0x01, 2E 00) is one answer of about 755 bytes, a
  * quarter of a second. The codec decodes it two ways, an FM3's "byte-exact
@@ -224,6 +231,20 @@ export const buildGridRead = (model) => (gridSize(model) ? frame(model, FN.PARAM
 
 /** "Send the preset as it is being edited": the edit buffer, whole. */
 export const DUMP = Object.freeze({ ASK: 0x03, HEAD: 0x77, CHUNK: 0x78, FOOT: 0x79, HEAD_BYTES: 13, CHUNK_BYTES: 3082, FOOT_BYTES: 11, CHUNK_RAW: 2048, MOST_CHUNKS: 32 })
+/*
+ * HOW MANY CHUNKS A UNIT'S WHOLE PRESET COMES IN, for Quick build's bar
+ * while it is read (bleWire gen3DumpGrid `onProgress`). The head does not
+ * say, so this is the size known for each unit: an Axe-Fx III's 16 and an
+ * FM9's 8 from the pinned codec's presetDump.ts, whose own words are that
+ * the count "is what varies by device/preset" and is counted rather than
+ * asserted (so a bar never asserts it either: short of the foot it stops at
+ * 99%); an FM3's 8 from the computer's reads of it (24,680 bytes). His
+ * Axe-Fx III sent 16, 49,336 bytes, over a WIDI Master (report 913f344a,
+ * 16 November 2026).
+ */
+export const DUMP_CHUNKS = Object.freeze({ [MODELS.axefx3]: 16, [MODELS.fm3]: 8, [MODELS.fm9]: 8 })
+/** The bytes of a unit's whole preset, head to foot (49,336 from an Axe-Fx III, 24,680 from an FM3 or FM9), or null for a unit whose count is not known. */
+export const dumpBytes = (model) => (DUMP_CHUNKS[model] ? DUMP.HEAD_BYTES + DUMP_CHUNKS[model] * DUMP.CHUNK_BYTES + DUMP.FOOT_BYTES : null)
 export const buildGridDump = (model) => (gridSize(model) ? frame(model, DUMP.ASK, [0x7f, 0x7f, 0x00]) : null)
 
 /**

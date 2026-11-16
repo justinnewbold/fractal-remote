@@ -25,7 +25,7 @@ import {
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { demoUnit, isDemo } from '../lib/demo'
-import { overBluetooth } from '../lib/bleSwitch'
+import { gridReadTakesLong, overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { editNoteUp } from '../lib/editWords'
@@ -650,7 +650,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       {emptyNoteShown ? <Note>This preset is empty.</Note> : null}
       {/* Quick build and the starter chains, on an empty preset (mock-up 1); its sheet stays up past the build it ends. */}
       {quickBuildShown ? (
-        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} onSave={saveFromQuickBuild} onPlay={onBack} />
+        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} takesLong={gridReadTakesLong(caps, onCable)} onSave={saveFromQuickBuild} onPlay={onBack} />
       ) : null}
 
       {/*

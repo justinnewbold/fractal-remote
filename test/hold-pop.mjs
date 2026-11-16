@@ -161,7 +161,7 @@ export function run(test) {
 
     /* The sheet itself: `still` stops its scroll and nothing else, and a sheet without it scrolls as it did. */
     const shared = flat(read('mobile/src/components/Sheet.js'))
-    assert.match(shared, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, children \}\)/)
+    assert.match(shared, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children \}\)/)
     assert.match(shared, /<ScrollView key=\{scrollKey\} contentContainerStyle=\{\{ padding: space\.lg, paddingTop: head \? space\.sm : space\.lg, gap: space\.md \}\} keyboardShouldPersistTaps="handled" keyboardDismissMode=\{fill \? 'on-drag' : 'none'\} scrollEnabled=\{!still\} > \{children\} <\/ScrollView>/)
     assert.equal((code(read('mobile/src/components/Sheet.js')).match(/\bstill\b/g) || []).length, 2, '`still` does something more than hold the scroll')
   })

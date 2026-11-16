@@ -1382,9 +1382,10 @@ what the computer sends for the same edit, and a test holds it there.
       FM3 keeps the second, and a preset that has an end keeps its row).
       Along rows 3 and 4 the old message and the corrected one are the
       same bytes, so that row does not depend on which computer app is
-      sending. THAT A UNIT JOINS IT HAS NOT BEEN SEEN: it rests on the old
-      message being right where the two agree. Do not move it back to row
-      2 while computer apps older than 1.90.82 are about.
+      sending. A UNIT HAS JOINED IT ONCE: his Axe-Fx III, from the phone
+      over a WIDI Master, 16 November 2026 (report 913f344a, "6 in, 0 not;
+      connected"); through a computer app not seen yet. Do not move it
+      back to row 2 while computer apps older than 1.90.82 are about.
     - *The log says the whole row as the unit read it back*
       (`rowAsRead`: "row 3 as read: column 1 Input 1, column 2 Drive 1
       (fed from row 3), …") and whether it read as connected. The card
@@ -1393,13 +1394,42 @@ what the computer sends for the same edit, and a test holds it there.
     - The card's words are as they were. Preset 389 was saved unjoined
       (and 388's build was never saved): no sound path, build again on
       another empty preset.
-  - *STILL NOT PROVEN ON A UNIT:* a row that reads back joined (his next
-    build on an empty preset, on row 3, is the check, through the Pi as it
-    is); the Undo; on a six-row unit with the Input on the top row it
-    builds there but lays no cables (that row's cable from an even column
+  - *STILL NOT PROVEN ON A UNIT:* a row that reads back joined through
+    the computer (seen once over Bluetooth, above: his Axe-Fx III, row 3,
+    a WIDI Master); the Undo; on a six-row unit with the Input on the top
+    row it builds there but lays no cables (that row's cable from an even column
     is still refused) and says so; and whether the unit keeps a bare
     wire's joins under a block placed over it is not known, so the plan
     joins every cell it places into again.
+  - *WHILE IT BUILDS, A CARD THAT MOVES (1.91.4).* "Looks like everything
+    worked. We need better feedback. Let him know the chain is building
+    correctly, like a spinning circle or dots that are moving or
+    something, as sometimes it feels like it's just frozen" (report
+    913f344a: 56 seconds from the tap to the card, 51 of them the two
+    whole-preset reads under one line of text that did not move). In the
+    sheet's head, which never scrolls: three steps (Check the preset is
+    empty, Put in the blocks and join them, Check what landed; an Undo's
+    are Check nothing has changed, Take the blocks back out, Check what is
+    left), React Native's own turning circle on the one going (no package,
+    so no build), a tick on each done, a bar on each whole-preset read
+    counted from the frames the wire keeps against the size known for the
+    unit (gen3-grid `DUMP_CHUNKS`, `dumpBytes`; held at 99% until the foot
+    has come), and a count of the steps sent. The words and the rules are
+    shared/starter-chains `buildPanel`. The picker is hidden and kept, so
+    no chip is tapped mid-build and More… is still open after one that
+    failed; the ✕ is faded (Sheet `locked`, false everywhere else). Where
+    the preset is read down a Bluetooth adapter from a gen-3 unit
+    (lib/bleSwitch `gridReadTakesLong`: never an AM4, the unit's USB
+    cable or the computer) it says "Over Bluetooth this takes about half a
+    minute to a minute." before the tap and under the card, and "Keep the
+    app open until it's done.": switched away, the phone stops the app,
+    the read gives up part-way and the build fails. Through the computer
+    it is the same card with no read bars (its read tells nothing, and
+    the word never leaves the phone: lib/device `gridCells`). The unit is
+    named from the rig's `deviceName`, never the capabilities, which carry
+    no name. Nothing was made faster: both reads are needed (the wire
+    refuses a write before a read, and the card says only what the read
+    back shows) and the live read is not believed.
   - *The browser's Starter chain* (src/components/GridEditor.jsx, every
     account, its fixed five) is another piece of code, with its own row
     rule since 1.90.82 (`starterRow`): on a six-row unit, the row the
@@ -1584,8 +1614,9 @@ what the computer sends for the same edit, and a test holds it there.
   words are exactly what every customer copy has always shown.
 
 **The chain over Bluetooth: a block placed, a cable joined, the grid read.
-Built 15 November 2026, HIS ACCOUNT ONLY, and NOT ONE OF ITS MESSAGES HAS
-GONE TO A UNIT FROM A PHONE YET.**
+Built 15 November 2026, HIS ACCOUNT ONLY. Run from a phone once, 16
+November 2026: one Quick build on his Axe-Fx III over a WIDI Master, on row
+3 (report 913f344a, below under NOT PROVEN); nothing else of it yet.**
 
 > "The four screens are good. I need everything with the chain builder to
 > work over Bluetooth also" (15 November 2026, of Quick build and the
@@ -1708,9 +1739,14 @@ where the chain is open).
 - **TWO WAYS TO READ THE GRID, AND THE FAST ONE IS NOT BELIEVED YET.** The
   preset whole (the edit buffer, the read the computer app uses, proven on
   all three units through a computer) is 24,680 bytes from an FM3 or FM9
-  and 49,336 from an Axe-Fx III: eight seconds and sixteen down an adapter
-  on the MIDI jacks, a moment on a USB cable. EVERY GRID THE APP ACTS ON
-  IS THAT ONE. The live read (01 2E 00, one answer of 755 bytes) is taken
+  and 49,336 from an Axe-Fx III, a moment on a USB cable. Down an adapter
+  on the MIDI jacks the jack's own pace would make that eight seconds and
+  sixteen; MEASURED on his Axe-Fx III through a WIDI Master (report
+  913f344a, 16 November 2026) it took 25.0 s and 25.9 s, about 2,000 bytes
+  a second, so a Quick build there spends about 50 of its 56 seconds on
+  its two reads. Whether the adapter or the unit set that pace the log
+  cannot say, and an FM3's or FM9's has not been timed over an adapter.
+  EVERY GRID THE APP ACTS ON IS THAT ONE. The live read (01 2E 00, one answer of 755 bytes) is taken
   beside it and laid against it in the log, and nothing more, until a
   unit's log has shown what it says: its layout is the codec's reading of
   two recordings, an Axe-Fx III's has never been captured, and the rule it
@@ -1732,17 +1768,29 @@ where the chain is open).
   copy out was reviewed with notes that say blocks are not moved, added
   or removed over Bluetooth, and Bluetooth → What Bluetooth can't do
   still says so to everybody (true for every account but his until then).
-- **NOT PROVEN ON ANY UNIT:** a block placed, a cell emptied or a cable
-  from the phone; either grid read over an adapter (whether a unit sends
-  its edit buffer down its MIDI jack when asked, and how long a Bluetooth
-  link takes over 49 KB); slot 1's address on an AM4 from here; whether a
-  cable into an EMPTY cell makes the unit carry the signal across it (the
-  browser's Starter chain has always assumed so; the read back after a
-  build is what will show it). His AM4, FM3 and Axe-Fx III are the first
-  checks, each one's first build. (Through the COMPUTER his Axe-Fx III has
-  taken blocks from Quick build and from the chain editor, 15 November
-  2026; of the cables sent along its row 2 that day, the first was not
-  there on the read back, above.)
+- **SEEN ON A UNIT ONCE, AND NO MORE (report 913f344a, 16 November
+  2026).** "Looks like everything worked." His first Quick build over
+  Bluetooth, his Axe-Fx III through a WIDI Master, on empty preset 390:
+  the phone placed six blocks on row 3 (Input 1, Drive 1, Amp 1, Cab 1,
+  Chorus 1, Output 1) and joined the five cables along it, and the read
+  back said "6 in, 0 not; connected" (every column after the Input "fed
+  from row 3"). So a block placed from the phone over Bluetooth, cables
+  joined from the phone along ROW 3, and the whole-preset read over an
+  adapter (the unit does send its edit buffer down its MIDI jack when
+  asked: 25.0 s and 25.9 s for 49,336 bytes) are no longer NOT PROVEN:
+  on an AXE-FX III ONLY, through THAT ADAPTER ONLY, on THAT ROW ONLY.
+- **NOT PROVEN ON ANY UNIT:** anything of the above on another row, on an
+  FM3, an FM9 or an AM4, or through another adapter (or how long the
+  read takes on them); a cell emptied or a cable parted from the phone (no
+  Undo has run over Bluetooth); the live read (in that log its blocks
+  agreed with the preset's and its cables did not); slot 1's address on an
+  AM4 from here; whether a cable into an EMPTY cell makes the unit carry
+  the signal across it (the browser's Starter chain has always assumed
+  so; every cell of his row held a block). His AM4 and FM3 are the next checks,
+  each one's first build. (Through the COMPUTER his Axe-Fx III has taken
+  blocks from Quick build and from the chain editor, 15 November 2026; of
+  the cables sent along its row 2 that day, the first was not there on
+  the read back, above.)
 - **Not built:** the chain EDITOR (move, add or remove one block) over
   Bluetooth. It draws from the blocks read, which over Bluetooth still
   has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
@@ -3990,7 +4038,7 @@ it sets, and the unit answers in the same shape with the value it is now
 on. So the answer to a SET it took is the phone's own bytes, and the echo
 guard counted each as an echo. Three and the log
 named a THRU plug; and ONE was enough to undo the paragraph above, since an
-empty preset's answer is taken at its first copy only where nothing has
+empty preset's answer was taken at its first copy only where nothing had
 echoed on that connection: after any block switched on or off, a preset
 with no blocks read as the unit not answering again.
 
@@ -4022,9 +4070,36 @@ with no blocks read as the unit not answering again.
   take it still meets with silence; what a unit says then is not known.
 - So "the unit is echoing what it receives" in a log from before 1.90.84,
   from an FM3, FM9 or Axe-Fx III, says nothing about the plug unless Thru
-  is known to be on. From 1.90.84 on, a set's first copy is not counted,
-  so the line takes three of: a second copy of a set, or any copy of a
-  question.
+  is known to be on. From 1.90.84 to 1.91.3 it took three copies of
+  anything sent but a set's first copy (a write's as much as a
+  question's), and a Quick build over Bluetooth could ring it (below).
+- AND QUICK BUILD'S "SELECT A CELL" (01 30) CAME BACK TOO. Report
+  913f344a, 16 November 2026, his Axe-Fx III through a WIDI Master, his
+  first Quick build over Bluetooth: the third select came back byte for
+  byte 104 ms after it went, and the alarm rang there over a rig wired
+  right. That the other two counts were the first two selects is
+  inferred, not shown (a copy that lands after the next message has gone
+  is not counted at all). Whether a cable (01 35) or an Undo's put of
+  block 0 comes back so is NOT KNOWN: every cable in that log went after
+  the alarm, which is said once a connection, and no Undo was run. With
+  the count off nought, the Undo's own read of the preset it had just
+  emptied would have read as the unit not answering.
+- SO SINCE 1.91.4 THE ALARM AND THE EMPTY-PRESET RULE COUNT COPIES OF
+  QUESTIONS ONLY (bleWire `questionEchoes`): anything the app asked of the
+  unit, of any kind, its own or another unit's (askAround), never a write,
+  whichever write a unit answers with itself. A unit never answers a
+  question with the question itself (the one that does, "which blocks?"
+  of an empty preset, says so with `opts.same`), so a copy of one is an
+  echo however the rest is wired, and a plug in THRU or one that loops is
+  still named by them: an FM3 or FM9 with MIDI Thru on during a build
+  (Quick build asks which preset the unit is on before every step), and an
+  Axe-Fx III with its plug in THRU, which never answers at all (its
+  answers leave by OUT) and is named by its probes. `echoes` (counts(),
+  the Echo test) still counts every copy but a set's first, as before.
+- THE LOG SAYS WHICH COPIES SET IT GOING: "the first copy of a question to
+  come back on this connection: …" and, after the alarm, "the copy that
+  made it three: …", each with the message, which copy of it, and how many
+  milliseconds after it went. Read those first when the alarm is in a log.
 
 **The adapter kept for a unit is not always the adapter it is on today.**
 Justin, 14 November 2026: "For some reason I can't get the aX3 to connect

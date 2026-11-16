@@ -1254,9 +1254,16 @@ export const clearCell = (row, col) => placeBlock(row, col, 0)
  * row editor draws its joins from — see shared/split-chain.mjs. The same
  * preset read the chain comes from, so the computer usually answers it out of
  * the copy it has just made.
+ *
+ * `onProgress({ got, of })` is told how far the read has got where the
+ * device's own wire reads the whole preset for it (bleWire gen3DumpGrid: half
+ * a minute from an Axe-Fx III over an adapter), as a capture's send is told
+ * (namInstallHere). Through the computer only `{ id, method, path, body }`
+ * goes on the relay (relay.js relaySend), so it never leaves the phone and is
+ * never told: that read takes half a second.
  */
-export async function gridCells() {
-  const res = await remoteRequest('/preset/grid')
+export async function gridCells({ onProgress } = {}) {
+  const res = await remoteRequest('/preset/grid', typeof onProgress === 'function' ? { onProgress } : undefined)
   return Array.isArray(res?.cells) ? res.cells : []
 }
 

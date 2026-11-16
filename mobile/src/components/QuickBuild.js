@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Image, Pressable, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { blockCatalog, clearCell, gridCells, placeBlock, setCable } from '../lib/device'
-import { beginChainWrite, endChainWrite, followPresetAfterChainWrite, getState, refreshBlocks, unitOnPreset } from '../lib/rig'
+import { beginChainWrite, endChainWrite, followPresetAfterChainWrite, getState, refreshBlocks, unitOnPreset, useRig } from '../lib/rig'
 import { logDebug } from '../lib/debugLog'
 import { gridShape } from '../lib/grid-plan'
 import { UNDO_STALE, runPlan, stepWords } from '../lib/split-chain'
@@ -17,6 +17,7 @@ import {
   BACK_TO_PLAY,
   BLOCKS_HEAD,
   BLOCKS_NOT_READ,
+  BUILDING,
   CANCEL_BUTTON,
   CHAIN_NONE_YET,
   CHECKING_EMPTY,
@@ -25,6 +26,7 @@ import {
   FROM_A_CHAIN,
   JOINING,
   KEEP_BUTTON,
+  KEEP_OPEN,
   KEEP_STARTER,
   KEEP_STARTER_SUB,
   MAKE_YOUR_OWN,
@@ -44,6 +46,7 @@ import {
   SAVE_PRESET,
   STARTERS_FULL,
   STARTER_NAME_MAX,
+  TAKES_LONG,
   TRY_AGAIN,
   UNDOING,
   UNDO_MOVED_AFTER,
@@ -53,6 +56,7 @@ import {
   YOUR_CHAIN,
   buildBlocked,
   buildLabel,
+  buildPanel,
   buildRoom,
   chainFull,
   chipsFor,
@@ -106,6 +110,8 @@ import Sheet from './Sheet'
  */
 
 const ofNumber = () => getState().preset?.number ?? null
+/* The unit's own name, as the rig keeps it from the detect answer (as Settings → Starter chains reads it): the capabilities carry none, over Bluetooth or through the computer. */
+const ofDeviceName = (s) => s.deviceName
 
 /** One block of a chain, as a small tile in the app's block colors with its short name (NAM's own picture beside it). */
 export function BlockPill({ family, label = null }) {
@@ -196,8 +202,10 @@ function Chip({ chip, quiet, onPress }) {
  * THE PICKER (mock-up 2): YOUR CHAIN in order, and the unit's blocks as
  * chips, the common ones first and the rest behind More…. `room` caps the
  * count (the free cells, four on an AM4): past it the chips go quiet.
+ * `hidden` while a build runs: no chip can be tapped then, and the picker
+ * stays as it was (More… open, if it was) for a build that fails.
  */
-export function ChainPicker({ palette, picks, onPicks, room = Infinity, linear = false, fullLine = null }) {
+export function ChainPicker({ palette, picks, onPicks, room = Infinity, linear = false, fullLine = null, hidden = false }) {
   const [more, setMore] = useState(false)
   const chips = useMemo(() => chipsFor(palette, picks), [palette, picks])
   const full = picks.length >= room
@@ -205,7 +213,7 @@ export function ChainPicker({ palette, picks, onPicks, room = Infinity, linear =
   const rest = chips.filter((c) => !c.common)
   const tap = (c) => onPicks(pickToggled(picks, c.family, c.nth, room))
   return (
-    <View style={{ gap: space.md }}>
+    <View style={hidden ? { display: 'none' } : { gap: space.md }}>
       <Text style={{ color: color.silkDim, fontSize: font.body }}>{QUICK_BUILD_HOW}</Text>
       <Heading>{YOUR_CHAIN}</Heading>
       <ChainStrip blocks={picks} empty={CHAIN_NONE_YET} />
@@ -280,6 +288,69 @@ function ResultCard({ tone, title, text }) {
   )
 }
 
+/**
+ * THE CARD WHILE A BUILD OR AN UNDO RUNS (shared/starter-chains buildPanel):
+ * its three steps, the one going with a turning circle (React Native's own,
+ * drawn by the phone, so it turns while the app is busy taking in the
+ * preset), a tick on each done, and a bar where how far it has got is known:
+ * the preset's bytes as they come down an adapter, and the steps sent.
+ */
+function BuildProgress({ stage, line, unit, takesLong }) {
+  const panel = buildPanel({ kind: stage.kind, step: stage.step, got: stage.got, of: stage.of, line, unit })
+  const now = panel.rows.find((r) => r.state === 'now')
+  /* A screen reader is told each step as it starts (VoiceOver has no live regions). */
+  const told = useRef(null)
+  useEffect(() => {
+    const key = `${stage.kind}:${stage.step}`
+    if (!now || told.current === key) return
+    told.current = key
+    AccessibilityInfo.announceForAccessibility?.(now.label)
+  }, [stage.kind, stage.step, now])
+  return (
+    <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel }}>
+      {panel.rows.map((r) => (
+        <View key={r.n} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm }}>
+          <View style={{ width: 24, minHeight: 22, alignItems: 'center', justifyContent: 'center' }}>
+            {r.state === 'now' ? (
+              <ActivityIndicator size="small" color={color.signal} />
+            ) : r.state === 'done' ? (
+              <Text style={{ color: color.ok, fontSize: font.body, fontWeight: '700' }}>✓</Text>
+            ) : (
+              <Text style={{ color: color.silkFaint, fontSize: font.body }}>{r.n}</Text>
+            )}
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ color: r.state === 'next' ? color.silkFaint : color.silk, fontSize: font.body, fontWeight: r.state === 'now' ? '700' : '400' }}>{r.label}</Text>
+            {r.state === 'now' && panel.line ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: color.silkDim, fontSize: font.small }}>
+                {panel.line}
+              </Text>
+            ) : null}
+            {r.state === 'now' && panel.percent !== null ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                <View
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{ min: 0, max: 100, now: panel.percent }}
+                  style={{ flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: color.rule }}
+                >
+                  <View style={{ width: `${panel.percent}%`, height: 6, backgroundColor: color.signal }} />
+                </View>
+                <Text style={{ color: color.silkDim, fontSize: font.small, fontVariant: ['tabular-nums'] }}>{panel.tally}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      ))}
+      {takesLong ? (
+        <>
+          <Text style={{ color: color.silkDim, fontSize: font.small }}>{TAKES_LONG}</Text>
+          <Text style={{ color: color.silkDim, fontSize: font.small }}>{KEEP_OPEN}</Text>
+        </>
+      ) : null}
+    </View>
+  )
+}
+
 /** What a chain asks for that this palette cannot give, and what the picker starts with. */
 const startFrom = (blocks, palette, room) => {
   const { picks, missing } = resolveChain(blocks, palette)
@@ -295,9 +366,13 @@ const startFrom = (blocks, palette, room) => {
  * something to save here", which is where Save is offered; `saves` whether
  * the app has a Save at all on this connection (over Bluetooth it may not),
  * so the line under the sheet never points at a button that is not there.
+ * `takesLong` where reading the chain takes half a minute (Edit's word,
+ * lib/bleSwitch gridReadTakesLong: this file never asks which wire it is
+ * on), so it is said before the tap and under the card.
  */
-export default function QuickBuild({ bare, caps, chain, pending = false, saves = true, onSave, onPlay }) {
+export default function QuickBuild({ bare, caps, chain, pending = false, saves = true, takesLong = false, onSave, onPlay }) {
   const starters = useStarterChains()
+  const unitName = useRig(ofDeviceName)
   const [palette, setPalette] = useState(null)
   const [open, setOpen] = useState(false)
   const [picks, setPicks] = useState([])
@@ -308,6 +383,8 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
   const [kept, setKept] = useState(null)
+  /* Where a build or an Undo has got, for its card: { kind, step, got, of } (BuildProgress). Gone wherever the run ends, which is wherever `busy` is let go of. */
+  const [stage, setStage] = useState(null)
   const alive = useRef(true)
   useEffect(
     () => () => {
@@ -315,6 +392,28 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     },
     []
   )
+  useEffect(() => {
+    if (!busy) setStage(null)
+  }, [busy])
+  /* The card is up while a run is: the picker hidden under it, the foot's own line not said twice. */
+  const building = !!busy && stage !== null
+  const toStep = (kind, step) => {
+    if (alive.current) setStage({ kind, step, got: null, of: null })
+  }
+  /* How far a read of the preset has got (lib/device gridCells onProgress): only into the step it was asked for, so a late word from one read never moves another's bar. */
+  const toldFor = (step) => (p) => {
+    if (alive.current && p && Number.isFinite(p.got) && Number.isFinite(p.of)) setStage((s) => (s && s.step === step ? { ...s, got: p.got, of: p.of } : s))
+  }
+  /* Step 2 from here: how many of the run's steps have gone before the one going, told as each goes, once the unit has said it is still on this preset (held), so a step stopped there is never counted. */
+  const sentCounter = (kind, of) => {
+    let sent = 0
+    if (alive.current) setStage({ kind, step: 2, got: 0, of })
+    return (call) => (...args) => {
+      if (alive.current) setStage({ kind, step: 2, got: sent, of })
+      sent += 1
+      return call(...args)
+    }
+  }
 
   const shape = gridShape(caps)
   const room = palette ? Math.max(0, buildRoom({ cells: [], shape, palette, blocks: chain })) : 0
@@ -411,19 +510,22 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   /* How many of a run's steps may have reached the unit: the ones answered, and the one that threw unless it was stopped before it was sent. */
   const triedOf = (res, gone) => (res.ok ? res.done : res.done + (gone.unsent ? 0 : 1))
 
-  /* The five calls, with each step said while it goes and written in the log. */
-  const wire = (plan, n, gone) => ({
-    placeBlock: held(n, gone, (row, col, blockId) => {
-      const step = plan.steps.find((s) => s.kind === 'place' && s.row === row && s.col === col && s.blockId === blockId)
-      if (alive.current) setBusy(placingLine(step?.name))
-      return placeBlock(row, col, blockId)
-    }),
-    clearCell: held(n, gone, (row, col) => clearCell(row, col)),
-    setCable: held(n, gone, (srcRow, srcCol, destRow, connect) => {
-      if (alive.current && connect) setBusy(JOINING)
-      return setCable(srcRow, srcCol, destRow, connect)
-    })
-  })
+  /* The five calls, with each step said while it goes, counted on the card, and written in the log. */
+  const wire = (plan, n, gone) => {
+    const sending = sentCounter('build', plan.steps.length)
+    return {
+      placeBlock: held(n, gone, sending((row, col, blockId) => {
+        const step = plan.steps.find((s) => s.kind === 'place' && s.row === row && s.col === col && s.blockId === blockId)
+        if (alive.current) setBusy(placingLine(step?.name))
+        return placeBlock(row, col, blockId)
+      })),
+      clearCell: held(n, gone, sending((row, col) => clearCell(row, col))),
+      setCable: held(n, gone, sending((srcRow, srcCol, destRow, connect) => {
+        if (alive.current && connect) setBusy(JOINING)
+        return setCable(srcRow, srcCol, destRow, connect)
+      }))
+    }
+  }
 
   const logSteps = (label, steps, res) =>
     steps.forEach((step, i) =>
@@ -433,6 +535,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   const build = async () => {
     if (busy || !picks.length) return
     setSaid(null)
+    toStep('build', 1)
     setBusy(CHECKING_EMPTY)
     /* The preset this is for, taken BEFORE its chain is read: the plan is made from that read, and every step is held to this number. With no preset known there is nothing to hold them to. */
     const n = ofNumber()
@@ -443,7 +546,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     }
     let cells
     try {
-      cells = await gridCells()
+      cells = await gridCells({ onProgress: toldFor(1) })
     } catch (err) {
       logDebug('chain', 'quick build: grid read', err?.message || String(err))
       setBusy(null)
@@ -461,6 +564,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     }
     const gone = { moved: false, unsent: false }
     beginChainWrite()
+    if (alive.current) setBusy(BUILDING)
     let res
     try {
       res = await runPlan(plan.steps, wire(plan, n, gone))
@@ -500,10 +604,11 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     /* Null when the unit did not answer: what landed is then not known, which is not the same as nothing landing (whatLanded). And where it would not say which preset it is on, nothing is read back as this preset's at all. */
     let after = null
     if (on === 'same') {
+      toStep('build', 3)
       if (alive.current) setBusy(READING_BACK)
       await refreshBlocks({ quiet: true })
       try {
-        after = await gridCells()
+        after = await gridCells({ onProgress: toldFor(3) })
       } catch (err) {
         logDebug('chain', 'quick build: read back', err?.message || String(err))
       }
@@ -534,6 +639,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
   const runUndo = async () => {
     const d = done
     if (!d?.undo || busy) return
+    toStep('undo', 1)
     setBusy(UNDOING)
     /* Still on the preset the build was made in? Asked of the unit, as before every step. */
     const before = await where(d.n)
@@ -553,7 +659,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
      */
     let now
     try {
-      now = await gridCells()
+      now = await gridCells({ onProgress: toldFor(1) })
     } catch (err) {
       logDebug('chain', 'quick build undo: grid read', err?.message || String(err))
       if (!alive.current) return
@@ -575,7 +681,8 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     beginChainWrite()
     let res
     try {
-      res = await runPlan(d.undo, { setCable: held(d.n, gone, setCable), placeBlock: held(d.n, gone, placeBlock), clearCell: held(d.n, gone, clearCell) })
+      const sending = sentCounter('undo', d.undo.length)
+      res = await runPlan(d.undo, { setCable: held(d.n, gone, sending(setCable)), placeBlock: held(d.n, gone, sending(placeBlock)), clearCell: held(d.n, gone, sending(clearCell)) })
     } catch (err) {
       res = { ok: false, done: 0, failed: d.undo[0], error: err?.message || String(err) }
     }
@@ -603,9 +710,10 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     /* Null when the unit did not answer, or would not say which preset it is on: then nothing is said to be out. */
     let after = null
     if (on === 'same') {
+      toStep('undo', 3)
       await refreshBlocks({ quiet: true })
       try {
-        after = await gridCells()
+        after = await gridCells({ onProgress: toldFor(3) })
       } catch (err) {
         logDebug('chain', 'quick build undo: read back', err?.message || String(err))
       }
@@ -648,9 +756,11 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
 
   const foot = done ? null : (
     <View style={{ gap: space.sm }}>
-      {busy ? <Text accessibilityLiveRegion="polite" style={{ color: color.silk, fontSize: font.body }}>{busy}</Text> : null}
-      <Press label={buildLabel(picks.length)} tone="signal" on={picks.length > 0} disabled={!picks.length || !!busy} busy={!!busy} onPress={build} />
-      {naming ? (
+      {busy && !building ? <Text accessibilityLiveRegion="polite" style={{ color: color.silk, fontSize: font.body }}>{busy}</Text> : null}
+      <Press label={busy ? BUILDING : buildLabel(picks.length)} tone="signal" on={picks.length > 0} disabled={!picks.length || !!busy} busy={!!busy} onPress={build} />
+      {/* Before the tap, where it is a long wait: said once more under the card. */}
+      {takesLong && !busy ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{TAKES_LONG}</Text> : null}
+      {busy ? null : naming ? (
         <NameRow name={name} onName={setName} onKeep={keep} onCancel={() => setNaming(false)} problem={kept?.bad ? kept.text : null} />
       ) : full ? (
         <Text style={{ color: color.silkDim, fontSize: font.small }}>{STARTERS_FULL}</Text>
@@ -697,7 +807,16 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
         </View>
       ) : null}
 
-      <Sheet open={open} onClose={close} title={QUICK_BUILD_TITLE} foot={foot} tall>
+      {/* The card in the sheet's head, which never scrolls, so it cannot sit out of view over a picker scrolled down; the ✕ faded, since nothing closes the sheet while it builds. */}
+      <Sheet
+        open={open}
+        onClose={close}
+        title={QUICK_BUILD_TITLE}
+        head={building ? <BuildProgress stage={stage} line={busy} unit={unitName} takesLong={takesLong} /> : null}
+        foot={foot}
+        tall
+        locked={!!busy}
+      >
         {done ? (
           <View style={{ gap: space.md }}>
             <ResultCard tone={done.landed.tone} title={done.landed.title} text={done.landed.text} />
@@ -742,7 +861,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
             ) : blocked ? (
               <Note tone="warn">{blocked}</Note>
             ) : (
-              <ChainPicker palette={palette} picks={picks} onPicks={setPicks} room={room} linear={shape.linear} />
+              <ChainPicker palette={palette} picks={picks} onPicks={setPicks} room={room} linear={shape.linear} hidden={building} />
             )}
           </View>
         )}

@@ -8,6 +8,8 @@ import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides, firstFrame } from '../lib/screenShape'
 import { SHEET_MAX, pageRow, playLines } from '../lib/playShape'
 
+/* A `locked` sheet's ✕: there, and plainly not a way out just now. */
+const LOCKED_LOOK = { opacity: 0.4 }
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
 const STATUS_AT_LEAST = 20
 const GLASS = 8
@@ -72,8 +74,13 @@ let lastFrame = null
  * the finger: a knob in Play's hold pop-up turns on a drag up and down
  * (components/Knob), and the sheet must not scroll under it. False, which
  * every other sheet is, and it scrolls as it always did.
+ *
+ * `locked` is a sheet that cannot be closed just now (Quick build while it
+ * builds, whose onClose then does nothing): its ✕ is drawn faded and said
+ * as not available, so it does not look like a way out that has frozen.
+ * False, which every other sheet is, and the ✕ is as it always was.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, children }) {
+export default function Sheet({ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -187,23 +194,28 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                   <Text style={{ color: color.silkDim, fontSize: font.small }}>{note}</Text>
                 ) : null}
               </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                onPress={onClose}
-                style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  /* A round glass button: its rim a ring inside it, so it is the 44 it was. */
-                  backgroundColor: pressed ? color.glassFillHi : color.glassFill,
-                  boxShadow: color.glassLiftRing
-                })}
-              >
-                <Text style={{ color: color.silkDim, fontSize: font.lead }}>✕</Text>
-              </Pressable>
+              {/* Faded as a whole while the sheet is `locked`, its own look untouched: every other sheet's ✕ is the one it was, in both looks (test/glass-classic). */}
+              <View style={locked ? LOCKED_LOOK : undefined}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={locked ? { disabled: true } : undefined}
+                  disabled={locked}
+                  accessibilityLabel="Close"
+                  onPress={onClose}
+                  style={({ pressed }) => ({
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    /* A round glass button: its rim a ring inside it, so it is the 44 it was. */
+                    backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+                    boxShadow: color.glassLiftRing
+                  })}
+                >
+                  <Text style={{ color: color.silkDim, fontSize: font.lead }}>✕</Text>
+                </Pressable>
+              </View>
             </View>
 
             {head ? <View style={{ gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm }}>{head}</View> : null}
