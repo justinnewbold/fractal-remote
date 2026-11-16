@@ -1347,9 +1347,11 @@ export function BlockPanel({
          * November 2026). The write went and the unit most likely took it;
          * with the read before the turn left as the knob's value, the knob
          * jumped back to the old number, and turning it back there sent
-         * nothing (commit skips a value equal to the knob's own).
+         * nothing (commit skips a value equal to the knob's own). A whole
+         * number stands as the whole number sent (device.js askedAs), never
+         * the drag's 10.46.
          */
-        setParams((prev) => prev.map((q) => (q.id === p.id ? { ...q, value: next } : q)))
+        setParams((prev) => prev.map((q) => (q.id === p.id ? { ...q, value: q.whole === true && Number.isFinite(next) ? Math.round(next) : next } : q)))
       }
       if (!res.ok) onError(res.unverified ? notChecked(p) : didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {

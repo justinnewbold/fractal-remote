@@ -1301,8 +1301,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * app's own setup asks for on an FM9 and an Axe-Fx III) or the phone's
      * own message come back put the read on the long wait between an
      * answer's bytes, and with a beat every half second it ran to its 10 s
-     * cap. The first frame of that answer is a short head, so its own bytes
-     * lose nothing by it.
+     * cap. The first frame of that answer is a head of a dozen bytes, so
+     * the first second now has to hold the whole head, not only its first
+     * byte: a few tens of milliseconds sooner. NOT DONE YET: once the head
+     * has come, a beat still starts the gap again (as for every long
+     * answer), and the grid's preset read has no first wait of its own.
      */
     if (job && job.opts.collect && job.timer !== undefined && job.opts.firstMs !== undefined && !job.back) {
       /* the first wait stands */

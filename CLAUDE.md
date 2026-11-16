@@ -1462,7 +1462,9 @@ what the computer sends for the same edit, and a test holds it there.
     unit's tempo beat with Send Realtime Sysex on, the phone's own message
     come back) do not stretch that second (they put it on the 2.5 s gap,
     and a beat every half second ran it to its 10 s cap); once a frame of
-    the answer has come, its bytes keep it waiting as before. A read with fewer values than its head
+    the answer has come, its bytes keep it waiting as before (and a beat
+    still starts the gap again then, as on every long answer, and the grid's
+    preset read has no first wait of its own: both are left as they were). A read with fewer values than its head
     said is damaged, and a channel switch drops the 400 ms list of what is
     in the preset, so the next read is on the new channel. Two checks of
     one block asked together still make two reads.
