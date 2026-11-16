@@ -379,11 +379,6 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
   }
 
   /**
-   * What GET /preset/blocks/<eid>/params answers over the computer, made from
-   * the block's whole read (`bulk`, {count, values}) for the channel it is on:
-   * ForgeFX's blockParams, field for field.
-   */
-  /**
    * Where the channel's values are in the block's whole read, as
    * blockParamsOf takes them (sliceOf, with the family's own channel count
    * where it has one): {stride, channels, base}, or null for a block Edit
@@ -396,6 +391,11 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     return sliceOf(f.stride, bulk, Number.isInteger(channel) && channel >= 0 ? channel : 0, f.channels)
   }
 
+  /**
+   * What GET /preset/blocks/<eid>/params answers over the computer, made from
+   * the block's whole read (`bulk`, {count, values}) for the channel it is on:
+   * ForgeFX's blockParams, field for field.
+   */
   function blockParamsOf(eid, bulk, { channel = 0 } = {}) {
     const b = editBlock(eid)
     if (!b) return null
