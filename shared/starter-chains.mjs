@@ -1040,8 +1040,14 @@ export function joinBreak(plan, cellsAfter) {
  * that is the difference between a message the unit dropped and a message
  * that was wrong (his 15 November log could not say). Empty for a linear
  * unit, whose slots have no cables.
+ *
+ * `nameOf(cell)` is the name the app already has for a block the grid read
+ * did not name (16 November 2026: through the computer the III's NAM 1
+ * came back as "eid_206", which the phone calls NAM 1 everywhere else;
+ * mobile/src/lib/ownBlocks ownCellName). Asked only of a cell with no name
+ * or the computer's "eid_N"; a cell it cannot name keeps what the read said.
  */
-export function rowAsRead(plan, cellsAfter) {
+export function rowAsRead(plan, cellsAfter, nameOf = null) {
   if (!plan || plan.linear || !Array.isArray(cellsAfter)) return ''
   /*
    * EVERY CELL THE PLAN TOUCHED: the ones it placed into, and both ends of
@@ -1065,7 +1071,8 @@ export function rowAsRead(plan, cellsAfter) {
       parts.push(`column ${colLabel(col)} empty`)
       continue
     }
-    const what = cell.isShunt ? 'a bare wire' : cell.name || `block ${cell.effectId}`
+    const ours = !cell.isShunt && typeof nameOf === 'function' && (!cell.name || /^eid_\d+$/.test(cell.name)) ? nameOf(cell) : null
+    const what = cell.isShunt ? 'a bare wire' : (typeof ours === 'string' && ours) || cell.name || `block ${cell.effectId}`
     /* Only whole row numbers are said: anything else in the list is a read the app does not understand, and is said as that. */
     const rows = Array.isArray(cell.fromRows) ? cell.fromRows.filter((r) => Number.isInteger(r)) : null
     const fed = rows === null || rows.length !== cell.fromRows.length ? 'feed not read' : rows.length ? `fed from row ${rows.map((r) => rowLabel(r)).join(' and ')}` : 'fed from nothing'

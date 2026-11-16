@@ -12786,7 +12786,8 @@ export function run(test) {
     assert.match(bare, /if \(went\.ok && went\.got\.name && went\.got\.name !== NAM_EMPTY && Number\.isInteger\(went\.way\)\) keptWay = went\.way/)
     assert.equal((bare.match(/keptWay = /g) || []).length, 2)
     assert.equal(nam.NAM_NAME_PLACES, 31)
-    assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: tries > 1 \? `The Axe-Fx III took the capture \$\{tries\} different ways and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered each time\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    /* The words are lib/captureComputer unkeptWords' (run whole in test/capture-computer.mjs), with the computer's own say on which byte went. */
+    assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: unkeptWords\(\{ tries, slotSaid: said, computer: oldAfterSendHere\(went\.old\) \}\) \}\) return \}/)
     /* A send that stopped part-way is offered again with its name as it was going. */
     assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \} \}\)\)/)
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */

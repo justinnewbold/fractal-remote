@@ -208,7 +208,8 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
  *   or "<EMPTY>" for one not kept), `tries` how many were sent, `way` the
  *   place in CAPTURE_WAYS of the last one sent (the one kept, where one
  *   was), `late` when a try turned out to have been kept after the slot had
- *   read empty. A send that fails throws the sender's own failure, with
+ *   read empty, `old` when a try's answer did not say which byte went (an
+ *   older computer app, which puts the name XORed in). A send that fails throws the sender's own failure, with
  *   `way` added: which way was going.
  */
 export async function sendCapture({ text, named, slot, replace = false, sentBefore = false, order = null, install, log = () => {}, onNext = () => {} }) {
@@ -286,5 +287,6 @@ export async function sendCapture({ text, named, slot, replace = false, sentBefo
   /* No way could be packed (it cannot happen for a file `plain` took, and is not left to be found out by a crash). */
   if (!got) return { ok: false, why: 'This capture could not be packed to send.' }
   if (got?.name === NAM_EMPTY) log(`NOT KEPT${tries > 1 ? `, any of the ${tries} ways tried` : ''}: the slot still reads ${NAM_EMPTY} after every message was taken`)
-  return { ok: true, name: plain.name, got, tries, way, late }
+  /* `old`: a try went through a computer app that did not say which byte went (lib/captureComputer says so on the card). */
+  return { ok: true, name: plain.name, got, tries, way, late, old }
 }

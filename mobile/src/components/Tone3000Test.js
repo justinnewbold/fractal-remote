@@ -107,6 +107,8 @@ import { captureLine, waitOver } from '../lib/captureLine'
 import { isPlaced, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
 import { captureOrder, captureToSlot, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
+import { CAPTURES_KEPT_FROM, tooOldUpTop, tooOldWords, unkeptWords } from '../lib/captureComputer'
+import { oldAfterSendHere, oldComputerHere, watchComputer } from '../lib/captureComputerHere'
 import Avatar from './Avatar'
 import Note from './Note'
 import Press from './Press'
@@ -191,6 +193,10 @@ export const PICK_AFTER_SEND = 'A capture is still going to the unit, so that to
 const taken = new Set()
 
 /* The captures this app has put on the unit, and where, for as long as the app runs: lib/capturePlaced, which every drawing of this page hears from. */
+
+/* The computer a capture would go through now, where its app is too old to have one kept (lib/captureComputerHere): `{ name, version }`, else null. */
+const oldHere = oldComputerHere
+const sameComputer = (a, b) => (a === null && b === null) || (!!a && !!b && a.name === b.name && a.version === b.version)
 
 /**
  * One of the two buttons on a capture's line: a small picture and a word,
@@ -314,6 +320,23 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       setOnUnit(now)
       if (!goingNow()) setSend(waitOver)
     })
+  }, [])
+  /*
+   * A computer app too old to have a capture kept (lib/captureComputer),
+   * heard as the link changes: the tone's view says so once up top, and
+   * every button that would send a capture sends nothing. A card that said
+   * so comes down once the computer is new enough, or the device is on
+   * Bluetooth.
+   */
+  const [computer, setComputer] = useState(oldHere)
+  useEffect(() => {
+    const look = () => {
+      const now = oldHere()
+      setComputer((was) => (sameComputer(was, now) ? was : now))
+      if (!now) setSend((was) => (was?.old ? null : was))
+    }
+    look()
+    return watchComputer(look)
   }, [])
   /* A send that stopped part-way, by capture: { again, way, play, back, line }. Kept apart from the send in hand, which a Play under another capture takes over. */
   const [stopped, setStopped] = useState({})
@@ -517,6 +540,20 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       setOnUnit(placedNow())
       return
     }
+    /*
+     * THROUGH A COMPUTER APP TOO OLD TO HAVE IT KEPT, NOTHING IS SENT: the
+     * unit drops most captures it sends (his log, 16 November 2026, through
+     * a Raspberry Pi on 1.90.63). The card says why and what to do, under
+     * this capture, in place of the note up top. Nothing fetched, nothing
+     * asked of the unit, no slot taken.
+     */
+    const old = oldHere()
+    if (old) {
+      logDebug('tone3000', `capture ${m.id} (${captureLabel(m)}) was not sent: the computer app on ${old.name || 'the computer'} is ${old.version}, older than ${CAPTURES_KEPT_FROM}, which puts the name XORed in, and the unit drops most of those`)
+      setComputer((was) => (sameComputer(was, old) ? was : old))
+      setSend({ id: m.id, line: tooOldWords(old), old: true })
+      return
+    }
     /* Get from a held block plays too (`back`): it is still Get's word that says what it is doing. */
     setTapped(play && !back ? 'play' : 'keep')
     if (goingNow()) {
@@ -622,16 +659,15 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         return
       }
       const { got, tries } = went
-      /* Every message was taken and the slot still reads empty: the unit did not keep it. Never "done", and nothing to play. */
+      /*
+       * Every message was taken and the slot still reads empty: the unit did
+       * not keep it. Never "done", and nothing to play. Where the computer
+       * did not say which byte went (`old`: an older computer app whose
+       * version was not known before the send), the card says that and what
+       * to do (lib/captureComputer unkeptWords); otherwise as it was.
+       */
       if (got.name === NAM_EMPTY) {
-        setSend({
-          id: m.id,
-          slot,
-          line:
-            tries > 1
-              ? `The Axe-Fx III took the capture ${tries} different ways and still shows slot ${said} as empty, so it did not keep it. The app’s log has what the unit answered each time.`
-              : `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.`
-        })
+        setSend({ id: m.id, slot, line: unkeptWords({ tries, slotSaid: said, computer: oldAfterSendHere(went.old) }) })
         return
       }
       /* A slot that never said what it holds (asked twice) is not said to hold the capture: the send went, and pointing NAM 1 at it is what finds out. */
@@ -871,6 +907,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
               <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{capturesNote(where)}</Text>
             </View>
           ) : null}
+          {/* The computer app is too old to have a capture kept: said once, here, as the view opens, so the buttons are not a surprise; a capture whose button was tapped says it under itself instead (lib/captureComputer tooOldUpTop). */}
+          {tooOldUpTop({ computer, captures: !!(models && models.length), send }) ? <Note tone="warn">{tooOldWords(computer)}</Note> : null}
           {(models || []).map((m) => {
             const named = captureLabel(m)
             const mine = send?.id === m.id

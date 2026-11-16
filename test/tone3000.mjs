@@ -455,6 +455,9 @@ export function run(test) {
     /* The card reaches a unit by the captures' three calls and nothing else of the unit's (test/nam-install.mjs, test/bluetooth.mjs hold what they send). */
     assert.deepEqual(card.match(/from '\.\.\/lib\/(device|bleWire|bluetooth|rig|link)'/g), ["from '../lib/device'"])
     assert.match(card, /import \{ namEmptySlotHere, namInstallHere, namPickHere \} from '\.\.\/lib\/device'/)
+    /* What it reads of the computer, to say one is too old for a capture to be kept (lib/captureComputerHere), it reads off the link and the device's one yes-or-no: nothing sent, nothing asked of the unit. */
+    const computerHere = read('mobile/src/lib/captureComputerHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.deepEqual(computerHere.match(/^import .*$/gm), ["import { capturesThroughComputer } from './device'", "import { linkState, subscribeLink } from './link'", "import { computerTooOld, oldAfterSend } from './captureComputer'"])
     /* A capture's text is kept for as long as the card is up and no longer: never in storage. */
     assert.ok(!/AsyncStorage|setItem|writeAsString/.test(card), 'the card writes a capture down')
     assert.match(card, /texts\.current = \{\}/)
