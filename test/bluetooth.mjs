@@ -21797,7 +21797,7 @@ export function run(test) {
     const qb = code('mobile/src/components/QuickBuild.js').replace(/\s+/g, ' ')
     assert.match(qb, /const ofDeviceName = \(s\) => s\.deviceName/)
     assert.match(qb, /const unitName = useRig\(ofDeviceName\)/)
-    assert.match(qb, /<BuildProgress stage=\{stage\} line=\{busy\} unit=\{unitName\} takesLong=\{takesLong\} \/>/)
+    assert.match(qb, /<BuildProgress stage=\{stage\} line=\{stage\.kind === 'undo' \? null : busy\} unit=\{unitName\} takesLong=\{takesLong\} \/>/)
     assert.ok(!/caps\?\.(short|name)/.test(qb), 'the card names the unit from the capabilities, which say "your unit"')
   })
 
