@@ -306,6 +306,7 @@ export function unattendedInstall({ hidden = false, sinceLaunchMs = 0, platform 
    * otherwise restart the box mid-song (an independent read, 16 November
    * 2026). It waits for the next power-on, or a quit.
    */
+  if (phoneSeen) return { install: false, why: 'a phone is already using it, so it waits for the next start or a quit' }
   if (sinceLaunchMs > INSTALL_WINDOW_MS) return { install: false, why: 'it installs when the app quits' }
   if (platform === 'linux' && !env.APPIMAGE) {
     return { install: false, why: 'the .deb asks for a password to install, so it waits for a quit' }
