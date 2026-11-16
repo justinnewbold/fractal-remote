@@ -20,8 +20,10 @@
  * Refused, so nothing is built: anything but three plain numbers (a "2.0"
  * compares as nothing in shared/versions.mjs and would keep Bluetooth shut
  * for every customer on the build), a last place of more than one digit
- * (CLAUDE.md, the numbering), and a number below what a store already has
- * (public/store-versions.json), which neither store would take.
+ * (CLAUDE.md, the numbering), a number below what a store already has
+ * (public/store-versions.json), which neither store would take, and the App
+ * Store's own number, whose version Apple has closed (an independent read,
+ * before the 2.0.0 pair: Apple says so only at upload, after the build).
  *
  *   node scripts/store-version.mjs 2.0.0
  */
@@ -39,6 +41,8 @@ export function storeVersionProblem(wanted, live) {
   for (const store of ['ios', 'android']) {
     if (live?.[store] && isOlder(v, live[store])) return `${v} is below ${live[store]}, which the ${store === 'ios' ? 'App Store' : 'Google Play'} copy already is`
   }
+  /* Apple closes a version once it is out: a build of the App Store's own number is refused at upload, after the iPhone's slot is spent. */
+  if (live?.ios && !isOlder(live.ios, v)) return `${v} is the App Store's own number, which Apple takes no new build of: it has to be above ${live.ios}`
   return null
 }
 

@@ -269,6 +269,28 @@ jobs:
           echo "::error::Google Play's internal testing track is for the next store version: tick Build the next store version as well."
           exit 1
 
+      # AND THE OTHER WAY ROUND: a next store version is for testers until
+      # Justin says. "I want to test it all on test flight first before a
+      # public release" (16 November 2026). Without this, Build the next store
+      # version (or a store version number) with Send ticked and the testing
+      # box left alone sends Android with plain --auto-submit, so by the
+      # `production` submit profile to Google Play production, everyone; and
+      # a Skip building resend without the box sends the newest Android
+      # build, which is the testers' one while docs/pending/next-store.json
+      # is there, to the same place (an independent read, before the 2.0.0
+      # pair). The iPhone's only way is TestFlight, which is testers, so an
+      # iPhone run is left alone. On release day there is no new build to
+      # send: Promote release in Play Console.
+      - name: A next store version goes to testers, never to everyone
+        if: >-
+          ${{ inputs.platform != 'ios' && !inputs.android_testing && (
+          (inputs.submit && !inputs.submit_only && (inputs.next_store || inputs.store_version != '')) ||
+          (inputs.submit_only && hashFiles('docs/pending/next-store.json') != '')
+          ) }}
+        run: |
+          echo "::error::A next store version goes to Google Play's internal testing track until it is released: tick Send Android to Google Play's internal testing track (or untick Send)."
+          exit 1
+
       - name: The next store version's native work, for this build only
         if: ${{ inputs.next_store || inputs.android_testing }}
         run: bash scripts/apply-pending.sh

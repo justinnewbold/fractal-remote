@@ -148,20 +148,27 @@ the new one. So a test line, with nothing committed for the build:
   "The version number the stores show for this build" (`store_version`,
   2.0.0) sets mobile/app.json's version in that checkout only
   (scripts/store-version.mjs, which refuses anything that is not three
-  numbers, a last place of two digits, or a number below a store's). "Send
+  numbers, a last place of more than one digit, a number below a store's,
+  or the App Store's own, a version Apple has closed). "Send
   Android to Google Play's internal testing track" (`android_testing`)
   submits with the `testing` profile: the iPhone to TestFlight as ever,
   Android to Play's internal track, testers only. That profile is itself a
   waiting patch (docs/pending/play-internal.patch), because @expo/fingerprint
   hashes the whole of mobile/eas.json: added to main, it alone moved both
   phones' fingerprints. So the box wants "Build the next store version" too,
-  and refuses a build without it. keep_packages as the build before it
+  and refuses a build without it. And the other way round: with Send
+  ticked, a build of the next store version (or one given a store version
+  number) is refused on Android without the testing box, and so is a Skip
+  building resend while next-store.json is there (mobile.yml "A next store
+  version goes to testers, never to everyone"), since either would go to
+  Google Play production, everyone. keep_packages as the build before it
   needed. NOTHING IN mobile/eas.json CHANGES ON MAIN between store
   versions, not even a submit profile.
 - *Its ledger*: the first pull request after it is started writes its row
   in docs/expo-builds.md and docs/pending/next-store.json, `{ "version",
-  "ios", "android" }`, the two fingerprints the build carries (its runtime
-  version on expo.dev).
+  "ios", "android", "watch" }`: the two fingerprints the build carries (its
+  runtime version on expo.dev, and what `npm run fingerprint` says with the
+  patches in) and the watch's own hash with the patches in.
 - *Every merge after that publishes twice*: main's own update, for the
   copies in the stores, then the same commit with docs/pending applied, for
   the testers (the update job's "Publish for the next store version's
@@ -173,13 +180,25 @@ the new one. So a test line, with nothing committed for the build:
 - *Release day*, on Justin's word: the pull request that applies
   docs/pending to main the usual way (README steps, the version to the
   store build's or past it), deletes the patch files AND next-store.json,
-  and records the new fingerprint. He then sends the builds the testers
+  and records the new fingerprint, which has to BE next-store.json's on
+  both phones (and the watch's hash its own) before that file goes: if not,
+  the build he sends for review takes no update from the merge on, and
+  that is another build, not a release. He then sends the builds the testers
   already have: the iPhone's from TestFlight for review in App Store
   Connect, Android's with Promote release from internal testing to
   production in Play Console. No new build, and from that merge on main's
   updates reach only the new store version, as at every store version.
 - A patch changed after the test build means the testers' copy no longer
   matches it, so that change waits for release day or for another build.
+  web.yml's `testers` job holds every pull request to that while
+  next-store.json is there: the patches in, the app's packages, and
+  `node scripts/next-store.mjs --strict`, which fails unless both phones'
+  fingerprints and the watch's hash are the build's. A pull request that
+  only touches docs/pending says Unchanged everywhere else, so without it
+  one would go green and be merged, and the testers would quietly take no
+  more updates (an independent read, before the 2.0.0 pair). Wanted all
+  the same, it is another build: his yes, the new values written into
+  next-store.json on purpose in that pull request, the build right after.
 
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with
