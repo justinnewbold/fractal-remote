@@ -57,7 +57,7 @@
  * needs. Nothing here knows a wire from a computer.
  */
 import { NAM_EMPTY, namRecord, namSlotSaid } from './nam-install.js'
-import { forgetNotKept, notKept, notKeptIn, place } from './capturePlaced.js'
+import { forgetNotKept, notKept, notKeptIn, place, slotTried } from './capturePlaced.js'
 
 /** The ways a capture is sent, in the order they are tried: 0x60 in the name's 32nd place each time (namRecord packs nothing else), with the file's hash and then without. `said` is for the log. */
 export const CAPTURE_WAYS = Object.freeze([
@@ -118,6 +118,12 @@ export function slotSpent(err) {
   return err?.status === 409 && (typeof err.holds === 'string' || /already holds/i.test(words))
 }
 
+/** Whether a failed send says it put nothing in its slot: refused, the start refused or unanswered, the slot never answered, or the line gone before the first message. Anything else may have (stopped part-way, or an answer lost while the computer went on). */
+export function wroteNothing(err) {
+  if (err?.status === 409 || err?.partial === false) return true
+  return /nothing was (sent|kept)/i.test(typeof err?.message === 'string' ? err.message : '')
+}
+
 /**
  * One tap's send of one capture: the slot, the send, and what the app
  * remembers after it (lib/capturePlaced). The slot is `again` (where a send
@@ -129,8 +135,10 @@ export function slotSpent(err) {
  *
  * Where the unit keeps it, it is placed; where it took it and did not keep
  * it, the slot is remembered; a failure forgets the slot only where
- * `slotSpent` says so. ALL OF IT BEFORE ANYTHING ASKS WHETHER THE PAGE IS
- * STILL UP: a send goes on after the page it started on is left.
+ * `slotSpent` says so, and a send that may have put something in its slot
+ * (not `wroteNothing`) ends what any OTHER capture remembered of it. ALL OF
+ * IT BEFORE ANYTHING ASKS WHETHER THE PAGE IS STILL UP: a send goes on after
+ * the page it started on is left.
  *
  * @param {object} c
  * @param {string|number} c.id      TONE3000's id for the capture
@@ -145,6 +153,15 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
   const over = Number.isInteger(again)
   const before = over ? null : notKeptIn(id)
   let slot = over ? again : before
+  /* A send into a slot that failed and may have put something there: what another capture remembered of that slot is no use now. */
+  const sendTo = async (to, sentBefore) => {
+    try {
+      return await send(to, sentBefore)
+    } catch (err) {
+      if (!wroteNothing(err)) slotTried(to, id)
+      throw err
+    }
+  }
   try {
     if (before !== null) log(`sent to slot ${namSlotSaid(before)} again, where it was taken and not kept last time`)
     if (slot === null) {
@@ -153,7 +170,7 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
     }
     let went
     try {
-      went = await send(slot, before !== null)
+      went = await sendTo(slot, before !== null)
     } catch (err) {
       if (before === null || !heldElse(err, name)) throw err
       /* Not its slot any more: something else went in since. Nothing was sent, and the player never picked that slot, so an empty one is looked for now. */
@@ -161,7 +178,7 @@ export async function captureToSlot({ id, name, again = null, find, send, log = 
       log(`slot ${namSlotSaid(before)} holds another capture now (${err?.message || 'refused'}); looking for an empty slot`)
       slot = await find()
       if (!Number.isInteger(slot)) return { slot: null, went: null }
-      went = await send(slot, false)
+      went = await sendTo(slot, false)
     }
     if (went?.ok && went.got?.name === NAM_EMPTY) notKept(id, slot)
     else {
@@ -240,7 +257,7 @@ export async function sendCapture({ text, named, slot, replace = false, sentBefo
       if (tries === 0 && sentBefore === true && heldAlready(err, plain.name)) {
         late = true
         got = { slot, name: plain.name, replaced: null, seconds: 0 }
-        log(`KEPT after all: the slot holds it, from the send before this one, which the unit filed after the slot had twice read ${NAM_EMPTY}. Nothing was sent`)
+        log(`KEPT after all: the slot holds it, from an earlier send of it, which the unit filed after the slot had twice read ${NAM_EMPTY}. Nothing was sent`)
         break
       }
       if (tries > 0 && heldAlready(err, plain.name)) {

@@ -39,8 +39,11 @@
  * one remembered of it: sent back to that slot it would be refused for the
  * other capture, and where the two are filed under one name (a pack's
  * captures often are, cut to 31 characters) the refusal reads as its own,
- * "kept after all", with the other one playing. lib/captureSend
- * `captureToSlot` is what reads and writes it, a tap at a time.
+ * "kept after all", with the other one playing. So does a send of another
+ * capture into it that failed in a way that may have put something there
+ * (`slotTried`: stopped part-way, or the answer lost while the computer may
+ * have finished it). lib/captureSend `captureToSlot` is what reads and
+ * writes it, a tap at a time.
  *
  * PURE: no React, no wire. The page keeps what this answers and draws it.
  */
@@ -83,6 +86,11 @@ export function notKept(id, slot) {
   if (!Number.isInteger(slot)) return
   forgetSlot(slot)
   unkept.set(String(id), slot)
+}
+
+/** A send of `id` into `slot` failed in a way that may have put something there: no OTHER capture's not-kept send is looked for in it now (lib/captureSend captureToSlot). */
+export function slotTried(slot, id) {
+  for (const [other, at] of [...unkept]) if (at === slot && other !== String(id)) unkept.delete(other)
 }
 
 /** The slot this capture was last taken into and not kept, or null. */
