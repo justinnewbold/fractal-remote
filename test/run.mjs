@@ -17563,7 +17563,7 @@ test('the computer app carries the device server that answers only its own calle
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard(\+|$)/, 'the computer app carries a device server any web page can sign out')
   /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, and the replug watch, e2030f4, sit on top). */
-  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the guard')
+  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the guard')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /93c1530/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17587,7 +17587,7 @@ test('the computer app carries the device server that can let Axiom onto the uni
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins(\+|$)/, 'the computer app carries a device server with no way to let Axiom in')
   /* Pinned at c7b4d3c, or at a later commit of the same branch that carries it (the replug watch, e2030f4, sits on top). */
-  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
+  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /c7b4d3c/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17609,7 +17609,7 @@ test('the computer app carries the device server that can let Axiom onto the uni
 test('the computer app carries the device server that finds a unit unplugged and plugged back in by itself', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+deviceorigins\+replug(\+|$)/, 'the computer app carries a device server that never notices its unit was replugged')
-  assert.ok(['e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the replug watch')
+  assert.ok(['e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the replug watch')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /e2030f4/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17633,7 +17633,7 @@ test('the computer app carries the device server that reads the footswitch page 
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+replug\+fcread(\+|$)/, 'the computer app carries a device server without the footswitch reads')
   /* Pinned at 18a9d80, or at a later commit of the same branch that carries it (an Axe-Fx III's own blocks, 0488f11, sit on top). */
-  assert.ok(['18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the footswitch reads')
+  assert.ok(['18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the footswitch reads')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /18a9d80/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17658,7 +17658,7 @@ test('the computer app carries the device server that opens an Axe-Fx III’s ow
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+fcread\+ownblocks(\+|$)/, 'the computer app carries a device server with no knobs for an Axe-Fx III’s own blocks')
   /* Pinned at 0488f11, or at a later commit of the same branch that carries it (the NAM captures, 4e6f05b, sit on top). */
-  assert.ok(['0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the III’s own blocks')
+  assert.ok(['0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the III’s own blocks')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /0488f11/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17681,7 +17681,7 @@ test('the computer app carries the device server that can send a capture to an A
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+ownblocks\+namcaptures(\+|$)/, 'the computer app carries a device server that cannot send a capture')
   /* Pinned at 4e6f05b, or at a later commit of the same branch that carries it (the one-piece send, 14e2c4f, sits on top). */
-  assert.ok(['4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the NAM captures')
+  assert.ok(['4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the NAM captures')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /4e6f05b/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17706,7 +17706,7 @@ test('the computer app carries the device server that sends a capture as one pie
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+namcaptures\+namonepiece(\+|$)/, 'the computer app carries a device server that lets other requests in between a capture’s messages')
   /* Pinned at 14e2c4f, or at a later commit of the same branch that carries it (the list of captures, 0b5e2ff to d44528e, sits on top). */
-  assert.ok(['14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the one-piece send')
+  assert.ok(['14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the one-piece send')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /14e2c4f/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17736,7 +17736,7 @@ test('the computer app carries the device server that answers the list of captur
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+namonepiece\+namheads(\+|$)/, 'the computer app carries a device server with no list of captures')
   /* Pinned at d44528e, or at a later commit of the same branch that carries it (the name byte as packed, 64c44a7, sits on top). */
-  assert.ok(['d44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the list of captures')
+  assert.ok(['d44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the list of captures')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /0b5e2ff/.test(w) && /032f107/.test(w) && /d44528e/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17770,7 +17770,7 @@ test('the computer app carries the device server that sends a capture’s name b
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+namheads\+nambyte(\+|$)/, 'the computer app carries a device server that writes its own byte over the phone’s')
   /* Pinned at 64c44a7, or at a later commit of the same branch that carries it (the six-row cable, 07bc01a and its notes in 5b5b426, sits on top). */
-  assert.ok(['64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the name byte')
+  assert.ok(['64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the name byte')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /64c44a7/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17805,7 +17805,7 @@ test('the computer app carries the device server whose six-row cables name the c
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+nambyte\+gridcable(\+|$)/, 'the computer app carries a device server that joins another cell than the one asked for on an FM9 or an Axe-Fx III')
   /* Pinned at 5b5b426, or at a later commit of the same branch that carries it (the unit's beat, a32e129, sits on top). */
-  assert.ok(['5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit), 'the pin moved off the six-row cable')
+  assert.ok(['5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the six-row cable')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   /* The codec is not ours to change, and has not: the fix is in the server, on top of the codec's own frame. */
   assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364')
@@ -17842,8 +17842,9 @@ test('the computer app carries the device server whose six-row cables name the c
  */
 test('the computer app carries the device server that says when the unit’s own beat last fell', async () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+gridcable\+unitbeat$/, 'the computer app carries a device server that cannot say when the unit’s beat falls')
-  assert.equal(lock.forgefx.commit, 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd')
+  assert.match(lock.forgefx.tag, /\+gridcable\+unitbeat(\+|$)/, 'the computer app carries a device server that cannot say when the unit’s beat falls')
+  /* Pinned at a32e129, or at a later commit of the same branch that carries it (the channel count, 426fc0c, sits on top). */
+  assert.ok(['a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit), 'the pin moved off the unit’s beat')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364')
   const why = lock._why.find((w) => /a32e129/.test(w))
@@ -17867,6 +17868,33 @@ test('the computer app carries the device server that says when the unit’s own
 })
 
 /*
+ * And a block's read is cut by its own channel count (ForgeFX 426fc0c). His
+ * Axe-Fx III sent a NAM block as four channels of 27 values where the table
+ * says 18; 18 divides 108, so channel B was read from the middle of A (Bass
+ * 8, Bright Cap 10 pF). The phone's own reader was put right first
+ * (gen3-edit sliceOf, test/bluetooth.mjs); this is the same rule in the
+ * server the computer app carries, so the Raspberry Pi reads B to D right.
+ */
+test('the computer app carries the device server that cuts a block’s read by its own channel count', async () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+unitbeat\+ownchannels$/, 'the computer app carries a device server that reads a NAM block’s channel B from the middle of A')
+  assert.equal(lock.forgefx.commit, '426fc0c5b68c14b75e1d6647d360f5576f5736cf')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364')
+  const why = lock._why.find((w) => /426fc0c/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/108 values, four channels of 27/, /Bass on B read 8 and Bright Cap 10 pF/, /four for NAM, the IR Player and Dynamic Distortion, two for the Crossover, one set for the Vocoder and Tone Match/, /only where it makes four channels or fewer/, /never more than four/, /NOT SEEN ON A UNIT YET/, /COMPUTER_NEEDED stays/, /one commit on top of a32e129/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  /* The server's counts are the phone's, block for block (mobile/src/lib/axefx3-own-knobs.js `channels`). */
+  const { AXE3_OWN_FAMILIES } = await import('../mobile/src/lib/axefx3-own-knobs.js')
+  assert.deepEqual(Object.fromEntries(Object.entries(AXE3_OWN_FAMILIES).map(([f, x]) => [f, x.channels])), { VOCODER: 1, CROSSOVER: 2, TONEMATCH: 1, IRPLAYER: 4, DYNADIST: 4, NAM: 4 }, 'the phone and the server (ForgeFX own-blocks.test.ts, the same counts, DYNDIST there) count a block’s channels differently')
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.ok(mods.includes('| Cut a gen-3 block\'s whole read by the block\'s own channel count'), 'licences/MODIFICATIONS.md has no row for the channel count')
+  assert.match(readSrc(new URL('../shared/versions.mjs', import.meta.url), 'utf8'), /export const COMPUTER_NEEDED = '1\.87\.23'/)
+})
+
+/*
  * And the keep is a lease (ForgeFX 41a0c1b), so a Close that never reaches
  * the computer (a phone gone flat or put away, a sign-out, a tab shut) can
  * no longer hold the AM4 on its tuner, muted, until the computer app is
@@ -17879,7 +17907,7 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
   /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
   assert.ok(
-    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd'].includes(lock.forgefx.commit),
+    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b', '4e6f05bd95ab2e45d838f9aff60258918ce06ff1', '14e2c4f7e0e5a6073776f6550e647ca810b4d187', 'd44528e193523288fc6f8964e64857e629115279', '64c44a776457621520de45efaa1db3ebde478b82', '5b5b4264cd4e824650d4637a0d1506bff7e742f2', 'a32e129bd178badc1d5bdc6bfc1bfc5bc6c3dddd', '426fc0c5b68c14b75e1d6647d360f5576f5736cf'].includes(lock.forgefx.commit),
     'the pin moved off the tuner lease'
   )
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')

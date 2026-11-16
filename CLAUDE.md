@@ -1418,10 +1418,12 @@ what the computer sends for the same edit, and a test holds it there.
     (`channels` in lib/axefx3-own-knobs.js, from docs/ax3-readings.md),
     else by the stride only where that makes four or fewer, else in four
     (gen3-edit `sliceOf`); the log's read line says the count, the stride
-    and where the channel starts. ForgeFX cuts the same way (gen3.ts
-    #channelSlice, ownBlocks.ts): its matching change is a patch waiting
-    for a pin and a computer release, and until then a NAM block through
-    the computer can still read its B and D from the wrong place.
+    and where the channel starts. ForgeFX cuts the same way since 426fc0c
+    (gen3.ts #channelSlice, ownBlocks.ts `channels`, the same counts as the
+    phone's, held equal by test/run.mjs), pinned in 1.90.87, so a NAM block
+    read through the computer or the Raspberry Pi has the same channels
+    once the computer app has taken that release. Not seen on a unit
+    through the computer yet.
   - *The backup write broke settings.* When a knob's check did not read
     back as asked, the app sent it again as a typed write of its 0-to-1
     place, and a gen-3 unit takes a typed write in the setting's OWN
@@ -1431,9 +1433,15 @@ what the computer sends for the same edit, and a test holds it there.
     took: the unit didn't answer. It may have." (device.js `unverified`,
     the browser's rule), and EVERY GEN-3 KNOB IS ONE WAY ONLY: its place
     (52 00), never the typed way (gen3-edit; asked for, the wire answers
-    `{ok: false, unsent: true}` and nothing goes). THROUGH THE COMPUTER the
-    phone still asks for the other way after a miss it heard, and ForgeFX
-    still sends it (setParam), so the same breakage can happen there.
+    `{ok: false, unsent: true}` and nothing goes). THROUGH THE COMPUTER TOO,
+    since 1.90.87: on a unit whose driver lays cables (`gridRouting`: the
+    FM3, FM9 and Axe-Fx III) the phone (device.js `oneWayKnobs`) and the
+    browser (forgefx.js setParamConfirmed) send a knob its place alone,
+    whatever encoding was remembered for it, and a miss the check heard is
+    answered with what the unit holds, never a second write. ForgeFX's
+    setParam still sends the typed 0-to-1 place when asked `continuous:
+    false` (an older app asks it), and setEnum's typed ordinals are right
+    and stay; an AM4 and an Axe-Fx II keep the second way.
   - *Whole numbers were drawn as knobs.* What the codec lists as a whole
     number (forgefx-midi FM3_FAMILY_JOIN_DISCRETE, FM9_ROUNDTRIP_DISCRETE,
     III_ROUNDTRIP_DISCRETE: Bit Reduce, Number of Taps, a cab's Type) is
