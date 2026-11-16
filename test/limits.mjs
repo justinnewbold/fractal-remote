@@ -5290,8 +5290,10 @@ export function run(test) {
      * ONE DIGIT IN THE LAST PLACE. "I want to eliminate the second digit from
      * the builds anyway. so instead of 1.9.89 and going up by .01 each change
      * would go up by .1 so 1.90.9 to 1.91.0 and so on." (Justin, 16 November
-     * 2026, with 2.0.0 the first number of it.) Each change moves the last
-     * number up one, and after 9 the middle one: 2.0.9, then 2.1.0.
+     * 2026.) Main went from 1.90.90 to 1.91.0 that day, and stays on 1.x
+     * until the 2.0.0 store build is released ("dont change the build number
+     * to 2.0.0 on the updartes currently going"). Each change moves the last
+     * number up one, and after 9 the middle one: 1.91.9, then 1.92.0.
      */
     assert.match(root, /^\d+\.\d+\.\d$/, `${root} has more than one digit in its last place: after x.y.9 comes x.(y+1).0`)
   })

@@ -176,7 +176,10 @@ the new one. So a test line, with nothing committed for the build:
   production branch, which a store build listens on). scripts/next-store.mjs
   says in the log whether that second update still matches the build; it
   stops matching when a patch, a package or anything native changes after
-  the build, and then the testers take nothing until another build.
+  the build, and then the testers take nothing until another build. Such an
+  update is published all the same (it reaches nobody) and THEN the step
+  goes red (`NOT_THE_BUILD`, exit 3), so the day it starts is seen; one
+  whose fingerprint would be the store copies' own is never published.
 - *Release day*, on Justin's word: the pull request that applies
   docs/pending to main the usual way (README steps, the version to the
   store build's or past it), deletes the patch files AND next-store.json,
