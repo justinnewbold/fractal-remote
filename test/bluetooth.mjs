@@ -370,6 +370,9 @@ function fakeGen3(sx, o) {
        * values, the values in two pages, the footer. A block not in the
        * preset is refused, as a real one refuses it; `editDamage` spoils the
        * second page's checksum, and `editSilent` answers nothing.
+       * `editLate` is how long before its first byte, `editGap` a pause
+       * between the head and the first page, and `editShort` loses the
+       * second page on the way (the footer still comes).
        */
       case 0x1f: {
         const eid = sx.decode14(p[0], p[1])
@@ -381,9 +384,9 @@ function fakeGen3(sx, o) {
         const half = Math.ceil(values.length / 2)
         const second = page(values.slice(half))
         if (opt.editDamage) second[second.length - 2] ^= 0x01
-        let t = say(sx.frame(model, 0x74, [...sx.encode14(eid), ...sx.encode14(count)]))
-        t = say(page(values.slice(0, half)), t + 2)
-        t = say(second, t + 2)
+        let t = say(sx.frame(model, 0x74, [...sx.encode14(eid), ...sx.encode14(count)]), opt.editLate)
+        t = say(page(values.slice(0, half)), t + 2 + (opt.editGap || 0))
+        if (!opt.editShort) t = say(second, t + 2)
         return say(sx.frame(model, 0x76, []), t + 2)
       }
       case 0x01: {
@@ -18048,6 +18051,69 @@ export function run(test) {
     await assert.rejects(drive(damaged.clock, damaged.wire.request('/preset/blocks/58/params', { editing: true })), /came back damaged/)
     const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
     await assert.rejects(drive(silent.clock, silent.wire.request('/preset/blocks/58/params', { editing: true })), /didn’t send the Amp’s settings/)
+  })
+
+  /*
+   * EDIT'S READ OF A BLOCK IS GIVEN UP A SECOND AFTER IT WENT, IF NOTHING
+   * HAS COME BACK (16 November 2026). It waited 2.5 s for the first byte and
+   * held the line all that time, while a Play tap gives up in 1.5 s; a
+   * healthy read is done in 0.3 to 0.7 s. Once the answer has begun, the
+   * wait between its parts is the 2.5 s it always was.
+   */
+  test('Edit’s read of a block gives up a second after it went when nothing comes back, still waits out a pause once the answer has begun, and fewer values than the head said is damaged', async () => {
+    const { settings } = await fm3Settings()
+    const read = (t) => drive(t.clock, t.wire.request('/preset/blocks/58/params', { editing: true }))
+    /* Nothing at all: given up 1000 ms after the read went, not 2500, and the log says how long it waited. */
+    const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
+    await assert.rejects(read(silent), (err) => err.status === 504 && /didn’t send the Amp’s settings/.test(err.message))
+    const went = silent.sent.find((s) => s.bytes[5] === 0x1f)
+    assert.equal(silent.clock.now() - went.at, 1000, 'the read waited another length for its first byte')
+    assert.ok(silent.logs.includes('no answer to the settings of the Amp in 1000 ms: nothing came in meanwhile'), silent.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    /* Its first byte late, but within the second: read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editLate: 800 }))).slug, 'amp')
+    /* Begun, then two seconds before the first page: the wait once anything has come is the gap, so it is read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editGap: 2000 }))).slug, 'amp')
+    /* A page lost on the way and the footer after it: damaged, never a block read from the wrong places. */
+    await assert.rejects(read(await onTheLine('fm3', { edit: () => true, settings, editShort: true })), (err) => err.status === 502 && /came back damaged/.test(err.message))
+    /* The collector itself: a head of 8, four values and the footer is damaged; all eight is the block. */
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const sx = await import(SX)
+    const head = sx.frame(0x11, 0x74, [...sx.encode14(58), ...sx.encode14(8)])
+    const page = (list) => sx.frame(0x11, 0x75, [0, 0, ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
+    const foot = sx.frame(0x11, 0x76, [])
+    const run = (frames) => {
+      const c = g3.readAllCollector(0x11, 58)
+      let out
+      for (const f of frames) out = c(f)
+      return out
+    }
+    assert.deepEqual(run([head, page([1, 2, 3, 4]), foot]), { damaged: true })
+    assert.deepEqual(run([head, page([1, 2, 3, 4]), page([5, 6, 7, 8]), foot]), { count: 8, values: [1, 2, 3, 4, 5, 6, 7, 8] })
+    /* Other reads keep the wait they had: the whole-preset read and a capture slot's are not Edit's block read. */
+    assert.match(src('mobile/src/lib/bleWire.js').replace(/\s+/g, ' '), /firstMs: WAIT\.gen3ReadAllFirst,/)
+    assert.equal((src('mobile/src/lib/bleWire.js').match(/firstMs: /g) || []).length, 1, 'another read was given the short first wait')
+  })
+
+  /*
+   * A BLOCK SWITCHED TO ANOTHER CHANNEL FROM EDIT IS READ ON THAT CHANNEL
+   * (16 November 2026). The list of what is in the preset, which says each
+   * block's channel, is kept 400 ms (gen3PlacedHere); a channel switch did
+   * not drop it, so a read straight after the switch was cut at the channel
+   * the block had just left.
+   */
+  test('a block switched to another channel is read on that channel straight away, not on the one it was on a moment ago', async () => {
+    const { settings, set } = await fm3Settings()
+    set(58, 7, 0, 0)
+    set(58, 7, 1, 65534)
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    const ask = (path) => drive(t.clock, t.wire.request(path, { editing: true }))
+    t.unit.state.blocks.find((b) => b.eid === 58).channel = 0
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((p) => p.id === 7).value, 0)
+    const started = t.clock.now()
+    await t.post('/preset/blocks/58/channel', { channel: 'B' })
+    assert.equal(t.unit.state.blocks.find((b) => b.eid === 58).channel, 1, 'the pretend FM3 did not move')
+    assert.ok(t.clock.now() - started < 400, `the switch took ${t.clock.now() - started} ms, past the 400 the list is kept, so this proves nothing`)
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((p) => p.id === 7).value, 10, 'read on the channel it was on a moment ago')
   })
 
   /* ---------------------------------------------------------------- */

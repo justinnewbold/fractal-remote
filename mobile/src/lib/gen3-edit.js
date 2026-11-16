@@ -91,7 +91,13 @@ export function readAllPart(f, model, eid) {
   return { part: 'chunk', values }
 }
 
-/** A collector for bleWire's `collect`, as lib/am4-edit.js readAllCollector: {count, values}, or {damaged}. */
+/**
+ * A collector for bleWire's `collect`, as lib/am4-edit.js readAllCollector:
+ * {count, values}, or {damaged}. AND DAMAGED WHERE FEWER VALUES CAME THAN
+ * THE HEAD SAID (16 November 2026): a page lost on the way, with the footer
+ * after it, was taken as the whole block, and every setting past the gap
+ * was read from the wrong place.
+ */
 export function readAllCollector(model, eid) {
   let head = null
   let damaged = false
@@ -114,7 +120,7 @@ export function readAllCollector(model, eid) {
       for (const v of got.values) values.push(v)
       return null
     }
-    return damaged ? { damaged: true } : { count: head.count, values }
+    return damaged || values.length < head.count ? { damaged: true } : { count: head.count, values }
   }
 }
 
