@@ -265,6 +265,8 @@ export const WAIT = {
 export const ECHO_MS = 250
 /** A Program Change with the number the app just sent, on any channel, within this, is the app's own come back (as the rig's own-echo window). */
 export const OWN_PC_MS = 1500
+/** An earlier Program Change than the app's last is its own come back only this soon after it went: copies come while the next is going, never a second later. */
+export const OWN_OLDER_PC_MS = 600
 /** Copies of one Program Change this close together are one burst: one change, one line. */
 export const PC_BURST_MS = 300
 /** The AM4 is asked one stored name at a time, at least this far apart. */
@@ -933,15 +935,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * channel that names another bank is another preset, and news. EVERY ONE
    * the app sent in that time is remembered, not the last alone: Next
    * tapped twice sends the second 120 ms after the first, before the first
-   * one's copies come back (an independent read, before it went out). And
-   * the bank selects sent with it, coming back, are the app's own too: not
-   * the unit answering, so a quiet unit stays quiet.
+   * one's copies come back (an independent read, before it went out). But
+   * an EARLIER one is the app's own only for OWN_OLDER_PC_MS, and only until
+   * its copies have come back: a controller taking the unit back to it a
+   * second later is a real change (a second read). Copies come back in the
+   * order things were sent, so the oldest send not yet heard is the one a
+   * copy belongs to, and is what its timing is told from. And the bank
+   * selects sent with it, coming back, are the app's own too: not the unit
+   * answering, so a quiet unit stays quiet.
    *
    * And copies of one Program Change in a burst are one change: the first
    * is news, the rest are counted, and the log says once how many came,
    * on which channels and how long after the app's own.
    */
-  /* The Program Changes the app sent in the last OWN_PC_MS, oldest first: {low, bank, at}. */
+  /* The Program Changes the app sent in the last OWN_PC_MS, oldest first: {low, bank, at, heard}. */
   let ownPcs = []
   /* The last bank select (CC 0) heard on each channel, {value, at}: what a Program Change after it names. */
   const bankHeard = new Map()
@@ -972,12 +979,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return bank && now - bank.at <= OWN_PC_MS ? bank.value : null
   }
   const ownLately = (now) => (ownPcs = ownPcs.filter((e) => now - e.at <= OWN_PC_MS))
-  /** The app's own Program Change that one on `channel` is a copy of, the newest that fits, or null. */
+  /**
+   * The app's own Program Change that one on `channel` is a copy of, or
+   * null: the oldest send not heard back yet that fits (an earlier one only
+   * within OWN_OLDER_PC_MS of going), else the newest, which the unit is on,
+   * so another copy of it changes nothing.
+   */
   function ownPcFor(low, channel, now) {
     const bank = bankOn(channel, now)
     const mine = ownLately(now)
-    for (let i = mine.length - 1; i >= 0; i--) if (mine[i].low === low && (bank === null || bank === mine[i].bank)) return mine[i]
-    return null
+    const newest = mine[mine.length - 1]
+    const fits = (e) => e.low === low && (bank === null || bank === e.bank)
+    for (const e of mine) if (!e.heard && (e === newest || now - e.at <= OWN_OLDER_PC_MS) && fits(e)) return e
+    return newest && fits(newest) ? newest : null
+  }
+  /* Its copies have come: the sends before it are over (copies come back in order), and it is not taken for a later change but as the unit's own preset. */
+  function ownPcHeard(e) {
+    e.heard = true
+    ownPcs = ownPcs.filter((x) => x.at >= e.at)
   }
   /* A bank select the app sent with one of its Program Changes, come back: CC 0 with its bank, or CC 32 with nought, within OWN_PC_MS. */
   const ownBankSelect = (msg, now) => (msg[1] === 0x00 || msg[1] === 0x20) && ownLately(now).some((e) => (msg[1] === 0x00 ? msg[2] === e.bank : msg[2] === 0))
@@ -1764,8 +1783,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (kind === 0xc0 && Number.isInteger(msg[1])) {
       const low = msg[1]
       const bank = bankOn(channel, now)
+      /* A bank select said on this channel since the burst began: the bank this one is in, where it may not be the burst's. One left from before (the app's own, come back) says nothing of it. */
+      const said = bankHeard.get(channel)
+      const fresh = pcBurst && said && said.at > pcBurst.first ? said.value : null
       /* Another copy in the burst it belongs to: counted, and nothing else. Not one after a bank select that names another bank: that is another preset. */
-      if (pcBurst && pcBurst.low === low && now - pcBurst.last <= PC_BURST_MS && (pcBurst.bank === null || bank === null || bank === pcBurst.bank)) {
+      if (pcBurst && pcBurst.low === low && now - pcBurst.last <= PC_BURST_MS && (fresh === null || fresh === pcBurst.bank)) {
         pcBurst.count++
         pcBurst.channels.add(channel)
         pcBurst.last = now
@@ -1777,7 +1799,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const mine = ownPcFor(low, channel, now)
       const own = mine !== null
       pcBurst = { low, bank: own ? mine.bank : bank, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? mine.at : null, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
-      if (own) return
+      if (own) {
+        ownPcHeard(mine)
+        return
+      }
     }
     if (isEcho(msg, now)) return
     if (kind >= 0x80 && kind < 0xf0) heardAgain()
