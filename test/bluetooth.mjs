@@ -23874,6 +23874,43 @@ export function run(test) {
     assert.equal(t.unit.state.lives, 2)
   })
 
+  test('a late answer to Edit’s own grid read is not taken for the next preset’s order: once that read has given up, the order’s read waits out the same window', async () => {
+    const { LATE_MS } = await import(WIRE)
+    const t = await played('fm3', { grid: ORDER_FM3, liveLate: 3000, ...CHAIN_OPEN, ...ORDER_OPEN })
+    /* Edit's chain read: its live read is answered three seconds late, after it has given up. */
+    const chain = t.wire.request('/preset/grid').then(() => 'read', (e) => e)
+    await advance(t.clock, 100)
+    /* The footswitch, meanwhile: preset 13, the same blocks laid out another way. */
+    t.unit.state.preset = 13
+    t.unit.state.grid = OTHER_FM3.map((c) => ({ ...c }))
+    await t.get('/preset')
+    t.logs.length = 0
+    const first = idsOf(await t.get('/preset/blocks'))
+    assert.notDeepEqual(first, GRID_ORDER_FM3, 'preset 13 was drawn in preset 12’s order, from Edit’s grid read answered late: ' + t.logs.join(' | '))
+    assert.equal(orderLines(t).length, 0, 'an order was believed from the late answer: ' + orderLines(t).join(' | '))
+    await drive(t.clock, chain)
+    /* Once the late answer could no longer come: asked, and 13 in its own order, not 12's kept. */
+    t.unit.opt.liveLate = undefined
+    await advance(t.clock, LATE_MS)
+    assert.deepEqual(idsOf(await t.get('/preset/blocks')), OTHER_ORDER_FM3, t.logs.join(' | '))
+  })
+
+  test('a missed “which preset?” answer does not hold Play’s tiles: inside the time its late answer could still come, the grid is not asked for the order', async () => {
+    const t = await played('fm3', { grid: ORDER_FM3, ...ORDER_OPEN })
+    t.unit.state.mutePreset = true
+    await t.get('/preset')
+    t.unit.state.mutePreset = false
+    t.logs.length = 0
+    t.sent.length = 0
+    const at = t.clock.now()
+    const got = idsOf(await t.get('/preset/blocks'))
+    const took = t.clock.now() - at
+    assert.ok(took < 500, `Play’s tiles waited ${took} ms for the block order behind a missed preset answer: ` + t.logs.join(' | '))
+    assert.deepEqual(got, USUAL_FM3)
+    assert.equal(t.unit.state.lives, 0, 'the grid was asked though its closing question would be held')
+    assert.ok(t.logs.includes('a late answer to which preset the unit is on may still come, so the grid is not asked now: the usual order this time'), t.logs.join(' | '))
+  })
+
   test('a connection that goes while the grid read for the order is out says so; a read that never left still says it was not sent', async () => {
     const isGridRead = (s) => s.bytes[5] === 0x01 && s.bytes[6] === 0x2e
     const WENT = 'the connection went while the grid read for the block order was out, before its answer: kept the usual order'

@@ -2369,6 +2369,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         say('an earlier grid read for the block order may still be answered, so the grid is not asked now: the usual order this time')
         return null
       }
+      /*
+       * A LATE ANSWER TO "WHICH PRESET?" MAY STILL COME (one went unanswered
+       * moments ago: Play's own preset read, or the watch's): the question
+       * this read ends with would be held for the rest of that window
+       * (heldFor), and Play's tiles with it, up to two seconds. So the grid
+       * is not asked: the usual order this time, and no miss (an independent
+       * read, 16 November 2026).
+       */
+      if (lateFor(buildGetPreset(model)[5]) > 0) {
+        say('a late answer to which preset the unit is on may still come, so the grid is not asked now: the usual order this time')
+        return null
+      }
       const out = buildGridRead(model)
       let got = null
       /* Whether the read left the phone: a connection that goes while it is out is not "not sent". */
@@ -3714,9 +3726,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* The live read: its answer as it came, and what this app makes of it (null where it makes nothing). */
   async function gen3LiveGrid() {
     const out = buildGridRead(model)
+    let went = false
     const got = await withFrames([out], () =>
-      ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridLive, 'where the blocks are', { priority: 'editRead' })
+      ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridLive, 'where the blocks are', {
+        priority: 'editRead',
+        sent: () => {
+          went = true
+        }
+      })
     )
+    /*
+     * ITS ANSWER MAY STILL COME, and it is the same question, byte for byte,
+     * as the block order's (gridOrder): a footswitch step meanwhile, and the
+     * last preset's layout was taken for the next one's order and kept for
+     * the connection (an independent read, 16 November 2026). So the order's
+     * read waits out the same late window as after one of its own.
+     */
+    if (went && (!got || got === SKIPPED)) gridLateUntil = time.now() + LATE_MS
     if (!got || got === SKIPPED || rejected(got)) return { frame: null, live: null }
     return { frame: got.frame, live: parseGridLive(got.frame, model) }
   }

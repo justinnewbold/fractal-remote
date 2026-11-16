@@ -1865,6 +1865,17 @@ read was not sent. THE LESSON AGAIN: a footswitch says nothing, so a read
 kept for a preset asks the unit where it is at the end, as the chain's
 read does.
 
+*And a second read, of those fixes, found two more, fixed the same way (16
+November 2026).* Edit's own live grid read is the same question, byte for
+byte, as the order's, and its answer can come after it has given up: a
+footswitch step meanwhile, and the next preset was drawn in the last one's
+order and kept for the connection. Now an Edit read that gives up opens
+the same two-second window as one of the order's (bleWire gen3LiveGrid,
+`gridLateUntil`). And a "which preset?" question that went unanswered
+(Play's own, or the watch's) held the order's closing question for the
+rest of its late window, and Play's tiles with it, up to two seconds: in
+that window the grid is not asked (the usual order that once, no miss).
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 
