@@ -19,6 +19,9 @@ export function onUnitBeat(fn) {
   return () => listeners.delete(fn)
 }
 
+/** How many are listening: none, with no beat being kept beside a unit. */
+export const unitBeatListeners = () => listeners.size
+
 /** A beat this device heard itself, at `at` on its own clock. */
 export function unitBeatHeard(at) {
   for (const fn of [...listeners]) {

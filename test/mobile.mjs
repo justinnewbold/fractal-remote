@@ -124,7 +124,8 @@ async function clickOnTheBench(os = 'ios') {
       export const createAudioPlayer = (src, opts = {}) => {
         const id = made.length
         const p = {
-          id, src, opts, isLoaded: true, currentTime: 0,
+          /* Ready at once, unless a test says when (globalThis.__clickLoadAt, on the bench's clock): the click waits for its players. */
+          id, src, opts, get isLoaded() { return now() >= (globalThis.__clickLoadAt ?? -Infinity) }, currentTime: 0,
           seekTo: async () => { say('seek ' + id) },
           play() { say('play ' + id) },
           pause() { say('pause ' + id) }
@@ -6458,6 +6459,7 @@ export function run(test) {
     globalThis.__clickAdmin = false
     delete globalThis.__clickBeatRoad
     delete globalThis.__clickBeatAsk
+    delete globalThis.__clickLoadAt
   }
 
   test('with the unit clicking, the light goes onto the unit’s own beat, says so only while it is so, follows a beat that moves, and stops asking with the click', async () => {
@@ -6572,6 +6574,43 @@ export function run(test) {
       }
     })
   }
+
+  test('where the unit’s beat is known before the sound is ready, nothing clicks or lights until it is, and the very first click is on the unit’s beat', async () => {
+    const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'both' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      const unit = { phase: clock.now() + 423, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      /* The players take 300 ms to load: the unit's beat is asked for, and answered, in the meantime. */
+      globalThis.__clickLoadAt = clock.now() + 300
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      const plays = () => audio.calls.filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+      await clock.advance(250)
+      assert.ok(unitEnd.beatAsks.length >= 1, 'the unit’s beat was not asked for while the sound was made ready')
+      assert.deepEqual(plays(), [], 'a click before the sound was ready')
+      assert.deepEqual(flashes, [], 'a light before the beat began')
+      assert.equal(click.useInStep(), false, 'in step with no beat being kept yet')
+      await clock.advance(4000)
+      const started = plays()
+      assert.ok(started.length >= 7, `only ${started.length} clicks in four seconds`)
+      /* Every one, the first too: started 40 ms ahead of the unit's beat, heard on it. */
+      for (const t of started) assert.ok(Math.abs(offBeat(t, unit, 40)) <= 1, `a click started at ${t} is heard ${offBeat(t, unit, 40)} ms off the unit’s beat`)
+      for (let i = 1; i < started.length; i++) assert.equal(started[i] - started[i - 1], 500, 'a beat was dropped or doubled at the start')
+      for (const t of flashes) assert.ok(Math.abs(offBeat(t, unit)) <= 1, `a flash ${offBeat(t, unit)} ms off the unit’s beat`)
+      assert.equal(click.useInStep(), true)
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 
   test('the unit’s beat is followed only for his account and only beside a unit that is clicking, and a unit that sends none changes nothing', async () => {
     const { dir, click, unitEnd, log, clock, audio, settle } = await clickOnTheBench('ios')

@@ -60,7 +60,7 @@ export function followUnitBeat({ beat, onWindow }, o = {}) {
   }
 
   const take = (window, how) => {
-    if (!alive || !window) return
+    if (!window) return
     const was = held
     held = joined(held, window, beat)
     /* The first one, and the first after the log said why there was none. */

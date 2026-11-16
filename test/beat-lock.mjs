@@ -270,6 +270,12 @@ export function run(test) {
     const next = { mid: 1000 + 12 * beat + 200, half: 10, at: 7100 }
     assert.deepEqual(joined({ mid: 1000, half: 10, at: 1100 }, next, beat), { ...next, moved: true })
 
+    /* Two that barely overlap: the belief is never closer than the floor, however thin the overlap. */
+    const thin = joined({ mid: 1000, half: 20, at: 7100 }, { mid: 1000 + 12 * beat + 39.5, half: 20, at: 7100 }, beat)
+    assert.equal(thin.moved, false)
+    assert.equal(thin.half, BEAT_LOCK.floorMs, 'half a millisecond of overlap was believed to half a millisecond')
+    assert.ok(Math.abs(thin.mid - (1000 + 12 * beat + 19.75)) < 1e-6)
+
     /* A window kept gains doubt: one that would have missed yesterday overlaps after a long quiet. */
     const kept = joined({ mid: 1000, half: 5, at: 0 }, { mid: 1000 + 1200 * beat + 60, half: 5, at: 600000 }, beat)
     assert.equal(kept.moved, false, 'ten minutes of two clocks is not the beat moving')
@@ -329,7 +335,9 @@ export function run(test) {
 
       /* Stopped: nothing more is asked, and nothing is left waiting. */
       const asked = b.asks.length
+      assert.equal(b.clock.pending(), 1, 'the next question is not booked while it runs')
       f.stop()
+      assert.equal(b.clock.pending(), 0, 'the next question is still booked the moment it is stopped')
       await b.clock.advance(60000)
       assert.equal(b.asks.length, asked, 'asked after it was stopped')
       assert.equal(b.clock.pending(), 0, 'a timer was left behind')
@@ -453,7 +461,9 @@ export function run(test) {
   test('following over Bluetooth or the cable: the beats this device hears are weighed, two in time first, and nothing is asked', async () => {
     const b = await follower()
     try {
+      assert.equal(b.bus.unitBeatListeners(), 0)
       const f = b.follow(500, { road: 'wire', ask: async () => assert.fail('the computer was asked over Bluetooth') })
+      assert.equal(b.bus.unitBeatListeners(), 1, 'nothing is listening for the unit’s beat')
       const { wireLateMs, wireDoubtMs, wireEveryMs } = b.lock.BEAT_LOCK
       /* The unit's beats as the adapter delivers them. */
       const hear = async (at) => {
@@ -485,8 +495,9 @@ export function run(test) {
       b.bus.unitBeatHeard(undefined)
       b.bus.unitBeatHeard(NaN)
 
-      /* Stopped: it stops listening. */
+      /* Stopped: it stops listening, and is not left on the hand-off. */
       f.stop()
+      assert.equal(b.bus.unitBeatListeners(), 0, 'a stopped follower is still listening')
       await hear(at + 500)
       await hear(at + 1000)
       await hear(at + 4000)
@@ -538,6 +549,7 @@ export function run(test) {
       bus.unitBeatHeard(20)
       assert.deepEqual([a, c], [[10], [10, 20]])
       assert.equal(typeof bus.onUnitBeat('nothing'), 'function')
+      assert.equal(bus.unitBeatListeners(), 2, 'something that is not a listener was kept, or one let go is still counted')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
