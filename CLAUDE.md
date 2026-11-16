@@ -3503,6 +3503,43 @@ not suggest renaming. Everything else is held, and is not to regress:
 
 ## Things that cost real time to learn here
 
+**Where a knob points is one rule, shared/knob-dial.mjs, and a test asks
+it.** "The design of the parameter knob does not match the actual one ...
+So min on left side and max on right." (a customer on an FM9, 16 November
+2026.) Both knobs, the phone's (mobile/src/components/Knob.js) and the
+browser's (src/components/Knob.jsx), had the right start and sweep and
+each turned its drawing a further quarter turn: the lowest setting pointed
+to half past ten and the highest to half past seven, gap on the left, for
+every account on every connection. Nothing asked where a knob points, so
+two copies drifted the same way unseen. Now angles are degrees clockwise
+from twelve, the sweep is half past seven to half past four, a setting the
+same either side of nought (Balance, Pan; not a log one) is lit from
+twelve, and test/knob-dial.mjs draws the browser's knob and reads where its
+dot and arcs land. The phone turns its marks and pointer by the rule and by
+nothing else (the test pins each turn and the pointer's angle). Any new
+dial draws from this file.
+
+**The app's own Program Change can come back, on every channel, and is not
+news.** The same customer's log: each preset stepped to from the app wrote
+"the unit sent Program Change 12: its preset changed" sixteen times, a few
+hundred milliseconds after the app sent 12 (his rig sends what it hears
+back out on all sixteen channels; a WIDI Master on an FM9). Each copy was
+taken as the unit changing preset: Edit's kept chain dropped, a knob turn
+waiting refused, sixteen of the log's 400 lines a step. bleWire heardShort
+now keeps every Program Change the app sent in the last 1.5 s with its
+bank (`OWN_PC_MS`); a copy of one is the app's own, an EARLIER send only
+within 600 ms of going (`OWN_OLDER_PC_MS`) and only until its copies, or a
+later send's, have come back (a controller taking the unit back to it is a
+real change). Copies of one number within 300 ms are one burst and one log
+line (`PC_BURST_MS`), split only by a bank select heard on that channel
+since the burst began. The app's own bank selects coming back are not the
+unit answering either, so a quiet unit stays quiet. Two independent reads
+went through it before it went out and found five ways a real change was
+swallowed or a copy was news; each has a test seen to fail without its fix
+(35 breaks in all). THE LESSON AGAIN: "remember more" swallowed a real
+change the first time; ask what a controller sending the same number would
+be taken for.
+
 **A squash merge carries every commit message on the branch, and one
 `[skip ci]` in them stops everything on main.** On 6 November 2026 four
 merges (#800 to #803) went to main and nothing ran: no update to the
