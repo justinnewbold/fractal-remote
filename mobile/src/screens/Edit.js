@@ -1341,6 +1341,15 @@ export function BlockPanel({
       if (fresh) {
         setParams(fresh?.named || [])
         setEnums(fresh?.enums || [])
+      } else {
+        /*
+         * NOTHING READ, SO THE ASKED VALUE STANDS (an independent read, 16
+         * November 2026). The write went and the unit most likely took it;
+         * with the read before the turn left as the knob's value, the knob
+         * jumped back to the old number, and turning it back there sent
+         * nothing (commit skips a value equal to the knob's own).
+         */
+        setParams((prev) => prev.map((q) => (q.id === p.id ? { ...q, value: next } : q)))
       }
       if (!res.ok) onError(res.unverified ? notChecked(p) : didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {

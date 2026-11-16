@@ -153,7 +153,8 @@ export const MOST_CHANNELS = 4
  * 108 values, four channels of 27, where the catalog said 18 a channel: 18
  * divides 108, so the app took it as six channels of 18. Channel A starts at
  * nought either way and read right; B was read from value 18, in the middle
- * of A, so Bass showed 8 (A's Level) and Bright Cap 10 pF, and every knob
+ * of A, so Bass showed 8 and Bright Cap 10 pF (B's own Level and Phase
+ * Invert, read where Bass and Bright Cap should be), and every knob
  * turned there "didn't take". A block never has more than four channels, so
  * a stride that makes more is out of date, as ForgeFX's own comment says of
  * one that does not divide at all.

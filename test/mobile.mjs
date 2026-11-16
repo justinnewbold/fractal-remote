@@ -14858,6 +14858,8 @@ export function run(test) {
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(flat, /const notChecked = \(p\) => `Couldn’t check that \$\{p\.label \|\| p\.name\} took: the unit didn’t answer\. It may have\.`/)
     assert.match(flat, /catch \(err\) \{ if \(!res\.unverified\) throw err \}/, 'a read that fails after an unchecked write puts its own words over "Couldn’t check"')
+    /* And with nothing read after it, the asked value stands on the knob (an independent read): it jumped back to the old number, and turning it back there sent nothing. */
+    assert.match(flat, /if \(fresh\) \{ setParams\(fresh\?\.named \|\| \[\]\) setEnums\(fresh\?\.enums \|\| \[\]\) \} else \{ \/\*[^]*?\*\/ setParams\(\(prev\) => prev\.map\(\(q\) => \(q\.id === p\.id \? \{ \.\.\.q, value: next \} : q\)\)\) \}/, 'an unchecked write with no read after it puts the knob back on the old number')
     assert.match(read('mobile/src/components/Volume.js').replace(/\s+/g, ' '), /if \(res\.unverified\) \{ say\?\.\('Couldn’t check that the volume took: the unit didn’t answer\. It may have\.'\) return \}/)
   })
 

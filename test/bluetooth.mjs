@@ -378,6 +378,8 @@ function fakeGen3(sx, o) {
         const eid = sx.decode14(p[0], p[1])
         if (!opt.edit) return reply(0x64, [0x1f, 0x04])
         if (!find(eid) || !state.settings.has(eid)) return reply(0x64, [0x1f, 0x07])
+        /* `editBeats`: while saying nothing, the unit's tempo beat every so many ms (Send Realtime Sysex on), as a unit at a gig does. */
+        if (opt.editSilent && opt.editBeats) for (let k = 1; k <= 20; k++) say(sx.frame(model, 0x10, []), k * opt.editBeats)
         if (opt.editSilent) return
         const { count, values } = state.settings.get(eid)
         const page = (list) => sx.frame(model, 0x75, [0, 0, ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
@@ -14046,8 +14048,9 @@ export function run(test) {
    * HIS III SENT A NAM BLOCK'S READ AS 108 VALUES (16 November 2026): four
    * channels of 27, where the list says 18 a channel. 18 divides 108, and the
    * app took that as six channels of 18, so channel B was read from value 18,
-   * in the middle of A: Bass showed 8 (A's Level, 0 dB) and Bright Cap 10 pF
-   * (A's Phase Invert, 0), the numbers in his log, and every knob turned on B
+   * in the middle of A: Bass showed 8 (B's own Level, 0 dB) and Bright Cap
+   * 10 pF (B's own Phase Invert, 0), read where Bass and Bright Cap should
+   * be, the numbers in his log, and every knob turned on B
    * or D "didn't take". Channel A starts at nought either way and read
    * right, which is how it looked: NAM knobs worked on A and nowhere else.
    * Each channel here is its own numbers, with nine more values past the
@@ -14120,7 +14123,7 @@ export function run(test) {
       t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel B; the unit said 108 values and sent 108, 27 a channel, 4 channels, this one from value 27$/.test(l)),
       t.logs.join(' | ')
     )
-    /* Bass turned to a quarter: it lands on B (value 27 + 10, as the unit keeps it) and reads back a quarter, where it once read A's Level. */
+    /* Bass turned to a quarter: it lands on B (value 27 + 10, as the unit keeps it) and reads back a quarter, where it once read B's own Level. */
     assert.deepEqual(await drive(t.clock, t.wire.request('/preset/blocks/206/params/10', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.25, continuous: true }) })), { ok: true })
     assert.deepEqual(t.unit.state.edits.at(-1), { eid: 206, pid: 10, sub: 0x52, value: 0.25 })
     assert.equal(t.unit.state.settings.get(206).values[27 + 10], Math.round(0.25 * 65534))
@@ -15916,11 +15919,14 @@ export function run(test) {
    * as 0.004 on his FM3 (10 out of 65534 of the way from 0 to 24). The
    * generator marks them (a 1 in a seventh place), and these are the rows,
    * every one, as scripts/gen3-knobs.mjs wrote them from the pinned codec.
+   * A CAB'S TYPE IS 0 TO 1023, the unit's own range: the codec's list says
+   * 188 (FM3, III) and 15 (FM9), the most one sweep read back, and a first
+   * cut drawn to those could not show or reach a Factory cab past them.
    */
   const WHOLE_ROWS = {
-    fm3: ['CABINET:4 0..188', 'CABINET:5 0..188', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:67 0..3', 'TENTAP:7 1..10'],
-    fm9: ['CABINET:4 0..15', 'CABINET:5 0..15', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:69 0..3', 'TENTAP:7 1..10'],
-    axefx3: ['CABINET:4 0..188', 'CABINET:5 0..188', 'DELAY:21 0..1', 'FUZZ:16 0..24', 'MEGATAP:3 1..128', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:17 0..1', 'REVERB:66 0..3', 'TENTAP:7 1..10']
+    fm3: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:67 0..3', 'TENTAP:7 1..10'],
+    fm9: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:69 0..3', 'TENTAP:7 1..10'],
+    axefx3: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'DELAY:21 0..1', 'FUZZ:16 0..24', 'MEGATAP:3 1..128', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:17 0..1', 'REVERB:66 0..3', 'TENTAP:7 1..10']
   }
   const KNOBS_OF = { fm3: [FM3K, 'FM3'], fm9: ['../mobile/src/lib/fm9-knobs.js', 'FM9'], axefx3: ['../mobile/src/lib/axefx3-knobs.js', 'AXE3'] }
 
@@ -15945,6 +15951,8 @@ export function run(test) {
      * this one, built, or FORGEFX_MIDI): every knob row whose setting the
      * unit's list names is a whole number. A new pin that adds one shows here.
      */
+    /* The generator takes the unit's own range for one, never the list's figure (the most one sweep read back). */
+    assert.match(src('scripts/gen3-knobs.mjs'), /\n        const hi = Math\.floor\(range\.displayMax\)\n/, 'a whole number’s range is cut to the most one sweep read back')
     const { existsSync } = await import('node:fs')
     const { pathToFileURL } = await import('node:url')
     const root = process.env.FORGEFX_MIDI || new URL('../../forgefx-midi/', import.meta.url).pathname
@@ -15965,7 +15973,8 @@ export function run(test) {
           if (sym === undefined || whole[sym] === undefined) continue
           named++
           assert.ok(g3.isWhole(row), `${unit} ${fam} ${row[1]} (${sym}) is a whole number to the codec and a plain knob here`)
-          assert.ok(row[3] <= whole[sym], `${unit} ${fam} ${row[1]} goes past the ${whole[sym]} the codec allows`)
+          /* Its range is the unit's own, not the list's figure (the most one sweep read back): only the cab's Type goes past it. */
+          assert.ok(row[3] <= whole[sym] || (fam === 'CABINET' && row[1] === 'Type' && row[3] === 1023), `${unit} ${fam} ${row[1]} goes past the ${whole[sym]} the codec allows`)
         }
       }
       assert.equal(named, WHOLE_ROWS[unit].length, unit)
@@ -18137,8 +18146,20 @@ export function run(test) {
     const went = silent.sent.find((s) => s.bytes[5] === 0x1f)
     assert.equal(silent.clock.now() - went.at, 1000, 'the read waited another length for its first byte')
     assert.ok(silent.logs.includes('no answer to the settings of the Amp in 1000 ms: nothing came in meanwhile'), silent.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    /*
+     * AND THE UNIT'S TEMPO BEAT, OR ANY BYTE THAT IS NOT THE ANSWER, DOES NOT
+     * PUT IT BACK ON THE LONG WAIT (an independent read, 16 November 2026):
+     * with a beat every 300 ms it waited 2.5 s after each and ran to its cap.
+     */
+    const beating = await onTheLine('fm3', { edit: () => true, settings, editSilent: true, editBeats: 300 })
+    await assert.rejects(read(beating), (err) => err.status === 504)
+    const sentAt = beating.sent.find((s) => s.bytes[5] === 0x1f).at
+    assert.equal(beating.clock.now() - sentAt, 1000, 'a tempo beat kept Edit’s read waiting past its first second')
+    assert.ok(beating.logs.some((l) => /^no answer to the settings of the Amp in 1000 ms: /.test(l)), beating.logs.filter((l) => /no answer/.test(l)).join(' | '))
     /* Its first byte late, but within the second: read whole. */
     assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editLate: 800 }))).slug, 'amp')
+    /* A slow link, a page taking about three seconds to arrive: once the answer has begun, its own bytes keep the read waiting, so it is read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, rate: 0.3 }))).slug, 'amp')
     /* Begun, then two seconds before the first page: the wait once anything has come is the gap, so it is read whole. */
     assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editGap: 2000 }))).slug, 'amp')
     /* A page lost on the way and the footer after it: damaged, never a block read from the wrong places. */

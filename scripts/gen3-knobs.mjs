@@ -323,20 +323,28 @@ function write({ unit, P, axe3, gen3, pinned }) {
        * A WHOLE NUMBER, NOT A PLACE (16 November 2026). The codec lists the
        * settings each unit keeps as a whole number (Bit Reduce, Number of
        * Taps, a cab's Type) and writes them as that number, typed (sub
-       * 09 00), up to the most its list says (forgefx-midi devices/gen3
-       * catalog.ts `roundtripDiscrete`, makeOrdinalEncode). ForgeFX's driver
-       * does not read that list, so it shows one as a place along its travel:
-       * Bit Reduce at 10 read as 0.004 on his FM3. Such a row carries a 1 in
-       * a seventh place, its range cut to what the list allows, and is read
-       * and written as the number itself (lib/gen3-edit.js). Its number is
-       * the value shown, so a range with a scale other than 1 would mean a
-       * whole number that is not what the unit shows: that stops the script.
+       * 09 00) (forgefx-midi devices/gen3 catalog.ts `roundtripDiscrete`,
+       * makeOrdinalEncode). ForgeFX's driver does not read that list, so it
+       * shows one as a place along its travel: Bit Reduce at 10 read as 0.004
+       * on his FM3. Such a row carries a 1 in a seventh place and is read and
+       * written as the number itself (lib/gen3-edit.js). Its number is the
+       * value shown, so a range with a scale other than 1 would mean a whole
+       * number that is not what the unit shows: that stops the script.
+       *
+       * ITS RANGE IS THE UNIT'S OWN, NEVER CUT TO THE LIST'S FIGURE. The
+       * list's figure is the most one sweep of one unit read back, not the
+       * range: a cab's Type (the IR's number in its bank, 0 to 1023, a
+       * Factory bank holding 1024) is 188 there on an FM3 and an Axe-Fx III
+       * (the Legacy bank's last) and 15 on an FM9, and a first cut drawn to
+       * those showed a Factory cab at #500 as 188 and could not reach it
+       * (an independent read, 16 November 2026). Every other listed setting's
+       * figure is at or above its range's top, so only the cab moved.
        */
       const most = P.whole?.[p.name]
       if (usable && most !== undefined) {
         if (range.scale !== undefined && range.scale !== 1) throw new Error(`${P.name} ${family} ${p.name} is kept as a whole number but shown at a scale of ${range.scale}: decide how before writing it`)
         const lo = Math.max(0, Math.ceil(range.displayMin))
-        const hi = Math.min(Math.floor(range.displayMax), most)
+        const hi = Math.floor(range.displayMax)
         if (!(lo < hi)) throw new Error(`${P.name} ${family} ${p.name} is kept as a whole number with nothing between ${lo} and ${hi}`)
         knobs.push([p.paramId, labelOf(p), lo, hi, 0, unitShown, 1])
         continue

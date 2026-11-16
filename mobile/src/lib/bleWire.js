@@ -1173,7 +1173,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (current !== job) return
       if (job.opts.match || job.opts.collect) {
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
-        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.came.bytes ? job.opts.ms : firstWait} ms${cameBack(job)}`)
+        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.back ? job.opts.ms : firstWait} ms${cameBack(job)}`)
       }
       /* Given up on part-way through: the unit may still be sending the rest of it. */
       if (job.opts.collect && job.back) {
@@ -1293,7 +1293,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       job.came.bytes += real
       job.came.framed += statuses
     }
-    if (job && job.opts.collect && job.timer !== undefined) {
+    /*
+     * A QUESTION WITH ITS OWN FIRST WAIT (`firstMs`: Edit's whole-block read)
+     * IS NOT KEPT WAITING BY BYTES THAT ARE NOT ITS ANSWER (an independent
+     * read, 16 November 2026). Until a frame of the answer itself has come
+     * (`job.back`), a unit's tempo beat (Send Realtime Sysex, which the
+     * app's own setup asks for on an FM9 and an Axe-Fx III) or the phone's
+     * own message come back put the read on the long wait between an
+     * answer's bytes, and with a beat every half second it ran to its 10 s
+     * cap. The first frame of that answer is a short head, so its own bytes
+     * lose nothing by it.
+     */
+    if (job && job.opts.collect && job.timer !== undefined && job.opts.firstMs !== undefined && !job.back) {
+      /* the first wait stands */
+    } else if (job && job.opts.collect && job.timer !== undefined) {
       time.clearTimeout(job.timer)
       const left = (job.opts.cap ?? Infinity) - (now - job.started)
       job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))

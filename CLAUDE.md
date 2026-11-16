@@ -1431,7 +1431,9 @@ what the computer sends for the same edit, and a test holds it there.
     his FM3, after a check that had read nothing at all. Now a check that
     heard nothing sends nothing more and Edit says "Couldn't check that …
     took: the unit didn't answer. It may have." (device.js `unverified`,
-    the browser's rule), and EVERY GEN-3 KNOB IS ONE WAY ONLY: its place
+    the browser's rule; with nothing read after it either, the asked value
+    stands on the knob, which had jumped back to the old number and then
+    sent nothing when turned back there), and EVERY GEN-3 KNOB IS ONE WAY ONLY: its place
     (52 00), never the typed way (gen3-edit; asked for, the wire answers
     `{ok: false, unsent: true}` and nothing goes). THROUGH THE COMPUTER TOO,
     since 1.90.87: on a unit whose driver lays cables (`gridRouting`: the
@@ -1449,10 +1451,18 @@ what the computer sends for the same edit, and a test holds it there.
     to what the list allows), read as the number itself and written as that
     number, typed, the codec's own frame; the way out passes only a whole
     number in range there. Bit Reduce at 10 read 0.004 before. Through the
-    computer it still does: ForgeFX does not read those lists.
+    computer it still does: ForgeFX does not read those lists. ITS RANGE IS
+    THE UNIT'S OWN, never the list's figure (the most one sweep read back):
+    a cab's Type, the IR's number in its bank, is 0 to 1023, and a first cut
+    drawn to the list's 188 (15 on an FM9) could neither show nor reach a
+    Factory cab past it (an independent read, before it went out).
   - *Slower than it had to be.* Edit's read of a block gives up 1 s after
     it went if nothing came back (it waited 2.5 s and held the line; a
-    healthy read is 0.3 to 0.7 s), a read with fewer values than its head
+    healthy read is 0.3 to 0.7 s), and bytes that are not its answer (the
+    unit's tempo beat with Send Realtime Sysex on, the phone's own message
+    come back) do not stretch that second (they put it on the 2.5 s gap,
+    and a beat every half second ran it to its 10 s cap); once a frame of
+    the answer has come, its bytes keep it waiting as before. A read with fewer values than its head
     said is damaged, and a channel switch drops the 400 ms list of what is
     in the preset, so the next read is on the new channel. Two checks of
     one block asked together still make two reads.
