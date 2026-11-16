@@ -2371,13 +2371,19 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       /*
        * A LATE ANSWER TO "WHICH PRESET?" MAY STILL COME (one went unanswered
-       * moments ago: Play's own preset read, or the watch's): the question
-       * this read ends with would be held for the rest of that window
-       * (heldFor), and Play's tiles with it, up to two seconds. So the grid
-       * is not asked: the usual order this time, and no miss (an independent
-       * read, 16 November 2026).
+       * moments ago: Play's own preset read, the watch's, or a stored slot's
+       * name, which is the same kind of question): the question this read
+       * ends with would be held for the rest of that window (heldFor), and
+       * Play's tiles with it, up to two seconds. So the grid is not asked:
+       * the usual order this time, and no miss (an independent read, 16
+       * November 2026). Only where more of the window is left than the wait
+       * the order already takes for a preset just changed (ORDER_QUIET_MS):
+       * less than that is waited out, as that is, and the order is not lost
+       * for the rest of the visit over a moment (a second read). And asked
+       * again before the closing question, below: a question still on the
+       * line now can go unanswered while the grid read is out.
        */
-      if (lateFor(buildGetPreset(model)[5]) > 0) {
+      if (lateFor(buildGetPreset(model)[5]) > ORDER_QUIET_MS) {
         say('a late answer to which preset the unit is on may still come, so the grid is not asked now: the usual order this time')
         return null
       }
@@ -2431,6 +2437,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
        * the same way (gen3StillHere). Moved, or no clear answer: nothing
        * kept, no miss, and a move is news, so Play reads the new preset.
        */
+      if (lateFor(buildGetPreset(model)[5]) > ORDER_QUIET_MS) {
+        say('a late answer to which preset the unit is on may still come, so it is not asked after the grid read: the usual order this time')
+        return null
+      }
       let here = null
       try {
         here = await presetNow()
@@ -3823,7 +3833,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       await gen3KnownFirst()
       const at = moves
       const started = time.now()
-      const asked = liveWanted()
+      /*
+       * NOT INSIDE ANOTHER GRID READ'S LATE WINDOW (gridLateUntil): the
+       * order's read of the same question, given up moments ago, may still
+       * be answered, and on the next preset that answer would be taken for
+       * this one's live grid (laid against the preset as DISAGREES, or with
+       * the live read believed, handed to Edit as this preset's layout). The
+       * preset whole is read instead: another question, which that late
+       * answer cannot be taken for (an independent read, 16 November 2026).
+       */
+      const wanted = liveWanted()
+      const asked = wanted && time.now() >= gridLateUntil
+      if (wanted && !asked) say('an earlier grid read may still be answered, so the live grid is not asked now: read from the preset')
       const { frame: liveFrame, live } = asked ? await gen3LiveGrid() : { frame: null, live: null }
       if (asked) {
         liveAsks += 1

@@ -1876,6 +1876,24 @@ the same two-second window as one of the order's (bleWire gen3LiveGrid,
 rest of its late window, and Play's tiles with it, up to two seconds: in
 that window the grid is not asked (the usual order that once, no miss).
 
+*And a third read, of THOSE fixes, found the rest of the same two (16
+November 2026), fixed the same way.* The window went one way only: Edit's
+own live grid read did not wait out the ORDER's late window, so on the
+next preset it could take the order's late answer for its own, which as
+the app ships says DISAGREES and turns the live read off for the
+connection, and with the live read believed would hand Edit the last
+preset's layout. Now Edit reads the preset whole inside that window (bleWire
+gen3Grid). And the check for a missed "which preset?" ran once, before the
+grid read: a question still on the line then (Play's own, the watch's, or
+a stored slot's name from Presets beside Play) could go unanswered while
+the grid read was out, and the closing question was held again. It is
+asked again before the closing question, and both checks skip only where
+more of the window is left than ORDER_QUIET_MS, so a moment left of it no
+longer loses the order for the whole visit. The tests were tightened where
+the read showed they would pass a wrong version (a window of any length,
+an Edit read that opens one even when answered, a skip counted as a miss
+or kept for the preset).
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 
