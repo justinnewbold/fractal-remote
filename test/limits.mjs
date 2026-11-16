@@ -4515,7 +4515,7 @@ export function run(test) {
     assert.match(day, /run 2, the iPhone to TestFlight\*\*[^]*?Which platform to build: \*\*ios\*\*[^]*?Skip building; send the last build that succeeded: \*\*ticked\*\*/, 'run 2 does not send the iPhone alone, with Skip building')
     assert.match(day, /\*\*Never with all or android\*\* for 1\.89\.0/, 'the steps do not warn that Skip building sends Android to Google’s review too')
     /* What the steps say of mobile.yml is what it does: the ticked box submits as it builds, Skip building submits the newest build, and eas.json still sends Android to production. */
-    assert.match(workflow, /\$\{\{ inputs\.submit && '--auto-submit' \|\| '' \}\}/, 'the Send box no longer submits as it builds, and the steps say it does')
+    assert.match(workflow, /\$\{\{ inputs\.submit && \(inputs\.android_testing && '--auto-submit-with-profile=testing' \|\| '--auto-submit'\) \|\| '' \}\}/, 'the Send box no longer submits as it builds, and the steps say it does')
     assert.match(workflow, /if: \$\{\{ inputs\.submit_only \}\}[\s\S]{0,200}eas submit \\\s+--platform "\$\{\{ inputs\.platform \}\}"[\s\S]{0,120}--latest/, 'Skip building no longer sends the newest build of the platform picked')
     assert.equal(JSON.parse(read('mobile/eas.json')).submit.production.android.track, 'production', 'eas.json no longer sends Android to production, and the steps are written around it')
     assert.match(read('docs/expo-builds.md'), /\*\*That pair, 1\.89\.0, is started with the Send box unticked\*\*/, 'the build ledger does not say the 1.89.0 pair is started with Send unticked')
@@ -5286,6 +5286,14 @@ export function run(test) {
       `the Mac app says ${desktop} while the app inside it says ${root} — ` +
         'an update compares the first and a person reads the second'
     )
+    /*
+     * ONE DIGIT IN THE LAST PLACE. "I want to eliminate the second digit from
+     * the builds anyway. so instead of 1.9.89 and going up by .01 each change
+     * would go up by .1 so 1.90.9 to 1.91.0 and so on." (Justin, 16 November
+     * 2026, with 2.0.0 the first number of it.) Each change moves the last
+     * number up one, and after 9 the middle one: 2.0.9, then 2.1.0.
+     */
+    assert.match(root, /^\d+\.\d+\.\d$/, `${root} has more than one digit in its last place: after x.y.9 comes x.(y+1).0`)
   })
 
 
