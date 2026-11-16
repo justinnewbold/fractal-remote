@@ -2530,7 +2530,11 @@ the capture on the unit, which is the hard half.
     the question was asked for, not from when it left (a scene tapped in
     the quiet holds the question back two seconds, and the next slot took
     its answer); and a footswitch's Program Change read in the log as an
-    answer cut short.
+    answer cut short. A third read, of those two, found the short
+    messages counted by the length the joiner rebuilds (a status byte for
+    each of a run sent with one), which hid an answer cut short beside a
+    swept controller: counted by the bytes that came now, and tested
+    through the joiner itself.
   - NOT SEEN ON HIS UNIT: a search that finishes over Bluetooth, and a
     whole send over the WIDI Uhost since (the 130 messages each need an
     answer, of ten bytes or so, where a slot's is 334; the one Bluetooth

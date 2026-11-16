@@ -13131,6 +13131,35 @@ export function run(test) {
       assert.equal((await asks('/nam/empty')).slot, 3)
       assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: 10 bytes came in meanwhile, 1 short MIDI message, 7 bytes that made no whole message'), t.logs.filter((l) => /no answer/.test(l)).join(' | '))
     }
+    /*
+     * And through the joiner itself, as the bytes really come: a controller
+     * swept, its status byte said once for seven messages (running status),
+     * then the start of an answer that never finished. The joiner hands on
+     * seven whole messages; counted by those lengths they hid the seven
+     * bytes cut short (found in the third review).
+     */
+    {
+      const { t, u, nam, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      const joiner = t.sx.createJoiner({ onSysex: (f) => t.wire.heard(f), onShort: (m) => t.wire.heardShort(m) })
+      const feed = (bytes) => {
+        t.wire.heardBytes(bytes)
+        joiner.push(bytes)
+      }
+      t.unit.hear = (b) => {
+        if (hex(b) === hex(nam.namSlotQuery(0x10, 2)) && u.quietSlotTimes === 1) {
+          t.clock.setTimeout(() => {
+            feed([0xb0, 0x07, 0x10, 0x07, 0x11, 0x07, 0x12, 0x07, 0x13, 0x07, 0x14, 0x07, 0x15, 0x07, 0x16])
+            feed([0xf0, 0x00, 0x01, 0x74, 0x10, 0x01, 0x08])
+          }, 500)
+        }
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: 22 bytes came in meanwhile, 7 short MIDI messages, 7 bytes that made no whole message'), t.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    }
     /* A long answer that stalls after its first frame (an AM4's stored preset): the frame that came is said as part of the answer, not as no whole message. */
     {
       const stall = await onTheLine('am4', { stallAfterHead: 4000 })

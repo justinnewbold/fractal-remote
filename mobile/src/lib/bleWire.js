@@ -1228,14 +1228,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* Every byte, a timing clock's too: whether anything at all came back on this connection (bytesIn). */
     bytesIn += bytes.length
     let real = 0
+    /* The status bytes of short messages (a controller, a Program Change): never inside a SysEx frame, so each is one byte a short message accounts for. */
+    let statuses = 0
     for (let i = 0; i < bytes.length; i++) {
-      if ((bytes[i] & 0xff) < 0xf8) real++
+      const b = bytes[i] & 0xff
+      if (b >= 0xf8) continue
+      real++
+      if (b >= 0x80 && b < 0xf0) statuses++
     }
     if (!real) return
     const now = time.now()
     const job = current
     /* For the question that is out, if it goes unanswered (cameBack): never a timing clock's. */
-    if (job && job.came) job.came.bytes += real
+    if (job && job.came) {
+      job.came.bytes += real
+      job.came.framed += statuses
+    }
     if (job && job.opts.collect && job.timer !== undefined) {
       time.clearTimeout(job.timer)
       const left = (job.opts.cap ?? Infinity) - (now - job.started)
@@ -1567,10 +1575,19 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /** A short message: only Program Change means anything here. */
   function heardShort(msg) {
     if (closed || !Array.isArray(msg) || !msg.length) return
-    /* For the question that is out, if it goes unanswered (cameBack): a short message is no part of any answer, and its bytes are not an answer cut short. */
+    /*
+     * For the question that is out, if it goes unanswered (cameBack): a
+     * short message is no part of any answer, and its bytes are not an
+     * answer cut short. ITS DATA BYTES ONLY: the joiner hands on a whole
+     * message, status byte and all, for each one of a run sent with the
+     * status said once (running status), and counted by that length seven
+     * controller messages hid the seven bytes of an answer cut short beside
+     * them (found in the third review). The status bytes are counted as
+     * they come (heardBytes).
+     */
     if (current && current.came) {
       current.came.short++
-      current.came.framed += msg.length
+      current.came.framed += msg.length - 1
     }
     if (isEcho(msg, time.now())) return
     if ((msg[0] & 0xf0) >= 0x80 && (msg[0] & 0xf0) < 0xf0) heardAgain()
