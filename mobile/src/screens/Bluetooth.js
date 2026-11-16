@@ -12,6 +12,7 @@ import {
   adapterAway,
   adapterBeforeCable,
   adapterDevices,
+  adapterHeard,
   adapterInsteadOfCable,
   adapterKeptFor,
   adapterName,
@@ -25,6 +26,7 @@ import {
   checkSteps,
   chooseAdapter,
   chooseCableHere,
+  clearResetBack,
   connectOwedUntil,
   editOverBluetooth,
   saveOverBluetooth,
@@ -38,17 +40,22 @@ import {
   midiJacks,
   offeredUnits,
   onAdapter,
+  openBluetoothSettings,
   otherAdapterNow,
   otherAdapterWords,
   pairScreenShut,
   refreshAdapters,
   refreshOnScreen,
+  resetDone,
+  resetStepNow,
+  resetStillNothing,
   runCheck,
   setBluetooth,
   setBluetoothUnit,
   setMethods,
   stopPageWait,
   switchAdapter,
+  takeOffered,
   turnOnBluetooth,
   unitName,
   useBluetooth,
@@ -62,14 +69,17 @@ import {
   BLUETOOTH_WAYS,
   CLOSE_AND_REOPEN,
   CONNECT_AGAIN,
-  CONNECT_AGAIN_SUB,
   FM3_WARNING,
   GUIDE_URL,
   ONE_AT_A_TIME,
+  OPEN_BLUETOOTH_SETTINGS,
   PARTS,
   PLUGS_CHECK,
   POWER_LINE,
   REPORT_BUTTON,
+  RESET_RECONNECT,
+  RESET_STILL,
+  RESET_STILL_SUB,
   SELLERS_LINE,
   REPORT_NOTE,
   SWITCH_TO,
@@ -79,18 +89,27 @@ import {
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
+  adapterKind,
   adapterOfUnit,
   adapterTabFor,
   adapterTabsFor,
-  appleListForget,
   bluetoothOffHint,
   bluetoothOffLine,
+  connectAgainSub,
   firmwareLineFor,
+  firstTimeLine,
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
   notAnAdapter,
   notAnsweringLine,
+  nothingBackLine,
+  resetBack,
+  resetIntro,
+  resetReportLine,
+  resetSteps,
+  takeFromOther,
+  takeFromOtherSub,
   troubleFor,
   untried,
   unitForReport,
@@ -353,8 +372,11 @@ function status(b, unitState) {
     if (notAnAdapter(b.adapter?.name)) return { line: notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
     if (b.unit === 'vp4') return { line: VP4_CONNECTED, tone: 'ok' }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
-    /* The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of. */
-    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
+    /*
+     * The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of.
+     * And with NOTHING AT ALL coming back (lib/bluetooth nothingBack, 16 November 2026), that, and the reset card under it, not the plugs first.
+     */
+    if (unitState === 'missing' || unitState === 'silent') return { line: b.nothingBack ? nothingBackLine(b.unit, b.adapter?.name) : notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
     return { line: `Connected · asking the ${name}…`, tone: 'dim' }
   }
   if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }
@@ -724,6 +746,64 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     connectBluetoothAgain()
   }
   /*
+   * NOTHING AT ALL IS COMING BACK: THE RESET CARD (16 November 2026). His WIDI
+   * Uhost on his FM3 said Connected and carried not one byte back through a
+   * dozen Connect agains, a restart of the app and a fresh connection in
+   * Apple's screen, while this page sent him to the plugs; the cure was
+   * outside the app (Forget This Device, the adapter unplugged and plugged
+   * back in, paired again). So while lib/bluetooth's nothingBack is up
+   * (bleLink: its own first questions brought back not one byte, past the
+   * connection's first seconds), the plugs hint and Close and reopen give way
+   * to one step at a time (shared/bluetooth-gear resetSteps), each with Still
+   * nothing to the next, while the app watches for the unit: the card goes
+   * the moment it answers (the rig's 'present'), never on bytes that are no
+   * answer, and says so. It stays through a drop (its first step is the
+   * adapter switched off). Never for a VP4, which never answers, a unit on a
+   * USB cable, a footswitch, or another unit that answered.
+   *
+   * By what is known of this adapter on this unit (lib/bluetooth
+   * adapterHeard): the plugs first where it has never answered here, one plug
+   * line beside the restart where it was just moved here, and last
+   * otherwise. Use a different adapter stays under it ("If WIDI Uhost isn't
+   * on your FM3"), which is the other cheap question.
+   */
+  const fixing = b.on && !!b.nothingBack && unitState !== 'present' && !b.answeredAs && keptAdapter && !vp4 && !footswitch
+  const known = fixing ? adapterHeard(b.unit, b.adapter.id) : null
+  const fixes = fixing
+    ? resetSteps({ unit: b.unit, kind: adapterKind(b.adapter.name), adapter: b.adapter.name, os: Platform.OS, noun: deviceNoun(), answered: !!known.answered, movedFrom: known.movedFrom, canPair: !shut, where: 'card' })
+    : []
+  const fixKeys = fixes.map((s) => s.key)
+  const fixAt = fixing ? resetStepNow(fixKeys) : null
+  /*
+   * ITS RECONNECT, one button whatever it does: connected and still silent,
+   * Connect again (on an iPhone, the unit asked again over the same link);
+   * gone, after about 15 seconds, as the steps say (on an iPhone, Apple's
+   * screen; on Android, the link's own try now). Not armed for Play: the
+   * card says the unit is back, here.
+   */
+  const goneLong = useLate(fixing && b.phase === 'connecting', RECONNECT_AFTER_MS)
+  const fixReconnect = !fixing ? null : connected ? { sub: connectAgainSub(Platform.OS), go: () => connectBluetoothAgain() } : goneLong ? { sub: away ? appleScreenOpens() : undefined, go: reconnect } : null
+  /* The unit answered with the card up: said where the card was, for a moment (lib/bluetooth resetBack). */
+  const backAgain = !!b.resetBack && connected && unitState === 'present'
+  useEffect(() => {
+    if (!b.resetBack) return
+    const t = setTimeout(clearResetBack, BACK_SHOWN_MS)
+    return () => clearTimeout(t)
+  }, [b.resetBack])
+  /*
+   * ANOTHER UNIT'S ADAPTER, THE ONLY ONE HERE, at a Connect for a unit with
+   * none of its own (lib/bluetooth offer, 16 November 2026): "Use WIDI Uhost
+   * for your FM3? It was your Axe-Fx III's." One tap moves it to this unit
+   * (takeOffered), and Bluetooth comes on with it as after a Connect. Never
+   * taken without the tap.
+   */
+  const offerFromOther = !b.on && !b.adapter && !!b.offer && canStart && b.offer.unit !== b.unit
+  const takeOffer = () => {
+    if (!canStart || !takeOffered()) return
+    arm()
+    setWanted(b.unit)
+  }
+  /*
    * TURN ON BLUETOOTH, under the line that says it is off: Android's own
    * question (lib/bluetooth turnOnBluetooth), and the search, or the adapter
    * kept, goes on by itself once it is on. Only after Connect, or the link,
@@ -828,19 +908,32 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               Troubleshooting's, one tap away: "It seems like there's too much
               to read everywhere you go" (Justin, 30 October 2026).
             */}
-            {/* The cure that worked first, before the plugs: a fresh connection (offerAgain). */}
-            {offerAgain ? <Press label={CONNECT_AGAIN} sub={CONNECT_AGAIN_SUB} tone="live" height={52} onPress={again} /> : null}
-            {quiet && !footswitch && (!cable || jacks) ? <Hint>{PLUGS_CHECK}</Hint> : null}
+            {/* NOTHING AT ALL IS COMING BACK: one reset at a time, in place of the plugs hint, Close and reopen and Report this, which are among its steps (`fixing`). */}
+            {fixing ? (
+              <ResetCard
+                unit={b.unit}
+                steps={fixes}
+                at={fixAt}
+                reconnect={fixReconnect}
+                onStill={() => resetStillNothing(fixKeys)}
+                onSettings={ios ? null : openBluetoothSettings}
+                onReport={onReport ? () => onReport(resetReportLine(b.unit, b.adapter?.name, resetDone())) : null}
+              />
+            ) : null}
+            {backAgain ? <Text accessibilityLiveRegion="polite" style={{ color: color.ble, fontSize: font.body, fontWeight: '700', lineHeight: 22 }}>{resetBack(b.unit)}</Text> : null}
+            {/* The cure that worked first, before the plugs: a fresh connection on Android, the unit asked again on an iPhone (offerAgain, connectAgainSub). */}
+            {offerAgain && !fixing ? <Press label={CONNECT_AGAIN} sub={connectAgainSub(Platform.OS)} tone="live" height={52} onPress={again} /> : null}
+            {quiet && !fixing && !footswitch && (!cable || jacks) ? <Hint>{PLUGS_CHECK}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
               IN: the way out that worked for him was closing the app
               completely (shared/bluetooth-gear CLOSE_AND_REOPEN).
             */}
-            {b.phase === 'connecting' || (quiet && !footswitch) ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
-            {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
+            {!fixing && (b.phase === 'connecting' || (quiet && !footswitch)) ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
+            {reportable && quiet && !fixing ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {/* A unit on a USB cable: unplugged is said as unplugged, and it connects by itself when it is back (lib/bluetooth cableAway). */}
             {b.phase === 'connecting' && cable ? <Hint>{cableAway() ? CABLE_AWAY : CABLE_CONNECTING_HINT}</Hint> : null}
-            {b.phase === 'connecting' && !cable ? (
+            {b.phase === 'connecting' && !cable && !fixing ? (
               <Hint>
                 {shut
                   ? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect.'
@@ -851,7 +944,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                       : `If this stays here, check the ${deviceNoun()}’s Bluetooth is on, and that the adapter is plugged in and lit.`}
               </Hint>
             ) : null}
-            {away ? <Press label="Reconnect" tone="live" sub={appleScreenOpens()} onPress={reconnect} /> : null}
+            {away && !fixing ? <Press label="Reconnect" tone="live" sub={appleScreenOpens()} onPress={reconnect} /> : null}
             {/* Another adapter the phone can see while the one kept is not there, or is connected and silent: said by name, and used only on the tap (otherAdapterNow, switchAdapter). */}
             {otherWords ? (
               <View style={{ gap: space.sm }}>
@@ -924,6 +1017,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
+              {/* Another unit's adapter, the only one here: one tap moves it to this unit (offerFromOther). */}
+              {offerFromOther ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} tone="live" height={52} disabled={b.looking} onPress={takeOffer} /> : null}
               {cableButtons}
               {differentButton}
               {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
@@ -1035,6 +1130,56 @@ function useAdapterTab(tabs, adapter) {
 
 /* Troubleshooting's last step, by adapter or by cable. */
 const ANOTHER_UNIT = 'If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.'
+
+/* The reset card's Reconnect waits this long after the adapter goes, as its steps say ("about 15 seconds"); its "answering again" is up this long. */
+const RECONNECT_AFTER_MS = 15000
+const BACK_SHOWN_MS = 8000
+
+/* True once `on` has held for `ms`, and false the moment it does not. */
+function useLate(on, ms) {
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    setLate(false)
+    if (!on) return
+    const t = setTimeout(() => setLate(true), ms)
+    return () => clearTimeout(t)
+  }, [on, ms])
+  return on && late
+}
+
+/**
+ * THE RESET CARD (16 November 2026): nothing at all is coming back through
+ * the adapter, and the steps that bring it back, one at a time, cheapest
+ * first (shared/bluetooth-gear resetSteps). Each has Still nothing, to the
+ * next, which the log keeps (lib/bluetooth resetStillNothing); the steps that
+ * end in Reconnect have it, where it can do something now (`reconnect`);
+ * Android's Bluetooth settings open from the two steps that are there; and
+ * the last is Report a Bluetooth problem, its first line saying the steps
+ * done. Words on every button, never a picture alone.
+ */
+function ResetCard({ unit, steps, at, reconnect = null, onStill, onSettings = null, onReport = null }) {
+  const i = Math.max(0, steps.findIndex((s) => s.key === at))
+  const step = steps[i]
+  if (!step) return null
+  const last = i === steps.length - 1
+  const reconnects = step.key !== 'reopen' && step.key !== 'report'
+  return (
+    <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.rule }}>
+      <Hint>{resetIntro(unit)}</Hint>
+      <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ color: color.silk, fontSize: font.body, fontWeight: '700', lineHeight: 22 }}>
+        {`Step ${i + 1} of ${steps.length}: ${step.title}`}
+      </Text>
+      {step.lines.map((line) => (
+        <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
+          {line}
+        </Text>
+      ))}
+      {onSettings && (step.key === 'bluetooth' || step.key === 'forget') ? <Press label={OPEN_BLUETOOTH_SETTINGS} height={44} onPress={onSettings} /> : null}
+      {reconnect && reconnects ? <Press label={RESET_RECONNECT} sub={reconnect.sub} tone="live" height={52} onPress={reconnect.go} /> : null}
+      {last ? (onReport ? <Press label={REPORT_BUTTON} height={52} onPress={onReport} /> : null) : <Press label={RESET_STILL} sub={RESET_STILL_SUB} height={52} onPress={onStill} />}
+    </View>
+  )
+}
 
 /**
  * Bluetooth → How to connect my Bluetooth device.
@@ -1170,23 +1315,39 @@ export function BluetoothTrouble({ onReport = null, way = null }) {
   const tabs = cableWay || !b.unit ? [] : adapterTabsFor(b.unit, { other: true })
   const [tab, setTab] = useAdapterTab(tabs, b.adapter)
   const own = troubleFor(b.unit, tab || 'other', deviceNoun())
+  /*
+   * THE RESETS, IN THE RESET CARD'S OWN WORDS (16 November 2026), for the
+   * tab's adapter (shared/bluetooth-gear resetSteps): its restart by what
+   * powers it, Bluetooth off and on, Forget This Device and pair again (as a
+   * cure, where it was item ten and worded as tidying Apple's list), and the
+   * app closed, before the plugs. This page cannot know whether this
+   * adapter has answered this unit, as the card does, so the plugs follow
+   * the resets, and the first line sends a first setup, or an adapter just
+   * moved here, to them first. Forget never where Apple's screen is kept
+   * shut (iOS 27 before Apple's fix): it could not be paired again.
+   */
+  const fixes = resetSteps({ unit: b.unit, kind: tab || 'other', os: Platform.OS, noun: deviceNoun(), answered: true, canPair: !pairScreenShut(), where: 'trouble' })
+  const fix = (key) => fixes.find((s) => s.key === key)?.lines.join(' ') || null
   const steps = cableWay
     ? [...cableSteps(deviceNoun(), { jacks }), ...(jacks ? [settings, midi] : []), fm3, ANOTHER_UNIT].filter(Boolean)
     : [
+        firstTimeLine(b.unit),
         own.lit,
         `Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings.`,
+        fix('restart'),
+        fix('bluetooth'),
+        fix('forget'),
+        fix('reopen'),
         own.plugs,
         own.typeA,
         settings,
         midi,
         own.before,
         ONE_AT_A_TIME,
-        CLOSE_AND_REOPEN,
+        fix('nearby'),
         ios
           ? `An iPhone or iPad lets an adapter nobody is using go after a few minutes. Tap Reconnect, or Stop and then Connect, and connect it again in Apple’s screen.`
           : `Android needs Nearby devices allowed for Fractal Remote, and on Android 11 and older Location turned on, to find the adapter.`,
-        /* Forget in Apple's Bluetooth MIDI screen does nothing for an adapter still connected to the device (7 November 2026): the way that does. */
-        ios ? appleListForget(deviceNoun()) : null,
         `Stay within about 30 feet of the adapter, with nothing big in between.`,
         ANOTHER_UNIT,
         fm3

@@ -250,7 +250,8 @@ export function whyNotPicked(list, fresh = new Set(), rule = {}) {
   if (!just.length && here.length > 1) return { why: `${here.length} are here and none is new, so the list asks which`, dev: null }
   const one = just.length === 1 ? just[0] : here[0]
   if (!isCable(one) && typeof refused === 'function' && refused(one.name)) return { why: 'it is not one the app uses with the unit picked', dev: one }
-  if (!fresh.has(one.id) && taken?.has?.(one.id)) return { why: 'it is kept for another unit', dev: one }
+  /* `taken`: the page offers it by name for one tap (lib/bluetooth offerFromOther), never takes it. */
+  if (!fresh.has(one.id) && taken?.has?.(one.id)) return { why: 'it is kept for another unit', dev: one, taken: true }
   if (!fresh.has(one.id) && typeof letGoOf === 'string' && one.id === letGoOf) return { why: 'it is the one just let go of', dev: one, letGo: true }
   return { why: 'nothing here could be chosen', dev: one }
 }

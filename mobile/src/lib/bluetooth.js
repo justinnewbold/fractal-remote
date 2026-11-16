@@ -14,7 +14,7 @@ import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
-import { notAnAdapter, unitForReport } from './bluetooth-gear'
+import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
 import { CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
@@ -79,7 +79,23 @@ const NOW = {
   /* The adapter kept did not connect on the link's last try, and nothing has connected since (bleLink): the page offers another it can see (otherAdapterNow). */
   notThere: false,
   /* Android: the app is asking, once a second, whether Bluetooth has come on (waitForBluetoothOn). */
-  waitingOn: false
+  waitingOn: false,
+  /*
+   * NOTHING AT ALL IS COMING BACK (16 November 2026): the adapter connected,
+   * and bleLink's own first questions on a connection brought back not one
+   * byte, and the connection is past its first seconds. The page's reset
+   * card is drawn while it is up (screens/Bluetooth ResetCard). Down when the
+   * unit answers (unitAnswered), never on a byte that is no answer, and at a
+   * new round of the link (bleLink); not at a drop, which the card's first
+   * step makes happen.
+   */
+  nothingBack: false,
+  /* Where the reset card is: { unit, adapter (its id), step, done (the steps before it), at }, or null. Kept on the phone too (RESET_KEY), so closing the app, one of the steps, picks up where it was. */
+  reset: null,
+  /* When the unit answered with the reset card up: the card says so for a moment (clearResetBack). */
+  resetBack: null,
+  /* An adapter kept for another unit, the only one here, at a Connect for a unit with none of its own: { id, name, driver?, transport?, unit }, offered for one tap (takeOffered), never taken by itself. */
+  offer: null
 }
 
 const UNIT_KEYS = BLE_UNITS.map((u) => u.key)
@@ -192,20 +208,206 @@ function settleByUnit(raw) {
   }
   return out
 }
-/* This unit's adapter is now `adapter` (or none): kept for it, and let go of by any other unit it was kept for. */
+/* This unit's adapter is now `adapter` (or none): kept for it, and let go of by any other unit it was kept for, which is noted as a move (noteMoved). */
 function keepFor(unit, adapter) {
   if (!unit) return
   const next = { ...byUnit }
+  let from = null
   if (adapter) {
-    for (const key of Object.keys(next)) if (key !== unit && next[key]?.id === adapter.id) delete next[key]
+    for (const key of Object.keys(next)) {
+      if (key !== unit && next[key]?.id === adapter.id) {
+        delete next[key]
+        from = key
+      }
+    }
     next[unit] = keptAdapter(adapter)
   } else delete next[unit]
+  if (from && !isCable(adapter)) noteMoved(unit, adapter, from)
   if (JSON.stringify(next) === JSON.stringify(byUnit)) return
   byUnit = next
   keepByUnit()
 }
 /* The ids of the adapters kept for the other units: never chosen for this one by themselves (bleAdapters pickAdapter `taken`). */
 const takenIds = () => new Set(Object.entries(byUnit).filter(([key, a]) => key !== saved.unit && a?.id).map(([, a]) => a.id))
+
+/*
+ * WHICH ADAPTER HAS ANSWERED WHICH UNIT, AND WHICH WAS JUST MOVED (16
+ * November 2026), under its own key, as the adapters kept per unit are.
+ *
+ * Nothing at all coming back through a connected adapter is a stuck link
+ * (Justin's WIDI Uhost that day, cured by Forget This Device and a restart of
+ * the adapter) as much as swapped plugs, which give exactly the same zero
+ * bytes. What tells the two apart is whether this adapter has ever answered
+ * this unit: the reset steps (shared/bluetooth-gear resetSteps) put the plugs
+ * last where it has, first where it never has, and one plug line beside the
+ * restart where it was just moved from another unit, its cables plugged in
+ * again.
+ *
+ *   - `answered`: { unit: { adapter id: 'YYYY-MM-DD' } }, the day the unit
+ *     last answered over it (unitAnswered, from bleLink), the newest few per
+ *     unit. Per pair, not on the adapter kept: keptAdapter keeps an
+ *     adapter's id, name, driver and transport and nothing else, and an
+ *     adapter moved away and back again is still one that has answered here.
+ *   - `moved`: { unit: { id, from } }, an adapter taken from another unit's
+ *     keeping for this one (keepFor), until it answers here.
+ *
+ * Nothing is seeded: an adapter with no record is one not known to have
+ * answered, and is told to check its plugs first.
+ */
+const HEARD_KEY = 'fractal.bluetooth.heard'
+const HEARD_MAX = 8
+const NO_HEARD = { answered: {}, moved: {} }
+let heard = { ...NO_HEARD }
+function keepHeard() {
+  AsyncStorage.setItem(HEARD_KEY, JSON.stringify(heard)).catch(() => {
+    /* Costs the next launch what has answered where, and the plugs come first again: nothing worse. */
+  })
+}
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+/* The newest `HEARD_MAX` of one unit's, so the record never grows past a handful of rows. */
+const newest = (rows) => Object.fromEntries(Object.entries(rows).sort(([, a], [, b]) => (a < b ? 1 : a > b ? -1 : 0)).slice(0, HEARD_MAX))
+function settleHeard(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {}
+  const answered = {}
+  const moved = {}
+  for (const key of UNIT_KEYS) {
+    const a = s.answered?.[key]
+    if (a && typeof a === 'object') {
+      const rows = Object.fromEntries(Object.entries(a).filter(([id, day]) => id && typeof day === 'string' && DAY.test(day)))
+      if (Object.keys(rows).length) answered[key] = newest(rows)
+    }
+    const m = s.moved?.[key]
+    if (m && typeof m.id === 'string' && m.id && UNIT_KEYS.includes(m.from) && m.from !== key) moved[key] = { id: m.id, from: m.from }
+  }
+  return { answered, moved }
+}
+/* An adapter taken from another unit's keeping for this one: its plugs may have moved with it. */
+function noteMoved(unit, adapter, from) {
+  const moved = { ...heard.moved, [unit]: { id: adapter.id, from } }
+  if (moved[from]?.id === adapter.id) delete moved[from]
+  heard = { ...heard, moved }
+  keepHeard()
+  logDebug('ble', `${adapterName(adapter) || 'the adapter'} was the ${unitName(from)}’s and is the ${unitName(unit)}’s now: until it answers there, its plugs are checked first`)
+}
+/** What is known of this adapter on this unit: the day it last answered there, or null, and the unit it was just moved from, or null. */
+export const adapterHeard = (unit, id) => ({
+  answered: (unit && id && heard.answered[unit]?.[id]) || null,
+  movedFrom: unit && id && heard.moved[unit]?.id === id ? heard.moved[unit].from : null
+})
+/* The same adapter under a new id (adapterBackUnderNewId): what it has answered goes with it. */
+function carryHeard(was, id) {
+  if (!was || !id || was === id) return
+  let changed = false
+  const answered = { ...heard.answered }
+  for (const [unit, rows] of Object.entries(answered)) {
+    if (rows[was] && !rows[id]) {
+      answered[unit] = newest({ ...rows, [id]: rows[was] })
+      changed = true
+    }
+  }
+  const moved = { ...heard.moved }
+  for (const [unit, m] of Object.entries(moved)) {
+    if (m.id === was) {
+      moved[unit] = { ...m, id }
+      changed = true
+    }
+  }
+  if (!changed) return
+  heard = { answered, moved }
+  keepHeard()
+}
+
+/*
+ * WHERE THE RESET CARD IS, kept on the phone too: one of its steps is
+ * closing the app, and opening it again starts the card where it was, for
+ * the same unit and adapter, within RESET_KEEP_MS. Gone when the unit
+ * answers.
+ */
+const RESET_KEY = 'fractal.bluetooth.reset'
+export const RESET_KEEP_MS = 30 * 60 * 1000
+const RESET_STEPS = Object.keys(RESET_TITLES)
+function keepReset(next) {
+  now = { ...now, reset: next }
+  AsyncStorage.setItem(RESET_KEY, JSON.stringify(next)).catch(() => {
+    /* Costs a reopened app the card's place: it starts at its first step. */
+  })
+}
+function settleReset(raw) {
+  const r = raw && typeof raw === 'object' ? raw : null
+  if (!r || !UNIT_KEYS.includes(r.unit) || typeof r.adapter !== 'string' || !r.adapter || !RESET_STEPS.includes(r.step) || !Number.isFinite(r.at)) return null
+  return { unit: r.unit, adapter: r.adapter, step: r.step, done: Array.isArray(r.done) ? r.done.filter((k) => RESET_STEPS.includes(k)) : [], at: r.at }
+}
+/* The card's place, when it is this unit's and this adapter's and not long ago. */
+const resetHere = () => {
+  const r = now.reset
+  return r && r.unit === saved.unit && r.adapter === saved.adapter?.id && Date.now() - r.at < RESET_KEEP_MS ? r : null
+}
+/** The reset card's step now, of `keys` (its steps, in order): where it was left, or the first. */
+export function resetStepNow(keys) {
+  const list = Array.isArray(keys) ? keys : []
+  const r = resetHere()
+  return r && list.includes(r.step) ? r.step : (list[0] ?? null)
+}
+/** The steps done before the one showing, in order: for the report's first line. */
+export const resetDone = () => resetHere()?.done || []
+/** Still nothing: the card's next step, and the log says which was done. The step the card is on stays the last. */
+export function resetStillNothing(keys) {
+  const list = Array.isArray(keys) ? keys : []
+  if (!saved.unit || !saved.adapter || !list.length) return null
+  const at = resetStepNow(list)
+  const next = list[Math.min(list.indexOf(at) + 1, list.length - 1)]
+  const done = [...resetDone().filter((k) => k !== at), at]
+  keepReset({ unit: saved.unit, adapter: saved.adapter.id, step: next, done, at: Date.now() })
+  logDebug('ble', `reset steps: still nothing after “${RESET_TITLES[at]}”; next, “${RESET_TITLES[next]}”`)
+  announce()
+  return next
+}
+/** The card's "answering again" has been seen: it goes. */
+export function clearResetBack() {
+  if (!now.resetBack) return
+  now = { ...now, resetBack: null }
+  announce()
+}
+
+/**
+ * THE UNIT ANSWERED over the adapter in use, on this connection (bleLink:
+ * its first questions answered, or the rig's word going to 'present'). The
+ * record says this adapter has answered this unit, today, and it is no
+ * longer one just moved here; nothing coming back is over, and a reset card
+ * that was up says the unit is back, and the log says on which step. Never
+ * for a unit on a USB cable, which has no plugs or pairing to remember.
+ */
+export function unitAnswered() {
+  const unit = saved.unit
+  const a = saved.adapter
+  if (!unit || !a) return
+  let changed = false
+  if (!isCable(a)) {
+    const day = new Date().toISOString().slice(0, 10)
+    if (heard.answered[unit]?.[a.id] !== day) {
+      heard = { ...heard, answered: { ...heard.answered, [unit]: newest({ ...(heard.answered[unit] || {}), [a.id]: day }) } }
+      changed = true
+    }
+    if (heard.moved[unit]?.id === a.id) {
+      const { [unit]: _gone, ...moved } = heard.moved
+      heard = { ...heard, moved }
+      changed = true
+    }
+    if (changed) keepHeard()
+  }
+  const was = resetHere()
+  if (was) {
+    const before = was.done.map((k) => `“${RESET_TITLES[k]}”`).join(', ')
+    logDebug('ble', `the ${unitName(unit)} answers again, with the reset steps on “${RESET_TITLES[was.step]}”${before ? ` (done before it: ${before})` : ''}`)
+    keepReset(null)
+  }
+  const up = now.nothingBack
+  if (up) {
+    logDebug('ble', `the ${unitName(unit)} answers: nothing coming back is over`)
+    now = { ...now, nothingBack: false, resetBack: Date.now() }
+  }
+  if (changed || was || up) announce()
+}
 
 /*
  * THE ADAPTER AS IT IS KEPT: its id and name, on an iPhone the driver that
@@ -434,6 +636,10 @@ export const useWaitingForBluetooth = () => useSyncExternalStore(subscribeBlueto
 
 /** What stands between the phone and the adapter, or null: for the waiting screen. A word, so it redraws only when it changes. */
 export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
+
+/** Whether nothing at all is coming back through the adapter (NOW nothingBack): Play's note leads with it, and opens the page's reset card. A true or false. */
+const readNothingBack = () => snapshot.nothingBack === true
+export const useNothingBack = () => useSyncExternalStore(subscribeBluetooth, readNothingBack, readNothingBack)
 
 /*
  * AN IPHONE WHOSE ADAPTER HAS GONE, AND A TRY HAS MISSED IT: for the waiting
@@ -680,6 +886,19 @@ export async function restoreBluetooth() {
     kept = null
   }
   byUnit = settleByUnit(kept)
+  /* What has answered where, and the reset card's place: their own keys, read as the adapters are. */
+  try {
+    const memo = await AsyncStorage.getItem(HEARD_KEY)
+    heard = settleHeard(memo ? JSON.parse(memo) : null)
+  } catch {
+    heard = { ...NO_HEARD }
+  }
+  try {
+    const memo = await AsyncStorage.getItem(RESET_KEY)
+    now = { ...now, reset: settleReset(memo ? JSON.parse(memo) : null) }
+  } catch {
+    now = { ...now, reset: null }
+  }
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
@@ -791,6 +1010,8 @@ export function setBluetoothUnit(key, { carry = false } = {}) {
   /* Another unit: what was let go of for the last one is no longer a question (letGoOf), nor is a note from its search about this one (it sat under the next unit's working connection). */
   letGoOf = null
   if (now.said) now = { ...now, said: null }
+  /* Nor is another unit's adapter offered for the unit left (takeOffered). */
+  if (now.offer) now = { ...now, offer: null }
   saved = { ...saved, unit: key, adapter: adapter ? keptAdapter(adapter) : null }
   logDebug('ble', `the unit is an ${unitName(key)}`)
   if (carry && using) logDebug('ble', `${adapterName(using) || 'the adapter'} is on the ${unitName(key)}: it is the ${unitName(key)}’s adapter now`)
@@ -828,7 +1049,13 @@ export function chooseAdapter(dev) {
   letGo.delete(dev.id)
   /* An adapter chosen, by the phone or by a tap, ends the memory of the one let go of (letGoOf). A USB cable chosen does not: it says nothing about which adapter is the right one. */
   if (!isCable(dev)) letGoOf = null
-  if (saved.adapter?.id === dev.id) return
+  /* An adapter chosen answers the offer of another unit's (takeOffered), whichever it is. */
+  const offered = !!now.offer
+  if (offered) now = { ...now, offer: null }
+  if (saved.adapter?.id === dev.id) {
+    if (offered) announce()
+    return
+  }
   noteBeforeCable(dev)
   saved = { ...saved, adapter: keptAdapter(dev) }
   /* The unit picked's own, from now on, and no other unit's (WHICH ADAPTER GOES WITH WHICH UNIT). */
@@ -1136,6 +1363,53 @@ function sayWhyNotPicked(list, just) {
   if (!why) return
   logDebug('ble', `no adapter chosen by the ${deviceNoun()}: ${why.dev ? `${adapterName(why.dev) || 'the one here'}: ` : ''}${why.why}`)
   if (why.letGo) noteBluetooth({ said: (sameSaid = sameAdapterWords(adapterName(why.dev))) })
+  offerFromOther(why)
+}
+
+/*
+ * KEPT FOR ANOTHER UNIT, AND THE ONLY ONE HERE (16 November 2026): never
+ * taken by itself (the 7 November rule, bleAdapters pickAdapter), but
+ * offered by name right under Connect, one tap that moves it to this unit
+ * (takeOffered). Justin's Uhost, the Axe-Fx III's until then, cost him
+ * ninety seconds and three trips through Apple's screen at his FM3, one of
+ * which disconnected it. Only for a unit with no adapter of its own.
+ */
+function offerFromOther(why) {
+  const whose = why?.taken && why.dev && !saved.adapter ? adapterKeptFor(why.dev.id) : null
+  if (!whose) return
+  logDebug('ble', `${adapterName(why.dev) || 'the adapter'} is offered for the ${unitName(saved.unit)}, on a tap: it is the ${unitName(whose)}’s`)
+  noteBluetooth({ offer: { ...keptAdapter(why.dev), unit: whose } })
+}
+
+/*
+ * THE OFFER IS TRUE OF THE LIST AT ONE MOMENT: an offered adapter that is no
+ * longer here, or no longer connected, is not offered (sameSaidStill's rule
+ * for its own note).
+ */
+function offerStill(devices) {
+  const o = now.offer
+  if (!o) return
+  const list = Array.isArray(devices) ? devices : []
+  if (!list.some((d) => d?.id === o.id && !d.offline)) noteBluetooth({ offer: null })
+}
+
+/**
+ * THE OFFER TAPPED: another unit's adapter, the only one here, used for the
+ * unit picked from now on (chooseAdapter: kept for this unit, let go of by
+ * the other, and noted as moved). Asked afresh against the list as it is
+ * now: one gone since the button was drawn is not chosen. True when it was.
+ */
+export function takeOffered() {
+  const o = now.offer
+  if (!o || !saved.unit || saved.adapter) return false
+  const here = adapterDevices().find((d) => d.id === o.id && !d.offline)
+  if (!here) {
+    noteBluetooth({ offer: null })
+    return false
+  }
+  logDebug('ble', `${adapterName(here) || 'the adapter'}, kept for the ${unitName(o.unit)}, is the ${unitName(saved.unit)}’s now, as asked`)
+  chooseAdapter(here)
+  return true
 }
 
 /*
@@ -1293,6 +1567,7 @@ function listenForList() {
     showList(e?.devices)
     tookAfterScreen(e?.devices)
     sameSaidStill(now.devices)
+    offerStill(now.devices)
   })
 }
 
@@ -1368,8 +1643,9 @@ export async function findAdapters({ cableFirst = true } = {}) {
   stopWaitingForBluetooth()
   afterScreen = null
   offAtConnect = null
-  /* And the note about the adapter he had is this search's to say afresh, or not at all. */
+  /* And the note about the adapter he had is this search's to say afresh, or not at all; so is another unit's adapter offered (takeOffered). */
   sameSaid = null
+  if (now.offer) now = { ...now, offer: null }
   noteBluetooth({ trouble: null, said: null })
   /*
    * A UNIT ON A USB CABLE FIRST, before anything about Bluetooth. "I've
@@ -1444,7 +1720,11 @@ export async function findAdapters({ cableFirst = true } = {}) {
       showList(list)
       const pick = pickAdapter(list, fresh, pickRule())
       if (pick) chooseAdapter(pick)
-      else noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
+      else {
+        noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
+        /* Another unit's adapter, the only one connected: offered for a tap, as after Apple's screen. */
+        offerFromOther(whyNotPicked(list, fresh, pickRule()))
+      }
       return pick
     }
     /*
@@ -1724,6 +2004,31 @@ async function askAndroidForBluetooth() {
 }
 
 /**
+ * ANDROID'S BLUETOOTH SETTINGS, from the reset card's Turn Bluetooth off and
+ * on (16 November 2026), and its Forget, which is there too: the same
+ * intent askAndroidForBluetooth falls back to, and the app's own page if it
+ * will not open. Never on an iPhone, whose Bluetooth settings no app may
+ * open (App Review 2.5.1): the card says where they are instead. True when
+ * they opened.
+ */
+export async function openBluetoothSettings() {
+  if (Platform.OS !== 'android') return false
+  try {
+    await Linking.sendIntent(BLUETOOTH_SETTINGS)
+    logDebug('ble', 'opened Android’s Bluetooth settings, from the reset steps')
+    return true
+  } catch (err) {
+    logDebug('ble', `Android’s Bluetooth settings did not open (${err?.message || err}): opening the app’s own settings`)
+  }
+  try {
+    await Linking.openSettings()
+  } catch {
+    // Nothing more to open; the step says where they are.
+  }
+  return false
+}
+
+/**
  * TURN ON BLUETOOTH: the button under "Bluetooth is off" on the Bluetooth
  * page and on the waiting screen. Only ever drawn once Connect, or the link
  * trying the adapter kept, has found it off (the trouble 'bluetooth-off',
@@ -1822,6 +2127,8 @@ export function adapterBackUnderNewId() {
   )
   if (same.length !== 1) return false
   logDebug('ble', `${name} is connected to this ${deviceNoun()} again, under a new id in Apple’s list: that is the one used now`)
+  /* The same adapter: what it has answered, and where it was just moved, go with it (WHICH ADAPTER HAS ANSWERED WHICH UNIT). */
+  carryHeard(a.id, same[0].id)
   chooseAdapter(same[0])
   return true
 }
