@@ -261,8 +261,63 @@ export const WAIT = {
    */
   gridLive: 2500,
   gridDumpGap: 2500,
-  gridDumpAll: 90000
+  gridDumpAll: 90000,
+  /*
+   * The same live read asked for Play's order (gridOrder), inside Play's
+   * own read of the blocks. Six times the quarter second its 754 bytes take
+   * at the jack's speed, and the status read's own wait: a unit that says
+   * nothing holds a tap no longer than an unanswered status read does, and
+   * only twice a connection.
+   */
+  gridOrder: 1500
 }
+
+/*
+ * THE GRID IS NOT ASKED FOR PLAY'S ORDER WHILE A PRESET IS STILL ARRIVING:
+ * within this long of the last preset change this wire counted (a select,
+ * a Program Change heard, a preset the unit said it is on). A rig that
+ * sends Program Changes back sends its burst within a tenth of a second. A
+ * read asked inside it WAITS OUT THE REST of this time and then asks, and
+ * is drawn in the usual order only if another preset change came while it
+ * waited. It used to give up at once, and the rig's own settled preset read
+ * (which the wire counts) comes straight before Play's read of the blocks,
+ * so that preset stayed in the usual order with nothing asking again (an
+ * independent read, before it went out).
+ */
+export const ORDER_QUIET_MS = 400
+/*
+ * HOW LONG THE ORDER'S GRID READ AND ITS CLOSING "WHICH PRESET?" MAY WAIT
+ * FOR THEIR TURN (gridOrder), where a question of the closing one's own
+ * kind is on the line or ahead of them (presetAhead), and only then. The
+ * checks before them let through at most ORDER_QUIET_MS of a missed preset
+ * answer's late window, which heldFor waits out; this is that and a little
+ * over, so a hold of just that long goes before the deadline and does not
+ * race it. What waits longer is a question of that kind whose answer is
+ * lost (the Presets list beside Play naming a stored slot, Play's own
+ * preset read): with it ahead, the closing question was held behind it and
+ * then for the whole of its late window, and Play's tiles with it, three
+ * and a half seconds (an independent read, 16 November 2026), and the grid
+ * read a second and a half for an order the check after it then threw
+ * away (a fifth read). Not sent by then: the usual order this time, no
+ * miss, nothing kept, asked again at the next read once that question's
+ * window has passed. A question of that kind ahead that is slow but does
+ * answer costs the order for that one read.
+ *
+ * IT IS COUNTED ONLY WHILE A QUESTION OF THAT KIND HOLDS THE LINE
+ * (gridOrder `presetHolds`), never on the line as a whole: one on the line
+ * has ORDER_CLOSE_MS of its own wait from when it went, and everything
+ * else ahead, the player's own taps among them, is waited for. Counted on
+ * the whole line, four block taps or a scene whose echo was lost ahead of a
+ * healthy "which preset?" used it up before that question had even gone,
+ * and the order was lost for the visit (a fifth read, and a sixth).
+ */
+export const ORDER_CLOSE_MS = ORDER_QUIET_MS + 50
+/* While something other than a "which preset?" holds the line at the order's deadline, how long until the line is looked at again. */
+const ORDER_LOOK_MS = 20
+/* Reads for Play's order that brought back nothing it could use, in a row, before it is not asked again on this connection. */
+export const ORDER_MISSES_MOST = 2
+/* Orders kept on one connection, the oldest let go first. */
+const ORDERS_KEPT_MOST = 256
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
 export const ECHO_MS = 250
@@ -633,8 +688,9 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; his account's alone: lib/bluetooth), asked at every request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
+ * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; his account until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -693,6 +749,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const chainOn = () => editOn() && typeof chain === 'function' && chain() === true
   const chainHand = gridHand()
+  /*
+   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (gridOrder): open to this account
+   * or not (`blockOrder`, lib/bluetooth: his account until lib/features
+   * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every
+   * send. Only an FM3, FM9 or Axe-Fx III ever asks it: an AM4's blocks are
+   * its own read (am4Blocks), its four slots in their order already, and a
+   * VP4 has a wire of its own. Not behind Edit's door: it is Play's order.
+   * `orderHand` holds the grid's live read and nothing else, for exactly as
+   * long as that read is being asked: the way out lets that one frame
+   * through, byte for byte, beside whatever the chain has in hand
+   * (`orderOr`). The grid's writes and the preset whole stay the chain's
+   * alone.
+   */
+  const orderOn = () => typeof blockOrder === 'function' && blockOrder() === true
+  const orderHand = gridHand()
+  const orderOr = (chained) => () => {
+    const held = chained()
+    const ordering = orderOn() ? orderHand.now() : null
+    if (!ordering) return held
+    return held ? [...held, ...ordering] : ordering
+  }
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
@@ -729,7 +806,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), () => (chainOn() ? chainHand.now() : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -793,6 +870,28 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* Scene and preset changes on this connection, and how many of them Play has read the blocks after. */
   let moves = 0
   let movedAt = -Infinity
+  /*
+   * And the preset changes among them, and when the last was counted: the
+   * grid read for Play's order (gridOrder) is not believed across one, nor
+   * asked straight after one. A scene change moves nothing on the grid.
+   */
+  let presetMoves = 0
+  let presetAt = -Infinity
+  /*
+   * A block moved from the phone since the last preset change (chainChanged):
+   * the orders kept from then on are of a layout the unit drops when it loads
+   * a preset (another one, or the same one chosen again), so the next preset
+   * change lets go of every order kept, and the stored layout is read again.
+   */
+  let orderEdited = false
+  function presetMoved() {
+    presetMoves += 1
+    presetAt = time.now()
+    if (orderEdited) {
+      orderKept.clear()
+      orderEdited = false
+    }
+  }
   let reread = 0
   let editTimer = null
   function moved() {
@@ -1171,14 +1270,28 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return new Promise((resolve, reject) => {
       const job = { out, opts, priority, resolve, reject, back: null, deadline }
       if (deadline !== null) {
-        job.late = time.setTimeout(() => {
+        /*
+         * Whoever asked may say, at the deadline, that what holds the line
+         * is not what the deadline is for (`stillFor`: how much longer to
+         * wait before looking again, 0 to give up now). Play's order gives
+         * up only on a "which preset?" that holds the line (gridOrder
+         * presetHolds); anything else ahead is waited for. Such a job is
+         * not dropped at its turn either (pump).
+         */
+        const due = () => {
           job.late = undefined
           const i = waiting.indexOf(job)
           if (i < 0) return
+          const more = typeof opts.stillFor === 'function' ? opts.stillFor() : 0
+          if (more > 0) {
+            job.late = time.setTimeout(due, more)
+            return
+          }
           waiting.splice(i, 1)
           say(`not sent, still waiting for the line at its deadline: ${opts.what || 'a message'}`)
           reject(tooLate())
-        }, deadline - time.now())
+        }
+        job.late = time.setTimeout(due, deadline - time.now())
       }
       const at = waiting.findIndex((j) => j.priority > priority)
       waiting.splice(at < 0 ? waiting.length : at, 0, job)
@@ -1257,10 +1370,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       time.clearTimeout(job.late)
       job.late = undefined
     }
-    /* Its turn came after its deadline: dropped, and the next in line goes. */
-    if (job.deadline !== null && job.deadline !== undefined && time.now() >= job.deadline) {
+    /* Its turn came after its deadline: dropped, and the next in line goes. Not one whose asker judges the line at the deadline (`stillFor`): its turn coming is the line being free. */
+    if (job.deadline !== null && job.deadline !== undefined && time.now() >= job.deadline && typeof job.opts.stillFor !== 'function') {
       say(`not sent, its turn came after its deadline: ${job.opts.what || 'a message'}`)
       job.reject(tooLate())
+      return pump()
+    }
+    /* Whoever asked may have a reason not to send it that only its turn can show (Edit's live grid read, inside a late window opened while it waited: gen3LiveGrid). Not sent, answered SKIPPED, and the next in line goes. */
+    if (typeof job.opts.unless === 'function' && job.opts.unless()) {
+      job.resolve(SKIPPED)
       return pump()
     }
     current = job
@@ -1858,6 +1976,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       structure = null
       editPlaced = null
       moved()
+      presetMoved()
       emit({ type: 'changed', scope: 'preset' })
     }
   }
@@ -1877,7 +1996,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const changed = last.preset !== null && p.number !== last.preset
     if (p.number !== last.preset) {
       sceneCache = null
-      if (last.preset !== null) moved()
+      if (last.preset !== null) {
+        moved()
+        presetMoved()
+      }
       /* A new preset whose name is not known yet has no name, not the last one's. */
       last.name = ''
     }
@@ -2152,13 +2274,366 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Blocks() {
+    /* The count of preset changes before the status read: the grid read for the order is believed only if it is still this when that read ends (gridOrder). */
+    const at = presetMoves
     const list = await statusNow()
     if (rejected(list)) throw refusedBy(list.rejected)
     if (!Array.isArray(list)) throw timedOut()
     /* outlineChain names by effect id and wants the channel as a letter. */
     const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
     sayStrangers(states)
-    return (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+    const order = await gridOrder(list, shown, at)
+    return order ? inGridOrder(shown, order) : shown
+  }
+
+  /*
+   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (orderOn: his account, until
+   * lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE).
+   *
+   * "The order of the Effects doesn't correspond to the real order of the
+   * FM9" (a customer, an FM9 through a WIDI Master). The status read above
+   * comes in effect-id order and carries no positions, so Play and Edit
+   * draw outlineChain's guess. Through the computer the order is the
+   * grid's, column by column, top row first (ForgeFX placedBlocks over the
+   * codec's walk), and the phone keeps it.
+   *
+   * So, where it is open, the grid's live read (lib/gen3-grid, 01 2E 00:
+   * one answer of about 750 bytes) is asked ONCE for each preset and block
+   * list on a connection, after the status read, as Play's own read, and
+   * its cells taken in the order parseGridLive walks them, which is that
+   * same walk. It ORDERS the list and nothing else: no row or column is
+   * handed on, so no other screen sees a thing it did not see before.
+   *
+   * BELIEVED ONLY WHERE IT AGREES. Its blocks have to be exactly the ones
+   * the status read listed (the ids that are no block, NOT_BLOCKS, left out
+   * of both; a shunt, a bare wire, is no block of the grid's), no preset
+   * change may have come between the status read and its answer, and the
+   * unit, asked after its answer, has to say it is still on the preset the
+   * grid was read for (a footswitch step says nothing of itself). Anything
+   * else is the usual order, with a line in the log saying why: no answer, a
+   * refusal, an answer this app cannot read, other blocks, a preset change,
+   * a unit on another preset or not saying. A preset still arriving waits
+   * out the rest of ORDER_QUIET_MS first; a read that came back with nothing
+   * keeps the grid from being asked again for LATE_MS (`gridLateUntil`).
+   *
+   * REMEMBERED for the connection by preset and block list (`orderKept`), a
+   * disagreement too, so a preset seen again asks nothing, and a scene
+   * change never asks (Play reads only the status then). A block moved from
+   * the phone has its preset read again, and what that read keeps is let go
+   * of at the next preset change, when the unit drops the move
+   * (`orderEdited`). After ORDER_MISSES_MOST reads in a row brought back
+   * nothing it could use (other blocks than the status read's among them),
+   * it is not asked again on this connection.
+   *
+   * NOT PROVEN ON A UNIT: no FM3, FM9 or Axe-Fx III has answered this read
+   * down its MIDI jack through an adapter (the answers on record came over
+   * USB to a computer), and an Axe-Fx III's answer has never been seen; the
+   * phone reads it as an FM9's. The check against the status read is what
+   * keeps a wrong reading off the screen.
+   */
+  const orderKept = new Map()
+  let orderMisses = 0
+  let orderGaveUp = false
+  let orderNoPresetSaid = false
+  let orderAnswerSaid = false
+  /*
+   * Until when an order read that came back with nothing may still be
+   * answered (LATE_MS). Its answer would match the next order read's
+   * question byte for byte, and a grid read is never held for a late answer
+   * (heldFor leaves function 0x01 alone), so the next preset's read took the
+   * last one's grid for its own (an independent read, before it went out).
+   * Inside it the grid is not asked, and not waited for either: Play's tiles
+   * wait on this read. Edit's own live read of the grid opens it too
+   * (gen3LiveGrid), and `gridLateBy` says whose read it was, for the log:
+   * he reads those lines to judge the order on a unit nobody has proven it
+   * on, and one that blamed the order's read for Edit's sent him the wrong
+   * way (an independent read, 16 November 2026).
+   */
+  let gridLateUntil = -Infinity
+  let gridLateBy = 'order'
+  let orderLane = Promise.resolve()
+  const inOrderLane = (run) => {
+    const next = orderLane.then(run, run)
+    orderLane = next.then(
+      () => {},
+      () => {}
+    )
+    return next
+  }
+  /*
+   * A "WHICH PRESET?" OF THE CLOSING QUESTION'S OWN KIND ON THE LINE OR
+   * AHEAD OF A READ ASKED NOW (the one out, or one waiting at Play's read
+   * priority or above): Play's own preset read, the watch's, or a stored
+   * slot's name from the Presets list beside Play. With its answer lost it
+   * holds what is behind it a second and a half and then through its late
+   * window, so only then are the order's grid read and its closing question
+   * given ORDER_CLOSE_MS. Anything else ahead is waited for, as it always
+   * was: the player's own taps go ahead of Play's reads, a scene whose echo
+   * is lost holds the line half a second, four block taps as long, and with
+   * a deadline every time either lost the order for the visit, the log
+   * blaming "another question" for a tap (a fifth read, 16 November 2026).
+   * And once given, the deadline counts only while such a question holds
+   * the line (presetHolds, below), so taps beside one are waited for too (a
+   * sixth read).
+   *
+   * BY PRIORITY: the one on the line counts whoever asked it (the watch's
+   * poll, a save's, Edit's: it holds the line all the same). One waiting
+   * counts only at Play's read priority or above (a save's question waits
+   * at a write's place, ahead of the read); Edit's own waits behind Play's
+   * reads, so it is never ahead of this one.
+   */
+  const presetAhead = () => {
+    const fn = buildGetPreset(model)[5]
+    return current?.opts?.fn === fn || waiting.some((j) => j.opts?.fn === fn && j.priority <= PRI.read)
+  }
+  /*
+   * AT THE DEADLINE, WHETHER A "WHICH PRESET?" IS WHAT HOLDS THE LINE
+   * (`stillFor` on the order's two reads: 0 gives up, more looks again that
+   * much later). The deadline counted the whole line, and the player's taps
+   * go ahead of Play's reads: with a healthy "which preset?" in the line
+   * (Play's own, or the Presets list beside Play naming slots, which always
+   * has one out) four block taps or a scene whose answer is lost used up
+   * ORDER_CLOSE_MS before that question had even gone, and a healthy unit
+   * lost the order for the visit (a sixth read, 16 November 2026). So one
+   * on the line has ORDER_CLOSE_MS of its own wait, from when it went, and
+   * is given up on only when that has passed with no answer. Anything else
+   * on the line, or nothing on it while the line is held (a tap, a scene or
+   * tempo read, a read of any kind held for a late answer to its kind, a
+   * capture), is waited for, and the line looked at again ORDER_LOOK_MS
+   * later. (A "which preset?" held at the head for a late answer to its kind
+   * is not given up on either: the checks before both reads leave less of
+   * such a window than ORDER_CLOSE_MS, and one that goes unanswered while
+   * this waits is given up on at ORDER_CLOSE_MS, before its window opens.)
+   */
+  const presetHolds = () => (current?.opts?.fn === buildGetPreset(model)[5] ? Math.max(0, current.started + ORDER_CLOSE_MS - time.now()) : ORDER_LOOK_MS)
+  /* The ids the order is checked on, in number order: never one that is no block (NOT_BLOCKS: an Axe-Fx III lists its Preset FC, 200, and its Performance page, 201, in every status answer, and neither is on the grid). */
+  const orderIds = (ids) => ids.filter((id) => !NOT_BLOCKS.includes(id)).sort((a, b) => a - b)
+  function keepOrder(key, order) {
+    orderKept.delete(key)
+    orderKept.set(key, order)
+    while (orderKept.size > ORDERS_KEPT_MOST) orderKept.delete(orderKept.keys().next().value)
+  }
+  /* The list Play draws, put in the grid's order; anything the grid did not place keeps its place after the rest. */
+  function inGridOrder(shown, order) {
+    const rank = new Map(order.map((id, i) => [id, i]))
+    const of = (b) => (rank.has(b.effectId) ? rank.get(b.effectId) : order.length)
+    return [...shown].sort((a, b) => of(a) - of(b))
+  }
+  function orderMissed(why) {
+    say(`${why}: kept the usual order`)
+    orderMiss()
+  }
+  /* One more read in a row with nothing it could use: no answer, a refusal, one this app cannot read, or other blocks than the status read's. Only an order believed starts the count again. */
+  function orderMiss() {
+    orderMisses += 1
+    if (orderMisses >= ORDER_MISSES_MOST && !orderGaveUp) {
+      orderGaveUp = true
+      say(`the grid is not asked for the block order again on this connection: ${ORDER_MISSES_MOST} reads in a row brought back nothing it could use`)
+    }
+  }
+
+  /** The effect ids in the unit's own order for this preset's blocks, or null for the usual order. Never throws. */
+  async function gridOrder(list, shown, at) {
+    if (!orderOn() || shown.length < 2) return null
+    if (!Number.isInteger(last.preset)) {
+      if (!orderNoPresetSaid) {
+        orderNoPresetSaid = true
+        say('the block order: the unit has not said which preset it is on, so the grid is not asked and the usual order is kept')
+      }
+      return null
+    }
+    const ids = orderIds(list.map((b) => b.effectId))
+    /* The preset the grid is read for: the unit is asked after its answer, and has to be on it still. */
+    const keyPreset = last.preset
+    const key = `${keyPreset}|${ids.join(',')}`
+    if (orderKept.has(key) && presetMoves === at) return orderKept.get(key)
+    return inOrderLane(async () => {
+      if (presetMoves !== at) {
+        say('the preset changed while its blocks were being read: kept the usual order')
+        return null
+      }
+      if (orderKept.has(key)) return orderKept.get(key)
+      if (orderGaveUp) return null
+      /* A preset still arriving (ORDER_QUIET_MS): the rest of the quiet time waited out, then asked, unless another preset change came meanwhile. */
+      const stillFor = ORDER_QUIET_MS - (time.now() - presetAt)
+      if (stillFor > 0) {
+        await pause(stillFor)
+        if (presetMoves !== at) {
+          say('the grid is not asked for the block order while a preset is still arriving: the usual order this time')
+          return null
+        }
+      }
+      if (time.now() < gridLateUntil) {
+        say(gridLateBy === 'edit' ? 'Edit’s grid read may still be answered, so the grid is not asked for the block order now: the usual order this time' : 'an earlier grid read for the block order may still be answered, so the grid is not asked now: the usual order this time')
+        return null
+      }
+      /*
+       * A LATE ANSWER TO "WHICH PRESET?" MAY STILL COME (one went unanswered
+       * moments ago: Play's own preset read, the watch's, or a stored slot's
+       * name, which is the same kind of question): the question this read
+       * ends with would be held for the rest of that window (heldFor), and
+       * Play's tiles with it, up to two seconds. So the grid is not asked:
+       * the usual order this time, and no miss (an independent read, 16
+       * November 2026). Only where more of the window is left than the wait
+       * the order already takes for a preset just changed (ORDER_QUIET_MS):
+       * less than that is waited out, as that is, and the order is not lost
+       * for the rest of the visit over a moment (a second read).
+       *
+       * A QUESTION OF THAT KIND ON THE LINE OR AHEAD NOW (presetAhead: the
+       * status answer starts one waiting the moment it lands, before the
+       * order looks) holds this read behind it, a second and a half where
+       * its answer is lost, and the check after the grid's answer then threw
+       * the order away, Play's tiles having waited 1.6 to 3 s for nothing (a
+       * fifth read). So the read is given ORDER_CLOSE_MS then, counted only
+       * while such a question holds the line (presetHolds: the player's taps
+       * and anything else ahead are waited for, a sixth read), and not sent
+       * by it is the usual order this time, no miss, nothing kept, no late
+       * window opened (nothing went), asked again at the next read once that
+       * question's window has passed.
+       *
+       * Looked at again after the grid's answer, below, for a window that
+       * opened while this read waited: a save's own "which preset?", asked
+       * at a write's place in the line after the order has looked, is the
+       * one way left to that. A question put on the line WHILE the grid
+       * read is out is neither check's to see (the grid's answer starts it
+       * before the order looks): the closing question's deadline bounds it.
+       */
+      if (lateFor(buildGetPreset(model)[5]) > ORDER_QUIET_MS) {
+        say('a late answer to which preset the unit is on may still come, so the grid is not asked now: the usual order this time')
+        return null
+      }
+      const out = buildGridRead(model)
+      let got = null
+      /* Whether the read left the phone: a connection that goes while it is out is not "not sent". */
+      let went = false
+      const gridBy = presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS, stillFor: presetHolds } : {}
+      try {
+        got = await orderHand.during([out], () =>
+          ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order', {
+            ...gridBy,
+            sent: () => {
+              went = true
+            }
+          })
+        )
+      } catch (err) {
+        /* Refused at the way out (the order closed to this account before its turn came), the adapter gone, or the connection with it. Nothing the unit did, so no miss. */
+        if (went && closed && !err?.refused) say('the connection went while the grid read for the block order was out, before its answer: kept the usual order')
+        else if (err?.late) say('the grid could not be read for the block order in time (a question of which preset the unit is on was ahead of it): the usual order this time')
+        else say('the grid read for the block order was not sent: kept the usual order')
+        return null
+      }
+      if (rejected(got)) {
+        orderMissed('the unit refused the grid read for the block order')
+        return null
+      }
+      if (!got || !got.frame) {
+        gridLateUntil = time.now() + LATE_MS
+        gridLateBy = 'order'
+        orderMissed('the grid read for the block order came back with nothing')
+        return null
+      }
+      /* Its answer as it came, once a connection: what settles its layout on a unit nobody has read it from (an Axe-Fx III's never has been). */
+      if (!orderAnswerSaid) {
+        orderAnswerSaid = true
+        say(`the grid’s answer for the block order, as it came: ${toHex(got.frame)}`)
+      }
+      if (presetMoves !== at) {
+        say('the preset changed while the grid was read for the block order: kept the usual order')
+        return null
+      }
+      const live = parseGridLive(got.frame, model)
+      if (!live) {
+        orderMissed('the grid’s answer for the block order is not one this app can read')
+        return null
+      }
+      /*
+       * WHICH PRESET THE UNIT IS ON, asked before anything is compared or
+       * kept. A gen-3 unit stepped by its own footswitch says nothing, so a
+       * step while Play's read was out went unnoticed: the next preset's
+       * grid was kept as this one's order, or this one kept as not matching
+       * (an independent read, before it went out). The chain's own read ends
+       * the same way (gen3StillHere). Moved, or no clear answer: nothing
+       * kept, no miss, and a move is news, so Play reads the new preset.
+       */
+      if (lateFor(buildGetPreset(model)[5]) > ORDER_QUIET_MS) {
+        say('a late answer to which preset the unit is on may still come, so it is not asked after the grid read: the usual order this time')
+        return null
+      }
+      /*
+       * WITH A DEADLINE (ORDER_CLOSE_MS) WHERE A QUESTION OF ITS KIND IS
+       * AHEAD (presetAhead): the check above sees only a window already
+       * open. A question of its kind put on the line while the grid read was
+       * out went out the moment the grid answered, and with its answer lost
+       * this one was held behind it and then through its whole late window
+       * (an independent read, 16 November 2026). Not sent in time: the usual
+       * order, no miss, nothing kept, asked at the next read. Nothing else
+       * ahead of it is given up on: the player's own taps go first and are
+       * waited for, as they always were (a fifth read), and so are they
+       * beside a "which preset?" that answers in time, since the deadline
+       * counts only while one holds the line (presetHolds, a sixth read).
+       */
+      let here = null
+      /* Whether it left the phone: a connection that goes while it waits its turn has asked the unit nothing. */
+      let closingWent = false
+      try {
+        here = await ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', {
+          ...(presetAhead() ? { deadline: time.now() + ORDER_CLOSE_MS, stillFor: presetHolds } : {}),
+          sent: () => {
+            closingWent = true
+          }
+        })
+      } catch (err) {
+        /* The adapter gone while it was asked, or before its turn came: nothing the unit did, and not said as if it were. */
+        if (closed) {
+          say(
+            closingWent
+              ? 'the connection went while the unit was asked which preset it is on after the grid read for the block order: kept the usual order'
+              : 'the connection went before the unit could be asked which preset it is on after the grid read for the block order: kept the usual order'
+          )
+          return null
+        }
+        if (err?.late) {
+          say('the unit could not be asked which preset it is on in time after the grid read for the block order (another question was ahead of it): the usual order this time')
+          return null
+        }
+        /* The adapter would not take it, the connection still up: never sent, so not the unit keeping quiet either. */
+        say('the question of which preset the unit is on was not sent after the grid read for the block order: kept the usual order')
+        return null
+      }
+      const said = here !== null && here !== SKIPPED && !rejected(here) && Number.isInteger(here?.number)
+      if (!said) {
+        say('the unit did not say which preset it is on after the grid read for the block order: kept the usual order')
+        return null
+      }
+      notePreset(here, true)
+      if (here.number !== keyPreset) {
+        say(`the unit is not on the preset the grid was read for: kept the usual order (read for preset ${keyPreset}, the unit is on ${here.number})`)
+        return null
+      }
+      if (presetMoves !== at) {
+        say('the preset changed while the grid was read for the block order: kept the usual order')
+        return null
+      }
+      /* Its blocks, in the order it walks them, which is the computer's: column by column, top row first. A shunt (a bare wire) is no block. */
+      const cells = live.cells.filter((c) => c.effectId !== undefined)
+      const onGrid = orderIds(cells.map((c) => c.effectId))
+      if (onGrid.join(',') !== ids.join(',')) {
+        const gridOnly = onGrid.filter((id) => !ids.includes(id))
+        const statusOnly = ids.filter((id) => !onGrid.includes(id))
+        say(`the grid’s blocks don’t match the status read: kept the usual order (preset ${keyPreset}; only on the grid: ${gridOnly.join(', ') || 'none'}; only in the status read: ${statusOnly.join(', ') || 'none'})`)
+        keepOrder(key, null)
+        /* A grid that disagrees is a read with nothing usable: a unit always misread is given up on after ORDER_MISSES_MOST, like one that says nothing. */
+        orderMiss()
+        return null
+      }
+      orderMisses = 0
+      const order = cells.map((c) => c.effectId)
+      say(`block order from the unit’s grid, preset ${keyPreset}: ${cells.map((c) => `${blockNamed(c.effectId)} r${c.row + 1}c${c.col + 1}`).join(', ')}`)
+      keepOrder(key, order)
+      return order
+    })
   }
 
   /*
@@ -2551,6 +3026,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* Another preset's blocks: nothing of Edit's goes until the unit has listed them. */
     editPlaced = null
     moved()
+    presetMoved()
     await changePreset(n)
     notePreset({ number: n }, false)
     emit({ type: 'changed', scope: 'preset' })
@@ -3399,6 +3875,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   function chainChanged() {
     gridKept = null
     statusKept = null
+    /* A block moved on the grid keeps its preset's block list: Play's order is read again, and what it reads is let go of at the next preset change (presetMoved). */
+    orderKept.clear()
+    orderEdited = true
     forgetEdits()
     if (am4) structure = null
     emit({ type: 'changed', scope: 'grid' })
@@ -3412,9 +3891,39 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* The live read: its answer as it came, and what this app makes of it (null where it makes nothing). */
   async function gen3LiveGrid() {
     const out = buildGridRead(model)
+    let went = false
+    /*
+     * NOT SENT INTO ANOTHER GRID READ'S LATE WINDOW (gridLateUntil), judged
+     * when its turn comes, not when Edit asked (`unless`). It waits in line
+     * behind Play's (editWaits), and the order's read that was out when Edit
+     * asked could give up meanwhile and open the window. Judged at the ask,
+     * as it was, it then left inside the window, took the order's late
+     * answer as its own, counted as answered, and opened no window for its
+     * own answer, which the next preset's order read took (an independent
+     * read, 16 November 2026). `held`: not sent for that, nothing opened.
+     */
+    let held = false
     const got = await withFrames([out], () =>
-      ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridLive, 'where the blocks are', { priority: 'editRead' })
+      ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridLive, 'where the blocks are', {
+        priority: 'editRead',
+        unless: () => (held = time.now() < gridLateUntil),
+        sent: () => {
+          went = true
+        }
+      })
     )
+    if (held) return { frame: null, live: null, held: true }
+    /*
+     * ITS ANSWER MAY STILL COME, and it is the same question, byte for byte,
+     * as the block order's (gridOrder): a footswitch step meanwhile, and the
+     * last preset's layout was taken for the next one's order and kept for
+     * the connection (an independent read, 16 November 2026). So the order's
+     * read waits out the same late window as after one of its own.
+     */
+    if (went && (!got || got === SKIPPED)) {
+      gridLateUntil = time.now() + LATE_MS
+      gridLateBy = 'edit'
+    }
     if (!got || got === SKIPPED || rejected(got)) return { frame: null, live: null }
     return { frame: got.frame, live: parseGridLive(got.frame, model) }
   }
@@ -3495,8 +4004,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       await gen3KnownFirst()
       const at = moves
       const started = time.now()
-      const asked = liveWanted()
-      const { frame: liveFrame, live } = asked ? await gen3LiveGrid() : { frame: null, live: null }
+      /*
+       * NOT INSIDE ANOTHER GRID READ'S LATE WINDOW (gridLateUntil): the
+       * order's read of the same question, given up moments ago, may still
+       * be answered, and on the next preset that answer would be taken for
+       * this one's live grid (laid against the preset as DISAGREES, or with
+       * the live read believed, handed to Edit as this preset's layout). The
+       * preset whole is read instead: another question, which that late
+       * answer cannot be taken for (an independent read, 16 November 2026).
+       * Judged when the live read's turn comes (gen3LiveGrid `held`), not
+       * here: it waits in line behind Play's, and the window can open while
+       * it waits (a fourth read).
+       */
+      const wanted = liveWanted()
+      const { frame: liveFrame, live, held } = wanted ? await gen3LiveGrid() : { frame: null, live: null }
+      const asked = wanted && !held
+      if (held) say('an earlier grid read may still be answered, so the live grid is not asked now: read from the preset')
       if (asked) {
         liveAsks += 1
         liveSilent = liveFrame ? 0 : liveSilent + 1

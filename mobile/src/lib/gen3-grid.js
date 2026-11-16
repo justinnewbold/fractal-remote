@@ -105,11 +105,14 @@
  * numbered over 127 (a Mixer, a NAM), and where the six rows' cable bits sit
  * is not something anybody has checked.
  *
- * SO THE LIVE READ IS NOT BELIEVED YET, ANYWHERE. As the app makes the wire
- * (bleWire `liveGrid`, which nothing hands it), every grid the app acts on
- * is the dump's. The live read is taken beside it and laid against it in
- * the log (`gridProof`), so a unit's own log settles the layout, and is
- * not asked again once it has (or after two silences).
+ * SO THE LIVE READ IS NOT BELIEVED YET FOR A GRID. As the app makes the
+ * wire (bleWire `liveGrid`, which nothing hands it), every grid the app
+ * acts on is the dump's. The live read is taken beside it and laid against
+ * it in the log (`gridProof`), so a unit's own log settles the layout, and
+ * is not asked again once it has (or after two silences). The one thing
+ * taken from it is the ORDER of Play's and Edit's blocks (bleWire
+ * `gridOrder`, his account first), and only where its blocks are exactly
+ * the status read's: no position is handed on, and nothing is written.
  *
  * `gridProof` and `gridFromLive` are the rule it WOULD be believed by, kept
  * and tested for the day it is switched on: where the dump has borne it out

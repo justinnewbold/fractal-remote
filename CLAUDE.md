@@ -1801,6 +1801,211 @@ where the chain is open).
   has no positions; Edit still says so there (BLE_NO_CHAIN). The grid
   read it needs exists now.
 
+**Play's and Edit's blocks in the unit's own order over Bluetooth: built
+16 November 2026, HIS ACCOUNT ONLY.** A customer (an FM9 through a WIDI
+Master, an iPhone): "the order of the Effects doesn't correspond to the
+real order of the FM9". Over Bluetooth or the unit's USB cable the one
+block read is the status read, in effect-id order with no positions, and
+Play and Edit drew outlineChain's usual-order guess; through the computer
+they come column by column off the grid. Now, on an FM3, FM9 or Axe-Fx
+III, after Play's status read the wire asks the grid's live read (01 2E
+00) ONCE per preset and block list on a connection, and uses it to ORDER
+the list and nothing else (bleWire `gridOrder`): column by column, top row
+first, the computer's walk. No row or column is handed on, so no other
+screen sees anything new. It is believed only where its blocks are
+exactly the status read's (NOT_BLOCKS left out of both: a III lists 200
+and 201 in every status answer), no preset changed between the two reads,
+and the unit, asked after the grid's answer, says it is still on that
+preset; within `ORDER_QUIET_MS` of a preset change it waits out the rest
+of that time first (a rig that sends Program Changes back), and it is not
+asked before the unit has said which preset it is on. No answer, a
+refusal, one it cannot read or other blocks: the usual order and a line
+saying why; two reads in a row with nothing usable and it is not asked
+again that connection. A scene change
+or a preset seen again asks nothing; a chain changed from the phone is
+read again. Never an AM4 (its slots come in order) or a VP4. The way out
+lets that one frame through, byte for byte, only while the order is open
+to the account at that moment (`orderHand`, `orderOr`); the grid's writes
+and the preset whole stay the chain's. The switch is
+`BLOCK_ORDER_FROM_GRID_FOR_EVERYONE` in features.js, false (lib/bluetooth
+`blockOrderFromGrid`, handed to the wire as `blockOrder`, not behind
+Edit's door); every other account gets today's order and today's bytes,
+which a test holds. READ "block order from the unit's grid, preset n: …"
+or "the grid's blocks don't match the status read: …" FIRST in his next
+log from each unit, beside "the grid's answer for the block order, as it
+came" (once a connection). NOT PROVEN ON A UNIT: an FM3, FM9 or Axe-Fx III
+answering the live read down its MIDI jack through an adapter (every
+answer on record came over USB to a computer), how long it takes there,
+and what an Axe-Fx III's answer looks like (never captured; read as an
+FM9's, and the check against the status read is what keeps a wrong
+reading off the screen). Not known either: a block moved on the unit's
+own front panel with the same blocks in the preset keeps the old order
+until the next connection. It opens to everyone when his log shows it
+agreeing, with its line in What's new then.
+
+*What an independent read found before it went out, all fixed, each with
+a test seen to fail without its fix (16 November 2026).* A block moved
+from the phone and not saved stayed where Play drew it after the unit had
+dropped the move (another preset and back, the same one chosen again, the
+footswitch away and back): now the next preset change lets go of what was
+kept, and the stored layout is read again. A footswitch step while the
+grid was being read went unnoticed, so one preset could be drawn in the
+next one's order: the unit is now asked which preset it is on after the
+grid answers (one small read more, once a preset), and a step it finds is
+news, so Play reads the new preset. An answer that came after its read had
+given up could be taken by the next preset's read: for two seconds after a
+read comes back with nothing the grid is not asked (the usual order that
+once, Play not kept waiting). A read straight after a preset change gave
+up, and the rig's own preset read comes just before Play's, so a preset
+could stay in the usual order for good: it now waits out the rest of the
+0.4 s and asks. A grid that never agrees with the status read is given up
+on after two in a row, as the rule always said. And the log says "the
+connection went while the grid read … was out" where it used to say the
+read was not sent. THE LESSON AGAIN: a footswitch says nothing, so a read
+kept for a preset asks the unit where it is at the end, as the chain's
+read does.
+
+*And a second read, of those fixes, found two more, fixed the same way (16
+November 2026).* Edit's own live grid read is the same question, byte for
+byte, as the order's, and its answer can come after it has given up: a
+footswitch step meanwhile, and the next preset was drawn in the last one's
+order and kept for the connection. Now an Edit read that gives up opens
+the same two-second window as one of the order's (bleWire gen3LiveGrid,
+`gridLateUntil`). And a "which preset?" question that went unanswered
+(Play's own, or the watch's) held the order's closing question for the
+rest of its late window, and Play's tiles with it, up to two seconds: in
+that window the grid is not asked (the usual order that once, no miss).
+
+*And a third read, of THOSE fixes, found the rest of the same two (16
+November 2026), fixed the same way.* The window went one way only: Edit's
+own live grid read did not wait out the ORDER's late window, so on the
+next preset it could take the order's late answer for its own, which as
+the app ships says DISAGREES and turns the live read off for the
+connection, and with the live read believed would hand Edit the last
+preset's layout. Now Edit reads the preset whole inside that window (bleWire
+gen3Grid; judged when Edit asked, which the fourth read found was not
+enough, below). And the check for a missed "which preset?" ran once, before
+the grid read: a question already on the line then (Play's own, the
+watch's, or a stored slot's name from Presets beside Play) kept the grid
+read waiting behind it and went unanswered just before it left, so its
+late window was open by the time the grid answered, and the closing
+question was held again. It is looked at again before the closing
+question, and both checks skip only where more of the window is left than
+ORDER_QUIET_MS, so a moment left of it no longer loses the order for the
+whole visit. That did NOT close the hold for a question put on the line
+WHILE the grid read was out (the fourth read, below). The tests were
+tightened for Edit's window (its length, to about 90 ms, and none opened
+by a read answered in time) and for the FIRST check's skip (not a miss,
+not kept); the order's own window, the second check's skip and where the
+ORDER_QUIET_MS line falls were not held until the fourth read.
+
+*And a fourth read, of THOSE fixes, found the hold still open one exchange
+later, and the tests still looser than they said (16 November 2026), all
+fixed, each test seen to fail with its fix taken out.* A "which preset?"
+kind of question put on the line WHILE the grid read was out (the Presets
+list beside Play naming a stored slot, Play's own preset read) went out
+the moment the grid answered, before the order could look, so neither
+check saw a window; with its answer lost, the closing question waited
+behind it and then through its whole late window, and Play's tiles with
+it, about three and a half seconds. Looking for windows cannot see that
+one, so the closing question itself now has a deadline, `ORDER_CLOSE_MS`
+(ORDER_QUIET_MS and 50 ms, so a hold the checks let through goes before
+it): not sent by then, the usual order that once, no miss, nothing kept,
+the grid asked again at the next read once that question's window has
+passed, with its own line in the log. The
+cost is that a question ahead of it that is slow but does answer loses
+the order for that one read. (As built it fired on the player's own taps
+too: the fifth read, below.) Edit's live grid read is judged when its
+turn comes, not when Edit asked for it (`unless` in the send queue,
+gen3LiveGrid `held`): it waited in line behind Play, the order's
+read could give up meanwhile, and it then left inside that read's window,
+took its late answer, and left its own answer unguarded for the next
+preset's order read to take, so a preset was drawn in the last one's
+order and kept. The log says when the connection went while the closing
+question was out, or the adapter would not take it (both were said as the
+unit not answering), and a skip names
+whose read left the window open, Edit's or the order's (`gridLateBy`; it
+blamed the order's read for Edit's). The tests were then said to hold
+where the ORDER_QUIET_MS line falls at both checks (about 370 and 300 ms
+left: asked and believed; 440 left at the first: not asked; 540 left at
+the second: not closed), the second check's skip (not a miss, not kept),
+the order's own window and Edit's to within a few milliseconds of their
+end, and Edit's skip near the end of the order's window, as shipped and
+with the live read believed; and a question ahead of the closing one was
+said to cost Play's tiles ORDER_CLOSE_MS at most. The fifth read found
+three of those looser than said (the second check's line held only
+between about 300 and 540 ms, Edit's window from below only, the order's
+half of `gridLateBy` not at all) and the grid read's own wait behind such
+a question not bounded at all (below).
+
+*And a fifth read, of THOSE fixes, found the deadline given too widely and
+the hold still open one exchange EARLIER (16 November 2026), all fixed,
+each fix and each tightened test seen to fail with it taken out.* The
+closing question's deadline fired on the player's own taps too: taps go
+ahead of Play's reads, a scene whose answer is lost holds the line half a
+second and four block taps as long, so a healthy unit lost the order for
+the visit and the log blamed "another question" for the tap. Now the
+deadline is given only where a question of its own kind (a "which
+preset?", function 0x0D: Play's own, the watch's, a stored slot's name)
+is on the line, or waiting ahead at Play's read priority or above, when
+it is asked (bleWire `presetAhead`), so "(another question was ahead of
+it)" is said only then; anything else ahead is waited for, as before the
+fourth read. And the grid read itself waited behind such a question: the
+status answer starts one waiting the moment it lands, before the order
+looks, so with its answer lost the grid read waited a second and a half,
+and the check after the grid's answer then threw the order away, Play's
+tiles 1.6 to 3 s for nothing (two tests that said "does not hold Play's
+tiles" allowed two seconds). The grid read now has the same deadline on
+the same condition: dropped, it is the usual order that once with its own
+line ("the grid could not be read for the block order in time …"), no
+miss, nothing kept, and asked again once that question's window has
+passed. The cost is the one already taken: a question ahead that answers,
+but slower than ORDER_CLOSE_MS, loses the order for that read. The log
+says "the connection went before the unit could be asked" where the
+closing question never left. The one way still to the second check is a
+"which preset?" that goes ahead of the grid read AFTER the order looked:
+only a save's own question does (asked at a write's place in the line),
+and with its answer lost it holds the grid read a second and a half, and
+the closing question waits without a deadline (a fifth-read gap, left:
+his account, a save made during Play's read, its answer lost; the same as
+before the fourth read). The tests now hold a tap ahead of the grid read
+and of the closing question waited for, the grid read's drop (a question
+on the line, one still waiting its turn, a stored name, one lost from the
+Presets list beside Play), the deadline's value at both places (a question
+ahead answered about 400 ms after it went is waited for, about 480 not),
+the second check's line from both sides through a save's question (about
+380 ms left: believed; 420: not closed) and its skip twice (no miss,
+nothing kept), the order's half of `gridLateBy`, an Edit read held back
+never counted as unanswered, Edit's window from above too (to a few
+milliseconds), and two refusals of the closing question at the way out
+counted as no miss. What a lost "which preset?" ahead costs Play's tiles
+now is ORDER_CLOSE_MS at the grid read or at the closing question (at
+both only where a second one goes on the line while the grid is read),
+except behind a save's question.
+
+*And a sixth read, of THOSE fixes, found the deadline still spent on the
+player's taps (16 November 2026), fixed, each fix and test seen to fail
+with it taken out.* The deadline counted the whole line, and taps go ahead
+of every read: with a "which preset?" in the line that DOES answer (Play's
+own, or the Presets list beside Play naming slots, which always has one
+out), four block taps or a scene whose answer is lost used it up before
+that question had even gone, so a healthy unit lost the order for the
+visit, at the grid read as well as at the closing question. Now it gives
+up only on a "which preset?" on the line that has gone unanswered for
+ORDER_CLOSE_MS from when IT went (bleWire `presetHolds`, handed to the
+send queue as `stillFor`); taps, scene and tempo reads, a read held for a
+late answer to its own kind, and a "which preset?" that answers in time
+are all waited for. A drop is still the usual order that once, no miss,
+nothing kept and no late window opened. The tests now also hold the
+priority half of `presetAhead` (a save's question waiting at a write's
+place gives the deadline, the watch's on the line gives it, Edit's waiting
+behind Play's reads does not) and a dropped grid read leaving the next
+visit free to ask. Left, as the fifth read said: a save's own question
+that goes ahead AFTER the order looked gets no deadline, so with its
+answer lost Play's tiles wait about one and a half to four seconds; and a
+lost question of another kind ahead costs its own wait (about 0.7 s for a
+scene or tempo read), with the order kept.
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 

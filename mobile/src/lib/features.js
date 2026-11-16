@@ -442,6 +442,41 @@ export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
 export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
 
 /**
+ * PLAY'S AND EDIT'S BLOCKS IN THE UNIT'S OWN ORDER, OVER BLUETOOTH OR THE
+ * UNIT'S OWN USB CABLE, on an FM3, FM9 or Axe-Fx III (bleWire gridOrder).
+ *
+ * "The order of the Effects doesn't correspond to the real order of the
+ * FM9" (a customer, an FM9 through a WIDI Master, November 2026). Over
+ * Bluetooth the one block read is the status read, which lists the blocks
+ * by their number and says nothing of where they sit, so Play and Edit put
+ * them in the order chains usually run (lib/chain-outline). Through the
+ * computer they come column by column off the grid, the unit's own order.
+ *
+ * On, the phone asks the unit where its blocks are (the grid's live read,
+ * 01 2E 00: one answer of about 750 bytes, a quarter of a second) once for
+ * each preset on a connection, after the status read, and uses it for the
+ * ORDER and nothing else: column by column, top row first, the computer's
+ * own walk. Only when the blocks in it are exactly the ones the status read
+ * listed; a preset seen again, and a scene change, ask nothing. No answer, a
+ * refusal, an answer it cannot read or other blocks, and the order is the
+ * usual one, with a line in the log saying why.
+ *
+ * His account first: NO UNIT HAS ANSWERED THIS READ FROM A PHONE YET. The
+ * answers on record came over USB to a computer (FM9-Edit's own, and an
+ * FM3's), never down a MIDI jack through an adapter, and an Axe-Fx III's has
+ * never been seen. Off, it is his account only (lib/bluetooth
+ * blockOrderFromGrid): every other account's Play and Edit are in the usual
+ * order, and the read's frame is refused at the way out.
+ *
+ * It moves, adds and removes nothing, and no screen says anything new: the
+ * blocks are drawn where the unit has them, as through the computer. It
+ * opens to everyone once his own log from a unit shows the order read
+ * agreeing with the status read ("block order from the unit’s grid"), with
+ * its line in What's new then.
+ */
+export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false
+
+/**
  * QUICK BUILD AND STARTER CHAINS (shared/starter-chains.mjs,
  * components/QuickBuild, components/StarterChains): on an empty preset, the
  * blocks tapped in order go into one row and are joined from the Input to

@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2548,6 +2548,8 @@ export function openWire() {
     remember: (m) => rememberMethods(unit, m),
     /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire), and null takes it off when the one picked answers after all (heardFromIt). */
     onForeign: (name) => noteBluetooth({ answeredAs: name || null }),
+    /* Play's and Edit's blocks in the unit's own order, from its grid (bleWire gridOrder): his account's, until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE; asked at every request and every send. Not behind Edit's door: it is Play's order. */
+    blockOrder: () => blockOrderFromGrid(),
     /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
@@ -2637,3 +2639,11 @@ export const saveOverBluetooth = () => allUnits === true || SAVE_OVER_BLUETOOTH_
  * open on the unit.
  */
 export const chainOverBluetooth = () => allUnits === true || CHAIN_OVER_BLUETOOTH_FOR_EVERYONE
+
+/**
+ * Whether this account's blocks are put in the unit's own order on Play and
+ * in Edit over Bluetooth or a USB cable, from the grid's live read (bleWire
+ * gridOrder): his, by the sign-in kept on the device, until lib/features
+ * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE. For the wire alone: no screen asks.
+ */
+export const blockOrderFromGrid = () => allUnits === true || BLOCK_ORDER_FROM_GRID_FOR_EVERYONE
