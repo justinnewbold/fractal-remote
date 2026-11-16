@@ -3447,7 +3447,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (got.damaged) throw failure(`The ${b.name}’s settings came back damaged. Try again.`, 502)
     if (moves === at) editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
     const out = ed.blockParamsOf(e, got, { channel: st.channel })
-    say(`read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}`)
+    /* And where the channel was cut from: the unit's count, the values that came, how many a channel and where this one starts (gen3-edit sliceOf). A read sliced in the wrong place is a knob that "didn't take" on every channel but A, and the log could not say so. */
+    const cut = ed.sliceFor(e, got, { channel: st.channel })
+    say(
+      `read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}` +
+        `; the unit said ${got.count} values and sent ${got.values.length}, ${cut.stride} a channel, ${cut.channels} channel${cut.channels === 1 ? '' : 's'}, this one from value ${cut.base}`
+    )
     return out
   }
 

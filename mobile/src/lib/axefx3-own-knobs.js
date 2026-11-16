@@ -184,11 +184,23 @@ export const AXE3_OWN_BLOCKS = Object.freeze({
   207: ['nam', 'NAM', 'NAM', 206]
 })
 
-/** Each family: knobs as [setting, name, min, max, logarithmic, unit], switches as [setting, name, first, last, names]. */
+/*
+ * Each family: knobs as [setting, name, min, max, logarithmic, unit], switches as [setting, name, first, last, names].
+ *
+ * AND HOW MANY CHANNELS THE BLOCK HAS (`channels`), as docs/ax3-readings.md
+ * says of each: four for NAM, the IR Player and Dynamic Distortion, two for
+ * the Crossover, one set for the Vocoder and Tone Match. A read is cut into
+ * that many equal sets whatever the stride says (gen3-edit sliceOf): his III
+ * sent a NAM block's read as 108 values (four channels of 27, 16 November
+ * 2026), where the stride of 18 made six "channels", and every channel but A
+ * was read from the wrong place. The stride stays for a read that is not that
+ * many equal sets.
+ */
 export const AXE3_OWN_FAMILIES = Object.freeze({
   /* The Vocoder: 67 settings and no channels (its whole read is one set of 67). */
   VOCODER: {
     stride: 67,
+    channels: 1,
     typeId: null,
     typedKnobs: false,
     knobs: [
@@ -214,6 +226,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   /* The Crossover: 15 settings, channels A and B only (its whole read is two sets of 15). */
   CROSSOVER: {
     stride: 15,
+    channels: 2,
     typeId: null,
     typedKnobs: false,
     knobs: [
@@ -230,6 +243,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   /* Tone Match: 22 settings and no channels. */
   TONEMATCH: {
     stride: 22,
+    channels: 1,
     typeId: null,
     typedKnobs: false,
     knobs: [
@@ -246,6 +260,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   /* The IR Player: 20 settings, four channels. */
   IRPLAYER: {
     stride: 20,
+    channels: 4,
     typeId: null,
     typedKnobs: false,
     knobs: [
@@ -264,6 +279,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   /* Dynamic Distortion: 14 settings, four channels. */
   DYNADIST: {
     stride: 14,
+    channels: 4,
     typeId: null,
     typedKnobs: false,
     knobs: [
@@ -284,6 +300,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
   },
   NAM: {
     stride: 18,
+    channels: 4,
     typeId: null,
     captureId: 0,
     typedKnobs: false,

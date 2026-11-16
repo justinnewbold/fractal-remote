@@ -125,16 +125,40 @@ export function readAllCollector(model, eid) {
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
 const round3 = (v) => Math.round(v * 1000) / 1000
 
+/** A block has four channels at most (A to D); some have two, one or none. */
+export const MOST_CHANNELS = 4
+
 /*
- * Which values are the channel the block is on: ForgeFX's #channelSlice.
- * The catalog's stride, unless the unit sent a count it does not divide, and
- * then the count in four; the channel past the last one there is, the last.
+ * Which values are the channel the block is on: ForgeFX's #channelSlice,
+ * and one rule more of its own (below). In order:
+ *
+ *   - the block's own channel count, where its catalog entry says it
+ *     (`channels`: the III's own blocks, lib/axefx3-own-knobs.js), and the
+ *     unit's count is that many equal sets;
+ *   - else the catalog's stride, where it divides the unit's count into FOUR
+ *     SETS OR FEWER;
+ *   - else the count in four;
+ *   - else the stride as it is.
+ *
+ * And the channel past the last one there is, the last.
+ *
+ * THE STRIDE ONCE WON WHENEVER IT DIVIDED THE COUNT, HOWEVER MANY CHANNELS
+ * THAT MADE (16 November 2026). His Axe-Fx III sent a NAM block's read as
+ * 108 values, four channels of 27, where the catalog said 18 a channel: 18
+ * divides 108, so the app took it as six channels of 18. Channel A starts at
+ * nought either way and read right; B was read from value 18, in the middle
+ * of A, so Bass showed 8 (A's Level) and Bright Cap 10 pF, and every knob
+ * turned there "didn't take". A block never has more than four channels, so
+ * a stride that makes more is out of date, as ForgeFX's own comment says of
+ * one that does not divide at all.
  */
-export function sliceOf(stride, bulk, channel) {
+export function sliceOf(stride, bulk, channel, declared) {
   const basis = bulk.count > 0 ? bulk.count : bulk.values.length
-  const s = stride && stride > 0 && basis % stride === 0 ? stride : basis > 0 && basis % 4 === 0 ? basis / 4 : Math.max(1, stride && stride > 0 ? stride : basis)
-  const channels = Math.max(1, Math.floor(basis / s))
-  return { stride: s, channels, base: Math.min(channel, channels - 1) * s }
+  const told = Number.isInteger(declared) && declared >= 1 && declared <= MOST_CHANNELS && basis > 0 && basis % declared === 0 ? basis / declared : 0
+  const fits = stride && stride > 0 && basis % stride === 0 && basis / stride <= MOST_CHANNELS
+  const s = told || (fits ? stride : basis > 0 && basis % 4 === 0 ? basis / 4 : Math.max(1, stride && stride > 0 ? stride : basis))
+  const channels = Math.min(MOST_CHANNELS, Math.max(1, Math.floor(basis / s)))
+  return { stride: s, channels, base: Math.min(Math.max(0, channel), channels - 1) * s }
 }
 
 /*
@@ -280,7 +304,7 @@ const drawn = (page) => ({
  * @param {object} c
  * @param {number} c.model     the unit's model byte (fractal-sysex MODELS)
  * @param {object} c.blocks    effect id → [slug, family, name, palette page]
- * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; `typedKnobs: false` on a family whose knobs are only ever sent their place (ONE WAY ONLY, below); and `captureId` on a NAM block's, the setting a read finds its capture slot in (never a row: nothing here writes it)
+ * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; `channels` on a family that says how many channels it has (the III's own blocks: sliceOf); `typedKnobs: false` on a family whose knobs are only ever sent their place (ONE WAY ONLY, below); and `captureId` on a NAM block's, the setting a read finds its capture slot in (never a row: nothing here writes it)
  * @param {object} c.rosters   slug → [[value, name, maker, based on] | null]
  * @param {object} c.pages     family → the editor's trimmed pages
  */
@@ -334,11 +358,24 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
    * the block's whole read (`bulk`, {count, values}) for the channel it is on:
    * ForgeFX's blockParams, field for field.
    */
+  /**
+   * Where the channel's values are in the block's whole read, as
+   * blockParamsOf takes them (sliceOf, with the family's own channel count
+   * where it has one): {stride, channels, base}, or null for a block Edit
+   * cannot open. For the log, so a read that is sliced wrong can be seen.
+   */
+  function sliceFor(eid, bulk, { channel = 0 } = {}) {
+    const b = editBlock(eid)
+    if (!b) return null
+    const f = families[b.family]
+    return sliceOf(f.stride, bulk, Number.isInteger(channel) && channel >= 0 ? channel : 0, f.channels)
+  }
+
   function blockParamsOf(eid, bulk, { channel = 0 } = {}) {
     const b = editBlock(eid)
     if (!b) return null
     const f = families[b.family]
-    const { base } = sliceOf(f.stride, bulk, Number.isInteger(channel) && channel >= 0 ? channel : 0)
+    const { base } = sliceFor(eid, bulk, { channel })
     const at = (pid) => bulk.values[base + pid] ?? 0
     const named = f.knobs.map((k) => ({ id: k[0], name: k[1], ...shownKnob(k, at(k[0])) }))
     const enums = f.switches.map(([id, name, min, max, labels]) => {
@@ -495,5 +532,5 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     return modelHere(b, x) ? 'block model' : null
   }
 
-  return Object.freeze({ model: unitModel, editBlock, modelsOf, layoutFor, blockParamsOf, knobFrame, modelFrame, editAllowed })
+  return Object.freeze({ model: unitModel, editBlock, modelsOf, layoutFor, sliceFor, blockParamsOf, knobFrame, modelFrame, editAllowed })
 }

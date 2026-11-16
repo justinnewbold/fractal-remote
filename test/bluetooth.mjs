@@ -13971,6 +13971,92 @@ export function run(test) {
     }
   })
 
+  /*
+   * HIS III SENT A NAM BLOCK'S READ AS 108 VALUES (16 November 2026): four
+   * channels of 27, where the list says 18 a channel. 18 divides 108, and the
+   * app took that as six channels of 18, so channel B was read from value 18,
+   * in the middle of A: Bass showed 8 (A's Level, 0 dB) and Bright Cap 10 pF
+   * (A's Phase Invert, 0), the numbers in his log, and every knob turned on B
+   * or D "didn't take". Channel A starts at nought either way and read
+   * right, which is how it looked: NAM knobs worked on A and nowhere else.
+   * Each channel here is its own numbers, with nine more values past the
+   * eighteen; B's Level is A's (0 dB) and its Bright Cap 470 pF, so the old
+   * cut gives exactly what his log said.
+   */
+  const NAM_PAST = (ch) => Array.from({ length: 9 }, (_, i) => 1000 * (ch + 1) + i)
+  const NAM_B_HERE = () => NAM_B().map((v, i) => (i === 1 ? 52427 : i === 15 ? 36526 : v))
+  const NAM_D_HERE = () => NAM_A().map((v, i) => (i === 10 ? 58981 : i === 0 ? 41 : v))
+  const nam108 = () => ({
+    count: 108,
+    values: [...NAM_A(), ...NAM_PAST(0), ...NAM_B_HERE(), ...NAM_PAST(1), ...NAM_A().map((v, i) => (i === 10 ? 6553 : v)), ...NAM_PAST(2), ...NAM_D_HERE(), ...NAM_PAST(3)]
+  })
+
+  test('a NAM block read as four channels of 27 (108 values) is cut into four: B from value 27, D from 81, the capture with them; a stride that makes more than four channels is not believed', async () => {
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const own = await import('../mobile/src/lib/axefx3-own-knobs.js')
+    /* Each of the III's own blocks says how many channels it has (docs/ax3-readings.md). */
+    assert.deepEqual(Object.fromEntries(Object.entries(own.AXE3_OWN_FAMILIES).map(([f, x]) => [f, x.channels])), { VOCODER: 1, CROSSOVER: 2, TONEMATCH: 1, IRPLAYER: 4, DYNADIST: 4, NAM: 4 })
+    const bulk = nam108()
+    for (const [ch, base] of [[0, 0], [1, 27], [2, 54], [3, 81]]) {
+      assert.deepEqual(e.withNam.sliceFor(206, bulk, { channel: ch }), { stride: 27, channels: 4, base }, `channel ${ch}`)
+      assert.deepEqual(e.sliceOf(18, bulk, ch, 4), { stride: 27, channels: 4, base })
+      /* And with no channel count to go on, a stride of 18 making six "channels" is not believed either: the count in four. */
+      assert.deepEqual(e.sliceOf(18, bulk, ch), { stride: 27, channels: 4, base })
+    }
+    const read = (ch) => e.withNam.blockParamsOf(206, bulk, { channel: ch })
+    const knobs = (r) => Object.fromEntries(r.named.map((p) => [p.name, p.value + 0]))
+    assert.deepEqual(knobs(read(0)), { Level: 0, Balance: 0, 'Input Gain': 0, Bass: 5, Mid: 5, Treble: 5, Bright: 0, 'Bright Cap': 469.979 })
+    /* B: its own numbers. Never "Bass 8, Bright Cap 10". */
+    const b = read(1)
+    assert.deepEqual(knobs(b), { Level: 0, Balance: 0, 'Input Gain': 10, Bass: 2, Mid: 7, Treble: 10, Bright: -10, 'Bright Cap': 469.979 }, 'channel B was read from another place')
+    const stack = b.enums.find((s) => s.id === NAM_SWITCH)
+    assert.equal(stack.options[stack.value].label, 'PLEXI')
+    /* The capture each channel is on, from the same place as its knobs. */
+    assert.deepEqual([0, 1, 3].map((ch) => read(ch).capture), [{ slot: 0 }, { slot: 28 }, { slot: 41 }], 'a capture was read off another channel')
+    /* C from 54 and D from 81: D was read from C's place when the stride won. */
+    assert.equal(knobs(read(2)).Bass, 1)
+    assert.equal(knobs(read(3)).Bass, 9)
+    /* His unit's 72-value read of 13 November is cut at 18 as ever. */
+    for (const [ch, base] of [[0, 0], [1, 18], [2, 36], [3, 54]]) assert.deepEqual(e.withNam.sliceFor(206, namRead(), { channel: ch }), { stride: 18, channels: 4, base })
+    assert.deepEqual(e.withNam.blockParamsOf(206, namRead(), { channel: 1 }).named.map((p) => p.value), [-10, 0, 10, 2, 7, 10, -10, 10])
+
+    /* NEVER MORE THAN FOUR, whatever the stride and the count: a block has channels A to D. */
+    for (const stride of [null, 0, 1, 2, 3, 5, 7, 10, 14, 15, 18, 20, 22, 27, 67, 144, 145]) {
+      for (let count = 0; count <= 600; count += 1) {
+        for (const declared of [undefined, 1, 2, 4, 5]) {
+          const cut = e.sliceOf(stride, { count, values: [] }, 3, declared)
+          assert.ok(cut.channels >= 1 && cut.channels <= 4, `${count} values at a stride of ${stride} made ${cut.channels} channels`)
+          assert.equal(cut.base, (cut.channels - 1) * cut.stride)
+        }
+      }
+    }
+    /* The block's own count wins: a Crossover (two channels) that one day sends two sets of 20 is cut in two, where the stride does not divide and the count in four would make four of 10. */
+    assert.deepEqual(e.sliceOf(15, { count: 40, values: [] }, 1, 2), { stride: 20, channels: 2, base: 20 })
+    assert.deepEqual(e.withNam.sliceFor(142, { count: 40, values: [] }, { channel: 1 }), { stride: 20, channels: 2, base: 20 })
+    /* A channel count that does not divide the read is not used: the stride, then the count in four. */
+    assert.deepEqual(e.sliceOf(15, { count: 30, values: [] }, 1, 4), { stride: 15, channels: 2, base: 15 })
+    assert.deepEqual(e.sliceOf(67, { count: 67, values: [] }, 2, 1), { stride: 67, channels: 1, base: 0 })
+  })
+
+  test('over Bluetooth, a NAM block on channel B that sends 108 values is read and turned on B, and the log says how the read was cut', async () => {
+    const t = await onANamIII({ edit: () => true, namKnobs: () => true, settings: new Map([[206, nam108()], [207, nam108()]]) })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    /* NAM 1 is on channel B in this preset (NAM_62). */
+    const one = await ask('/preset/blocks/206/params')
+    assert.deepEqual(one.named.map((p) => p.value + 0), [0, 0, 10, 2, 7, 10, -10, 469.979])
+    assert.deepEqual(one.capture, { slot: 28 })
+    assert.ok(
+      t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel B; the unit said 108 values and sent 108, 27 a channel, 4 channels, this one from value 27$/.test(l)),
+      t.logs.join(' | ')
+    )
+    /* Bass turned to a quarter: it lands on B (value 27 + 10, as the unit keeps it) and reads back a quarter, where it once read A's Level. */
+    assert.deepEqual(await drive(t.clock, t.wire.request('/preset/blocks/206/params/10', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.25, continuous: true }) })), { ok: true })
+    assert.deepEqual(t.unit.state.edits.at(-1), { eid: 206, pid: 10, sub: 0x52, value: 0.25 })
+    assert.equal(t.unit.state.settings.get(206).values[27 + 10], Math.round(0.25 * 65534))
+    t.clock.set(t.clock.now() + 6000)
+    assert.equal((await ask('/preset/blocks/206/params')).named.find((p) => p.name === 'Bass').value, 2.5, 'the knob turned on B read back from another place')
+  })
+
   test('a NAM knob is written with the frame every gen-3 knob gets, byte for byte, and only that one; Edit’s way out passes only its read, its eight knobs and its five switches', async () => {
     const sx = await import(SX)
     const e = await import('../mobile/src/lib/axefx3-edit.js')
@@ -14174,7 +14260,7 @@ export function run(test) {
     assert.deepEqual(two.named.map((p) => [p.id, p.name, p.value + 0]), [[1, 'Level', 0], [2, 'Balance', 0], [5, 'Input Gain', 0], [10, 'Bass', 5], [11, 'Mid', 5], [12, 'Treble', 5], [14, 'Bright', 0], [15, 'Bright Cap', 469.979]])
     assert.deepEqual([two.block, two.slug, two.type], ['NAM', 'nam', null])
     assert.deepEqual(two.enums.map((s) => [s.id, s.options[s.value].label]), [[3, 'THRU'], [6, 'NORMAL'], [7, 'OFF'], [8, 'POST'], [9, 'ACTIVE'], [13, 'SUM L+R']])
-    assert.ok(t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel A$/.test(l)), t.logs.join(' | '))
+    assert.ok(t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel A; the unit said 72 values and sent 72, 18 a channel, 4 channels, this one from value 0$/.test(l)), t.logs.join(' | '))
     /* And which capture the channel is on: setting 0 as the unit holds it, a slot counted from nought (Axe-Edit's 001). It is in no list of knobs or switches; the picker in Edit reads it from here. */
     assert.deepEqual(two.capture, { slot: 0 })
     assert.ok(!two.named.some((p) => p.id === 0) && !two.enums.some((p) => p.id === 0), 'the capture came back as a knob or a switch: Edit would write it its own way')
@@ -14327,7 +14413,8 @@ export function run(test) {
       assert.equal(fam.typeId, null, `${name} has a model setting`)
       assert.deepEqual(fam.selectors, {})
       assert.equal(fam.stride, want.stride)
-      const cut = e.sliceOf(fam.stride, reads[eid], 0)
+      assert.equal(fam.channels, want.channels, `${name}: not the channels the unit has`)
+      const cut = e.sliceOf(fam.stride, reads[eid], 0, fam.channels)
       assert.deepEqual([cut.stride, cut.channels, cut.base], [want.stride, want.channels, 0], `${name}: the whole read is not cut into its channels`)
       /* Every knob, and no other: the number in the read comes out as the unit showed it. */
       assert.deepEqual(fam.knobs.map((r) => [r[0], r[1]]), want.knobs.map((r) => [r[0], r[1]]), name)
