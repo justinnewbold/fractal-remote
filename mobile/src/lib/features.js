@@ -269,8 +269,15 @@ export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
  * correctly") and, asked whether to open them now or keep them on his
  * account, said "Open them to everyone". So this is true: every account
  * whose Edit is open on an Axe-Fx III gets the NAM block's knobs (lib/bleWire
- * ownEditOf `'nam'`, axefx3-edit `namOnly`). Off, they are his account's
- * alone again.
+ * ownEditOf `'nam'`, axefx3-edit `namOnly`).
+ *
+ * SINCE 16 NOVEMBER 2026 (1.91.2) THIS SWITCH DECIDES NOTHING:
+ * OWN_KNOBS_FOR_EVERYONE, below, is on, and it gives every account the whole
+ * list, the NAM block in it (lib/bluetooth ownKnobsLevel reads it first). So
+ * turning this one off alone closes nothing. To take the NAM block's knobs
+ * back to his account, turn OWN_KNOBS_FOR_EVERYONE off as well; to leave
+ * customers the NAM block and nothing else of the list, turn only that one
+ * off.
  */
 export const NAM_KNOBS_FOR_EVERYONE = true
 
@@ -285,7 +292,9 @@ export const NAM_KNOBS_FOR_EVERYONE = true
  * list (axefx3-edit `withNam`). Only the knobs: the blocks' list settings
  * (EDIT_SETTINGS_FOR_EVERYONE) and their names through the computer
  * (OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE) are switches of their own, still
- * his. Off, they are his account's alone again.
+ * his. On, it also carries the NAM block for everybody, whatever
+ * NAM_KNOBS_FOR_EVERYONE says. Off, the five are his account's alone again,
+ * and every other account goes back to what NAM_KNOBS_FOR_EVERYONE gives.
  */
 export const OWN_KNOBS_FOR_EVERYONE = true
 

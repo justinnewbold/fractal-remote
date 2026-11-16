@@ -152,7 +152,9 @@
  *
  * Every family is sent one way only, as every gen-3 knob is (gen3-edit ONE
  * WAY ONLY). The NAM block's knobs have been turned on his unit and held (13
- * November 2026); NOTHING ELSE HERE HAS BEEN TURNED ON A UNIT.
+ * November 2026), and the other five blocks' knobs on 16 November 2026 ("I
+ * verified knobs are working correctly on the 5 AX3 blocks"; over Bluetooth
+ * or through the Pi was not said). Their switches have not been tapped.
  *
  * THE COMPUTER APP SERVES THIS SAME LIST (ForgeFX server/src/ownBlocks.ts,
  * from the pin 0488f11, 1.90.51), for a block read through the computer.

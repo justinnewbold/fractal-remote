@@ -2554,7 +2554,7 @@ export function openWire() {
     reader: () => allUnits === true,
     /* An Axe-Fx III's captures listed, sent and picked from this device (lib/nam-install), his account's alone, asked at every request. */
     captures: () => allUnits === true,
-    /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for his account, the NAM block for everyone (ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for every account since lib/features OWN_KNOBS_FOR_EVERYONE (1.91.2; ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     namKnobs: () => ownKnobsLevel(allUnits === true),
     /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
     save: () => saveOverBluetooth(),
@@ -2614,8 +2614,10 @@ export async function runCheck(step) {
  * the wire (bleWire ownEditOf) and for a block named through the computer
  * (lib/ownBlocksHere): `true` is every block in the hand-written list
  * (lib/axefx3-own-knobs), his account's until lib/features
- * OWN_KNOBS_FOR_EVERYONE; `'nam'` is the NAM block alone, every account's
- * since NAM_KNOBS_FOR_EVERYONE; false is none.
+ * OWN_KNOBS_FOR_EVERYONE, everybody's since that is on (1.91.2); `'nam'` is
+ * the NAM block alone, what every other account had from
+ * NAM_KNOBS_FOR_EVERYONE until then; false is none. OWN_KNOBS_FOR_EVERYONE
+ * is asked first, so while it is on the NAM switch is not read at all.
  */
 export const ownKnobsLevel = (admin) => (admin === true || OWN_KNOBS_FOR_EVERYONE ? true : NAM_KNOBS_FOR_EVERYONE ? 'nam' : false)
 

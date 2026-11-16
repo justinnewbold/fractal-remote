@@ -888,10 +888,14 @@ what the computer sends for the same edit, and a test holds it there.
     (1.91.2, "Yes, open the knobs for everyone now"). lib/bluetooth turns
     them into one answer (`ownKnobsLevel`), asked by the wire at each
     request and each send: `true`, the whole list (axefx3-edit `withNam`,
-    named from when NAM was alone in it), his account's and, since both
-    switches are on, everybody's; `'nam'`, the NAM block alone (`namOnly`),
-    which every other account had until 16 November 2026; false, the
-    codec's catalog as it was. Where a block is not in the account's Edit it is
+    named from when NAM was alone in it), his account's and, since
+    `OWN_KNOBS_FOR_EVERYONE` is on, everybody's; `'nam'`, the NAM block
+    alone (`namOnly`), which every other account had until 16 November
+    2026; false, the codec's catalog as it was. `OWN_KNOBS_FOR_EVERYONE`
+    is asked first, so WHILE IT IS ON THE NAM SWITCH DECIDES NOTHING:
+    turning `NAM_KNOBS_FOR_EVERYONE` off alone closes nothing, and taking
+    the NAM block's knobs back to his account means turning both off.
+    Where a block is not in the account's Edit it is
     marked `knobs: false`, Edit says "This block's knobs aren't in the app
     yet", and a read or write of Edit's at its id is refused at the way
     out (bleWire gen3Sender, `ownEditOf`). Edit's own door
