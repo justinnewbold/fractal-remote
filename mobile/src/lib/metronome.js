@@ -14,7 +14,7 @@ import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
-import { EDGE_KEY, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep } from './edgeFlash'
+import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
 import { METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
 
 /**
@@ -108,6 +108,8 @@ async function switchUnit(slug, on) {
   const said = await setUnitMetronome(slug, on)
   if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
   if (said?.ok === false || said?.simulated) return said
+  /* The unit has taken a switch, whoever asked (a press, or its arriving): what it refused before is put right, or overtaken, and is not asked again. */
+  if (untold !== null && untold.slug === slug) untold = null
   const tell = (value) =>
     logDebug(
       'metronome',
@@ -135,14 +137,38 @@ async function switchUnit(slug, on) {
   return said
 }
 
-/**
+/*
+ * WHAT THE UNIT WAS LAST ASKED FOR AND DID NOT TAKE, to ask again.
+ *
+ * The setting is kept before the unit is written, so that the device does
+ * what was asked at the press. But a unit that then refused, or could not
+ * be reached, was left as it was, and the next press of the same thing
+ * changed nothing in the setting: so nothing was written, the answer was
+ * "ok", and the words "the unit didn't take it … then try again" went away
+ * with the unit still doing what it had been told to stop. Found with the
+ * sound picked Off (16 November 2026): Off lit, the unit clicking, and a
+ * second press that sent nothing. So what was refused is remembered, for
+ * that unit, and the same pick pressed again (Off again, the same place
+ * again) is written again though the setting no longer changes.
+ *
+ * ONLY a pick, a press that names the place. The switch, and the watch's
+ * tap, ask nothing of the unit when its half does not change, and must not
+ * write it: somebody may have turned the unit's click on or off by hand
+ * since, and a press of "Tap on the watch" is no reason to turn it back.
+ * And forgotten as soon as the unit takes a switch from anywhere
+ * (switchUnit), its arriving included.
+ */
+let untold = null
+
+/*
  * Change the setting, and tell the unit if its half changed.
  *
- * Only the unit's half is written, and only when it changes: turning the
- * phone's tap on must not reach out and switch the unit's click off when
- * somebody had turned it on at the unit by hand.
+ * Only the unit's half is written, and only when it changes, or when it is
+ * what the unit last refused: turning the phone's tap on must not reach out
+ * and switch the unit's click off when somebody had turned it on at the unit
+ * by hand.
  */
-export async function setMetronome(patch, slug, here = {}) {
+async function change(patch, slug, here = {}) {
   /* Where the unit's click cannot be switched (an AM4, Bluetooth, the demo), its half never changes. */
   const can = unitClick(slug, here).can
   const before = clicks(setting, can).unit
@@ -150,16 +176,36 @@ export async function setMetronome(patch, slug, here = {}) {
   announce()
   AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
   const after = clicks(setting, can).unit
-  if (before === after) return { ok: true }
+  const again = can && untold !== null && untold.slug === slug && untold.on === after && !!patch && 'where' in patch
+  if (before === after && !again) return { ok: true }
+  untold = null
   try {
-    return (await switchUnit(slug, after)) || { ok: true }
+    const said = (await switchUnit(slug, after)) || { ok: true }
+    if (said.ok === false && !said.unsupported) untold = { slug, on: after }
+    return said
   } catch (err) {
     /* A unit (or a link: Bluetooth refuses every setting write) that has no
        click to switch is not a unit that failed to take it. */
     if (isUnsupported(err)) return { ok: false, unsupported: true }
+    untold = { slug, on: after }
     logDebug('metronome', 'could not reach the unit', String(err?.message || err))
     return { ok: false, message: String(err?.message || err) }
   }
+}
+
+/**
+ * Change the setting, and tell the unit if its half changed (`change`,
+ * above).
+ *
+ * A place picked is a sound picked: it lets go of Off (lib/edgeFlash),
+ * whoever picks it and from whichever page. Settings' own row writes the
+ * place through here for an account not offered the sound as a choice, on a
+ * device another account may have left on Off; without this the unit came
+ * back to that account clicking under a lit Off.
+ */
+export async function setMetronome(patch, slug, here = {}) {
+  if (patch && 'where' in patch) setQuiet(false)
+  return change(patch, slug, here)
 }
 
 /**
@@ -259,7 +305,49 @@ export function setEdgeFlash(on) {
   announce()
   AsyncStorage.setItem(EDGE_KEY, edgeToKeep(edge)).catch(() => {})
 }
-/** The choice, and whether whoever is signed in here is offered it: `{ offered, on }`. */
+
+/*
+ * NO SOUND, AS A CHOICE (lib/edgeFlash has the why): kept on the device, a
+ * sound until somebody picks Off, and read only for an account the choice is
+ * offered to.
+ */
+let quiet = false
+AsyncStorage.getItem(QUIET_KEY)
+  .then((raw) => {
+    quiet = quietKept(raw)
+    announce()
+  })
+  .catch(() => {})
+function setQuiet(on) {
+  if (quiet === (on === true)) return
+  quiet = on === true
+  announce()
+  AsyncStorage.setItem(QUIET_KEY, quietToKeep(quiet)).catch(() => {})
+}
+
+/**
+ * Pick the metronome's sound: Off (lib/edgeFlash SOUND_OFF) or one of the
+ * shared rule's places. The sound row in the volume pop-up and on Settings →
+ * Metronome both come through here, so the two cannot disagree.
+ *
+ * Off goes quiet FIRST, before the unit has answered: the device stops at
+ * the press. Then the place is set to the device, which is the shared rule
+ * switching the unit's own click off by the road it has always used (and
+ * asking it again, if it refused: `untold`), and the light is switched on,
+ * being all that is left. So Off is only ever kept with the place on the
+ * device. A place lets go of Off, and is written only where the unit's click
+ * can be switched; where it cannot, the place kept is left as it is.
+ */
+export async function setMetronomeSound(key, slug, here = {}) {
+  const picked = soundPicked(key, { can: unitClick(slug, here).can })
+  setQuiet(picked.quiet)
+  if (picked.edge) setEdgeFlash(true)
+  if (!picked.where) return { ok: true }
+  /* Past setMetronome, which would let go of the Off just set. */
+  return change({ where: picked.where }, slug, here)
+}
+
+/** The choices, and whether whoever is signed in here is offered them: `{ offered, on, quiet }`. `on` is the flash; `quiet` is no sound, false for an account not offered it. */
 export function useEdgeFlash() {
   const offered = edgeChoiceOn({ admin: useBluetoothAdmin(), everyone: METRONOME_FLASH_CHOICE_FOR_EVERYONE })
   const on = useSyncExternalStore(
@@ -270,7 +358,15 @@ export function useEdgeFlash() {
     () => edge,
     () => edge
   )
-  return { offered, on }
+  const silenced = useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => quiet,
+    () => quiet
+  )
+  return { offered, on, quiet: offered && silenced }
 }
 
 /*
@@ -461,15 +557,16 @@ function probeLag(player, lags, lead, asked) {
  *
  * `onBeat` is called only on a beat the edge of the screen is to light on
  * (lib/edgeFlash edgeBeat): with the choice switched off the click and the
- * tap carry on and nothing lights; with the click on the unit alone, for an
- * account offered the choice, the beat runs here in silence, no sound and no
- * tap, only for the light.
+ * tap carry on and nothing lights; with the click on the unit alone, or the
+ * sound picked Off, for an account offered the choice, the beat runs here in
+ * silence, no sound and no tap, only for the light.
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
   const { can, heard: heardOn } = useUnitCan()
-  const sound = clicks(s, can, heardOn).phone
   const choice = useEdgeFlash()
+  /* Never while it is quiet: the sound picked Off (lib/edgeFlash) is the device's too, and the light alone is left. */
+  const sound = deviceSounds({ clicks: clicks(s, can, heardOn).phone, offered: choice.offered, quiet: choice.quiet })
   const { flash, silent } = edgeBeat({ offered: choice.offered, edge: choice.on, metronomeOn: s.on, deviceClicks: sound })
   const on = sound || silent
   const beat = beatMs(bpm)

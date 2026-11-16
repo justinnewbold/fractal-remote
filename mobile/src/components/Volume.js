@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Modal, PanResponder, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
+import { Modal, PanResponder, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -8,7 +8,7 @@ import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
-import { noteEdited } from '../lib/rig'
+import { noteEdited, useRig } from '../lib/rig'
 import {
   latestWriter,
   NUDGE_SETTLE_MS,
@@ -102,23 +102,69 @@ const noOutput = (present, onError) => {
   )
 }
 
+/*
+ * WHICH PRESET, ON WHICH UNIT, the level under the slider belongs to.
+ *
+ * The Output block's id does not say: it is the same number in every preset
+ * of an FM3, FM9 or Axe-Fx III, and the same on all three. So a preset
+ * stepped to from a footswitch while the pop-up was open left the last
+ * preset's level on the slider, and a press of + still waiting to be
+ * confirmed was confirmed on the NEW preset: its level moved to the old
+ * one's, and Save lit for a change nobody made. The level is the preset's,
+ * so it is dropped and read again when the preset is another one, whatever
+ * the block's id (found by the review, 16 November 2026).
+ *
+ * What it cannot do: the app hears of a footswitch a moment after the unit
+ * has stepped, and a press confirmed inside that moment has already gone to
+ * the new preset.
+ */
+const ofSounding = (s) => `${s.deviceSlug}:${s.preset?.number}`
+
 export default function Volume({ blocks, open, onClose, onError }) {
   const output = (blocks || []).find((b) => b.slug === 'output')
   const eid = idOf(output)
+  const sounding = useRig(ofSounding)
 
   const [param, setParamState] = useState(null)
   const [value, setValue] = useState(null)
+  /*
+   * THE LEVEL, WHERE IT IS READ FROM. The state above is what is drawn; this
+   * is the level as it was last set, by a thumb, a press, a read of the unit
+   * or the unit's own answer, and it is what everything that runs later
+   * reads: where a drag starts from, what a press steps from, what the
+   * landing confirms.
+   *
+   * It is set in the same breath as the state (`show`), and by nothing else.
+   * It used to ride on the ref below, which is written again after every
+   * draw from what was drawn: and a draw's after-work can run later than the
+   * next move of a thumb (React leaves it for after a touch-move's draw). So
+   * the draw of +10 could put +10 back over the +15 the thumb had since
+   * moved to, and a thumb that came off just then had +10 confirmed on a
+   * unit already at +15, under a slider showing +15, with nothing said.
+   */
+  const level = useRef(null)
+  const show = (v) => {
+    level.current = v
+    setValue(v)
+  }
   const [dragging, setDragging] = useState(false)
   /* Measured, because the thumb's position has to be a fraction of the real
      track rather than of a number typed here. */
   const [width, setWidth] = useState(0)
-  /* And the window, for how wide the panel itself should be. */
-  const { width: width0 } = useWindowDimensions()
+  /* And the window, for how wide the panel itself should be, and how tall the metronome's part of it may be. */
+  const { width: width0, height: height0 } = useWindowDimensions()
   const insets = useSafeAreaInsets()
 
-  const live = useRef({ param: null, value: null, width: 0, eid: null })
+  /*
+   * WHAT THE POP-UP KNOWS NOW, for everything that runs later than the render
+   * it was made in: the writer, the slider's touch handler and the landing at
+   * the end of a drag. The level's own control, how wide the track is, the
+   * block, whether there is an Output block at all, and where an error is
+   * said. Never the level itself: that is `level`, above, and why.
+   */
+  const live = useRef({ param: null, width: 0, eid: null, present: false, onError: null })
   useEffect(() => {
-    live.current = { param, value, width, eid }
+    live.current = { param, width, eid, present: !!output, onError }
   })
 
   /*
@@ -156,12 +202,30 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * when the screen was drawn.
    */
   const [reading, setReading] = useState(false)
-  /* Another preset's Output block is another level: not shown as this one's
-     while this one is read. */
+  /*
+   * Another preset's Output block is another level: not shown as this one's
+   * while this one is read. And a press still waiting to be confirmed was a
+   * press on the level that has gone: its wait is dropped with it, or it
+   * fired later and "confirmed" a level on a preset it was never made on,
+   * lighting Save for a change nobody made.
+   *
+   * `turn` is counted up each time, and is how anything still going out
+   * knows the level it was sent for has gone (the landing, below). The
+   * block a wait was for is forgotten too: a block that goes and comes
+   * BACK under the same id (the chain read again while a drag was still
+   * being confirmed) is another turn, and the read of it must not be held
+   * back for a landing from before it went. It was: the slider read "—"
+   * and every press was dropped until the pop-up was closed and opened.
+   */
   useEffect(() => {
     setParamState(null)
-    setValue(null)
-  }, [eid])
+    show(null)
+    clearTimeout(settle.current.timer)
+    settle.current.timer = null
+    settle.current.again = false
+    settle.current.eid = null
+    settle.current.turn += 1
+  }, [eid, sounding])
   useEffect(() => {
     if (!open || !Number.isInteger(eid)) return undefined
     let stop = false
@@ -172,9 +236,19 @@ export default function Volume({ blocks, open, onClose, onError }) {
         if (stop) return
         const found = outputLevelParam(res?.named)
         setParamState(found)
-        /* A press still settling from before a quick close and open is newer
-           than this answer, which was asked before it landed. */
-        if (!settle.current.timer && !settle.current.landing) setValue(found ? found.value : null)
+        /*
+         * A press or a drag still landing ON THIS BLOCK from before a quick
+         * close and open is newer than this answer, which was asked before
+         * it landed. One that was landing on the block before this one is
+         * not: held back for it, the new block's level was never shown, the
+         * slider read "—" until the next open, and the next press of + went
+         * to the bottom of the range, the sound all but gone ("the next
+         * press drops the volume", found by the review, 16 November 2026:
+         * a press, then a footswitch to another unit's preset inside the
+         * same second).
+         */
+        const landing = (settle.current.timer !== null || settle.current.landing) && settle.current.eid === eid
+        if (!landing) show(found ? found.value : null)
       } catch (err) {
         if (!stop) onError?.(err.message)
       } finally {
@@ -184,7 +258,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
     return () => {
       stop = true
     }
-  }, [open, eid, onError])
+  }, [open, eid, sounding, onError])
 
   /** Where the thumb was when the finger landed, as a value. */
   const from = useRef(0)
@@ -195,26 +269,30 @@ export default function Volume({ blocks, open, onClose, onError }) {
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        from.current = live.current.value
+        from.current = level.current
         setDragging(true)
         tick()
       },
       onPanResponderMove: (_, gesture) => {
         const { param: p, width: w } = live.current
-        if (!p || !w) return
+        /* Never from a level that is not known: nothing counted from nothing is a level to send. */
+        if (!p || !w || typeof from.current !== 'number') return
         const span = p.max - p.min
         const next = clamp(from.current + (gesture.dx / w) * span, p.min, p.max)
         const rounded = Math.round(next * 100) / 100
-        setValue(rounded)
+        /* Drawn, and kept where the landing reads it: the thumb can come off before the screen has drawn this value. */
+        show(rounded)
         writer.current.send(rounded)
+        /* Save is told as the level is sent (see the press, below). */
+        noteEdited()
       },
       onPanResponderRelease: () => {
         setDragging(false)
-        land()
+        landDrag()
       },
       onPanResponderTerminate: () => {
         setDragging(false)
-        land()
+        landDrag()
       }
     })
   ).current
@@ -226,38 +304,54 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * The unit accepts a write it then ignores and says nothing about it, so the
    * one value that matters — the one you stopped on — is the one worth paying a
    * read-back for.
+   *
+   * IT READS THE BLOCK OFF THE REF, AS THE WRITER DOES. "When I tried to turn
+   * the decibels up or down, it gave me an error": No output level to move
+   * yet — the chain is still loading, with the level on screen and the chain
+   * read long before. The slider's touch handler is made once, on the first
+   * render, and the landing it calls at the end of a drag was the first
+   * render's too: from before the chain was read, holding no block for the
+   * life of the screen. So every drag moved the level (the writer reads the
+   * ref) and then said there was nothing to move, and the value the thumb
+   * came off on was never confirmed, nor Save told. Nothing in here may be
+   * read from the render: whichever render's landing is called, it is the
+   * same landing.
    */
   const land = async () => {
-    const { param: p, value: v } = live.current
+    const { param: p, eid: block, present, onError: say } = live.current
+    const v = level.current
     if (!p || typeof v !== 'number') return
-    if (!Number.isInteger(eid)) {
-      noOutput(!!output, onError)
+    if (!Number.isInteger(block)) {
+      noOutput(present, say)
       return
     }
+    const turn = settle.current.turn
     try {
       const failed = await writer.current.settled()
-      if (failed) onError?.(failed.message)
-      const res = await setParamConfirmed(eid, p.id, v, p)
+      if (failed) say?.(failed.message)
+      /* The level went while the writes were still going out (another preset, another unit's block, the chain read again): it was the old one's, and is not confirmed on what is there now. */
+      if (settle.current.turn !== turn) return
+      const res = await setParamConfirmed(block, p.id, v, p)
       /* The level is a parameter like any other, so the Save button should
          know about it — see rig.noteEdited. */
       noteEdited()
       /* A newer value arrived while this one was being checked: its own
          check follows, and a miss against a value nobody wants any more is
          not a miss. */
-      if (live.current.value !== v) return
+      if (level.current !== v) return
       if (!res.ok) {
         /* Say what the unit is holding, and show it: a slider left pointing
            at a number the unit refused is a slider lying about the volume. */
         const holding = typeof res.actual === 'number' ? res.actual : null
-        if (holding !== null) setValue(holding)
-        onError?.(
+        if (holding !== null) show(holding)
+        say?.(
           holding === null
             ? `The volume didn’t take. You asked for ${volumeLabel(v, p)}.`
             : `The volume didn’t take. You asked for ${volumeLabel(v, p)}; the unit says ${volumeLabel(holding, p)}.`
         )
       }
     } catch (err) {
-      onError?.(err.message)
+      say?.(err.message)
     }
   }
 
@@ -266,13 +360,21 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * drag; the careful read-back waits until the presses stop, and runs one
    * at a time. See NUDGE_SETTLE_MS for the evening that taught this.
    */
-  const settle = useRef({ timer: null, landing: false, again: false })
+  /*
+   * `eid` is the block the press or the drag that is landing was made on, so
+   * a read of ANOTHER block is never held back for it (the open's read,
+   * above); `turn` counts the levels this pop-up has had under it (the
+   * reset, above).
+   */
+  const settle = useRef({ timer: null, landing: false, again: false, eid: null, turn: 0 })
   useEffect(() => () => clearTimeout(settle.current.timer), [])
   const settleNow = async () => {
     if (settle.current.landing) {
       settle.current.again = true
       return
     }
+    /* A drag let go while presses were still waiting lands for them too: one landing, not theirs after it. */
+    clearTimeout(settle.current.timer)
     settle.current.timer = null
     settle.current.landing = true
     try {
@@ -285,18 +387,42 @@ export default function Volume({ blocks, open, onClose, onError }) {
       }
     }
   }
+  /*
+   * The end of a drag lands the way a burst of presses does, and is marked
+   * as landing while it does: a quick close and open during it used to show
+   * the level the unit held when the open asked, under the one the thumb
+   * had just left, and the landing then said nothing, because it only
+   * speaks for the level on screen.
+   */
+  const landDrag = () => {
+    settle.current.eid = live.current.eid
+    settleNow()
+  }
   const nudge = (direction) => {
-    const p = live.current.param
+    const { param: p, eid: block, present, onError: say } = live.current
     if (!p) return
-    if (!Number.isInteger(eid)) {
-      noOutput(!!output, onError)
+    if (!Number.isInteger(block)) {
+      noOutput(present, say)
       return
     }
-    const next = nudged(live.current.value, p, volumeNudge(p) * direction)
-    setValue(next)
-    live.current = { ...live.current, value: next }
+    /* Never from a level that is not known: the rule steps an unknown level from the bottom of its range, which is the sound all but gone. */
+    if (typeof level.current !== 'number') return
+    const next = nudged(level.current, p, volumeNudge(p) * direction)
+    show(next)
     writer.current.send(next)
+    /*
+     * SAVE IS TOLD AS THE LEVEL IS SENT, not only once it has been confirmed.
+     * It is in the unit's edit buffer from the moment it goes, and the wait
+     * to confirm it can be dropped: by another preset, and also by a preset
+     * change that did not happen. The watch's Next puts the new number up
+     * at once, and a unit that refuses it puts the old one back: the level
+     * here is dropped and read again both times, the press's wait goes with
+     * it, and the unit is left holding a level Save had never heard of.
+     * Told here, it is told for the preset the press was made on.
+     */
+    noteEdited()
     clearTimeout(settle.current.timer)
+    settle.current.eid = block
     settle.current.timer = setTimeout(settleNow, NUDGE_SETTLE_MS)
   }
 
@@ -446,7 +572,26 @@ export default function Volume({ blocks, open, onClose, onError }) {
             {/* "Make it so the metronome can be turned on and off in the volume
                 section of the app." Outside the level's own reading and no-level
                 notes: a unit with no level to move can still click. */}
-            <MetronomeSwitch />
+            {/*
+              ITS OWN SCROLLING, AND ONLY ITS OWN. The pop-up has no scroll
+              view round it, and must not: the slider above is dragged
+              sideways, and a scroll view under a drag is the fight this
+              pop-up was made to end. But the metronome's part grew a row of
+              sounds and the flash's switch, with a line under them that runs
+              to five on a narrow phone over Bluetooth, and the panel is
+              centred: too tall, and Done went off the bottom with no way to
+              reach it. So this part alone scrolls, in what the window leaves
+              once everything round it is drawn (metronomeRoom). The slider is
+              not inside it, and where it all fits nothing moves.
+            */}
+            <ScrollView
+              style={{ flexGrow: 0, maxHeight: metronomeRoom(height0, insets) }}
+              alwaysBounceVertical={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <MetronomeSwitch />
+            </ScrollView>
 
             <Press label="Done" height={TAP} tone="signal" onPress={onClose} />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, textAlign: 'center' }}>
@@ -462,6 +607,20 @@ export default function Volume({ blocks, open, onClose, onError }) {
 /* The slider's drawing: the track's thickness and the knob's size. */
 const TRACK = 6
 const KNOB = 28
+
+/*
+ * How tall the metronome's part may be: the window, less the screen's own
+ * edges, less everything drawn round it. That is the glass's padding and the
+ * panel's (space.xl each, top and bottom), the four gaps between the panel's
+ * five parts, the VOLUME row with its big number, the slider's row, Done, and
+ * the line under it. Never under the switch and one line of words, so on a
+ * window with no room at all the switch is still whole.
+ */
+const VOLUME_ROW = 44
+const CLOSE_LINE = 16
+const AROUND_METRONOME = 4 * space.xl + 4 * space.lg + VOLUME_ROW + 2 * TAP + CLOSE_LINE
+const LEAST_METRONOME = TAP + 2 * space.xl
+const metronomeRoom = (height, insets) => Math.max(LEAST_METRONOME, height - (insets?.top || 0) - (insets?.bottom || 0) - AROUND_METRONOME)
 
 /** What VoiceOver's rotor offers on the slider. */
 const ROTOR = [{ name: 'increment' }, { name: 'decrement' }]

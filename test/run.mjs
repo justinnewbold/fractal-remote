@@ -6880,6 +6880,14 @@ presetWheel(test)
 const { run: edgeFlash } = await import('./edge-flash.mjs')
 edgeFlash(test)
 
+console.log('\nthe volume pop-up, run: a drag from the launch that drew it to the thumb coming off')
+const { run: volumeDrag } = await import('./volume-drag.mjs')
+volumeDrag(test)
+
+console.log('\nthe metronome’s sound and flash in the volume pop-up, drawn and pressed, his account only')
+const { run: metronomeChoices } = await import('./metronome-choices.mjs')
+metronomeChoices(test)
+
 console.log('\nPlay’s tiles as squares on a big screen, and a phone held upright as it was')
 const { run: squarePlay } = await import('./square-play.mjs')
 squarePlay(test)

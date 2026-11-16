@@ -37,8 +37,8 @@ import MissingPick from '../components/MissingPick'
 import { playingOf } from '../lib/relay-rules'
 import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
-import { setEdgeFlash, setFlashTiming, setMetronome, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
-import { EDGE_WORDS } from '../lib/edgeFlash'
+import { setEdgeFlash, setFlashTiming, setMetronome, setMetronomeSound, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { EDGE_WORDS, SOUND_OFF, SOUND_WORDS, deviceSounds, placeNote, soundLine } from '../lib/edgeFlash'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -421,6 +421,12 @@ export default function Settings({
     const said = await setMetronome(patch, rigSlug, clickHere)
     if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')
   }
+  /* The sound, for an account offered it as a choice: Off, or a place, which lets go of Off (lib/edgeFlash). The volume pop-up's row comes through the same setMetronomeSound. */
+  const changeSound = async (key) => {
+    setClickSaid(null)
+    const said = await setMetronomeSound(key, rigSlug, clickHere)
+    if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')
+  }
   /* What the Stop the looper row last did, in words, in place of its hint. */
   const allBlocks = useRig(ofAllBlocks)
   /* A unit whose switches can be read — see the Footswitches page. */
@@ -540,7 +546,8 @@ export default function Settings({
   const flashTiming = useFlashTiming()
   /* The flash round the edge as a choice, and whether this account is offered it (lib/edgeFlash). */
   const edgeChoice = useEdgeFlash()
-  const phoneMayClick = clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone
+  /* Never with the sound picked Off: there is no click then for the flash to be moved to meet. */
+  const phoneMayClick = deviceSounds({ clicks: clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone, offered: edgeChoice.offered, quiet: edgeChoice.quiet })
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
      as however many times they were pressed. */
@@ -1859,6 +1866,23 @@ export default function Settings({
               onPress={() => changeClick({ on: !clickSetting.on })}
             />
             <Section>Where it clicks</Section>
+            {/*
+              NO SOUND, for an account offered it as a choice (lib/edgeFlash):
+              the first of the row, as it is the first in the volume pop-up.
+              Lit, nothing below it is: the place it leaves behind is the
+              device, and the device is silent. The line under it is the
+              volume pop-up's own for the same state (soundLine): what
+              picking it gives, the light alone, or, lit with the flash
+              switched off since, that nothing keeps time.
+            */}
+            {edgeChoice.offered ? (
+              <View style={{ gap: space.xs }}>
+                <Press label={SOUND_WORDS.noSound} tone="live" on={edgeChoice.quiet} onPress={() => changeSound(SOUND_OFF)} />
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {soundLine({ quiet: true, edge: edgeChoice.quiet ? edgeChoice.on : true, unit: unitCan.can, demo, noun: deviceNoun() })}
+                </Text>
+              </View>
+            ) : null}
             {/* Only Phone where the unit's click cannot be switched: Unit and Both would click nowhere.
                 It is lit then, being what clicks, and a tap on it keeps a saved Unit for when the unit can. */}
             {placesFor(unitCan.can).map((p) => (
@@ -1866,16 +1890,19 @@ export default function Settings({
                 <Press
                   label={p.label}
                   tone="live"
-                  on={placeLit(clickSetting, p.key, unitCan.can)}
-                  onPress={() => (unitCan.can ? changeClick({ where: p.key }) : null)}
+                  on={!edgeChoice.quiet && placeLit(clickSetting, p.key, unitCan.can)}
+                  onPress={() => (edgeChoice.offered ? changeSound(p.key) : unitCan.can ? changeClick({ where: p.key }) : null)}
                 />
-                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{p.note}</Text>
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {placeNote(p, { offered: edgeChoice.offered, edge: edgeChoice.on, noun: deviceNoun() })}
+                </Text>
               </View>
             ))}
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
             <Note tone="hint">
-              {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}. ${
-                unitCan.can ? 'The unit’s own click is the steadiest one to play to.' : unitCan.why
+              {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}.${
+                /* Under No sound the line there has said what is left and what to do about the unit's own click: not "so the phone keeps time" under a phone that is silent. */
+                unitCan.can ? ' The unit’s own click is the steadiest one to play to.' : edgeChoice.quiet ? '' : ` ${unitCan.why}`
               }${
                 unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
                   ? ` Until the unit says its click is on, the ${deviceNoun()} keeps time as well.`
@@ -1894,7 +1921,7 @@ export default function Settings({
                 <Section>{EDGE_WORDS.section}</Section>
                 <Press label={edgeChoice.on ? EDGE_WORDS.on : EDGE_WORDS.off} tone="live" on={edgeChoice.on} onPress={() => setEdgeFlash(!edgeChoice.on)} />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}` : ''}`}
+                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}.` : ''}`}
                 </Text>
               </>
             ) : null}

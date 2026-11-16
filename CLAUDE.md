@@ -2935,8 +2935,98 @@ beat and the device makes no sound and no tap, and opens no audio.
   he says so, with its What's new line in that pull request.
 - **The light keeps the unit's tempo, not its beat.** The unit does not
   tell the app when its beats fall, so the light and the unit's click can
-  be part of a beat apart; a press of Tap starts both together. The page
-  says so where the unit clicks. Do not promise they are locked.
+  be part of a beat apart, and NOTHING in the app lines them up. The page
+  and the volume pop-up say so where the unit clicks. Do not promise they
+  are locked, and never say a press of Tap starts them together: the words
+  said that until 16 November 2026 and it was never true. Tap works the
+  tempo out on the device and sends the unit a NUMBER (lib/tempo), so the
+  unit's beat stays where it was.
+
+  > "The metronome is not matching up properly into the sound coming out
+  > of speakers. There's a delay." (16 November 2026, the light on his
+  > account against his Axe-Fx III's own click, through the Pi)
+
+  What it would take: the unit's beat reaching the app. Over Bluetooth a
+  gen-3 unit's beat message is recognised and thrown away (bleWire
+  `isBeatPush`), and none has been seen from a real unit. Through a
+  computer the engine only counts such frames (ForgeFX registryCore's
+  persistent onFrame) and sends no beat on; that is an engine change and
+  a computer release, and the phone would also need the time between it
+  and the computer, which nothing measures. On Linux (the Pi) the engine
+  reaches an Axe-Fx III through its USB-MIDI port, the port a unit with
+  Send Realtime Sysex on would send beats down, if it sends them there.
+- **The sound is a choice of four, with Off among them: built 16 November
+  2026, HIS ACCOUNT ONLY, behind the same switch.**
+
+  > "Additionally, add a feature where you can either have sound on,
+  > sound off, or you can have it flash on the phone with sound or flash
+  > on the phone without sound on the phone only with sound playing on
+  > the phone, or on the device only playing with sound." (16 November
+  > 2026, with the volume pop-up's Metronome section on screen)
+
+  Every one of those was there but one: the flash with no click
+  ANYWHERE. With the metronome on something always made a sound. So the
+  volume pop-up, under Metronome on, has one row for the sound (Off, the
+  device, Unit, Both: only Off and the device where the unit's click
+  cannot be switched) and the flash's own switch, and Settings →
+  Metronome has No sound as the first of Where it clicks. Each of his is
+  a pair of those two.
+  - Off is kept on the DEVICE (`fractal.metronome.sound`, lib/edgeFlash
+    `QUIET_KEY`), never in shared/metronome.mjs, which is inside the
+    computer app: no new place, no computer release, and the watch is
+    told what it always was. Picking it does three things: the device is
+    held silent (`deviceSounds`), the place is set to the device, so the
+    shared rule tells the unit to stop clicking by the road it has always
+    used, and the flash is switched on, being all that is left.
+  - **Off is only ever kept with the place on the device.** Off sets the
+    place there everywhere, so it REPLACES a saved Unit, also over
+    Bluetooth or on an AM4; and any place picked lets go of Off, whoever
+    picks it and from whichever page (`setMetronome` does it for a
+    `where`; the picker goes past it through `change`). So the setting
+    never asks the unit to click under a lit Off, and nothing else has to
+    ask whether it is quiet: the unit's half is the shared rule's alone.
+    (What the unit DOES is another matter where it refused, or cannot be
+    switched: see the two points below.)
+  - Both pages go through `setMetronomeSound` (lib/metronome.js), so they
+    cannot disagree. Off is read only for an account offered the choice
+    (`useEdgeFlash().quiet`): a device handed to another account clicks.
+  - **A unit that did not take its switch is asked again** when the same
+    pick is pressed again: Off again, the same place again (`untold`,
+    lib/metronome.js, for every account). The setting is kept before the
+    unit is written, so a second press changed nothing and used to send
+    nothing: Off lit, the unit clicking, and "the unit didn't take it"
+    gone. ONLY a pick, a press that names the place: the switch and "Tap
+    on the watch" ask nothing of the unit while its half does not change,
+    and writing it from them would undo a click somebody had since
+    switched at the unit by hand (the first version of this did exactly
+    that, and the second review caught it). And it is forgotten as soon
+    as the unit takes a switch from anywhere, its arriving included.
+    A unit that refused Off and is not picked again keeps clicking under
+    a lit Off, and the words "the unit didn't take it" go at the next
+    press of anything on that page (a press of the switch included, which
+    sends nothing) or when the page is left: the retry is the player's to
+    press, on the same pick.
+  - **Where the unit's own click is out of the app's hands** (over
+    Bluetooth, on an AM4, a unit with no switch) Off silences the device
+    and nothing else, so the line says "No sound from this phone" and how
+    to switch the unit's own click off, never a bare "No sound" over a
+    click in the speakers. Not in the demo, whose unit makes none.
+  - The words are one rule for both pages (`soundLine`, `placeNote`):
+    the light is called apart from the unit's click wherever the unit
+    clicks with the edge lit, under Both as under Unit; the device is not
+    said to click "with a flash" with the flash switched off; and with no
+    sound and no flash it says nothing keeps time. Settings' hint lower
+    down leaves out why the unit is not offered while No sound is lit:
+    "so the phone keeps time" is not so under a phone that is silent.
+  - The pop-up has no scrolling round it (the slider is why), so the
+    metronome's part alone scrolls, in what the window leaves
+    (`metronomeRoom`, components/Volume): Done can always be reached. On
+    a window under 600 tall the row and the flash are not drawn there at
+    all and the pop-up is on and off only, as it is for every other
+    account. The tempo box keeps to its one switch.
+  - It opens to everyone with the flash, by the same switch.
+  - Not seen on a phone: the row's fit on a narrow screen, the heights
+    and the scrolling are worked out from the theme's numbers, not drawn.
 - **Axiom** (justinnewbold/Axiom-Fractal-Grok, which he pointed at) has
   the same three places, Phone / Pedal / Both, and a green light by Tap,
   and no flash round the screen: the edge flash is this app's own.
@@ -3428,6 +3518,73 @@ by searching for the literal conditional that opens them and takes the first
 hit — so writing that same conditional higher up the file, *including inside
 a comment*, hands the test the wrong block. Both of those have happened. Give
 the condition a name instead.
+
+**On the phone, a touch handler made once keeps the render it was made
+in.** The volume pop-up is drawn by the top bar when the app opens, before
+any chain is read, and its slider's handler (`useRef(PanResponder.create(…))
+.current`) is that first render's for the life of the screen. Whatever it
+calls at the end of a drag read the Output block from that render: nothing.
+So a drag moved the level and then said "No output level to move yet — the
+chain is still loading", with 0.0 dB on screen, and the value the thumb
+came off on was never confirmed (16 November 2026; the writer had been
+fixed for the same thing and the landing had not). Anything such a handler
+reaches reads what it needs from a ref (`live.current`), never from the
+render. Reading the file as text could not see it: every line was right,
+and what was wrong was which render's line ran. test/volume-drag.mjs runs
+the real pop-up over several renders with stand-in hooks, and its last
+check puts the fault back to prove the bench catches it. Reach for that
+shape whenever a phone component's fault is about WHEN something was made.
+
+And a ref that every draw writes again is not a safe place for what a
+thumb sets. The first fix put the dragged level on that same ref, which an
+effect rewrites after every draw from what was drawn; the draw a touch-move
+asks for leaves its effect for later, and the next move can run first. So
+the draw of +10 could put +10 back over the +15 the thumb had moved to, and
+a thumb that came off then had +10 confirmed on a unit at +15 (found by the
+review, in the React Native renderer's own code, the same day). The level
+has its own ref now (`level`, set only by `show`), and the bench has
+`render` (draw, effects left waiting) and `flush` beside `draw`, because a
+bench that runs every effect at once cannot see this at all.
+
+Two more were in the pop-up before any of this, found on the lines the fix
+touched (the second review, the same day), and both are closed:
+
+- A press of − or + waits 350 ms to be confirmed, and the read of the level
+  at each open is held back while one waits, so a quick close and open does
+  not show an older level over the press. It was held back for ANY press:
+  a press, then a preset whose Output is another block inside that second,
+  and the new block's level was never shown. The slider read "—", and the
+  next + stepped from the bottom of the range: −79 dB, the sound all but
+  gone. The wait says which block it is for now (`settle.current.eid`), a
+  block that goes takes its waiting press with it, and no press or drag is
+  ever counted from a level that is not known.
+- **The level is the preset's, not the block's.** The Output block is the
+  same id in every preset of an FM3, FM9 or Axe-Fx III, and on all three,
+  so the id never said the level under the slider was another preset's: a
+  footswitch to the next preset left the last one's level on the slider,
+  and a press still waiting was confirmed on the new preset, with Save
+  lit. The pop-up keys the level to the unit and the preset number as well
+  (`ofSounding`), drops it and reads it again when either changes, and
+  counts each change (`settle.current.turn`) so that nothing still going
+  out lands on a level that has gone, a block that went and came back
+  under the same id included. What it cannot do: the app hears of a
+  footswitch a moment after the unit has stepped, and a press confirmed
+  inside that moment has already gone to the new preset.
+- **Save is told as the level is sent**, not only once it is confirmed.
+  The key changes for a preset change that did not happen too: the
+  watch's Next puts the new number up at once and a unit that refuses it
+  puts the old one back, and a unit that stops answering for a moment
+  has no number. The level is dropped and read again each time, and a
+  press's wait goes with it; told only at the confirm, Save never heard
+  of a level the unit was left holding (the fourth read of that day).
+- A drag's landing was not marked as landing at all, so a quick close and
+  open while it was still going out showed the level the unit held when
+  the open asked, and the landing then said nothing (it only speaks for
+  the level on screen). A drag lands through the same door as a burst of
+  presses now (`landDrag`).
+
+Neither has been seen on a phone; both were run on the bench, which has a
+slow wire for the second (`unit.slow`).
 
 **Never write "this phone" into a sentence the app shows.**
 
