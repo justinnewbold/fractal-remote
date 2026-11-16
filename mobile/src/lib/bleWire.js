@@ -1092,8 +1092,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     current = job
     job.started = time.now()
-    /* What comes in while it is out, by kind: said if it goes unanswered (`cameBack`). */
-    job.came = { bytes: 0, own: 0, elsewhere: 0, parts: 0, others: 0, last: null }
+    /* What comes in while it is out, by kind: said if it goes unanswered (`cameBack`). `framed` is how many of the bytes the messages counted account for. */
+    job.came = { bytes: 0, framed: 0, own: 0, elsewhere: 0, parts: 0, short: 0, others: 0, last: null }
+    /* Whoever asked may need to know when it really left, which can be long after it was asked for (a capture slot's question waits behind Play: namSlotHead). */
+    if (typeof job.opts.sent === 'function') job.opts.sent(job.started)
     const messages = job.opts.messages ? job.out : [job.out]
     lastSent = { messages: [], at: job.started }
     for (const m of messages) {
@@ -1151,22 +1153,29 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * from another unit on the line, and the frames a long answer got before
    * it stalled are whole messages too, and each is named: said as "made no
    * whole message", an echo read as an answer cut short (found in review
-   * before it went out).
+   * before it went out). So is a short MIDI message (a Program Change when
+   * a footswitch is pressed): no part of any answer. Only bytes that none
+   * of those account for are said to have made no whole message.
    */
   function cameBack(job) {
     const c = job.came
-    if (!c || !c.bytes) return ': nothing came in meanwhile'
+    if (!c || (!c.bytes && !c.framed)) return ': nothing came in meanwhile'
     const n = (count, one, many) => `${count} ${count === 1 ? one : many}`
     const what = []
     if (c.parts) what.push(n(c.parts, 'message that was part of its answer', 'messages that were part of its answer'))
     if (c.own) what.push(n(c.own, 'copy of what was sent', 'copies of what was sent'))
     if (c.elsewhere) what.push(n(c.elsewhere, 'message not from this unit', 'messages not from this unit'))
+    if (c.short) what.push(n(c.short, 'short MIDI message', 'short MIDI messages'))
     if (c.others) {
       const last = c.last
       const sum = Array.isArray(last) && last.length >= 8 ? (checksumHeld(last) ? 'its checksum right' : 'ITS CHECKSUM WRONG') : 'too short to check'
       what.push(`${n(c.others, 'whole message that was', 'whole messages that were')} not its answer (the last ${Array.isArray(last) ? last.length : 0} bytes, function 0x${Array.isArray(last) ? (last[5] & 0xff).toString(16).padStart(2, '0') : '??'}, ${sum})`)
     }
-    return what.length ? `: ${n(c.bytes, 'byte', 'bytes')} came in meanwhile, ${what.join(', ')}` : `: ${n(c.bytes, 'byte', 'bytes')} came in meanwhile and made no whole SysEx message`
+    if (!what.length) return `: ${n(c.bytes, 'byte', 'bytes')} came in meanwhile and made no whole SysEx message`
+    /* What the messages counted do not account for: the start of one that never finished (an answer cut short), beside whatever else came. */
+    const loose = c.bytes - c.framed
+    if (loose > 0) what.push(`${n(loose, 'byte', 'bytes')} that made no whole message`)
+    return `: ${n(Math.max(c.bytes, c.framed), 'byte', 'bytes')} came in meanwhile, ${what.join(', ')}`
   }
   /* A Fractal frame's check byte is the XOR of everything before it, kept to seven bits. */
   const checksumHeld = (f) => {
@@ -1241,10 +1250,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (closed) return
     const now = time.now()
     const job = current
-    /* Each kind of message that is not the answer is counted for the question that is out (cameBack). */
+    /* Each kind of message that is not the answer is counted for the question that is out, with its bytes (cameBack). */
     const came = job && job.came ? job.came : null
+    const count = (kind) => {
+      if (!came) return
+      came[kind]++
+      came.framed += Array.isArray(f) ? f.length : 0
+    }
     if (!isFractal(f)) {
-      if (came) came.elsewhere++
+      count('elsewhere')
       return
     }
     /*
@@ -1293,7 +1307,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {
       echoes++
-      if (came) came.own++
+      count('own')
       if (echoes >= 3 && !thruTold) {
         thruTold = true
         /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
@@ -1302,7 +1316,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return
     }
     if (f[4] !== model) {
-      if (came) came.elsewhere++
+      count('elsewhere')
       if (f[4] === 0x7f) return
       foreign = { model: f[4], at: now }
       if (!am4 && f[4] === MODELS.am4) heardAnAm4()
@@ -1321,7 +1335,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         job.back = f
         heardFromIt()
         if (got !== null) return end(job, got)
-        if (came) came.parts++
+        count('parts')
         time.clearTimeout(job.timer)
         const left = (job.opts.cap ?? Infinity) - (now - job.started)
         job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
@@ -1368,7 +1382,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     /* Heard while a question was out and not its answer: counted, for the line if it goes unanswered (cameBack). */
     if (came) {
-      came.others++
+      count('others')
       came.last = f
     }
     unasked(f, now)
@@ -1553,6 +1567,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /** A short message: only Program Change means anything here. */
   function heardShort(msg) {
     if (closed || !Array.isArray(msg) || !msg.length) return
+    /* For the question that is out, if it goes unanswered (cameBack): a short message is no part of any answer, and its bytes are not an answer cut short. */
+    if (current && current.came) {
+      current.came.short++
+      current.came.framed += msg.length
+    }
     if (isEcho(msg, time.now())) return
     if ((msg[0] & 0xf0) >= 0x80 && (msg[0] & 0xf0) < 0xf0) heardAgain()
     if ((msg[0] & 0xf0) === 0xc0) {
@@ -3521,7 +3540,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * dropped.
    */
   let namQuietUntil = 0
-  /* When a slot was last asked, answered or not: what the quiet after a slot asked again is counted from (namSlotSure), and how late a stray answer is said to be (unasked). */
+  /* When a slot's question last left the phone, answered or not: what the quiet after a slot asked again is counted from (namSlotSure), and how late a stray answer is said to be (unasked). */
   let namAskedAt = 0
   /* What is left of that quiet, waited out: never longer than the longest quiet there is (a slot asked again, namSlotSure), whatever the clock does. */
   const namQuiet = async () => {
@@ -3555,8 +3574,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let namFullTo = -1
   async function namSlotHead(slot) {
     await namQuiet()
-    namAskedAt = time.now()
-    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true })
+    /*
+     * WHEN THE QUESTION LEFT THE PHONE, not when it was asked for (`sent`,
+     * told by pump as it goes). A search's question is Edit's kind of read,
+     * and after a scene or preset change those wait for Play, two seconds
+     * and more: counted from the asking, the quiet after a slot asked again
+     * ended that much before its answer's time was up, and the next slot
+     * took the answer (found in the second review, with a scene tapped in
+     * the quiet, before it went out).
+     */
+    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true, sent: (at) => (namAskedAt = at) })
     if (rejected(got)) throw failure(`The ${spec.name} would not say what is in capture slot ${namSlotSaid(slot)} (${rejectedWords(got.rejected)}). Its firmware may be older than the NAM block.`, 502)
     if (!got) {
       namQuietUntil = time.now() + LATE_MS
@@ -3586,9 +3613,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * the next slot, asked at once, would have been handed the second one,
    * and every slot after it read one late.
    *
-   * THAT QUIET IS COUNTED FROM WHEN THE SLOT WAS LAST ASKED, not from when
-   * an answer was taken: the wait and the quiet from the asking, which is
-   * how long an answer is allowed for everywhere else here. Counted from
+   * THAT QUIET IS COUNTED FROM WHEN THE SLOT'S QUESTION LAST LEFT THE
+   * PHONE (namAskedAt), not from when an answer was taken: the wait and
+   * the quiet from the asking, which is how long an answer is allowed for
+   * everywhere else here. Counted from
    * the answer (the first cut), an answer taken a tenth of a second after
    * the second asking left the next slot asked two seconds later, with the
    * second asking's own answer still allowed two and a half more: handed

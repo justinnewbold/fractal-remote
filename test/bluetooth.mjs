@@ -12755,6 +12755,56 @@ export function run(test) {
       assert.deepEqual([next.slot, next.from], [3, 3], 'the mark went past a slot that is empty')
     }
 
+    /*
+     * AND THE QUIET IS COUNTED FROM WHEN THE QUESTION LEFT, NOT FROM WHEN IT
+     * WAS ASKED FOR (found in the second review). A scene tapped in the quiet
+     * after slot 003's silence: the search's questions are Edit's kind of
+     * read and wait for Play after it, so the second asking leaves two
+     * seconds after it was asked for. The unit then answers it twice (the
+     * first asking's answer, very late, and its own, 2.3 seconds after it
+     * left: in time). Counted from the asking, the quiet ended before that
+     * second answer came, and slot 004, really empty, was handed it.
+     */
+    {
+      const { t, u, asks } = await capturesLine()
+      t.clock.set(t.clock.now() + 60000)
+      u.delays = new Map([[3, [1000]]])
+      const hear = t.unit.hear
+      const sentAt = []
+      let tapped = null
+      t.unit.hear = (b) => {
+        const slot = b[0] === 0xf0 && b[5] === 0x01 && t.sx.decode14(b[6], b[7]) === 0x88 ? t.sx.fromSeptets32(b, 12) : null
+        if (slot === null) return hear(b)
+        sentAt.push([slot, t.clock.now()])
+        if (slot !== 2) return hear(b)
+        const asking = sentAt.filter(([at]) => at === 2).length
+        if (asking === 1) {
+          /* Silent; and 4.3 seconds on, in the quiet, a scene is tapped. */
+          t.clock.setTimeout(() => {
+            t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) }).then(() => (tapped = true), (e) => (tapped = e))
+          }, 4300)
+          return undefined
+        }
+        t.clock.setTimeout(() => hear(b), 100)
+        t.clock.setTimeout(() => hear(b), 2300)
+        return undefined
+      }
+      const found = await asks('/nam/empty')
+      assert.equal(tapped, true, 'the scene tapped in the quiet was not taken')
+      const twos = sentAt.filter(([slot]) => slot === 2).map(([, at]) => at)
+      const three = sentAt.find(([slot]) => slot === 3)[1]
+      /* The second asking left well after the quiet was over: it waited for Play. */
+      assert.ok(twos[1] - twos[0] >= 2500 + LATE_MS + 1000, `the second asking left ${twos[1] - twos[0]} ms after the first: it did not wait behind the scene change, so this proves nothing`)
+      assert.ok(three - twos[1] >= 2500 + LATE_MS, `slot 004 was asked ${three - twos[1]} ms after slot 003’s second asking left the phone`)
+      assert.deepEqual([found.slot, found.heads.map((h) => [h.slot, h.empty])], [3, [[0, false], [1, false], [2, false], [3, true]]], 'an empty slot was handed the second answer to the slot before it')
+      /* And the answer nobody was waiting for is timed from when the question left, too. */
+      const stray = t.logs.find((l) => /^a capture slot’s answer came with no question waiting, \d+ ms after a slot was last asked: dropped$/.test(l))
+      assert.ok(stray, t.logs.filter((l) => /capture slot/.test(l)).join(' | '))
+      /* 2.3 seconds after the question left, give or take the moment it took to reach the unit (counted from the asking it would say four and a half). */
+      const strayMs = Number(stray.match(/, (\d+) ms after/)[1])
+      assert.ok(strayMs >= 2300 && strayMs < 2500, stray)
+    }
+
     /* THREE SILENCES: given up on, in words that are true, with nothing past it asked; and the next search starts AT that slot. */
     {
       const { t, u, nam, asks, shaped } = await capturesLine()
@@ -13038,6 +13088,48 @@ export function run(test) {
       assert.equal((await asks('/nam/empty')).slot, 3)
       const line = t.logs.find((l) => l.startsWith('no answer to capture slot 003 in 2500 ms'))
       assert.match(line, /^no answer to capture slot 003 in 2500 ms: \d+ bytes came in meanwhile, 2 messages not from this unit$/, line)
+    }
+    /*
+     * A short MIDI message (a controller moved, a Program Change from a
+     * footswitch) is no part of an answer: named, not left as bytes that
+     * "made no whole SysEx message", which reads as an answer cut short
+     * (found in the second review). And the start of a message that never
+     * finished is still said, beside whatever else came.
+     */
+    {
+      const { t, u, nam, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (hex(b) === hex(nam.namSlotQuery(0x10, 2)) && u.quietSlotTimes === 1) {
+          t.clock.setTimeout(() => {
+            t.wire.heardBytes([0xb0, 0x07, 0x64])
+            t.wire.heardShort([0xb0, 0x07, 0x64])
+          }, 500)
+        }
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: 3 bytes came in meanwhile, 1 short MIDI message'), t.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    }
+    {
+      const { t, u, nam, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (hex(b) === hex(nam.namSlotQuery(0x10, 2)) && u.quietSlotTimes === 1) {
+          t.clock.setTimeout(() => {
+            t.wire.heardBytes([0xb0, 0x07, 0x64])
+            t.wire.heardShort([0xb0, 0x07, 0x64])
+            t.wire.heardBytes([0xf0, 0x00, 0x01, 0x74, 0x10, 0x01, 0x08])
+          }, 500)
+        }
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: 10 bytes came in meanwhile, 1 short MIDI message, 7 bytes that made no whole message'), t.logs.filter((l) => /no answer/.test(l)).join(' | '))
     }
     /* A long answer that stalls after its first frame (an AM4's stored preset): the frame that came is said as part of the answer, not as no whole message. */
     {

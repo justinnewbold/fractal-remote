@@ -235,9 +235,13 @@ Since 1.90.83 (bleWire):
   ever), and when a re-asked slot answers a new quiet is begun, so that an
   answer to another asking of it, arriving late, is dropped and never
   handed to the next slot's question. That quiet runs to `WAIT.namSlot +
-  LATE_MS` (4.5 seconds) after the slot was last ASKED (`namAskedAt`), not
-  after an answer was taken: until the last asking's own answer can no
-  longer come, by the allowance every answer has here. The search uses
+  LATE_MS` (4.5 seconds) after the slot's question last LEFT THE PHONE
+  (`namAskedAt`, told by `pump` through the question's `sent` option), not
+  after an answer was taken and not after the question was asked for: a
+  search's question is Edit's kind of read, and waits for Play for two
+  seconds and more after a scene or preset change. So it runs until the
+  last asking's own answer can no longer come, by the allowance every
+  answer has here. The search uses
   it, and so does an upload's first look at its slot, which lets go of its
   hold (`captureBusy`) at each silence and takes it again at the next
   asking, so nothing is refused during a quiet. The list's read
@@ -271,12 +275,15 @@ answer to capture slot 014 in 2500 ms":
 | "…, 1 copy of what was sent" | the phone's own message come back (MIDI Thru, or a plug in the THRU jack): no answer |
 | "…, 1 message not from this unit" | another maker's device, or a message to every Fractal unit |
 | "…, 1 message that was part of its answer" | a long answer that stalled part-way (an AM4's stored preset) |
+| "…, 1 short MIDI message" | a controller, or a Program Change from a footswitch: no part of any answer |
+| "…, 7 bytes that made no whole message" (after any of the above) | the start of an answer that never finished, beside whatever else came |
 
 A timing clock's bytes are never counted. A slot's answer that arrives
 during a quiet, with no slot's question waiting, has a line of its own: "a
 capture slot’s answer came with no question waiting, N ms after a slot was
-last asked: dropped" (the answer was only late; if that is what the log
-shows, `WAIT.namSlot` is too short for that adapter).
+last asked: dropped" (N from when that question left the phone; the answer
+was only late, and if that is what the log shows, `WAIT.namSlot` is too
+short for that adapter).
 
 And one line a search: "looked for an empty capture slot from 001: 34
 answered in 9.4 s, 1 asked again; 034 is empty" (the count includes the

@@ -2458,8 +2458,10 @@ the capture on the unit, which is the hard half.
     AND AFTER THE ONE THAT ANSWERS, so an answer to an earlier asking that
     comes late is never taken for the next slot's. That second quiet runs
     until the last asking's own answer can no longer come (the wait and
-    the quiet, 4.5 seconds, counted from that asking), which is how long
-    an answer is allowed everywhere else on the wire. The same for an
+    the quiet, 4.5 seconds, counted from when that question LEFT THE
+    PHONE, `namAskedAt`, which pump tells: a search's question waits for
+    Play after a scene or preset change, two seconds and more), which is
+    how long an answer is allowed everywhere else on the wire. The same for an
     upload's first look at its slot, which lets go of its hold on the
     line during each quiet, so a tap is not refused while nothing is
     going to the unit. Three silences running and the words say so:
@@ -2499,7 +2501,10 @@ the capture on the unit, which is the hard half.
     WRONG)": an answer damaged on the way. "…1 copy of what was sent":
     the phone's own message come back (MIDI Thru), which is no answer.
     "…1 message that was part of its answer": a long answer that
-    stalled. A timing clock's bytes are not counted. A slot's answer that
+    stalled. "…1 short MIDI message": a controller or a footswitch's
+    Program Change, no part of any answer. "…7 bytes that made no whole
+    message", after any of those: the start of an answer beside them. A
+    timing clock's bytes are not counted. A slot's answer that
     comes when no slot's question is waiting is said too ("a capture
     slot’s answer came with no question waiting, 2610 ms after a slot was
     last asked: dropped": only late), and each search ends in one line
@@ -2520,7 +2525,12 @@ the capture on the unit, which is the hard half.
     stalled answer "no whole message", and counted a timing clock's
     bytes; and these notes had 96 for 93. THE LESSON AGAIN: every one of
     them was in what the fix added (the second quiet, the mark, the log
-    line), not in what it mended.
+    line), not in what it mended. AND A SECOND READ, OF THOSE FIXES, found
+    two more, fixed the same way: the second quiet was counted from when
+    the question was asked for, not from when it left (a scene tapped in
+    the quiet holds the question back two seconds, and the next slot took
+    its answer); and a footswitch's Program Change read in the log as an
+    answer cut short.
   - NOT SEEN ON HIS UNIT: a search that finishes over Bluetooth, and a
     whole send over the WIDI Uhost since (the 130 messages each need an
     answer, of ten bytes or so, where a slot's is 334; the one Bluetooth
