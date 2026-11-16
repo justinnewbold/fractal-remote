@@ -862,7 +862,11 @@ what the computer sends for the same edit, and a test holds it there.
     name on Axe-Edit's page, every bank, number and length of an impulse
     response, and Tone Match's start, match and export controls. Dynamic
     Distortion's Type is a switch, not a model. One way only for all of
-    them, and none has been turned on a unit. An FM9 has no hand-written
+    them. TURNED ON HIS AX3 AND RIGHT, 16 November 2026: "I verified knobs
+    are working correctly on the 5 AX3 blocks" (Justin; which connection
+    he used, over Bluetooth or through the Pi, was not said, and no log
+    came with it). Still his account only (`OWN_KNOBS_FOR_EVERYONE`) until
+    he says to open them. An FM9 has no hand-written
     list: there these blocks keep their on and off and no knobs.
   - *THE CODEC HAS A MINED TABLE FOR FIVE OF THE SIX, AND IT PUT TWO
     NAMES RIGHT* (found 13 November 2026). forgefx-midi's AXE3_PARAMS
@@ -909,10 +913,10 @@ what the computer sends for the same edit, and a test holds it there.
     for its place) is taken there. A NAM's knob was never sent the typed
     way, and since 16 November 2026 no gen-3 knob is (gen3-edit "ONE WAY
     ONLY", below under "What made knobs not take"). NOT TURNED YET: the NAM
-    block's six switches (Edit draws none, so there is nothing to tap),
-    and every knob of the other five blocks in the list, which is why
-    they have a switch of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and
-    did not open with the NAM block's.
+    block's six switches (Edit draws none, so there is nothing to tap).
+    The knobs of the other five blocks in the list, which have a switch
+    of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and did not open with
+    the NAM block's, were turned on his AX3 on 16 November 2026 (above).
 - **A block's list settings in Edit, under its knobs: built 13 November
   2026, HIS ACCOUNT ONLY** ("Yes, I like B for the edit screen" and "Menu
   style B", of three ways shown on a NAM block; the picture is in the
