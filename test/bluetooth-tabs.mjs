@@ -209,6 +209,42 @@ export function run(test) {
     }
   })
 
+  test('Bluetooth tabs: Troubleshooting’s resets (16 November 2026) are the reset card’s words for that adapter on that unit, name no other, and say CME’s WIDI app only under a WIDI', async () => {
+    const g = await gearFile()
+    for (const unit of UNITS) {
+      for (const { key } of g.adapterTabsFor(unit, { other: true })) {
+        for (const os of ['ios', 'android']) {
+          const noun = os === 'ios' ? 'iPad' : 'tablet'
+          const at = `${unit} ${key} ${os}`
+          const trouble = g.resetSteps({ unit, kind: key, os, noun, answered: true, where: 'trouble' })
+          /* The resets, in the card's order; no plugs among them (they are the list's own, after them) and no report (the page's button). */
+          assert.deepEqual(trouble.map((s) => s.key), ['restart', 'bluetooth', 'forget', 'reopen', 'nearby'], at)
+          const said = trouble.flatMap((s) => s.lines).join(' ')
+          for (const [other, names] of Object.entries(SAYS)) {
+            if (other !== key) assert.equal(said.match(names)?.[0] ?? null, null, `${at}: another adapter is named`)
+          }
+          if (key !== 'other') assert.match(said, SAYS[key], `${at}: its resets never say which adapter they are about`)
+          for (const u of UNITS) if (u !== unit) assert.ok(!said.includes(NAMES[u]), `${at}: says something of the ${NAMES[u]}`)
+          const widi = ['master', 'jack', 'uhost'].includes(key)
+          assert.equal(/CME’s WIDI app/.test(said), widi, `${at}: CME’s WIDI app under an adapter that is no WIDI, or not under one that is`)
+          if (!widi) assert.doesNotMatch(said, /WIDI/, `${at}: a WIDI is named under an adapter that is none`)
+          assert.doesNotMatch(said, /tried|tested|\bworks\b|this phone|your phone|\bbeta\b|\bDone\b|colour/i, at)
+          /* No Reconnect here (the card's own button): Stop, then Connect, which the page always has. */
+          assert.doesNotMatch(said, /Reconnect/, at)
+          /* FORGET IT IS A CURE, in the card's very words, and only if it is listed there. */
+          const card = g.resetSteps({ unit, kind: key, os, noun, answered: true, where: 'card' })
+          assert.equal(trouble.find((s) => s.key === 'forget').lines[0], card.find((s) => s.key === 'forget').lines[0], `${at}: Forget is worded apart from the card`)
+          assert.match(trouble.find((s) => s.key === 'forget').lines[0], os === 'ios' ? /^If .+ is listed in the iPad’s Settings → Bluetooth, tap ⓘ beside it, then Forget This Device\.$/ : /^If .+ is listed in Android’s Bluetooth settings, tap the gear beside it, then Forget/, at)
+          assert.equal(trouble.find((s) => s.key === 'restart').lines[0], card.find((s) => s.key === 'restart').lines[0], `${at}: the restart is worded apart from the card`)
+        }
+      }
+      /* The line at the top: the unit's own name, and no other's. */
+      const first = g.firstTimeLine(unit)
+      assert.ok(first.includes(`your ${NAMES[unit]}`) && UNITS.every((u) => u === unit || !first.includes(NAMES[u])), first)
+      assert.match(first, /Check its plugs first: they are further down this list\.$/)
+    }
+  })
+
   test('Bluetooth tabs: How to connect draws one adapter under the tabs, Troubleshooting that adapter’s fixes, and a tab changes nothing but what is read', async () => {
     const src = read('mobile/src/screens/Bluetooth.js')
     const page = flat(src)
@@ -219,11 +255,21 @@ export function run(test) {
 
     /* TROUBLESHOOTING: the unit's own tabs, then the adapter's, then the list. */
     assert.match(trouble, /const tabs = cableWay \|\| !b\.unit \? \[\] : adapterTabsFor\(b\.unit, \{ other: true \}\) const \[tab, setTab\] = useAdapterTab\(tabs, b\.adapter\) const own = troubleFor\(b\.unit, tab \|\| 'other', deviceNoun\(\)\)/)
-    /* The list: the adapter's light first, its plugs and Type A in their old places, its firmware among the settings, then what is true of every adapter. */
+    /*
+     * The list: a first setup sent to the plugs first, the adapter's light,
+     * Bluetooth allowed, then THE RESETS IN THE CARD'S ORDER (16 November
+     * 2026: restart, Bluetooth off and on, forget and pair again, the app
+     * closed), and only then its plugs and Type A, the unit's settings, its
+     * firmware, and what is true of every adapter. Troubleshooting cannot
+     * know whether this adapter has answered this unit, so the plugs follow
+     * the resets, with the first line for whoever has never seen it work.
+     */
     assert.match(
       trouble,
-      /: \[ own\.lit, `Check Bluetooth is on, and allowed for Fractal Remote in the \$\{deviceNoun\(\)\}’s Settings\.`, own\.plugs, own\.typeA, settings, midi, own\.before, ONE_AT_A_TIME, CLOSE_AND_REOPEN, ios \?/
+      /: \[ firstTimeLine\(b\.unit\), own\.lit, `Check Bluetooth is on, and allowed for Fractal Remote in the \$\{deviceNoun\(\)\}’s Settings\.`, fix\('restart'\), fix\('bluetooth'\), fix\('forget'\), fix\('reopen'\), own\.plugs, own\.typeA, settings, midi, own\.before, ONE_AT_A_TIME, fix\('nearby'\), ios \?/
     )
+    /* In the card's own words, for the tab's adapter, with the plugs not among them (they are the list's own, above). */
+    assert.match(trouble, /const fixes = resetSteps\(\{ unit: b\.unit, kind: tab \|\| 'other', os: Platform\.OS, noun: deviceNoun\(\), answered: true, canPair: !pairScreenShut\(\), where: 'trouble' \}\)/)
     assert.match(trouble, /ANOTHER_UNIT, fm3 \]\.filter\(Boolean\)/)
     /* Nothing of another adapter is in the list any more: the lines that named every adapter at once are gone from the page. */
     assert.ok(!/TROUBLE_LIT|swapLine|BOTH_WAYS|FIRST_TIME|PLUGS_SWAP/.test(trouble), 'Troubleshooting lists a line that is not the picked adapter’s')

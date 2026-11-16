@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native'
 import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
   adapterBackUnderNewId,
+  adapterCameBack,
   adapterDevices,
   adapterName,
   bluetoothAdmin,
@@ -18,10 +19,12 @@ import {
   refreshKeptAdapter,
   releaseAdapter,
   subscribeBluetooth,
+  unitAnswered,
   unitName
 } from './bluetooth'
 import { isCable } from './bleAdapters'
-import { getState, handleEvent, refreshAll, reset as resetRig, set as setRig, stopWatching, watchUnit, writeTuner } from './rig'
+import { notAnAdapter } from './bluetooth-gear'
+import { getState, handleEvent, refreshAll, reset as resetRig, set as setRig, stopWatching, subscribeRig, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
@@ -123,6 +126,35 @@ let askedOver = null
 /* Android said Bluetooth was off at the last try (the trouble 'bluetooth-off'): its going is the moment to try again (settingsMoved). */
 let wasOff = false
 /*
+ * NOTHING AT ALL IS COMING BACK, SAID TO THE PAGE (16 November 2026).
+ * Justin's WIDI Uhost on his FM3 was connected and carried not one byte back
+ * for fifteen minutes; what cured it was outside the app (Forget This Device
+ * in the iPhone's Settings, the adapter unplugged and plugged back in, paired
+ * again), and the page sent him to the plugs. So once this link's own first
+ * questions on a connection (the wake, its second asking, askAround) have
+ * brought back nothing at all, the page is told (lib/bluetooth nothingBack)
+ * and walks the player through the resets, watching for the unit.
+ *
+ * NEVER IN A CONNECTION'S FIRST SECONDS (NOTHING_BACK_MS): a unit still
+ * starting up says nothing for a while, and a first answer after an iPhone
+ * reconnects by itself has taken three seconds. Only where the first
+ * connection of a round has already been made afresh by itself (`afresh`),
+ * so with that, at least two connections' questions; never for a VP4, which
+ * never answers, a unit on a USB cable, or a footswitch picked as the
+ * adapter. Down when the unit answers on a connection (heardTheUnit), never
+ * on bytes that are no answer, and at a new round (endNothingBack); a drop
+ * does not take it down, since the reset's first step is the adapter
+ * switched off, nor does the same adapter back under a new id, which its
+ * steps make happen on an iPhone (adapterCameBack).
+ */
+export const NOTHING_BACK_MS = 8000
+let quietCheck = null
+let quietTimer = null
+let nothingUp = false
+/* The connection the unit picked has answered on (heardTheUnit), so it is said once a connection; and the rig's word for the unit at the last look (rigMoved). */
+let answeredOn = null
+let unitWord = null
+/*
  * Android answers a connect no this quickly with its Bluetooth off, and an
  * adapter that is merely away takes its fifteen seconds (FractalBleMidiModule.kt
  * OPEN_TIMEOUT_MS). Not only then: an adapter whose MIDI port another app
@@ -186,6 +218,7 @@ export function startBluetoothLink(set) {
   running = true
   held = false
   afresh = false
+  endNothingBack()
   delay = 0
   wasOff = false
   const s = bluetoothSettings()
@@ -194,9 +227,70 @@ export function startBluetoothLink(set) {
     onAdapter('onState', heardState),
     onAdapter('onDevices', heardDevices),
     subscribeBluetooth(settingsMoved),
-    AppState.addEventListener('change', screen)
+    AppState.addEventListener('change', screen),
+    subscribeRig(rigMoved)
   ]
   begin()
+}
+
+/* A new round: what the last one said about nothing coming back is not this one's (see NOTHING AT ALL IS COMING BACK). */
+function endNothingBack() {
+  stopQuiet()
+  if (!nothingUp) return
+  nothingUp = false
+  noteBluetooth({ nothingBack: false })
+}
+
+function stopQuiet() {
+  if (quietTimer) clearTimeout(quietTimer)
+  quietTimer = null
+  quietCheck = null
+}
+
+/* This connection's watch for nothing at all coming back: its questions done (`asked`) and its first seconds past (`waited`), both, and still not a byte. */
+function watchQuiet(made, name) {
+  stopQuiet()
+  const q = { made, name, asked: false, waited: false }
+  quietCheck = q
+  quietTimer = setTimeout(() => {
+    quietTimer = null
+    q.waited = true
+    raiseIfQuiet(q)
+  }, NOTHING_BACK_MS)
+  return q
+}
+
+function raiseIfQuiet(q) {
+  if (quietCheck !== q || !q.asked || !q.waited || wire !== q.made || !running || held || answeredOn === q.made) return
+  if (typeof q.made.bytesIn !== 'function' || q.made.bytesIn() !== 0) return
+  quietCheck = null
+  nothingUp = true
+  say(`nothing at all has come back from ${q.name} on this connection: the Bluetooth page walks through the resets, watching for the unit`)
+  noteBluetooth({ nothingBack: true })
+}
+
+/*
+ * THE UNIT ANSWERED ON THIS CONNECTION: its first questions answered, or the
+ * rig's word for it going to 'present' while it is up (a unit that finished
+ * starting up, answering the rig's own watch). Said once a connection, to
+ * lib/bluetooth unitAnswered: the record that this adapter has answered this
+ * unit, nothing coming back over, a reset card that was up told it is back.
+ * Never for a VP4, which never answers over Bluetooth.
+ */
+function heardTheUnit(made) {
+  if (!made || wire !== made || answeredOn === made || made.unit === 'vp4') return
+  answeredOn = made
+  if (quietCheck?.made === made) stopQuiet()
+  nothingUp = false
+  unitAnswered()
+}
+
+/* The rig's word for the unit moved: to 'present', on a connection that is up, from anything else, is the unit answering on it. A word still 'present' from the connection before is not. */
+function rigMoved() {
+  const word = getState().unit
+  const was = unitWord
+  unitWord = word
+  if (word === 'present' && was !== 'present' && wire) heardTheUnit(wire)
 }
 
 /*
@@ -363,6 +457,10 @@ async function connected(e) {
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
+  /* The word as this connection starts: a 'present' kept from the one before is not this one's answer (rigMoved). */
+  unitWord = getState().unit
+  /* And its watch for nothing at all coming back, not before NOTHING_BACK_MS; never for a VP4, a USB cable, or a footswitch picked as the adapter (its own line says so: shared/bluetooth-gear notAnsweringLine), which sends nothing until it is stepped on. */
+  const quiet = made.unit !== 'vp4' && !onCable() && !notAnAdapter(name) ? watchQuiet(made, name) : null
   /*
    * ONE QUESTION TO WAKE THE LINK, ITS ANSWER NOT USED. On the AM4 test the
    * first question after connecting went unanswered, and the same question a
@@ -382,6 +480,7 @@ async function connected(e) {
   const heard = () => (typeof made.bytesIn === 'function' ? made.bytesIn() : null)
   /* With how much came back, when something did: an answer the app could not read is not a silent line. */
   say(woke?.connected ? 'the first question was answered' : heard() > 0 ? `no answer to the first question (${heard()} bytes came back); asking again` : 'no answer to the first question; asking again')
+  if (woke?.connected) heardTheUnit(made)
   if (wire !== made || !running) return
   /*
    * NOT ANSWERED: asked once more here, and still nothing, the other units'
@@ -403,6 +502,7 @@ async function connected(e) {
       again = null
     }
     if (wire !== made || !running) return
+    if (again?.connected) heardTheUnit(made)
     if (!again?.connected) {
       const who = typeof made.askAround === 'function' ? await made.askAround() : null
       if (wire !== made || !running) return
@@ -413,6 +513,11 @@ async function connected(e) {
           return againAfresh(name)
         }
         say(`nothing at all came back on this connection to ${name} either`)
+        /* Its questions done, with nothing at all back: the page is told once its first seconds are past too (raiseIfQuiet). */
+        if (quiet) {
+          quiet.asked = true
+          raiseIfQuiet(quiet)
+        }
       }
     }
   }
@@ -510,6 +615,8 @@ function letGoOfWire() {
   unhear = null
   wire?.stopPolls()
   wire = null
+  /* Its watch for nothing coming back goes with it; what it already told the page stays (NOTHING AT ALL IS COMING BACK). */
+  if (quietCheck?.made === was) stopQuiet()
   closeWire()
   /* Asked once it is closed: whether it left the AM4 on its own tuner, its 0 not sent. */
   if (was?.unitTunerOwed?.()) unitTunerOwed = true
@@ -607,11 +714,16 @@ function againAfresh(name) {
 }
 
 /**
- * CONNECT AGAIN, by hand: the Bluetooth page's button, and the one in Play's
- * Bluetooth note, while the adapter is connected and the unit says nothing.
- * Exactly what Turn off Bluetooth and then Connect did for him on 7 November
- * 2026, in one tap: a fresh connection to the same adapter. True when it
- * started one.
+ * CONNECT AGAIN, by hand: the Bluetooth page's button, the reset card's
+ * Reconnect while the adapter is connected, and the one in Play's Bluetooth
+ * note, while the adapter is connected and the unit says nothing. On Android
+ * exactly what Turn off Bluetooth and then Connect did for him on 7 November
+ * 2026, in one tap: a fresh connection to the same adapter. ON AN IPHONE IT
+ * IS NOT ONE (16 November 2026): the Bluetooth link is iOS's, and letting go
+ * and connecting only unhook and hook the app's own MIDI port on it
+ * (FractalBleMidiModule.swift), so there it asks the unit again over the same
+ * link, and its line says so (shared/bluetooth-gear connectAgainSub). True
+ * when it started one.
  */
 export function connectBluetoothAgain() {
   if (!running || held || letting || !wire) return false
@@ -700,9 +812,18 @@ function settingsMoved(s) {
   if (unit === seen.unit && adapter === seen.adapter) return
   const unitMoved = unit !== seen.unit
   const adapterMoved = adapter !== seen.adapter
+  /*
+   * THE SAME ADAPTER BACK UNDER A NEW ID (lib/bluetooth adapterCameBack): on
+   * an iPhone the reset card's own steps do that (restarted, forgotten and
+   * paired again), so it is the same round of nothing coming back, and the
+   * card stays on its step until the unit answers, or does not.
+   */
+  const cameBack = !unitMoved && adapterMoved && adapterCameBack(seen.adapter, adapter)
   seen = { unit, adapter }
-  /* Another unit or adapter is a new round: one connection made afresh by itself is owed to it again. */
+  /* Another unit or adapter is a new round: one connection made afresh by itself is owed to it again, and nothing coming back was the last one's. */
   afresh = false
+  if (cameBack) stopQuiet()
+  else endNothingBack()
   const name = s.connectedTo
   attempt++
   clearTimer()
@@ -717,7 +838,7 @@ function settingsMoved(s) {
     }
     if (!running) return
     if (adapterMoved) {
-      say(adapter ? (isCable(s.adapter) ? 'a unit on a USB cable was chosen' : 'a different adapter was chosen') : 'the adapter was forgotten')
+      say(adapter ? (isCable(s.adapter) ? 'a unit on a USB cable was chosen' : cameBack ? 'the same adapter is back under a new id' : 'a different adapter was chosen') : 'the adapter was forgotten')
       if (touched) releaseAdapter()
       held = false
       delay = 0
@@ -785,6 +906,7 @@ export function holdBluetooth() {
   if (!running || held) return
   held = true
   afresh = false
+  endNothingBack()
   attempt++
   clearTimer()
   stopWatching()
@@ -803,6 +925,7 @@ export function stopBluetoothLink() {
   running = false
   attempt++
   clearTimer()
+  endNothingBack()
   for (const off of offs.splice(0)) {
     try {
       off?.remove ? off.remove() : off?.()

@@ -126,7 +126,8 @@ export function run(test) {
     assert.match(page, /export function BluetoothTrouble\(\{ onReport = null, way = null \}\)/)
     assert.match(page, /const cableWay = way === 'cable' \|\| \(way !== 'adapter' && cable\) (?:\/\*[^*]*\*\/ )?const tabs = cableWay \|\| !b\.unit \? \[\] : adapterTabsFor\(b\.unit, \{ other: true \}\) const \[tab, setTab\] = useAdapterTab\(tabs, b\.adapter\)/)
     /* The cable's list is its own: no adapter tabs over it (15 November 2026), and the adapter's lines only on the other branch. */
-    assert.match(page, /const own = troubleFor\(b\.unit, tab \|\| 'other', deviceNoun\(\)\) const steps = cableWay \?/)
+    /* With the reset steps for the tab's adapter between them since 16 November 2026 (shared/bluetooth-gear resetSteps), on the adapter's branch only. */
+    assert.match(page, /const own = troubleFor\(b\.unit, tab \|\| 'other', deviceNoun\(\)\) const fixes = resetSteps\(\{[^}]*\}\) const fix = \(key\) => fixes\.find\(\(s\) => s\.key === key\)\?\.lines\.join\(' '\) \|\| null const steps = cableWay \? \[\.\.\.cableSteps\(deviceNoun\(\), \{ jacks \}\)/)
   })
 
   test('the shared fixes are short: no step past forty words, and the browser draws the same ones', async () => {

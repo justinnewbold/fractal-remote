@@ -3914,10 +3914,12 @@ what the page offered:
 On an iPhone "connected" means CoreMIDI took the port, and "sent" that it
 took the bytes: neither says a byte left the phone or reached a unit. When
 a report shows 0 bytes, ask which adapter is on the unit before anything
-else.
+else, then whether this adapter has ever answered this unit (below: a stuck
+link looks exactly like swapped plugs).
 
-**And with ONE adapter, zero bytes is the plugs: a customer's report of 14
-November 2026** (an Axe-Fx III, an iPhone on iOS 27.3, a WIDI Master, the
+**With ONE adapter, zero bytes was read as the plugs: a customer's report of
+14 November 2026. Not proven, and since 16 November (below) known not to be
+the only reading** (an Axe-Fx III, an iPhone on iOS 27.3, a WIDI Master, the
 app at 1.90.69 on store copy 1.90.0, a first setup: one adapter listed, the
 same one every time). Connected, and "nothing at all has come back (0
 bytes)" through four runs and twenty minutes of Connect again, Use a
@@ -3949,6 +3951,114 @@ adapter for a few seconds, then forget it in the iPhone's Bluetooth
 settings and connect again from the app). If the customer writes back that
 both plugs were in, the next thing to ask for is a log after doing exactly
 that, and whether Axe-Edit reaches the unit over USB at the same time.
+
+**Zero bytes is ALSO a stuck link, and then the plugs are the wrong first
+step: Justin's FM3, 16 November 2026.** His WIDI Uhost with a CME U2MIDI Pro
+on the FM3's MIDI jacks, an iPhone on iOS 27.2.1: Connected, and not one
+byte back from 17:07 to 17:22, through about a dozen of the app's
+reconnects, a full restart of the app (new MIDI ports), three drops and
+returns, and a brand-new connection made in Apple's screen. What cured it:
+Forget This Device in the iPhone's Settings → Bluetooth, the Uhost
+unplugged and plugged back in, paired again; the FM3 answered 42 ms after
+that connection, on the same CoreMIDI ids and the same code. The plugs were
+never touched. It had hit two paying customers too.
+
+> "Most people aren't stupid and don't have them plugged in backwards ...
+> your number one thing is to make sure they're plugged in correctly with
+> MIDI out and MIDI in, and that's not the problem." And: "if we need to
+> build something in the app to disconnect it automatically or to pull up
+> the Apple thing to un-pair and re-pair, whatever we have to do, we need to
+> get this fixed."
+
+- **KNOWN.** The fault was below the app. On an iPhone the Bluetooth link is
+  iOS's: Connect again and the link's own "let go and connect again" only
+  unhook and hook the app's MIDI port on it (FractalBleMidiModule.swift
+  connect and disconnect), never the link (on Android they do drop it, the
+  7 November cure). No app can forget an iPhone's pairing or open Settings →
+  Bluetooth (App Review 2.5.1). And zero bytes is what swapped plugs, a WIDI
+  Master's small plug left out, and a stuck link all look like; only a plug
+  in THRU brings bytes back.
+- **NOT KNOWN.** Which half of his cure mattered: he forgot the pairing and
+  unplugged the Uhost at once. A Uhost hung after its move from the Axe-Fx
+  III fits as well as a stale pairing. Whether the 17:18 drops were him
+  unplugging it, whether the MacBook still had the FM3 on USB, the Uhost's
+  firmware, and whether other WIDIs, the iPad or the Mac had hold of it. So
+  the 14 November customer's case may have been either.
+- **WHAT THE APP DOES NOW (an update, no build).** bleLink tells the page
+  (lib/bluetooth `nothingBack`) once its own first questions on a connection
+  brought back not one byte, past the connection's first eight seconds
+  (`NOTHING_BACK_MS`), on a connection after the round's first was made
+  afresh; never for a VP4 or a USB cable; down when the unit answers on a
+  connection, never on bytes that are no answer, not at a drop (the reset's
+  first step), and at a new round. The Bluetooth page then draws the reset
+  card (screens/Bluetooth `ResetCard`, words in shared/bluetooth-gear
+  `resetSteps`), one step at a time with Still nothing: restart the adapter
+  by what powers it (`restartWords`: a Uhost's USB power; a WIDI Master's or
+  MD-BT01's plugs, which are its power, each back in its own jack, never
+  "unplug its power"), Bluetooth off and on in Settings, Forget This Device
+  and pair again (only "if it is listed there"; never where Apple's screen
+  is kept shut), close the app, other gear nearby (CME's WIDI app only under
+  a WIDI), the plugs, and a report whose first line says the steps done. Its
+  place is kept on the phone (closing the app is a step), and the log says
+  which step it was on when the unit answered: over a few cases that tells
+  the pairing from the adapter. Play's note leads with "Nothing is coming
+  back from WIDI Uhost, so the app can't hear the FM3." and Fix it step by
+  step. Troubleshooting has the same resets in the same words before the
+  plugs. Connect again's line on an iPhone says it asks the unit again over
+  the same link.
+- **WHAT AN INDEPENDENT READ FOUND, FIXED BEFORE IT WENT OUT (16 November
+  2026, 23 findings, each with a test seen to fail without its fix).** THE
+  CARD VANISHED ON THE RESETS THAT WORK: on an iPhone the same adapter comes
+  back from a restart or a fresh pairing under new CoreMIDI ids, the link
+  took that for a new round and dropped nothingBack, and the page fell back
+  to the plugs advice this card replaces; "answering again" was never said.
+  Now lib/bluetooth decides ONCE, in chooseAdapter, whether an adapter is
+  the same one back (an iPhone, the same name, its old id no longer
+  connected, not kept for another unit), and bleLink asks it
+  (`adapterCameBack`) and keeps nothingBack up; the answered record and the
+  card's place carry WHEREVER it is chosen again (Reconnect through Apple's
+  screen, Stop then Connect: forgetAdapter remembers what it forgot). A
+  footswitch connected as the adapter never gets nothingBack or Fix it step
+  by step. "The FM3 is answering again." lives 8 s (`RESET_BACK_MS`, a
+  timer in lib, whichever screen is up). A place saved on Close the app
+  comes back on the next step. The words never claim an adapter "hasn't
+  answered before" (nothing is seeded, so that was false for every
+  customer): "First time with the WIDI Uhost on your FM3? Check its plugs
+  first."
+  A SECOND READ, OF THOSE FIXES, found six more, fixed the same way: a
+  place left on Close the app and never finished logged "the app was opened
+  again" at every launch for good (a place past `RESET_KEEP_MS` now goes
+  from the phone, and the step after Close the app is saved, not only
+  held); a Connect tapped on the page before the card came up still sent
+  the page to Play the moment a reset worked, so "answering again" was
+  never seen (the card disarms that jump; a Connect after it arms it
+  again); and four tests that did not yet hold what they named (the card
+  with no Reconnect yet, the moved place written to the phone, `forgot`
+  being one unit's and gone at the next choice, and the same name in other
+  capitals). A THIRD READ, of those, found the disarm undone on Android by
+  the page's own Turn on Bluetooth, drawn over the card on its Turn
+  Bluetooth off and on step: it armed the jump again, so the page still
+  left for Play the moment that step worked. It does not arm while the card
+  is up now. THE LESSON AGAIN: the fixes were read, and that read found
+  the next faults.
+- **THE PLUGS BY WHAT IS KNOWN, never dropped on bytes alone.** lib/bluetooth
+  keeps, per unit and adapter, the day the adapter last answered that unit
+  (`adapterHeard`, under its own key `fractal.bluetooth.heard`: keptAdapter
+  keeps four fields and drops anything more), and notes an adapter taken
+  from another unit's keeping as just moved until it answers there. The
+  card puts the plugs last only where this adapter has answered this unit;
+  first, inside the restart, where it never has (every customer today:
+  nothing is seeded); and one plug line beside the restart where it was just
+  moved, its cables plugged in again. Troubleshooting cannot know, so it
+  says "First time with this adapter on your FM3, or just moved it here?
+  Check its plugs first" at the top.
+- **ANOTHER UNIT'S ADAPTER IS OFFERED, NEVER TAKEN.** At a Connect for a unit
+  with no adapter of its own, with another unit's the only one here, the
+  page offers "Use WIDI Uhost for your FM3? It was your Axe-Fx III's." under
+  Connect (lib/bluetooth `offer`, `takeOffered`), one tap that moves it. The
+  7 November rule stands (bleAdapters pickAdapter): it cost him ninety
+  seconds and three trips through Apple's screen that day, but taking it
+  silently is how the AM4's WIDI Jack once went to the FM3.
 
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by

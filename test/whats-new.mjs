@@ -98,6 +98,24 @@ export function run(test) {
     }
   })
 
+  test('two fixes folded into one line each keep their own place: the empty-preset fix of 16 November 2026 is never under “Metronome:”', () => {
+    /*
+     * To keep the day at six lines (the reset card's line came in), the
+     * metronome's fix and the empty-preset fix were joined, and the joined
+     * line opened "Metronome:", so a fix to presets over Bluetooth read as
+     * the metronome's. Both are still said, each by its own place.
+     */
+    const day = JSON.parse(read('shared/whats-new.json')).days.find((d) => d.date === '2026-11-16')
+    assert.ok(day, 'the 16 November 2026 day is gone')
+    const texts = day.lines.map((l) => (typeof l === 'string' ? l : l.text))
+    const preset = texts.find((t) => /a preset with no blocks in it no longer says the unit did not answer in time/.test(t))
+    const metronome = texts.find((t) => /tapping the same choice again after your unit didn’t take a change now really asks the unit again/.test(t))
+    assert.ok(preset, 'the empty-preset fix is no longer said')
+    assert.ok(metronome, 'the metronome’s fix is no longer said')
+    assert.doesNotMatch(preset, /^Metronome:/, 'the empty-preset fix is under the metronome’s heading')
+    if (preset === metronome) assert.match(preset, /^Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, .+ And in the metronome, tapping/, 'the folded line does not say each fix by its own place')
+  })
+
   test('a line may promise editing over Bluetooth only from the store version that opens it, on the units that version opens, and never on a VP4', () => {
     /*
      * The list reaches every copy by update, the 1.89.3 and 1.89.36 copies

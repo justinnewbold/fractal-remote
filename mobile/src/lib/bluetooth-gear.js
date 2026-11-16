@@ -1246,6 +1246,13 @@ export const tunerQuietLine = (unit) =>
  * nothing at all comes back, which is exactly that log. So its line names
  * its own two plugs. (What that rig really was is not known; this is the
  * reading that fits a first setup with one adapter.)
+ *
+ * AND NOT WHERE NOTHING AT ALL COMES BACK, past a connection's first
+ * questions (16 November 2026): zero bytes is a stuck link as much as the
+ * plugs, and there the page and Play say nothingBackLine, below, with the
+ * reset steps, which put the plugs where what is known of the adapter puts
+ * them. This line stays for bytes that are no answer (an echo through THRU)
+ * and before the link has asked enough to know.
  */
 export const isWidiMaster = (adapter) => /widi\s*master/i.test(String(adapter || ''))
 export function notAnsweringLine(unit, adapter = null) {
@@ -1373,6 +1380,233 @@ export const SWITCH_TO_SUB = (adapter, answered) => `Uses the ${adapterSaid(adap
  */
 export const CONNECT_AGAIN = 'Connect again'
 export const CONNECT_AGAIN_SUB = 'A fresh connection to the adapter'
+/*
+ * BUT NOT ON AN IPHONE (16 November 2026). On Android, letting go of the
+ * adapter closes Android's own Bluetooth link to it, and the next connect is
+ * a new one: that was the 7 November cure. On an iPhone or iPad the
+ * Bluetooth link is iOS's own. The app's let go and connect only unhook and
+ * hook its own MIDI port on the link iOS keeps (FractalBleMidiModule.swift,
+ * connect and disconnect), so the tap asks the unit again over the same
+ * link, and its line says that and promises nothing more.
+ */
+export const CONNECT_AGAIN_SUB_IOS = 'Asks the unit again, over the same Bluetooth link'
+export const connectAgainSub = (os) => (os === 'ios' ? CONNECT_AGAIN_SUB_IOS : CONNECT_AGAIN_SUB)
+
+/*
+ * NOTHING AT ALL IS COMING BACK, AND THE STEPS THAT GET IT BACK (16 November
+ * 2026).
+ *
+ * Justin's WIDI Uhost, with a CME U2MIDI Pro on his FM3's MIDI jacks, from an
+ * iPhone: the page said Connected, and not one byte came back through a dozen
+ * Connect agains, a restart of the app, and a fresh connection made in
+ * Apple's screen. What cured it was Forget This Device in the iPhone's
+ * Settings → Bluetooth, the adapter unplugged and plugged back in, and paired
+ * again: the FM3 answered at once. "Most people aren't stupid and don't have
+ * them plugged in backwards ... your number one thing is to make sure they're
+ * plugged in correctly with MIDI out and MIDI in, and that's not the
+ * problem." And: "if we need to build something in the app to disconnect it
+ * automatically or to pull up the Apple thing to un-pair and re-pair,
+ * whatever we have to do, we need to get this fixed." It had hit two paying
+ * customers too.
+ *
+ * No app can forget an iPhone's pairing, or open its Settings → Bluetooth
+ * (App Review 2.5.1). So the page walks the player through the resets that
+ * work, one at a time, cheapest first, while the app watches for the unit to
+ * answer (screens/Bluetooth ResetCard, drawn while lib/bluetooth's
+ * `nothingBack` is up: bleLink raises it once its own first questions on a
+ * connection have brought back nothing at all, and never in a connection's
+ * first seconds). The same steps, in the same words, are on Troubleshooting
+ * (resetSteps with `where: 'trouble'`). Which of the two halves of his cure
+ * mattered, the pairing forgotten or the adapter unplugged, the log cannot
+ * say: he did both at once. So both are steps, the cheaper first, and the
+ * log says which step it was on when the unit answered.
+ *
+ * ZERO BYTES IS ALSO WHAT SWAPPED PLUGS LOOK LIKE: the phone's messages go
+ * into the unit's MIDI OUT, and nothing reaches the adapter's input. So the
+ * plugs come last only where this adapter is known to have answered this
+ * unit (`answered`: lib/bluetooth keeps that, per unit and adapter); first,
+ * inside the restart, where it never has; and one plug line beside the
+ * restart where it was just moved from another unit (`movedFrom`), whose
+ * cables were plugged in again.
+ *
+ * AND THE RESTART BY WHAT POWERS THE ADAPTER (adapterKind): a Uhost has its
+ * own USB power; a WIDI Master and a Yamaha MD-BT01 take theirs from the
+ * unit's MIDI OUT, so for them "unplug its power" is pulling its plugs out,
+ * and each goes back in the jack it came out of; a WIDI Jack can be either.
+ * CME's WIDI app is named only under a WIDI adapter.
+ */
+export const nothingBackLine = (unit, adapter) => `Nothing is coming back from ${adapterSaid(adapter) || 'the adapter'}, so the app can’t hear the ${UNITS[unit] || 'unit'}.`
+
+/** Over the card's steps: the two cheap checks first (the unit on and started, the adapter the one on it is the button beside the card), then how the card works. */
+export const resetIntro = (unit) => {
+  const name = UNITS[unit] || 'unit'
+  return `Check the ${name} is on and has finished starting up. Then try these one at a time. The app watches, and tells you the moment the ${name} answers.`
+}
+export const resetBack = (unit) => `The ${UNITS[unit] || 'unit'} is answering again.`
+export const RESET_STILL = 'Still nothing'
+export const RESET_STILL_SUB = 'Shows the next step'
+export const RESET_RECONNECT = 'Reconnect'
+export const OPEN_BLUETOOTH_SETTINGS = 'Open Bluetooth settings'
+/* Play's note, beside Turn off Bluetooth, in the same state: it opens the Bluetooth page, where the card is. */
+export const FIX_STEP_BY_STEP = 'Fix it step by step'
+
+/* The steps by name, in the order the card shows them: the log says them by these keys, and a report by these titles. */
+export const RESET_TITLES = Object.freeze({
+  restart: 'Restart the adapter',
+  bluetooth: 'Turn Bluetooth off and on',
+  forget: 'Forget it and pair it again',
+  reopen: 'Close the app and open it again',
+  nearby: 'Switch off other Bluetooth gear nearby',
+  plugs: 'Check the plugs',
+  report: 'Send us a report'
+})
+
+/**
+ * HOW THIS ADAPTER IS RESTARTED, by what powers it: `long`, the step itself,
+ * and `short`, the same inside another sentence. `it` is the adapter as the
+ * sentence names it ("the WIDI Uhost").
+ */
+export function restartWords(unit, kind, it = 'the adapter') {
+  const name = UNITS[unit] || 'unit'
+  if (kind === 'uhost') return { long: `Unplug ${it}’s USB power, wait 10 seconds, and plug it back in.`, short: `unplug ${it}’s USB power and plug it back in` }
+  if (kind === 'master' || kind === 'mdbt01') {
+    return {
+      long: `Pull ${it}’s two plugs out of the ${name}, wait 10 seconds, and push each one back into the jack it came out of.`,
+      short: 'pull its two plugs out and push each one back into the jack it came out of'
+    }
+  }
+  if (kind === 'jack') {
+    return {
+      long: `Pull ${it}’s two cables out of the ${name}, and unplug its charger if it has one. Wait 10 seconds, then plug each one back where it came out.`,
+      /* The charger too, as in the step itself: a Jack on a charger with only its cables pulled stays on, and is never restarted. */
+      short: 'pull its cables out and unplug its charger if it has one, then plug each one back where it came out'
+    }
+  }
+  return {
+    long: `Switch the adapter off for 10 seconds: unplug its power, or pull its plugs out of the ${name} if that is where its power comes from. Then plug everything back in the same way.`,
+    short: 'switch it off and on again the same way'
+  }
+}
+
+/** The unit's MIDI Thru, where it has the setting: not the Axe-Fx III, whose THRU is a jack (its plug lines say so), nor a VP4, which is only sent to. */
+const thruLine = (unit) => (unit === 'axefx3' || unit === 'vp4' || !UNITS[unit] ? null : thruOff(UNITS[unit]))
+
+/**
+ * THE RESET STEPS, for the card on the Bluetooth page (`where: 'card'`) or
+ * for Troubleshooting (`where: 'trouble'`, where the follow-ups say Stop and
+ * Connect, since the card's Reconnect is not on that page). Each step is
+ * { key, title, lines }, one step shown at a time on the card.
+ *
+ * @param {object} o
+ * @param {string|null} o.unit       the unit picked
+ * @param {string|null} o.kind       the adapter's kind (adapterKind; a tab's key on Troubleshooting), or null
+ * @param {string|null} [o.adapter]  the adapter's name as the device lists it
+ * @param {string} [o.os]            'ios' or 'android'
+ * @param {string} [o.noun]          the device in hand (deviceNoun)
+ * @param {boolean} [o.answered]     this adapter is known to have answered this unit
+ * @param {string|null} [o.movedFrom] the unit it was just moved from, whose cables were plugged in again
+ * @param {boolean} [o.canPair]      Apple's screen opens here (not pairScreenShut): without it nobody is told to forget a pairing they cannot make again
+ * @param {'card'|'trouble'} [o.where]
+ */
+export function resetSteps({ unit, kind = null, adapter = null, os = 'ios', noun = 'phone', answered = false, movedFrom = null, canPair = true, where = 'card' } = {}) {
+  const name = UNITS[unit] || 'unit'
+  const card = where !== 'trouble'
+  const known = !!ADAPTER_TABS[kind] && kind !== 'other'
+  /* The adapter as a sentence names it: its own name for a kind the app knows ("the WIDI Uhost"), the name it lists by for another, or just the adapter. */
+  const said = adapterSaid(adapter)
+  const it = known ? `the ${said && adapterKind(said) === kind ? said : ADAPTER_TABS[kind]}` : said || 'the adapter'
+  const widi = kind === 'master' || kind === 'jack' || kind === 'uhost'
+  const restart = restartWords(unit, known ? kind : null, it)
+  const plugs = troubleFor(unit, kind, noun).plugs
+  const thru = thruLine(unit)
+  const from = movedFrom && UNITS[movedFrom] && movedFrom !== unit ? UNITS[movedFrom] : null
+  const back = (step) => (card ? `If ${it} isn’t back in about 15 seconds, tap Reconnect.` : step === 'restart' ? 'If it isn’t back in about 15 seconds, tap Stop, then Connect.' : 'Then tap Stop, then Connect.')
+  const ios = os === 'ios'
+  const steps = []
+  /*
+   * 1. THE ADAPTER RESTARTED, with the plugs first where it is not known to
+   * have answered here, and one plug line where it was just moved here.
+   * Not known is not "never": the record starts empty on every device (lib/bluetooth
+   * adapterHeard: nothing is seeded, nor kept across a second device or a
+   * reinstall), so the line ASKS whether it is the first time, as
+   * Troubleshooting's first line does (firstTimeLine), and never says it
+   * has not answered before.
+   */
+  steps.push({
+    key: 'restart',
+    lines: [
+      !answered ? `${from ? `It was just moved here from your ${from}, so check its plugs first.` : `First time with ${it} on your ${name}? Check its plugs first.`} ${plugs}${thru ? ` ${thru}` : ''}` : null,
+      restart.long,
+      answered && from ? `It was just moved here from your ${from}, so check its plugs too. ${plugs}` : null,
+      `It should connect again by itself. ${back('restart')}`
+    ]
+  })
+  /* 2. THE DEVICE'S OWN BLUETOOTH, off and on: CME's own first step for a stale Bluetooth cache, and cheaper than forgetting a pairing. */
+  steps.push({
+    key: 'bluetooth',
+    lines: ios
+      ? [`Open the ${noun}’s Settings → Bluetooth, turn Bluetooth off, wait 5 seconds, and turn it back on. Use Settings for this, not Control Center, which doesn’t turn Bluetooth all the way off.`, card ? `Then come back here. ${back('bluetooth')}` : back('bluetooth')]
+      : [`Open Android’s Bluetooth settings, turn Bluetooth off, wait 5 seconds, and turn it back on.`, card ? `Then come back here. ${back('bluetooth')}` : back('bluetooth')]
+  })
+  /*
+   * 3. FORGET IT AND PAIR IT AGAIN: what cured it on 16 November 2026, with
+   * the restart it came with. Only "if it is listed there": an adapter that
+   * never asked to pair is not. On an iPhone whose Apple's screen this copy
+   * keeps shut, never: it could not be paired again from here.
+   */
+  if (!ios || canPair) {
+    steps.push({
+      key: 'forget',
+      lines: ios
+        ? [
+            `If ${it} is listed in the ${noun}’s Settings → Bluetooth, tap ⓘ beside it, then Forget This Device.`,
+            card
+              ? `Then ${restart.short}. Come back here, tap Reconnect, tap ${it} in Apple’s screen, and tap Pair if the ${noun} asks.`
+              : `Then ${restart.short}, tap Stop, then Connect, tap ${it} in Apple’s screen, and tap Pair if the ${noun} asks.`
+          ]
+        : [
+            `If ${it} is listed in Android’s Bluetooth settings, tap the gear beside it, then Forget (on some phones, Unpair).`,
+            card ? `Then ${restart.short}. Come back here and tap Reconnect. If Android asks to pair, accept.` : `Then ${restart.short}, and tap Stop, then Connect. If Android asks to pair, accept.`
+          ]
+    })
+  }
+  /* 4. The app closed completely: what cured the 26 October case, where the app's own MIDI connection was the stale part. */
+  steps.push({ key: 'reopen', lines: ['Close the app completely (swipe it away) and open it again.', card ? 'These steps pick up where you left off.' : null] })
+  /* 5. Something else holding the adapter. CME's WIDI app only under a WIDI adapter. */
+  steps.push({
+    key: 'nearby',
+    lines: [
+      `Switch off any other Bluetooth MIDI adapter nearby, and turn Bluetooth off on any other phone, tablet or computer that has used ${it}: one of them may be holding on to it.`,
+      widi ? 'Close CME’s WIDI app wherever it is open.' : null,
+      card ? 'Then tap Reconnect.' : null
+    ]
+  })
+  /* 6. The plugs and MIDI Thru, last, where this adapter has answered this unit before (above, under 1, where it has not). */
+  if (card && answered) steps.push({ key: 'plugs', lines: [plugs, thru] })
+  /* 7. The report, which carries the steps done in the log and on its first line. */
+  if (card) steps.push({ key: 'report', lines: ['Still nothing? Send us a report. It says which of these steps you did, so we can look into it.'] })
+  return steps.map((s) => ({ ...s, title: RESET_TITLES[s.key], lines: s.lines.filter(Boolean) }))
+}
+
+/** Troubleshooting's first line: its plug checks come after the resets, so a first setup is sent to them first. */
+export const firstTimeLine = (unit) => `First time with this adapter on your ${UNITS[unit] || 'unit'}, or just moved it here from another unit? Check its plugs first: they are further down this list.`
+
+/** What the card's report says first: what is wrong, and the steps done, by their titles. */
+export const resetReportLine = (unit, adapter, done = []) => {
+  const steps = (Array.isArray(done) ? done : []).map((key) => RESET_TITLES[key]).filter(Boolean)
+  return `${nothingBackLine(unit, adapter)}${steps.length ? ` Steps done: ${steps.join('; ')}.` : ''}`
+}
+
+/*
+ * AN ADAPTER KEPT FOR ANOTHER UNIT, THE ONLY ONE HERE, at a Connect for a
+ * unit with none of its own (16 November 2026). The phone never takes it by
+ * itself (the 7 November rule: the AM4's WIDI Jack once went to the FM3 with
+ * no tap), and that cost Justin ninety seconds and three trips through
+ * Apple's screen, one of which disconnected it. So it is offered, one tap,
+ * right under Connect, and the tap moves it to this unit.
+ */
+export const takeFromOther = (adapter, unit) => `Use ${adapterSaid(adapter) || 'this adapter'} for your ${UNITS[unit] || 'unit'}?`
+export const takeFromOtherSub = (other) => `It was your ${UNITS[other] || 'other unit'}’s.`
 
 /*
  * BLUETOOTH OFF ON AN ANDROID PHONE OR TABLET: said, with Turn on Bluetooth

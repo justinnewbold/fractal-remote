@@ -17,9 +17,9 @@ import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
-import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow } from '../lib/bluetooth'
+import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
-import { CONNECT_AGAIN, notAnsweringLine } from '../lib/bluetooth-gear'
+import { CONNECT_AGAIN, FIX_STEP_BY_STEP, connectAgainSub, notAnAdapter, notAnsweringLine, nothingBackLine } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
@@ -137,6 +137,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const bleUnit = useBluetoothUnit()
   /* Another unit answered on the adapter: a fresh connection would only hear it again, so no Connect again (the Bluetooth page offers Switch to). */
   const bleAnswered = useBluetoothAnsweredAs()
+  /* Nothing at all coming back through the adapter (lib/bluetooth nothingBack, 16 November 2026): the note says so, and opens the page's reset steps. */
+  const bleNothing = useNothingBack()
   /* The note under the pill is Bluetooth's alone: put away when Bluetooth goes, so it is not open on its own when Bluetooth next comes on. */
   useEffect(() => {
     if (!bluetooth) setSaying(false)
@@ -748,6 +750,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           onClose={() => setSaying(false)}
           onReport={onReport}
           onBluetoothPage={onBluetoothPage}
+          /* Nothing at all coming back: the note says so, and opens the page's reset steps (Which, `nothing`). */
+          nothing={bleNothing}
         />
       ) : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
@@ -811,8 +815,22 @@ const ofAllBlocks = (s) => s.allBlocks
 /* The Bluetooth page's own button's words (screens/Bluetooth), for the way to it from the pill's note. */
 const DIFFERENT_ADAPTER = 'Use a different adapter'
 
-function Which({ link, cable = false, quiet = false, unit = null, onClose, onReport = null, onBluetoothPage = null }) {
+function Which({ link, cable = false, quiet = false, nothing = false, unit = null, onClose, onReport = null, onBluetoothPage = null }) {
   const adapter = link?.macName || 'the adapter'
+  /*
+   * NOTHING AT ALL COMING BACK (`nothing`, 16 November 2026) is not "check
+   * the plugs" first: his WIDI Uhost, plugged in right, carried not one byte
+   * back until the iPhone forgot it and it was restarted. So the note leads
+   * with that (shared/bluetooth-gear nothingBackLine), and its button opens
+   * the Bluetooth page, where the reset steps are, in place of Use a
+   * different adapter, which is on that page too. Where some bytes came back
+   * and no answer (a plug in THRU), and before the link has asked enough to
+   * know, the plugs line as before. And never for a footswitch picked as the
+   * adapter (notAnAdapter), which sends nothing until it is stepped on: its
+   * own line names it, with Use a different adapter, and the page draws no
+   * reset steps for one.
+   */
+  const silentNothing = quiet && nothing && !notAnAdapter(link?.macName)
   /*
    * A unit on a USB cable: the cable's words (lib/cableWords cableNote), and
    * the same one way back to the computer, named for it.
@@ -828,7 +846,9 @@ function Which({ link, cable = false, quiet = false, unit = null, onClose, onRep
   const said = cable
     ? cableNote(link)
     : quiet
-      ? notAnsweringLine(unit, link?.macName)
+      ? silentNothing
+        ? nothingBackLine(unit, link?.macName)
+        : notAnsweringLine(unit, link?.macName)
       : link?.link === 'connected'
         ? `Connected over Bluetooth, through ${adapter}.`
         : link?.link === 'joining'
@@ -906,7 +926,7 @@ function Which({ link, cable = false, quiet = false, unit = null, onClose, onRep
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={CONNECT_AGAIN}
-            accessibilityHint="Makes a fresh connection to the Bluetooth adapter"
+            accessibilityHint={connectAgainSub(Platform.OS)}
             onPress={() => {
               tick()
               fire(`press ${CONNECT_AGAIN}`, () => connectBluetoothAgain())
@@ -926,7 +946,7 @@ function Which({ link, cable = false, quiet = false, unit = null, onClose, onRep
           page, where Use a different adapter is, only where that page is
           drawn for this account (App's onBluetoothPage).
         */}
-        {quiet && onBluetoothPage ? (
+        {quiet && !silentNothing && onBluetoothPage ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={DIFFERENT_ADAPTER}
@@ -939,6 +959,22 @@ function Which({ link, cable = false, quiet = false, unit = null, onClose, onRep
             style={button}
           >
             <Text style={{ color: color.silk, fontSize: font.body }}>{DIFFERENT_ADAPTER}</Text>
+          </Pressable>
+        ) : null}
+        {/* Nothing at all coming back: the Bluetooth page, where the reset steps are, one at a time (screens/Bluetooth ResetCard). */}
+        {silentNothing && onBluetoothPage ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={FIX_STEP_BY_STEP}
+            accessibilityHint="Opens the Bluetooth page, with the steps that get the unit answering again"
+            onPress={() => {
+              tick()
+              fire(`press ${FIX_STEP_BY_STEP}`, () => onBluetoothPage())
+              onClose()
+            }}
+            style={button}
+          >
+            <Text style={{ color: color.silk, fontSize: font.body }}>{FIX_STEP_BY_STEP}</Text>
           </Pressable>
         ) : null}
         {/*

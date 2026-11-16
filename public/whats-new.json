@@ -3,8 +3,12 @@
     {
       "date": "2026-11-16",
       "day": "16 November 2026",
-      "version": "1.90.87",
+      "version": "1.90.89",
       "lines": [
+        {
+          "text": "Over Bluetooth, when your adapter says it’s connected but nothing comes back from your unit, Play now says so, and Fix it step by step opens the Bluetooth page, which walks you through the resets that cure it one at a time: restart the adapter, turn Bluetooth off and on, forget it and pair it again.",
+          "only": null
+        },
         {
           "text": "In Edit on an Axe-Fx III, the NAM block’s knobs on channels B, C and D now show and change their own settings. Before, they read from the wrong place and said they didn’t take. Over Bluetooth or a USB cable, whole-number settings such as Bit Reduce now show the number your unit has.",
           "only": null
@@ -22,11 +26,7 @@
           "only": null
         },
         {
-          "text": "Metronome: when your unit doesn’t take a change and the app says to try again, tapping the same choice again now really asks the unit again. Before, the second tap sent nothing.",
-          "only": null
-        },
-        {
-          "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it could still say the unit did not answer in time once you had switched a block on or off. It no longer does.",
+          "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time once you have switched a block on or off. And in the metronome, tapping the same choice again after your unit didn’t take a change now really asks the unit again.",
           "only": null
         }
       ]
