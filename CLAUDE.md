@@ -1883,16 +1883,54 @@ next preset it could take the order's late answer for its own, which as
 the app ships says DISAGREES and turns the live read off for the
 connection, and with the live read believed would hand Edit the last
 preset's layout. Now Edit reads the preset whole inside that window (bleWire
-gen3Grid). And the check for a missed "which preset?" ran once, before the
-grid read: a question still on the line then (Play's own, the watch's, or
-a stored slot's name from Presets beside Play) could go unanswered while
-the grid read was out, and the closing question was held again. It is
-asked again before the closing question, and both checks skip only where
-more of the window is left than ORDER_QUIET_MS, so a moment left of it no
-longer loses the order for the whole visit. The tests were tightened where
-the read showed they would pass a wrong version (a window of any length,
-an Edit read that opens one even when answered, a skip counted as a miss
-or kept for the preset).
+gen3Grid; judged when Edit asked, which the fourth read found was not
+enough, below). And the check for a missed "which preset?" ran once, before
+the grid read: a question already on the line then (Play's own, the
+watch's, or a stored slot's name from Presets beside Play) kept the grid
+read waiting behind it and went unanswered just before it left, so its
+late window was open by the time the grid answered, and the closing
+question was held again. It is looked at again before the closing
+question, and both checks skip only where more of the window is left than
+ORDER_QUIET_MS, so a moment left of it no longer loses the order for the
+whole visit. That did NOT close the hold for a question put on the line
+WHILE the grid read was out (the fourth read, below). The tests were
+tightened for Edit's window (its length, to about 90 ms, and none opened
+by a read answered in time) and for the FIRST check's skip (not a miss,
+not kept); the order's own window, the second check's skip and where the
+ORDER_QUIET_MS line falls were not held until the fourth read.
+
+*And a fourth read, of THOSE fixes, found the hold still open one exchange
+later, and the tests still looser than they said (16 November 2026), all
+fixed, each test seen to fail with its fix taken out.* A "which preset?"
+kind of question put on the line WHILE the grid read was out (the Presets
+list beside Play naming a stored slot, Play's own preset read) went out
+the moment the grid answered, before the order could look, so neither
+check saw a window; with its answer lost, the closing question waited
+behind it and then through its whole late window, and Play's tiles with
+it, about three and a half seconds. Looking for windows cannot see that
+one, so the closing question itself now has a deadline, `ORDER_CLOSE_MS`
+(ORDER_QUIET_MS and 50 ms, so a hold the checks let through goes before
+it): not sent by then, the usual order that once, no miss, nothing kept,
+the grid asked again at the next read, with its own line in the log. The
+cost is that a question ahead of it that is slow but does answer loses
+the order for that one read. Edit's live grid read is judged when its
+turn comes, not when Edit asked for it (`unless` in the send queue,
+gen3LiveGrid `held`): it waited in line behind Play, the order's
+read could give up meanwhile, and it then left inside that read's window,
+took its late answer, and left its own answer unguarded for the next
+preset's order read to take, so a preset was drawn in the last one's
+order and kept. The log says when the connection went while the closing
+question was out, or the adapter would not take it (both were said as the
+unit not answering), and a skip names
+whose read left the window open, Edit's or the order's (`gridLateBy`; it
+blamed the order's read for Edit's). The tests now hold where the
+ORDER_QUIET_MS line falls at both checks (about 370 and 300 ms left: asked
+and believed; 440 left at the first: not asked; 540 left at the second:
+not closed), the second check's skip (not a miss, not kept), the order's
+own window and Edit's to within a few milliseconds of their end, and
+Edit's skip near the end of the order's window, as shipped and with the
+live read believed. What a question ahead of the closing one costs Play's
+tiles now is the wait for its turn, ORDER_CLOSE_MS at most.
 
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
