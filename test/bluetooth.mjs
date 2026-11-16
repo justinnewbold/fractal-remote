@@ -11699,6 +11699,13 @@ export function run(test) {
           whole[40] ^= 0x01
           return t.say(whole)
         }
+        /* Or each asking of a slot answered after a delay of its own (`delays`: slot -> [ms, ms, ...], one an asking, until they run out). */
+        const delays = u.delays ? u.delays.get(sx.fromSeptets32(b, 12)) : null
+        if (delays && delays.length) {
+          const answer = [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(sx.fromSeptets32(b, 12)))]
+          t.clock.setTimeout(() => said(b, answer), delays.shift())
+          return
+        }
         /* Or answer LATE, that long after it was asked (`slowSlot`, `slowBy`, `slowTimes`): after the phone has stopped waiting for it. */
         if (u.slowSlot === sx.fromSeptets32(b, 12) && u.slowTimes > 0) {
           u.slowTimes--
@@ -12473,11 +12480,22 @@ export function run(test) {
   })
 
   test('a unit that stops answering part-way is told it is over, the failure says the slot may hold part of a capture, and the tools are free again', async () => {
-    const { u, asks, record } = await capturesLine()
+    const { t, u, asks, shaped, record } = await capturesLine()
     const rec = record('Cut Short', 9)
     u.silentAt = 5
+    t.sent.length = 0
     await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 504 && e.partial === true && e.slot === 3 && /stopped answering after 6 of 130 messages\. Slot 004 may hold part of a capture now: send it again to the same slot\./.test(e.message))
     assert.deepEqual(u.busy, [1, 0], '"it is over" was not said after a send that stopped')
+    /*
+     * NO MESSAGE OF AN UPLOAD IS EVER SENT TWICE, the unanswered one least
+     * of all: a 0x55 says nothing of where its words go, so one the unit
+     * took, with only its answer lost, would be filed again after itself,
+     * and the closing word (every word XORed) cannot tell. Only a slot's
+     * QUESTION is asked again (namSlotSure).
+     */
+    const parts = shaped().filter((f) => f[5] === 0x55).map(hex)
+    assert.equal(parts.length, 6, 'the message that went unanswered was sent again, or the send went on past it')
+    assert.equal(new Set(parts).size, 6, 'a message of an upload was sent twice')
     assert.equal(u.kept.length, 0)
     /* A refusal in the middle says what the unit answered. */
     u.silentAt = null
@@ -12687,9 +12705,9 @@ export function run(test) {
       /* The second asking waits out the wait and the quiet: the first question's answer can no longer come. */
       const twos = sentAt.filter(([h]) => h === said(nam, 2)).map(([, when]) => when)
       assert.ok(twos[1] - twos[0] >= 2500 + LATE_MS, `slot 003 was asked again ${twos[1] - twos[0]} ms after the first asking`)
-      /* And no OTHER slot is asked until the second asking's answer can no longer be on its way either. */
+      /* And no OTHER slot is asked until the second asking's own answer can no longer be on its way either: the wait and the quiet, counted from that asking. */
       const three = sentAt.find(([h]) => h === said(nam, 3))[1]
-      assert.ok(three - twos[1] >= LATE_MS, `slot 004 was asked ${three - twos[1]} ms after slot 003 was asked again`)
+      assert.ok(three - twos[1] >= 2500 + LATE_MS, `slot 004 was asked ${three - twos[1]} ms after slot 003 was asked again`)
       assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: nothing came in meanwhile'), t.logs.filter((l) => /capture slot/.test(l)).join(' | '))
       assert.ok(t.logs.includes('asking capture slot 003 again (2 of 3)'))
       assert.ok(t.logs.some((l) => /^looked for an empty capture slot from 001: 4 answered in [\d.]+ s, 1 asked again; 004 is empty$/.test(l)), t.logs.filter((l) => /looked for/.test(l)).join(' | '))
@@ -12712,6 +12730,31 @@ export function run(test) {
       assert.deepEqual([found.slot, found.heads.map((h) => [h.slot, h.name])], [3, [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three'], [3, '<EMPTY>']]], 'the slot after one asked again was handed that slot’s other answer')
     }
 
+    /*
+     * AND THE SECOND ASKING'S OWN ANSWER SLOW AS WELL (found in review,
+     * with this stand-in). Slot 003's first answer comes 4.6 seconds late
+     * and is taken for the second asking's; the second asking's own answer
+     * comes three seconds after it was asked, inside what an answer is
+     * allowed. Slot 004, really empty and a second in answering, must not be
+     * asked before then: asked two seconds after the first answer was taken
+     * (the first cut), it was handed "High Gain Three", read as full, and
+     * the mark passed over it for the rest of the connection.
+     */
+    {
+      const { t, u, asks } = await capturesLine()
+      u.delays = new Map([[2, [4600, 3000]], [3, [1000]]])
+      const found = await asks('/nam/empty')
+      assert.deepEqual([found.slot, found.heads.map((h) => [h.slot, h.name])], [3, [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three'], [3, '<EMPTY>']]], 'an empty slot was handed the answer to the second asking of the slot before it')
+      /* The answer nobody was waiting for is said, with how long after the slot was last asked. */
+      const stray = t.logs.find((l) => /^a capture slot’s answer came with no question waiting, \d+ ms after a slot was last asked: dropped$/.test(l))
+      assert.ok(stray, t.logs.filter((l) => /capture slot/.test(l)).join(' | '))
+      /* Three seconds after the second asking, give or take the moment that question waited its turn (a count from nought, a time never written down, would say seven). */
+      const after = Number(stray.match(/, (\d+) ms after/)[1])
+      assert.ok(after >= 3000 && after < 3200, stray)
+      const next = await asks('/nam/empty')
+      assert.deepEqual([next.slot, next.from], [3, 3], 'the mark went past a slot that is empty')
+    }
+
     /* THREE SILENCES: given up on, in words that are true, with nothing past it asked; and the next search starts AT that slot. */
     {
       const { t, u, nam, asks, shaped } = await capturesLine()
@@ -12722,9 +12765,10 @@ export function run(test) {
       assert.ok(err, 'a slot silent three times was not given up on')
       assert.equal(err.status, 504)
       assert.deepEqual([err.slot, err.asked], [2, 3])
-      assert.equal(err.message, 'The Axe-Fx III didn’t say what is in capture slot 003, asked 3 times. Nothing was sent. Tap again: the search carries on from that slot.')
+      /* The words promise no slot: what has read full is this connection's, and an adapter that drops answers drops connections too. */
+      assert.equal(err.message, 'The Axe-Fx III didn’t say what is in capture slot 003, asked 3 times. Nothing was sent. Tap again to keep looking.')
       assert.deepEqual(shaped().map(hex), [0, 1, 2, 2, 2].map((slot) => said(nam, slot)), 'a slot past the silent one was asked, or it was not asked three times')
-      assert.ok(t.logs.some((l) => /^gave up looking for an empty capture slot at 003: 2 answered from 001 in [\d.]+ s; the next search starts at 003$/.test(l)), t.logs.filter((l) => /gave up/.test(l)).join(' | '))
+      assert.ok(t.logs.some((l) => /^gave up looking for an empty capture slot at 003: 2 answered in [\d.]+ s; the next search on this connection starts at 003$/.test(l)), t.logs.filter((l) => /gave up/.test(l)).join(' | '))
       t.clock.set(t.clock.now() + 10000)
       t.sent.length = 0
       const again = await asks('/nam/empty')
@@ -12791,15 +12835,53 @@ export function run(test) {
     u.begun.length = 0
     await assert.rejects(asks('/nam/slots/1', { method: 'POST', body: { words: record('Never Lands', 5).words } }), (e) => e.status === 409 && /already holds “Brit Crunch”\. Nothing was sent\./.test(e.message))
     assert.deepEqual([u.busy, u.begun], [[], []], 'something of a capture was sent to a slot that is in use')
-    /* All 128 read full: no slot, and how many were found taken is `from` and the heads together. */
-    for (let slot = 0; slot <= nam.NAM_SLOT_PROVEN_MOST; slot++) u.held.set(slot, u.held.get(0))
+    /*
+     * "NONE EMPTY" IS ONLY SAID OF SLOTS READ IN THAT SEARCH (found in
+     * review). All 128 full: the search reads up from the mark, finds
+     * nothing, and reads the slots under the mark too before it answers.
+     * How many were found taken is `from` and the heads together, and the
+     * heads are every slot, in order.
+     */
+    const all = [...Array(nam.NAM_SLOT_PROVEN_MOST + 1).keys()]
+    for (const slot of all) u.held.set(slot, u.held.get(0))
+    t.sent.length = 0
     const full = await asks('/nam/empty')
-    assert.equal(full.slot, null)
-    assert.equal(full.from + full.heads.length, nam.NAM_SLOT_PROVEN_MOST + 1)
+    assert.deepEqual([full.slot, full.from, full.heads.map((h) => h.slot)], [null, 0, all])
+    assert.deepEqual(shaped().map(hex), [...all.slice(2), 0, 1].map(said), 'the slots under the mark were not read before "all taken" was said')
+    assert.ok(t.logs.includes('no capture slot is empty from 003 up: reading 001 to 002 again, in case one has been cleared on the unit'), t.logs.filter((l) => /cleared on the unit/.test(l)).join(' | '))
+    assert.ok(t.logs.some((l) => /^looked for an empty capture slot from 001: 128 answered in [\d.]+ s; none empty up to 128$/.test(l)), t.logs.filter((l) => /looked for/.test(l)).join(' | '))
+    /* Asked again with every slot read full: the unit is asked all over again, never answered from memory. The card has just said "Clear one on the unit, then send again". */
     t.sent.length = 0
     const stillFull = await asks('/nam/empty')
-    assert.deepEqual([stillFull.slot, stillFull.from, stillFull.heads], [null, nam.NAM_SLOT_PROVEN_MOST + 1, []])
-    assert.deepEqual(shaped(), [], 'a search with every slot known full asked the unit something')
+    assert.deepEqual([stillFull.slot, stillFull.from, stillFull.heads.length], [null, 0, all.length])
+    assert.deepEqual(shaped().map(hex), all.map(said), 'a search with every slot read full answered "all taken" without asking the unit')
+    assert.ok(t.logs.includes('every capture slot up to 128 has read full on this connection: reading 001 to 128 again, in case one has been cleared on the unit'))
+    /* One cleared on the unit, as the card said to: found, on this connection. */
+    u.held.delete(10)
+    t.sent.length = 0
+    const cleared = await asks('/nam/empty')
+    assert.deepEqual([cleared.slot, cleared.from, cleared.heads.map((h) => h.slot)], [10, 0, all.slice(0, 11)], 'a slot cleared on the unit was not found after every slot had read full')
+    assert.deepEqual(shaped().map(hex), all.slice(0, 11).map(said))
+    /* And with the mark part-way up: nothing empty above it, one cleared under it. The slots above are read first, then the ones under, and the heads come back in order. */
+    u.held.set(10, u.held.get(0))
+    u.held.delete(4)
+    t.sent.length = 0
+    const under = await asks('/nam/empty')
+    assert.deepEqual([under.slot, under.from, under.heads.map((h) => h.slot)], [4, 0, [0, 1, 2, 3, 4, ...all.slice(10)]])
+    assert.deepEqual(shaped().map(hex), [...all.slice(10), 0, 1, 2, 3, 4].map(said))
+    assert.ok(t.logs.includes('no capture slot is empty from 011 up: reading 001 to 010 again, in case one has been cleared on the unit'))
+    /*
+     * GIVEN UP ON IN THE SECOND PART: the line counts every slot that
+     * answered in this search, above the mark and under it, and says where
+     * the next one begins: with every slot above read full, at the first.
+     */
+    u.held.set(4, u.held.get(0))
+    u.quietSlot = 1
+    u.quietSlotTimes = 3
+    const stuck = await asks('/nam/empty').then(() => null, (e) => e)
+    assert.deepEqual([stuck?.status, stuck?.slot, stuck?.asked], [504, 1, 3])
+    assert.ok(t.logs.some((l) => /^gave up looking for an empty capture slot at 002: 125 answered in [\d.]+ s; the next search on this connection starts at 001$/.test(l)), t.logs.filter((l) => /gave up/.test(l)).join(' | '))
+    t.clock.set(t.clock.now() + 10000)
 
     /*
      * THE MARK ONLY CLIMBS A SLOT AT A TIME FROM THE FIRST. A full slot read
@@ -12828,6 +12910,40 @@ export function run(test) {
       assert.deepEqual([got.slot, got.name], [3, 'After A Silence'])
       const out = shaped().map(hex)
       assert.deepEqual(out.slice(0, 2), [hex(nam.namSlotQuery(0x10, 3)), hex(nam.namSlotQuery(0x10, 3))], 'the slot was not asked again before anything was written')
+      assert.deepEqual(u.busy, [1, 0])
+    }
+    /*
+     * THE UPLOAD'S HOLD IS NOT KEPT THROUGH THE QUIET BEFORE ITS SLOT IS
+     * ASKED AGAIN (found in review). Nothing is going to the unit then, so a
+     * scene tapped then is not refused as if a capture were going: held
+     * through three askings, every tap was refused for eleven seconds.
+     * While the slot's question is out, and once the capture has begun, a
+     * tap is refused as ever.
+     */
+    {
+      const { t, u, record } = await capturesLine()
+      t.clock.set(t.clock.now() + 10000)
+      u.quietSlot = 3
+      u.quietSlotTimes = 2
+      u.busy.length = 0
+      const refused = (e) => /is taking a capture/.test(e?.message || '')
+      const began = t.clock.now()
+      const sending = t.wire.request('/nam/slots/3', { capturing: true, method: 'POST', body: { words: record('Tapped Meanwhile', 9).words } })
+      /* One second in: the slot's first question is out. Held: a tap is refused, and a read asked now waits. */
+      await advance(t.clock, 1000)
+      await assert.rejects(t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ scene: 2 }) }), refused, 'a tap went beside the slot’s own read at the start of an upload')
+      let readAt = null
+      t.wire.request('/scene').then(() => (readAt = t.clock.now()), () => (readAt = t.clock.now()))
+      await advance(t.clock, 1000)
+      assert.equal(readAt, null, 'a read went beside the slot’s own read at the start of an upload')
+      /* Three and a half seconds in: the first silence is over and the quiet is running. Not held: the read that waited has gone, and a tap is taken. */
+      await advance(t.clock, 1500)
+      assert.ok(readAt !== null && readAt - began < 3500, 'a read held back by the slot’s first question did not go in the quiet after it')
+      const tap = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ scene: 2 }) })
+      await drive(t.clock, tap.then(() => null, (e) => assert.ok(!refused(e), 'a tap was refused in the quiet before the slot was asked again: nothing was going to the unit')))
+      assert.deepEqual([u.busy, u.begun], [[], []], 'the capture began before its slot had said it is empty')
+      const sent = await drive(t.clock, sending)
+      assert.deepEqual([sent.slot, sent.name], [3, 'Tapped Meanwhile'])
       assert.deepEqual(u.busy, [1, 0])
     }
     /* Silent three times: nothing was sent, and it says so. */
@@ -12861,17 +12977,88 @@ export function run(test) {
     }
     {
       const { t, u, asks } = await capturesLine()
-      /* An answer that was only late, inside the quiet: dropped, and said to have come late, with how late. */
+      /* An answer that was only late, inside the quiet: dropped, and said to have come late, with how late. The clock is well past nought first, so a count from nought (a time never written down) is not three seconds by luck. */
+      t.clock.set(t.clock.now() + 60000)
       u.slowSlot = 1
       u.slowBy = 3000
       u.slowTimes = 1
       assert.equal((await asks('/nam/empty')).slot, 3)
       assert.ok(t.logs.includes('no answer to capture slot 002 in 2500 ms: nothing came in meanwhile'))
-      const late = t.logs.find((l) => /^a capture slot’s answer came \d+ ms after the question it was too late for: dropped$/.test(l))
+      const late = t.logs.find((l) => /^a capture slot’s answer came with no question waiting, \d+ ms after a slot was last asked: dropped$/.test(l))
       assert.ok(late, t.logs.filter((l) => /late|capture slot/.test(l)).join(' | '))
       /* Three seconds after it was asked, give or take the moment the question waited its turn. */
-      const ms = Number(late.match(/came (\d+) ms/)[1])
+      const ms = Number(late.match(/, (\d+) ms after/)[1])
       assert.ok(ms >= 3000 && ms < 3200, late)
+    }
+    /*
+     * EVERYTHING THAT CAME IN IS SAID AS WHAT IT WAS (found in review). The
+     * phone's own question come back (MIDI Thru, or his white plug in the
+     * THRU jack) is a whole message: said as "made no whole message", it
+     * read as an answer cut short, the wrong lead. And a timing clock's
+     * bytes are not counted at all.
+     */
+    {
+      const { t, u, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (b[0] === 0xf0) t.say([...b], 3)
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      const line = t.logs.find((l) => l.startsWith('no answer to capture slot 003 in 2500 ms'))
+      assert.match(line, /^no answer to capture slot 003 in 2500 ms: (\d+) bytes came in meanwhile, 1 copy of what was sent$/, line)
+    }
+    {
+      const { t, u, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const tick = () => {
+        t.wire.heardBytes([0xf8])
+        t.clock.setTimeout(tick, 21)
+      }
+      t.clock.setTimeout(tick, 21)
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: nothing came in meanwhile'), t.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    }
+    /* Whole messages that are not this unit's (another maker's, or one addressed to every Fractal unit) are counted as that. */
+    {
+      const { t, u, nam, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (hex(b) === hex(nam.namSlotQuery(0x10, 2)) && u.quietSlotTimes === 1) {
+          t.say([0xf0, 0x41, 0x10, 0x00, 0xf7], 3)
+          t.say(t.sx.frame(0x7f, 0x00, []), 6)
+        }
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      const line = t.logs.find((l) => l.startsWith('no answer to capture slot 003 in 2500 ms'))
+      assert.match(line, /^no answer to capture slot 003 in 2500 ms: \d+ bytes came in meanwhile, 2 messages not from this unit$/, line)
+    }
+    /* A long answer that stalls after its first frame (an AM4's stored preset): the frame that came is said as part of the answer, not as no whole message. */
+    {
+      const stall = await onTheLine('am4', { stallAfterHead: 4000 })
+      await stall.get('/presets/5/scenes').catch(() => null)
+      const line = stall.logs.find((l) => /^no answer to the scene names of B02 /.test(l))
+      assert.match(line, /^no answer to the scene names of B02 in \d+ ms: \d+ bytes came in meanwhile, 1 message that was part of its answer$/, line)
+    }
+    /* And bytes that never made a message at all (an answer cut short) are said as that. */
+    {
+      const { t, u, nam, asks } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (hex(b) === hex(nam.namSlotQuery(0x10, 2)) && u.quietSlotTimes === 1) t.wire.heardBytes([0xf0, 0x00, 0x01, 0x74, 0x10, 0x01, 0x08])
+        return send(b)
+      }
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      const line = t.logs.find((l) => l.startsWith('no answer to capture slot 003 in 2500 ms'))
+      assert.equal(line, 'no answer to capture slot 003 in 2500 ms: 7 bytes came in meanwhile and made no whole SysEx message')
     }
     /* Any other question that goes unanswered says what came in too (here: nothing). */
     {

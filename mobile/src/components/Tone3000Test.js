@@ -558,7 +558,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         })
         if (!alive.current) return
         if (found.slot === null) {
-          /* How many were found taken: the ones read this time, after the ones this connection had already read full (`from`, the device's own wire). */
+          /* How many were found taken: where the heads start (`from`: the device's own wire reads every slot before it says none is empty, so the first) and the heads themselves. */
           const taken = (Number.isInteger(found.from) ? found.from : 0) + found.heads.length
           setSend({ id: m.id, line: `The unit’s first ${taken} capture slots are all taken. Clear one on the unit, then send again.` })
           return
