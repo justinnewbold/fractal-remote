@@ -17,7 +17,10 @@
  *   account — who is signed in here, or null
  *   hostOn  — mac role: the Mac is listening for a phone
  *   macName — remote role: what the phone shows once the Mac has answered
- *   macVersion — remote role: which Mac app answered, for the debug report
+ *   macVersion — which computer app this page works through: the one that
+ *             answered over the relay, or (mac role) the one on this
+ *             machine, by its host.name; for the debug report, and for the
+ *             chain editor's joins (shared/chain-move.mjs builtElsewhere)
  *   since   — when `link` last changed, so a screen can wait out a blip
  *
  * The pure parts — which role this is, what state that makes, what to say

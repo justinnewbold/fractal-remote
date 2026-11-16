@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks, setCable, blockParams, isDemo, currentPreset } from '../lib/forgefx'
+import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks, setCable, blockParams, isDemo, currentPreset, servedLocally } from '../lib/forgefx'
 import { linkState } from '../lib/link'
 import { logDebug } from '../lib/debugLog'
 import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-order.mjs'
-import { JOIN_ROW, JOINING_ROW, afterMoveSaid, cablesLaid, joinRow, joinedWords, maybeCut, moveBlocks, oldCableBytes, rowCuts, rowNote } from '../../shared/chain-move.mjs'
+import { CHAIN_CHANGED, JOIN_ROW, JOINING_ROW, afterMoveSaid, builtElsewhere, cablesLaid, joinRow, joinedWords, maybeCut, moveBlocks, oldCableBytes, rowCuts, rowNote } from '../../shared/chain-move.mjs'
 import { chainPlan } from '../lib/actions'
 import ChainWait, { useChain } from './ChainWait'
 import RowsPanel from './RowsPanel'
@@ -115,14 +115,18 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
    * THE ROW'S JOINS, AS ON THE PHONE (shared/chain-move.mjs, one plan for
    * both). Only where the unit's joins are the app's to make (a gen-3 unit,
    * the demo's grid units): never an AM4, a VP4 or an Axe-Fx II. `oldBytes`:
-   * through a computer app older than 1.90.82 (this page reached by the
-   * relay; the computer's own window and Wi-Fi page are served by this
-   * release) some six-row joins go to the wrong cell, so a move needing one
-   * is refused before anything is cleared.
+   * through a computer app older than 1.90.82 (or one that does not say)
+   * some six-row joins go to the wrong cell, so a move needing one is refused
+   * before anything is cleared. That is any computer app this page did not
+   * come from (shared/chain-move.mjs builtElsewhere): the one the relay
+   * reaches, and the one on this computer when this is the hosted website
+   * open beside it (its version read from its own host.name, link.js
+   * readMac). The computer's own window and Wi-Fi page are this release.
    */
   const joinsHere = cablesLaid(capabilities)
-  const cablesVersion = () => (linkState()?.role === 'remote' ? linkState().macVersion : null)
-  const oldBytes = () => !isDemo() && linkState()?.role === 'remote' && oldCableBytes(linkState().macVersion)
+  const elsewhere = () => builtElsewhere({ role: linkState()?.role, served: servedLocally() })
+  const cablesVersion = () => (elsewhere() ? linkState().macVersion : null)
+  const oldBytes = () => !isDemo() && elsewhere() && oldCableBytes(linkState().macVersion)
   const gridNow = () => readGrid().then((g) => (Array.isArray(g?.cells) ? g.cells : null))
   const moveWire = { gridCells: gridNow, clearCell, placeBlock, setCable, readBlock: blockParams }
   const chainLog = (what, detail) => logDebug('chain', what, detail)
@@ -202,7 +206,7 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
     const cuts = rowCuts({ cells, blocks, rows, law: oldBytes(), version: cablesVersion(), holes, only: touched })
     for (const r of touched) {
       const cut = cuts.find((c) => c.row === r)
-      leaveRow(r, cut ? { text: cut.text, joins: cut.joins, holes: cut.holes, n } : null)
+      leaveRow(r, cut ? { text: cut.text, joins: cut.joins, n } : null)
       if (cut) logDebug('chain', `row ${rowLabel(r)} after the ${what}`, cut.text)
     }
   }
@@ -216,10 +220,10 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
     setIssue(null)
     try {
       logDebug('chain', `Join the row clicked on row ${rowLabel(cut.row)}`, `${cut.joins.length} join${cut.joins.length === 1 ? '' : 's'}`)
-      /* And the row asked again after, the way it was found (rowCuts, with the empty spaces where a tap-to-move's note counted them), so "joined again" is said only of a row that reads whole. */
-      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(shown.find((l) => l.row === cut.row)), blocks, rows, law: oldBytes(), version: cablesVersion(), holes: !!cut.holes, onPreset: presetHeld(n) })
+      /* And the row asked again after, the way it was found (rowCuts, its empty spaces always counted), so "joined again" is said only of a row that reads whole. */
+      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(shown.find((l) => l.row === cut.row)), blocks, rows, law: oldBytes(), version: cablesVersion(), onPreset: presetHeld(n) })
       const w = joinedWords(r)
-      leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, holes: w.holes ?? cut.holes, n })
+      leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, n })
       onChanged(w.ok ? `Joined row ${rowLabel(cut.row)} again` : `Tried to join row ${rowLabel(cut.row)} again`)
     } catch (err) {
       setIssue(err.message)
@@ -346,11 +350,19 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
     chainUndo.clear()
     setWorking(`add:${row}:${col}`)
     setIssue(null)
-    leaveRow(row, null)
+    /*
+     * A block already in the chain (the list offers every block, and a unit
+     * has one of each) is MOVED here, and leaves an empty space where it was,
+     * which nothing joins across: its old row is written to as well, and read
+     * back with the space counted, as tap-to-move reads both of its rows.
+     */
+    const was = (blocks || []).find((b) => b.effectId === Number(choice) && !(b.row === row && b.col === col)) || null
+    const touched = was ? [...new Set([row, was.row])] : [row]
+    for (const r of touched) leaveRow(r, null)
     try {
       const res = await placeBlock(row, col, Number(choice))
       /* Replace puts a block over a joined one, and Add one into a space: on a gen-3 unit either may come in joined to nothing, so the row is read back and said under it where it is cut. */
-      await checkRows([row], { what: 'add' })
+      await checkRows(touched, { holes: !!was, what: 'add' })
       const block = palette.find((b) => b.page === Number(choice))
       onChanged(
         linear
@@ -472,12 +484,16 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
         /* Each moved block read before and after, for the log: his account only (two reads a block would slow every customer's drag). */
         measure: admin,
         onPreset: presetHeld(n),
+        /* The chain read, for the Inputs and Outputs when the row is asked again after the move. */
+        blocks,
         /* Undo goes only once something is about to be written: a move refused before it keeps the last change's Undo. */
         starting: () => chainUndo.clear()
       })
       if (res.notSent) {
         if (res.why) leaveRow(lane.row, { text: res.why, joins: [], n })
+        /* Stopped by the preset, or refused because the chain on the unit is not the one on screen: onChanged reads the chain again, as the words say. */
         if (res.stopped) onChanged(`A move on row ${rowLabel(lane.row)} was not sent: ${res.why}`)
+        else if (res.why === CHAIN_CHANGED) onChanged(`A move on row ${rowLabel(lane.row)} was not sent: the chain had changed on the unit`)
         return
       }
       /* What the move leaves said, over the chain, under its row and in the history (afterMoveSaid, the phone's words too). */

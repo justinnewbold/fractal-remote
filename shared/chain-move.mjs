@@ -46,7 +46,12 @@
  *   4. Only the joins that are now missing are sent, the grid is read again,
  *      and every join is checked against the read before. Where one is still
  *      missing the screen says so where the move was made, with "Join the
- *      row" (`joinRow`), which sends what is missing and reads again.
+ *      row" (`joinRow`), which sends what is missing and reads again. The
+ *      row is then asked on that last read as a cut row is (`rowCuts`, empty
+ *      spaces counted), so a cut the plan did not cover (a block brought in
+ *      from after the Output, whose column nothing fed) is said too; and a
+ *      moved block the unit did not put in its new cell is named, with no
+ *      button, since nothing can be joined into an empty cell.
  *   5. A move that fails part-way puts the blocks back where they were and
  *      gets the same rejoin; the read after says which blocks are not back,
  *      and the words never claim they are (`putBackSaid`).
@@ -55,9 +60,12 @@
  *      another block) would otherwise be joined where Fractal's own editors
  *      never put a cable.
  *   7. EVERY WRITE IS HELD TO THE PRESET THE MOVE WAS MADE ON (`onPreset`,
- *      Quick build's rig unitOnPreset at both ends): a footswitch that
- *      changes preset mid-move stops it there, and nothing more, a join least
- *      of all, goes into the other preset.
+ *      Quick build's rig unitOnPreset at both ends), where the app makes the
+ *      joins and the screen can name the preset (the screens hand no
+ *      `onPreset` otherwise): a footswitch that changes preset mid-move stops
+ *      it there, and nothing more, a join least of all, goes into the other
+ *      preset. The first clear goes on the ask made just before it, unless
+ *      settings were read in between (`measure`): then it is asked again.
  *
  * MENDING WHAT IS ALREADY CUT (`rowCuts`): a block on the row of an Input,
  * between it and that row's Output, that is fed from NOTHING (so no parallel
@@ -70,8 +78,9 @@
  * Never on a row with cells fed from another row (a parallel path), never on
  * a unit with no joins to make (an AM4, a VP4, an Axe-Fx II), and never over
  * Bluetooth, where the chain editor is not. After it, the row is asked again
- * (rowCuts on the read joinRow makes), and only a row that reads whole is
- * called joined again.
+ * (rowCuts on the read joinRow makes, ALWAYS with empty spaces counted), and
+ * only a row that reads whole, with no empty space between its Input and
+ * Output, is called joined again.
  *
  * SETTINGS ARE MEASURED, NEVER WRITTEN BACK, AND ON HIS ACCOUNT ONLY
  * (`measure`). Before and after a move each moved block is read once
@@ -131,6 +140,15 @@ export const joinMakeable = (rows, srcRow, srcCol) => !(rows === 6 && srcRow ===
  */
 export const joinAsTheLaw = (rows, srcCol, destRow) =>
   rows !== 6 || destRow === 2 || destRow === 3 || (srcCol % 2 === 0 && (destRow === 0 || destRow === 4 || destRow === 5))
+
+/**
+ * Whether a browser page's joins are built by a computer app OTHER than the
+ * one that served the page, so its version decides the bytes: through the
+ * relay (`remote`), or the hosted website open on the computer that runs the
+ * app (`mac`, not served by it). The computer's own window and its Wi-Fi page
+ * (`served`) are this release, and build them right.
+ */
+export const builtElsewhere = ({ role, served = false } = {}) => role === 'remote' || (role === 'mac' && !served)
 
 /** Where a join lands, in words: "row 3, column 2" (the cell it feeds). */
 const joinedAt = (j) => `row ${rowLabel(j.destRow)} at column ${colLabel(j.srcCol + 1)}`
@@ -230,6 +248,17 @@ export function firstCut(still, row) {
 /** After a move that left a join missing: "The blocks moved, but row 3 isn’t joined at column 2, so there’s no sound past it." */
 export const cutAfterMove = (j) => `The blocks moved, but row ${rowLabel(j.destRow)} isn’t joined at column ${colLabel(j.srcCol + 1)}, so there’s no sound past it.`
 
+/** After a move whose own joins all read back, but whose row the last read finds cut elsewhere (rowCuts' words, from "Row 3 …"). */
+export const foundAfterMove = (cut) => `The blocks moved, but ${String(cut.text).charAt(0).toLowerCase()}${String(cut.text).slice(1)}`
+
+/** After a move the unit did not take whole: a moved block not in its new cell, which reads empty. */
+export function notPlacedWords(row, list) {
+  const one = list.length === 1
+  const each = list.map((x) => `${x.name} at column ${colLabel(x.col)}`)
+  const names = each.length < 2 ? each.join('') : `${each.slice(0, -1).join(', ')} and ${each[each.length - 1]}`
+  return `The unit didn’t take ${names}, so row ${rowLabel(row)} has ${one ? 'an empty space' : 'empty spaces'} there and no sound past ${one ? 'it' : 'them'}. Put a block in ${one ? 'it' : 'each'}, or move one back.`
+}
+
 /** After a move whose rejoin could not be read back. */
 export const uncheckedAfterMove = (row) => `The blocks moved, but the app couldn’t read row ${rowLabel(row)} back to check it’s joined.`
 
@@ -302,8 +331,13 @@ export function afterMoveSaid({ row, res }) {
   if (!joins) return { issue: null, note: null, line: null }
   if (res.stopped === 'unknown') return { issue: null, note: { text: `The blocks moved, but the unit stopped saying which preset it’s on, so the app didn’t join row ${r} again.`, joins }, line: null }
   if (!res.checked) return { issue: null, note: { text: uncheckedAfterMove(row), joins }, line: null }
+  /* A block the unit did not put in its new cell: said by name, and no Join the row, which could only answer that the cell is empty. */
+  if (Array.isArray(res.notPlaced) && res.notPlaced.length) return { issue: null, note: { text: notPlacedWords(row, res.notPlaced), joins: [] }, line: null }
   const cut = firstCut(res.still, row)
-  return { issue: null, note: cut ? { text: cutAfterMove(cut), joins } : null, line: null }
+  if (cut) return { issue: null, note: { text: cutAfterMove(cut), joins }, line: null }
+  /* Every join the plan made reads back, and the row is still cut where the plan did not look (rowCuts on the same read). */
+  const found = Array.isArray(res.cutsAfter) ? res.cutsAfter.find((c) => c.row === row) : null
+  return { issue: null, note: found ? { text: foundAfterMove(found), joins: found.joins } : null, line: null }
 }
 
 /**
@@ -329,8 +363,9 @@ export function joinedWords({ row, still, checked, readBefore = true, sent = 0, 
     if (failed) return { ok: false, text: `The app sent ${sent} join${sent === 1 ? '' : 's'}, then stopped: ${failed} Row ${rowLabel(cut.destRow)} still isn’t joined at column ${colLabel(cut.srcCol + 1)}.` }
     return { ok: false, text: `The app sent the joins, but row ${rowLabel(cut.destRow)} still isn’t joined at column ${colLabel(cut.srcCol + 1)}.` }
   }
-  const left = Array.isArray(cuts) ? cuts.find((c) => c.row === row) || cuts[0] : null
-  if (left) return { ok: false, text: left.text, joins: left.joins, holes: left.holes }
+  /* Only the pressed row's own: another row's cut and its joins are never drawn under this one. */
+  const left = Array.isArray(cuts) ? cuts.find((c) => c.row === row) : null
+  if (left) return { ok: false, text: left.text, joins: left.joins }
   return { ok: true, text: `Row ${r} is joined again.` }
 }
 
@@ -547,17 +582,21 @@ const heldBack = (on) => Object.assign(new Error(on === 'moved' ? PRESET_MOVED_M
  * `log(what, detail)` writes a `[chain]` line; `measure` reads each moved
  * block before and after, for the log (his account only, at both ends);
  * `hold` (presetHold) is asked before EVERY write, and `checkedFirst` says
- * it was asked just now, so the first clear goes without asking again.
+ * it was asked just now, so the first clear goes without asking again,
+ * unless settings are measured first: those reads are round trips, a
+ * footswitch can land among them, and the first clear is asked then too.
  * Never throws for the unit's sake: a write that throws (or is held back)
  * puts the cleared blocks back where they were, joins them again, and is
  * answered as `threw`. Held back because the unit is on ANOTHER preset, it
  * stops there and sends nothing more at all.
  *
  * Answers { threw, stopped, answers, refused, sent, missingAfterMove, still,
- * checked, after, missingBack }: `still` the joins the last read does not
- * show, `checked` whether there was a last read to go by, `missingBack` the
- * names of blocks taken out that are not back in their own cells after a
- * failure (by the last read, else the put-backs that did not go).
+ * checked, after, missingBack, notPlaced }: `still` the joins the last read
+ * does not show, `checked` whether there was a last read to go by,
+ * `missingBack` the names of blocks taken out that are not back in their own
+ * cells after a failure (by the last read, else the put-backs that did not
+ * go), `notPlaced` the moved blocks ({ name, col }) whose new cell the last
+ * read shows empty after a move that did not fail.
  */
 export async function runMove({ plan, moves, wire, log = () => {}, names = null, measure: measuring = false, hold = presetHold(null), checkedFirst = false }) {
   const row = plan.row
@@ -572,7 +611,8 @@ export async function runMove({ plan, moves, wire, log = () => {}, names = null,
   const notBack = []
   let threw = null
   let stopped = null
-  let fresh = checkedFirst
+  /* The ask moveBlocks made counts for the first clear only if nothing went to the unit since: measuring did. */
+  let fresh = checkedFirst && !measuring
   const go = async () => {
     if (fresh) {
       fresh = false
@@ -670,8 +710,10 @@ export async function runMove({ plan, moves, wire, log = () => {}, names = null,
   if (after && still.length) log('move: still not joined', still.map(joinSaid).join('; '))
   const missingBack = notHome(after)
   if (missingBack.length) log('move: not back in their own cells', missingBack.join(', '))
+  const notPlaced = !threw && after ? moves.filter((m) => !cellAt(after, row, m.to)).map((m) => ({ name: m.name, col: m.to })) : []
+  if (notPlaced.length) log('move: not in their new cells', notPlaced.map((x) => `${x.name} (column ${colLabel(x.col)} empty)`).join(', '))
   await settled()
-  return { ...counted(), joinsRefused: refused, sent, missingAfterMove, still, checked: !!after, after, missingBack }
+  return { ...counted(), joinsRefused: refused, sent, missingAfterMove, still, checked: !!after, after, missingBack, notPlaced }
 }
 
 /**
@@ -685,9 +727,12 @@ export async function runMove({ plan, moves, wire, log = () => {}, names = null,
  * every write of it held to that preset.
  *
  * Answers { notSent: true, why } or { notSent: false, plan, ...runMove's
- * answer } (whose `refused` counts the writes the unit answered "refused").
+ * answer, cutsAfter } (whose `refused` counts the writes the unit answered
+ * "refused"; `cutsAfter` is rowCuts on the last read, for the move's row,
+ * empty spaces counted, `blocks` the chain read for the Inputs' and
+ * Outputs' slugs).
  */
-export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables = true, law = false, version = null, log = () => {}, names = null, measure = false, onPreset = null, starting = () => {} } = {}) {
+export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables = true, law = false, version = null, log = () => {}, names = null, measure = false, onPreset = null, starting = () => {}, blocks = null } = {}) {
   let plan = plainMove(row)
   if (cables) {
     const before = await readCells(wire)
@@ -706,19 +751,24 @@ export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables
   }
   starting()
   const res = await runMove({ plan, moves, wire, log, names, measure, hold, checkedFirst: true })
-  return { ...res, notSent: false, plan }
+  /* The row asked on the move's last read as a cut row is asked: a cut the plan's own joins do not cover is said under it too. */
+  const cutsAfter = res.checked && Array.isArray(res.after) ? rowCuts({ cells: res.after, blocks: blocks || [], rows, law, version, holes: true, only: [row] }) : []
+  if (cutsAfter.length) log(`move: row ${rowLabel(row)} asked again`, cutsAfter[0].text)
+  return { ...res, notSent: false, plan, cutsAfter }
 }
 
 /**
  * "JOIN THE ROW": read the grid, send the joins it does not show, read
  * again, and ask the row again (rowCuts on that read, with `blocks`, `rows`,
- * `law`, `version` and `holes` as the cut was found by). `joins` are the
- * move's (after a move left one missing) or a cut row's (`rowCuts`). Every
- * join is held to the unit's preset (`onPreset`). Answers joinedWords'
- * input: { row, readBefore, sent, failed, stopped, skipped, still, checked,
- * after, cuts }, and logs the row before and after.
+ * `law` and `version` as the cut was found by, and ALWAYS with empty spaces
+ * counted, so "joined again" is never said over an empty cell between the
+ * row's Input and Output, however the cut was found). `joins` are the move's
+ * (after a move left one missing) or a cut row's (`rowCuts`). Every join is
+ * held to the unit's preset (`onPreset`). Answers joinedWords' input: { row,
+ * readBefore, sent, failed, stopped, skipped, still, checked, after, cuts },
+ * and logs the row before and after.
  */
-export async function joinRow({ row, joins, wire, log = () => {}, names = null, blocks = null, rows = 4, law = false, version = null, holes = false, onPreset = null }) {
+export async function joinRow({ row, joins, wire, log = () => {}, names = null, blocks = null, rows = 4, law = false, version = null, onPreset = null }) {
   const list = (joins || []).filter((j) => j && Number.isInteger(j.srcRow) && Number.isInteger(j.srcCol) && Number.isInteger(j.destRow))
   const cols = list.flatMap((j) => [j.srcCol, j.srcCol + 1])
   const first = cols.length ? Math.min(...cols) : 0
@@ -736,7 +786,7 @@ export async function joinRow({ row, joins, wire, log = () => {}, names = null, 
   if (r.stopped === 'moved') return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: list, checked: false, after: null, cuts: null }
   const after = r.sent ? await readCells(wire) : before
   log(`join the row: row ${rowLabel(row)} after: ${rowSaid(after, row, first, last, names)}`)
-  const cuts = after ? rowCuts({ cells: after, blocks: blocks || [], rows, law, version, holes, only: [row] }) : null
+  const cuts = after ? rowCuts({ cells: after, blocks: blocks || [], rows, law, version, holes: true, only: [row] }) : null
   if (cuts?.length) log(`join the row: row ${rowLabel(row)} asked again`, cuts[0].text)
   return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: after ? missingJoins(after, list) : list, checked: !!after, after, cuts }
 }
@@ -783,7 +833,10 @@ export function maybeCut(blocks) {
  * before it, where nothing can be joined from) is `blocked`, said with its
  * reason in the words, and the row gets no button: joining half of it
  * leaves it as silent as before, and "joined again" over that was the first
- * cut of this the review found.
+ * cut of this the review found. With `holes`, a cell fed from nothing after
+ * an empty space is said with the space and is neither joined nor blocked,
+ * so the button is offered for the cut cells the app can join, and the space
+ * is still said after them (joinRow's answer counts it).
  *
  * Answers [{ row, col, joins, blocked, hole, holes, text }]: `col` the first
  * cut column, `joins` what Join the row sends (none while anything is

@@ -256,8 +256,9 @@ const summaryBlock = (b) => ({ effectId: b.effectId, slug: b.slug ?? null, name:
 export function createMockDevice(unitKey = DEFAULT_UNIT, { joinsAsOnUnit = false } = {}) {
   /*
    * FOR THE TESTS ONLY, AND OFF IN THE DEMO: a block put into a cell joins
-   * nothing, and a cell emptied takes its joins with it, as Justin's Axe-Fx
-   * III did on 15 and 16 November 2026 (a block placed into an empty cell
+   * nothing, and a cell emptied takes the join INTO it with it (the joins
+   * out of it, into the next column's cells, stay), as Justin's Axe-Fx III
+   * most likely did on 15 and 16 November 2026 (a block placed into an empty cell
    * read back "fed from nothing"; a drag that cleared and re-placed four
    * blocks left the row silent). With it off, as the demo has it, every
    * placed block is joined to its own row, so no test of a drag against the

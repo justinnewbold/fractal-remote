@@ -61,7 +61,7 @@ import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, l
 import { addedWords, addHint, addOutcome, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere, saidInRun } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
-import { JOIN_ROW, JOINING_ROW, afterMoveSaid, cablesLaid, joinRow, joinedWords, maybeCut, moveBlocks, oldCableBytes, rowCuts, rowNote } from '../lib/chain-move'
+import { CHAIN_CHANGED, JOIN_ROW, JOINING_ROW, afterMoveSaid, cablesLaid, joinRow, joinedWords, maybeCut, moveBlocks, oldCableBytes, rowCuts, rowNote } from '../lib/chain-move'
 import { linkState, linkVia } from '../lib/link'
 import { isSilencingParam } from '../lib/guardrails'
 import { blockLevel, levelFloor, levelToSend, levelTypes, LEVEL_HINT } from '../lib/blockLevel'
@@ -2304,6 +2304,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    */
   const placeOf = (eid) => (getState().allBlocks || []).find((b) => idOf(b) === eid) || null
 
+  /* A row a block was taken out of by a write elsewhere: the grid read, and the row said under it as it reads now, its empty spaces counted. */
+  const sayRowLeft = async (row, n) => {
+    const cells = await gridCells().catch(() => null)
+    if (!Array.isArray(cells)) return
+    const cut = rowCuts({ cells, blocks: getState().allBlocks || blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, holes: true, only: [row] })[0]
+    leaveRow(row, cut ? { text: cut.text, joins: cut.joins, n } : null)
+    if (cut) logDebug('chain', `row ${rowLabel(row)} after a block was moved out of it`, cut.text)
+  }
+
   const add = async (row, col, page = choice, from = null) => {
     if (page === null || page === undefined) return
     chainUndo.clear()
@@ -2316,8 +2325,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     /* Where this very block was before, if it was in the chain already (a search of the list offers those too): a unit has one of each, so that is a move. */
     const was = placeOf(Number(page))
     beginChainWrite()
-    /* What was said under this row is about the row before this write (a green "joined again" over a block that comes in joined to nothing). */
+    /* The preset this write is made on: what it leaves said is about it. */
+    const n = getState().preset?.number
+    /* What was said under this row is about the row before this write (a green "joined again" over a block that comes in joined to nothing). And under the row the block may leave: that is written to as well. */
     leaveRow(row, null)
+    if (was && was.row !== row) leaveRow(was.row, null)
     try {
       const r = await placeBlock(row, col, Number(page))
       logDebug('chain', `add block ${page} at ${where(row, col)}`, refusedAnswer(r) ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
@@ -2344,6 +2356,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         const gone = from && !holds(...from.split(':').map(Number))
         setTold({ at: gone ? `${row}:${col}` : under, tone: 'ok', text: got.kind === 'moved' ? movedWords(name, where(row, col), where(was.row, was.col)) : addedWords(name, where(row, col)) })
       }
+      /* MOVED, NOT ADDED: the block left an empty space in its old row, which nothing joins across. That row is read again, the space counted, and said under it (lib/chain-move rowCuts with holes), as the browser's tap-to-move says it. */
+      if (got.kind === 'moved' && joinsHere) await sayRowLeft(was.row, n)
     } catch (err) {
       endChainWrite()
       setIssue(err.message)
@@ -2442,6 +2456,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         /* Each moved block read before and after, for the log: his account only (two reads a block would slow every customer's drag). */
         measure: bluetoothAdmin(),
         onPreset: presetHeld(n),
+        /* The chain read, for the Inputs and Outputs when the row is asked again after the move. */
+        blocks,
         starting: () => {
           /* Undo goes only once something is about to be written: a move refused before it keeps the last change's Undo. */
           chainUndo.clear()
@@ -2454,6 +2470,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         setSettling(null)
         if (res.stopped) followPresetAfterChainWrite()
         if (res.why) leaveRow(lane.row, { text: res.why, joins: [], n })
+        /* The chain on the unit is not the one on screen: it is read again, as the words say. */
+        if (res.why === CHAIN_CHANGED) await refreshBlocks({ quiet: true })
         return
       }
       /* What the move leaves said, over the chain and under its row (lib/chain-move afterMoveSaid, the browser's words too). */
@@ -2543,13 +2561,13 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     beginChainWrite()
     try {
       logDebug('chain', `Join the row tapped on row ${rowLabel(cut.row)}`, `${cut.joins.length} join${cut.joins.length === 1 ? '' : 's'}`)
-      /* And the row asked again after, the way it was found (rowCuts), so "joined again" is said only of a row that reads whole. */
-      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(lanes.find((l) => l.row === cut.row)), blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, holes: !!cut.holes, onPreset: presetHeld(n) })
+      /* And the row asked again after, the way it was found (rowCuts, its empty spaces always counted), so "joined again" is said only of a row that reads whole. */
+      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(lanes.find((l) => l.row === cut.row)), blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, onPreset: presetHeld(n) })
       endChainWrite({ refresh: false })
       if (r.stopped) followPresetAfterChainWrite()
       else await refreshBlocks({ quiet: true })
       const w = joinedWords(r)
-      leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, holes: w.holes ?? cut.holes, n })
+      leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, n })
     } catch (err) {
       setIssue(err.message)
       onError(err.message)

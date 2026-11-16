@@ -116,14 +116,21 @@ export function run(test) {
     if (preset === metronome) assert.match(preset, /^Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, .+ And in the metronome, tapping/, 'the folded line does not say each fix by its own place')
   })
 
-  test('a line folded to keep 16 November 2026 at six keeps every sentence it was published with, and the chain editor’s says what the app does, not that the sound is back', () => {
+  test('a line folded to keep 16 November 2026 at six keeps every sentence it was published with, and the chain editor’s is said once, under its own name, and says what the app does', () => {
     /*
      * The chain editor's fix came on a day already at six lines. The first cut
      * folded it in by cutting the Raspberry Pi line's second sentence, already
      * on the website, and promised the chain was "no longer silent", which no
-     * unit has shown. So each published line is kept whole, the chain
-     * editor's two sentences each go on the end of one, and they say what the
-     * app does (joins the row again and checks it; offers Join the row).
+     * unit has shown. So each published line is kept whole. The second cut
+     * hung one chain-editor sentence off the Raspberry Pi line and one off the
+     * phone-or-tablet line, so the fix read as the phone's and Join the row as
+     * the Pi's, and the drags it now refuses were not said. Now the chain
+     * editor's words are ONE sentence, headed by the chain editor, saying what
+     * the app does (joins the row again after a move, or refuses the move and
+     * says why). No line of that day but the phone-or-tablet one has room for
+     * it (six lines, 320 characters a line, every line already published), so
+     * it is there, under its own heading; Join the row is not named, the
+     * button says what it does where it appears.
      */
     const day = JSON.parse(read('shared/whats-new.json')).days.find((d) => d.date === '2026-11-16')
     const texts = day.lines.map((l) => (typeof l === 'string' ? l : l.text))
@@ -133,8 +140,13 @@ export function run(test) {
     ]) {
       assert.ok(texts.some((t) => t.startsWith(published)), `a published line lost a sentence: ${published.slice(0, 60)}…`)
     }
-    assert.ok(texts.some((t) => t.includes('The chain editor now joins a row again after a move, and checks it.')), 'the chain editor’s move is not said')
-    assert.ok(texts.some((t) => t.includes('A row the chain editor finds cut now offers Join the row.')), 'Join the row is not said')
+    const chain = texts.filter((t) => /chain editor/i.test(t))
+    assert.equal(chain.length, 1, 'the chain editor’s fix is said in more than one place, or not at all')
+    assert.ok(!/raspberry pi/i.test(chain[0]), 'the chain editor’s fix hangs off the Raspberry Pi line')
+    const said = chain[0].slice(chain[0].search(/(?:In the c|C)hain editor/))
+    assert.match(said, /^(?:In the chain editor,|Chain editor:) /, 'the chain editor’s sentence is not headed by the chain editor')
+    assert.match(said, /joins its row again/, 'what a move does now is not said')
+    assert.match(said, /isn’t made, saying why\./, 'a move the app cannot join again is not said to be refused, with why')
     for (const t of texts) assert.ok(!/no longer leaves the chain silent|no longer silent/i.test(t), `a line promises the sound is back: ${t}`)
   })
 
