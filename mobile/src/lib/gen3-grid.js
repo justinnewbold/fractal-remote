@@ -65,11 +65,12 @@
  * OLDER COMPUTER APP STILL SENDS THE LAW'S, which is why Quick build puts a
  * chain on a six-row unit's THIRD row (shared/starter-chains `homeRow`):
  * a cable along row 3 is the same bytes either way, so that row does not
- * depend on which computer app is sending. A UNIT HAS JOINED IT ONCE: his
- * Axe-Fx III, from the phone over a WIDI Master, five cables along row 3
- * and the read back "6 in, 0 not; connected" (report 913f344a, 16 November
- * 2026). A III only, that adapter only, that row only; the 162 cables that
- * changed are still not seen.
+ * depend on which computer app is sending. HIS AXE-FX III HAS JOINED IT
+ * TWICE, 16 November 2026: from the phone over a WIDI Master, five cables
+ * along row 3 and the read back "6 in, 0 not; connected" (report
+ * 913f344a), and through his Raspberry Pi on computer app 1.90.63, older
+ * than the correction ("9 in, 0 not; connected", report adc7d553). A III
+ * only, that row only; the 162 cables that changed are still not seen.
  *
  * ONE CABLE IS STILL REFUSED: out of a six-row grid's TOP row from an even
  * column (`cableKnown`). The codec refuses it as "not decoded", the computer

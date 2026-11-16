@@ -882,8 +882,9 @@ export function run(test) {
     assert.equal(s.TAKES_LONG, 'Over Bluetooth this takes about half a minute to a minute.')
     assert.equal(s.KEEP_OPEN, 'Keep the app open until it’s done.')
     assert.equal(s.BUILDING, 'Building…')
+    assert.equal(s.UNDO_BUSY, 'Undoing…')
     const words = s.SHOWN_WORDS()
-    for (const w of [s.TAKES_LONG, s.KEEP_OPEN, s.BUILDING, ...s.STEPS_BUILD, ...s.STEPS_UNDO, s.readingFrom('Axe-Fx III'), s.readingBack('FM3'), s.sentOf(4, 11), s.JOINING]) assert.ok(words.includes(w), w)
+    for (const w of [s.TAKES_LONG, s.KEEP_OPEN, s.BUILDING, s.UNDO_BUSY, ...s.STEPS_BUILD, ...s.STEPS_UNDO, s.readingFrom('Axe-Fx III'), s.readingBack('FM3'), s.sentOf(4, 11), s.JOINING]) assert.ok(words.includes(w), w)
   })
 
   test('Quick build draws the card in the sheet’s head while it builds: a turning circle, the picker hidden and kept, the ✕ faded, and the long wait said only where it is long', () => {
@@ -896,7 +897,7 @@ export function run(test) {
     assert.match(qb, /const panel = buildPanel\(\{ kind: stage\.kind, step: stage\.step, got: stage\.got, of: stage\.of, line, unit \}\)/)
     /* Up while a run is, in the head (which never scrolls); gone wherever the run ends. */
     assert.match(qb, /const building = !!busy && stage !== null/)
-    assert.match(qb, /head=\{building \? <BuildProgress stage=\{stage\} line=\{busy\} unit=\{unitName\} takesLong=\{takesLong\} \/> : null\}/)
+    assert.match(qb, /head=\{building \? <BuildProgress stage=\{stage\} line=\{stage\.kind === 'undo' \? null : busy\} unit=\{unitName\} takesLong=\{takesLong\} \/> : null\}/)
     assert.match(qb, /useEffect\(\(\) => \{ if \(!busy\) setStage\(null\) \}, \[busy\]\)/)
     /* No chip can be tapped mid-build, and the picker is the same one after (More… still open for a build that failed). */
     assert.match(qb, /<ChainPicker palette=\{palette\} picks=\{picks\} onPicks=\{setPicks\} room=\{room\} linear=\{shape\.linear\} hidden=\{building\} \/>/)
@@ -904,6 +905,10 @@ export function run(test) {
     /* The foot's own line is not said twice, the button says Building…, the keep row waits, and the ✕ is faded while it runs. */
     assert.match(qb, /\{busy && !building \? <Text accessibilityLiveRegion="polite"/)
     assert.match(qb, /<Press label=\{busy \? BUILDING : buildLabel\(picks\.length\)\}/)
+    /* An Undo's button says only that it is working, and the card is not handed the button's words, so neither repeats nor contradicts the other. */
+    assert.match(qb, /<Press label=\{busy \? UNDO_BUSY : UNDO_LABEL\}/)
+    assert.match(qb, /<BuildProgress stage=\{stage\} line=\{stage\.kind === 'undo' \? null : busy\}/)
+    assert.ok(!/label=\{busy \? UNDOING/.test(qb), 'the Undo button says the blocks are coming out on every step')
     assert.match(qb, /\{busy \? null : naming \? \(/)
     assert.match(qb, /locked=\{!!busy\} >/)
     /* The long wait, said before the tap and under the card, only where Edit says it is long. */

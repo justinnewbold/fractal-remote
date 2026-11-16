@@ -1382,10 +1382,15 @@ what the computer sends for the same edit, and a test holds it there.
       FM3 keeps the second, and a preset that has an end keeps its row).
       Along rows 3 and 4 the old message and the corrected one are the
       same bytes, so that row does not depend on which computer app is
-      sending. A UNIT HAS JOINED IT ONCE: his Axe-Fx III, from the phone
-      over a WIDI Master, 16 November 2026 (report 913f344a, "6 in, 0 not;
-      connected"); through a computer app not seen yet. Do not move it
-      back to row 2 while computer apps older than 1.90.82 are about.
+      sending. HIS AXE-FX III HAS JOINED IT TWICE, 16 November 2026:
+      from the phone over a WIDI Master (report 913f344a, "6 in, 0 not;
+      connected"), and through his Raspberry Pi on computer app 1.90.63,
+      older than 1.90.82 and so sending the law's bytes, which are the
+      corrected ones along this row (report adc7d553, "9 in, 0 not;
+      connected", every column "fed from row 3"). That second one bears
+      out why the row was chosen. Not seen on an FM3 or FM9, or on any
+      other row. Do not move it back to row 2 while computer apps older
+      than 1.90.82 are about.
     - *The log says the whole row as the unit read it back*
       (`rowAsRead`: "row 3 as read: column 1 Input 1, column 2 Drive 1
       (fed from row 3), …") and whether it read as connected. The card
@@ -1394,9 +1399,9 @@ what the computer sends for the same edit, and a test holds it there.
     - The card's words are as they were. Preset 389 was saved unjoined
       (and 388's build was never saved): no sound path, build again on
       another empty preset.
-  - *STILL NOT PROVEN ON A UNIT:* a row that reads back joined through
-    the computer (seen once over Bluetooth, above: his Axe-Fx III, row 3,
-    a WIDI Master); the Undo; on a six-row unit with the Input on the top
+  - *STILL NOT PROVEN ON A UNIT:* a row other than row 3 that reads back
+    joined (row 3 has, twice, on his Axe-Fx III: over Bluetooth and through
+    the Pi, above); the Undo; on a six-row unit with the Input on the top
     row it builds there but lays no cables (that row's cable from an even column
     is still refused) and says so; and whether the unit keeps a bare
     wire's joins under a block placed over it is not known, so the plan
@@ -4045,9 +4050,10 @@ with no blocks read as the unit not answering again.
 - The first copy of such a SET to come back is the unit's answer and is
   not counted (bleWire `answersItself`, and `lastSent.copies`, which counts
   each sent message's copies whoever takes them). A second copy of the same
-  message is an echo: with a plug really in THRU both come, and the count
-  climbs a write at a time, so the line is still written for a rig wired
-  wrong. Never a question (7F in the value's place): the echo of "which
+  message is an echo and is still counted in `echoes` (counts(), the Echo
+  test), but since 1.91.4 it no longer rings the alarm or holds an empty
+  preset's read: a rig wired wrong is named by the copies of its QUESTIONS,
+  which a plug in THRU echoes too (the 1.91.4 bullet, below). Never a question (7F in the value's place): the echo of "which
   scene?" is what the guard exists for. Not on an AM4, whose messages are
   another shape.
 - A plug that only loops, with nothing behind it, gives one copy of a SET,
@@ -4070,7 +4076,7 @@ with no blocks read as the unit not answering again.
   take it still meets with silence; what a unit says then is not known.
 - So "the unit is echoing what it receives" in a log from before 1.90.84,
   from an FM3, FM9 or Axe-Fx III, says nothing about the plug unless Thru
-  is known to be on. From 1.90.84 to 1.91.3 it took three copies of
+  is known to be on. From 1.90.84 until 1.91.4 it took three copies of
   anything sent but a set's first copy (a write's as much as a
   question's), and a Quick build over Bluetooth could ring it (below).
 - AND QUICK BUILD'S "SELECT A CELL" (01 30) CAME BACK TOO. Report

@@ -18,6 +18,7 @@ import {
   BLOCKS_HEAD,
   BLOCKS_NOT_READ,
   BUILDING,
+  UNDO_BUSY,
   CANCEL_BUTTON,
   CHAIN_NONE_YET,
   CHECKING_EMPTY,
@@ -812,7 +813,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
         open={open}
         onClose={close}
         title={QUICK_BUILD_TITLE}
-        head={building ? <BuildProgress stage={stage} line={busy} unit={unitName} takesLong={takesLong} /> : null}
+        head={building ? <BuildProgress stage={stage} line={stage.kind === 'undo' ? null : busy} unit={unitName} takesLong={takesLong} /> : null}
         foot={foot}
         tall
         locked={!!busy}
@@ -833,7 +834,7 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
                 onPlay?.()
               }}
             />
-            {done.undo ? <Press label={busy ? UNDOING : UNDO_LABEL} sub={undoSub(done.count)} disabled={!!busy} busy={!!busy} onPress={runUndo} /> : null}
+            {done.undo ? <Press label={busy ? UNDO_BUSY : UNDO_LABEL} sub={undoSub(done.count)} disabled={!!busy} busy={!!busy} onPress={runUndo} /> : null}
             {undoSaid ? <Note tone={undoSaid.bad ? 'fault' : 'hint'}>{undoSaid.text}</Note> : null}
             {pending && onSave ? (
               <Press

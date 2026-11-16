@@ -205,7 +205,7 @@ export function run(test) {
     assert.equal(hex(g.buildGridCable(0x10, 2, 1, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 00 41 60 03 f7')
     assert.equal(hex(g.buildGridCable(0x10, 2, 2, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 03 43 20 42 f7')
     assert.equal(hex(g.buildGridCable(0x10, 2, 3, 2, true)), 'f0 00 01 74 10 01 35 00 00 00 00 00 01 00 00 00 00 00 00 02 00 06 44 60 00 f7')
-    /* And along row 3, where Quick build puts a chain on a six-row unit, the law's bytes and these are the same, column after column: an older computer app sends the same bytes there. (A unit has joined that row once: his Axe-Fx III from the phone over a WIDI Master, report 913f344a.) */
+    /* And along row 3, where Quick build puts a chain on a six-row unit, the law's bytes and these are the same, column after column: an older computer app sends the same bytes there. (His Axe-Fx III has joined that row twice: from the phone over a WIDI Master, report 913f344a, and through his Pi on computer app 1.90.63, report adc7d553.) */
     for (let srcCol = 1; srcCol <= 13; srcCol++) {
       assert.deepEqual(g.buildGridCable(0x10, 3, srcCol, 3, true).slice(21, 24), law(3, srcCol, 3), `row 3, column ${srcCol}`)
       assert.deepEqual(g.buildGridCable(0x12, 4, srcCol, 4, true).slice(21, 24), law(4, srcCol, 4), `row 4, column ${srcCol}`)

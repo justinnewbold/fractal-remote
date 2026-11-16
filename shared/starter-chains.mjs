@@ -229,6 +229,8 @@ export const TAKES_LONG = 'Over Bluetooth this takes about half a minute to a mi
 /* Switched away, the phone stops the app, the read stops part-way and the build fails (no Bluetooth in the background). */
 export const KEEP_OPEN = 'Keep the app open until it’s done.'
 export const BUILDING = 'Building…'
+/* The Undo's button while its card is up: the card says which step it is on, so the button says only that it is working (it said "Taking the blocks back out…" through all three steps, the first and last of which take nothing out). */
+export const UNDO_BUSY = 'Undoing…'
 
 /**
  * What the card shows: the three steps (`kind` 'build' or 'undo'), each
@@ -272,7 +274,7 @@ export const SHOWN_WORDS = () => [
   undoMissedLine(['Amp']), UNDO_NOT_READ, undoSub(0), undoneLine(0), undoNotJoinedLine(3), undoNotJoinedLine(3, 1), undoNotJoinedLine(3, 4), undoWiringLeftLine(0), undoWiringLeftLine(2), BLOCKS_NOT_READ, TRY_AGAIN,
   NO_BLOCKS_TITLE, stoppedEarlyLine(), stoppedEarlyLine(['Input 1']), endsPutLine(['Input 1']), endsPutLine(['Input 1', 'Output 1']), PRESET_MOVED_BEFORE, PRESET_MOVED_AFTER, UNDO_MOVED_AFTER, UNIT_QUIET, UNIT_QUIET_BEFORE, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'The unit did not answer in time.', false),
   notAddedLine(['Cab'], 2, false, 2), endMissingLine(['Output 1'], 2), endMissingLine(['Input 1', 'Output 1'], 1),
-  ...STEPS_BUILD, ...STEPS_UNDO, readingFrom('Axe-Fx III'), readingFrom(''), readingBack('FM3'), readingBack(null), sentOf(4, 11), TAKES_LONG, KEEP_OPEN, BUILDING
+  ...STEPS_BUILD, ...STEPS_UNDO, readingFrom('Axe-Fx III'), readingFrom(''), readingBack('FM3'), readingBack(null), sentOf(4, 11), TAKES_LONG, KEEP_OPEN, BUILDING, UNDO_BUSY
 ]
 
 /* ---------------------------------------------------------------- */
@@ -765,10 +767,11 @@ const listedEnd = (palette, end) =>
  * message and the corrected one are the same bytes, so a chain there does
  * not depend on which computer app sends them, and a player's may well be
  * from before the correction. Row 3 of the two, the nearer to the second,
- * where a chain used to go. SEEN TO JOIN ONCE: Justin's Axe-Fx III, from
- * the phone over a WIDI Master, read back "6 in, 0 not; connected" on row 3
- * (report 913f344a, 16 November 2026). Through a computer app, and on an
- * FM9, not seen yet.
+ * where a chain used to go. SEEN TO JOIN TWICE, on Justin's Axe-Fx III, 16
+ * November 2026: from the phone over a WIDI Master ("6 in, 0 not;
+ * connected", report 913f344a), and through his Raspberry Pi on computer
+ * app 1.90.63, older than the correction ("9 in, 0 not; connected", report
+ * adc7d553). On an FM3 or FM9, not seen yet.
  */
 export const homeRow = (rows) => (rows >= 6 ? 2 : rows > 1 ? 1 : 0)
 
