@@ -11692,6 +11692,13 @@ export function run(test) {
           u.quietSlotTimes--
           return
         }
+        /* Or answer with a byte changed on the way (`damagedSlot`, `damagedTimes`): a whole message whose checksum no longer holds. */
+        if (u.damagedSlot === sx.fromSeptets32(b, 12) && u.damagedTimes > 0) {
+          u.damagedTimes--
+          const whole = sx.frame(0x10, 0x01, [...b.slice(6, 12), ...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(u.damagedSlot))])
+          whole[40] ^= 0x01
+          return t.say(whole)
+        }
         /* Or answer LATE, that long after it was asked (`slowSlot`, `slowBy`, `slowTimes`): after the phone has stopped waiting for it. */
         if (u.slowSlot === sx.fromSeptets32(b, 12) && u.slowTimes > 0) {
           u.slowTimes--
@@ -12591,13 +12598,19 @@ export function run(test) {
     const next = await asks('/nam/heads/2/2')
     assert.deepEqual(next.heads.map((h) => [h.slot, h.name]), [[2, 'High Gain Three'], [3, '<EMPTY>']], 'a slot was handed the late answer of the one asked before it')
     assert.ok(t.clock.now() - slowAt >= 2500 + 2000, `the next slot was asked ${t.clock.now() - slowAt} ms after the silent one was: inside the time its answer could still come`)
-    /* The same for the search for an empty slot (the card's send starts with it). */
+    /*
+     * The same for the search for an empty slot (the card's send starts with
+     * it). The slot whose answer comes late is a FULL one ("Clean One"): the
+     * search starts at slot 004, the first this connection has not read full
+     * (namFullTo), and handed that late answer it would read 004 as taken
+     * and answer 005.
+     */
     t.clock.set(t.clock.now() + 10000)
-    u.slowSlot = 5
+    u.slowSlot = 1
     u.slowTimes = 1
-    assert.equal((await asks('/nam/heads/5/1')).stopped, 5)
+    assert.equal((await asks('/nam/heads/1/1')).stopped, 1)
     const found = await asks('/nam/empty')
-    assert.deepEqual([found.slot, found.heads.map((h) => h.name)], [3, ['Brit Crunch', 'Clean One', 'High Gain Three', '<EMPTY>']], 'the search for an empty slot was handed a late answer')
+    assert.deepEqual([found.slot, found.from, found.heads.map((h) => [h.slot, h.name])], [3, 3, [[3, '<EMPTY>']]], 'the search for an empty slot was handed a late answer')
     u.slowSlot = null
     t.clock.set(t.clock.now() + 10000)
 
@@ -12636,6 +12649,261 @@ export function run(test) {
     const reading = t.wire.request('/nam/heads/16/8', { capturing: true })
     const scene = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ scene: 2 }) })
     await drive(t.clock, Promise.all([reading, scene.catch((e) => assert.ok(e.status !== 409, `a scene was refused during a list read: ${e.message}`))]))
+  })
+
+  /*
+   * THE SEARCH FOR AN EMPTY SLOT OVER AN ADAPTER THAT LOSES AN ANSWER NOW
+   * AND THEN. Justin's Axe-Fx III over a WIDI Uhost, 15 November 2026: four
+   * taps of Preview and Get, each asking the unit's slots one at a time from
+   * the first, each stopped by one slot that did not answer (014, 031, 028,
+   * 024: a different one each time, about one question in twenty-five), and
+   * no empty slot ever reached, his unit having thirty-odd captures in a row
+   * from the first. One unanswered question ended the search, and the next
+   * tap began it again from the first slot.
+   */
+  test('the search for an empty slot asks a silent slot again, keeps the quiet both sides of it, and gives up only at the third silence', async () => {
+    const { NAM_SLOT_ASKS, LATE_MS } = await import('../mobile/src/lib/bleWire.js')
+    assert.equal(NAM_SLOT_ASKS, 3)
+    const said = (nam, slot) => hex(nam.namSlotQuery(0x10, slot))
+
+    /* ONE SILENCE: asked again after the quiet, and the search goes on. */
+    {
+      const { t, u, nam, asks, shaped } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 1
+      t.sent.length = 0
+      const at = []
+      const sentAt = []
+      const send = t.unit.hear
+      t.unit.hear = (b) => {
+        if (nam.namShaped(b, 0x10)) sentAt.push([hex(b), t.clock.now()])
+        return send(b)
+      }
+      const found = await asks('/nam/empty', { onProgress: (slot, again) => at.push([slot, again]) })
+      assert.deepEqual([found.slot, found.from, found.heads.map((h) => h.slot)], [3, 0, [0, 1, 2, 3]], 'a slot that said nothing once ended the search')
+      assert.deepEqual(shaped().map(hex), [0, 1, 2, 2, 3].map((slot) => said(nam, slot)), 'the silent slot was not asked exactly twice, or another was asked meanwhile')
+      /* What the screen is told: each slot as it is asked, and the second asking of the silent one. */
+      assert.deepEqual(at, [[0, 1], [1, 1], [2, 1], [2, 2], [3, 1]])
+      /* The second asking waits out the wait and the quiet: the first question's answer can no longer come. */
+      const twos = sentAt.filter(([h]) => h === said(nam, 2)).map(([, when]) => when)
+      assert.ok(twos[1] - twos[0] >= 2500 + LATE_MS, `slot 003 was asked again ${twos[1] - twos[0]} ms after the first asking`)
+      /* And no OTHER slot is asked until the second asking's answer can no longer be on its way either. */
+      const three = sentAt.find(([h]) => h === said(nam, 3))[1]
+      assert.ok(three - twos[1] >= LATE_MS, `slot 004 was asked ${three - twos[1]} ms after slot 003 was asked again`)
+      assert.ok(t.logs.includes('no answer to capture slot 003 in 2500 ms: nothing came in meanwhile'), t.logs.filter((l) => /capture slot/.test(l)).join(' | '))
+      assert.ok(t.logs.includes('asking capture slot 003 again (2 of 3)'))
+      assert.ok(t.logs.some((l) => /^looked for an empty capture slot from 001: 4 answered in [\d.]+ s, 1 asked again; 004 is empty$/.test(l)), t.logs.filter((l) => /looked for/.test(l)).join(' | '))
+    }
+
+    /*
+     * AN ANSWER LATER THAN ANYTHING ALLOWED FOR. Slot 003's first answer
+     * comes 4.6 seconds after it was asked: after the wait and the quiet,
+     * a tenth of a second after the slot was asked again, whose own answer
+     * came at once. Two answers, both slot 003's. Asked straight after, slot
+     * 004 would be handed the second ("High Gain Three": taken) and the
+     * search would answer 005, with every slot after read one late.
+     */
+    {
+      const { u, asks } = await capturesLine()
+      u.slowSlot = 2
+      u.slowBy = 4600
+      u.slowTimes = 1
+      const found = await asks('/nam/empty')
+      assert.deepEqual([found.slot, found.heads.map((h) => [h.slot, h.name])], [3, [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three'], [3, '<EMPTY>']]], 'the slot after one asked again was handed that slot’s other answer')
+    }
+
+    /* THREE SILENCES: given up on, in words that are true, with nothing past it asked; and the next search starts AT that slot. */
+    {
+      const { t, u, nam, asks, shaped } = await capturesLine()
+      u.quietSlot = 2
+      u.quietSlotTimes = 3
+      t.sent.length = 0
+      const err = await asks('/nam/empty').then(() => null, (e) => e)
+      assert.ok(err, 'a slot silent three times was not given up on')
+      assert.equal(err.status, 504)
+      assert.deepEqual([err.slot, err.asked], [2, 3])
+      assert.equal(err.message, 'The Axe-Fx III didn’t say what is in capture slot 003, asked 3 times. Nothing was sent. Tap again: the search carries on from that slot.')
+      assert.deepEqual(shaped().map(hex), [0, 1, 2, 2, 2].map((slot) => said(nam, slot)), 'a slot past the silent one was asked, or it was not asked three times')
+      assert.ok(t.logs.some((l) => /^gave up looking for an empty capture slot at 003: 2 answered from 001 in [\d.]+ s; the next search starts at 003$/.test(l)), t.logs.filter((l) => /gave up/.test(l)).join(' | '))
+      t.clock.set(t.clock.now() + 10000)
+      t.sent.length = 0
+      const again = await asks('/nam/empty')
+      assert.deepEqual([again.slot, again.from, again.heads.map((h) => h.slot)], [3, 2, [2, 3]])
+      assert.deepEqual(shaped().map(hex), [2, 3].map((slot) => said(nam, slot)), 'the next search began again at the first slot')
+    }
+
+    /* A slot that REFUSES is not asked again: that is an answer. */
+    {
+      const { t, nam, asks, shaped } = await capturesLine()
+      const send = t.unit.hear
+      t.unit.hear = (b) => (hex(b) === said(nam, 1) ? t.say(t.sx.frame(0x10, 0x64, [0x01, 0x03])) : send(b))
+      t.sent.length = 0
+      await assert.rejects(asks('/nam/empty'), (e) => e.status === 502 && /would not say what is in capture slot 002/.test(e.message))
+      assert.deepEqual(shaped().map(hex), [0, 1].map((slot) => said(nam, slot)))
+    }
+  })
+
+  test('the search for an empty slot goes on from where this connection has read every slot full, and never trusts that to write', async () => {
+    const { t, u, nam, asks, shaped, record } = await capturesLine()
+    const said = (slot) => hex(nam.namSlotQuery(0x10, slot))
+    /* A new connection knows nothing: from the first slot. */
+    t.sent.length = 0
+    const first = await asks('/nam/empty')
+    assert.deepEqual([first.slot, first.from], [3, 0])
+    assert.deepEqual(shaped().map(hex), [0, 1, 2, 3].map(said))
+    /* Asked again with nothing changed: only the slot after the last one read full. An empty slot is never remembered: it is read again. */
+    t.sent.length = 0
+    const second = await asks('/nam/empty')
+    assert.deepEqual([second.slot, second.from, second.heads.map((h) => h.slot)], [3, 3, [3]])
+    assert.deepEqual(shaped().map(hex), [said(3)])
+    /* A capture sent there: its own read back raises the mark, and the next search asks slot 005 alone. */
+    await asks('/nam/slots/3', { method: 'POST', body: { words: record('Sent Here', 3).words } })
+    t.sent.length = 0
+    const third = await asks('/nam/empty')
+    assert.deepEqual([third.slot, third.from], [4, 4])
+    assert.deepEqual(shaped().map(hex), [said(4)], 'the search read again what this connection had read full')
+    /* A slot filled from elsewhere meanwhile (Axe-Edit, another device): read, found taken, passed. */
+    u.held.set(4, u.held.get(0))
+    const fourth = await asks('/nam/empty')
+    assert.deepEqual([fourth.slot, fourth.heads.map((h) => [h.slot, h.empty])], [5, [[4, false], [5, true]]])
+    /*
+     * A slot UNDER the mark emptied on the unit since. The search passes
+     * over it (it asks from the mark), and answers a later empty slot it
+     * has just read: never a slot on the strength of what it remembered.
+     */
+    u.held.delete(1)
+    t.sent.length = 0
+    const fifth = await asks('/nam/empty')
+    assert.deepEqual([fifth.slot, fifth.from], [5, 5])
+    assert.deepEqual(shaped().map(hex), [said(5)])
+    /* And once any read of that slot says <EMPTY> (the list's, here), the mark comes down to it: the next search answers it. */
+    assert.deepEqual((await asks('/nam/heads/1/1')).heads.map((h) => [h.slot, h.empty]), [[1, true]])
+    t.sent.length = 0
+    const sixth = await asks('/nam/empty')
+    assert.deepEqual([sixth.slot, sixth.from], [1, 1])
+    assert.deepEqual(shaped().map(hex), [said(1)])
+    /*
+     * THE MEMORY NEVER WRITES. A slot the phone last read as <EMPTY>, taken
+     * since: the upload reads it again and refuses, with nothing sent.
+     */
+    u.held.set(1, u.held.get(0))
+    u.busy.length = 0
+    u.begun.length = 0
+    await assert.rejects(asks('/nam/slots/1', { method: 'POST', body: { words: record('Never Lands', 5).words } }), (e) => e.status === 409 && /already holds “Brit Crunch”\. Nothing was sent\./.test(e.message))
+    assert.deepEqual([u.busy, u.begun], [[], []], 'something of a capture was sent to a slot that is in use')
+    /* All 128 read full: no slot, and how many were found taken is `from` and the heads together. */
+    for (let slot = 0; slot <= nam.NAM_SLOT_PROVEN_MOST; slot++) u.held.set(slot, u.held.get(0))
+    const full = await asks('/nam/empty')
+    assert.equal(full.slot, null)
+    assert.equal(full.from + full.heads.length, nam.NAM_SLOT_PROVEN_MOST + 1)
+    t.sent.length = 0
+    const stillFull = await asks('/nam/empty')
+    assert.deepEqual([stillFull.slot, stillFull.from, stillFull.heads], [null, nam.NAM_SLOT_PROVEN_MOST + 1, []])
+    assert.deepEqual(shaped(), [], 'a search with every slot known full asked the unit something')
+
+    /*
+     * THE MARK ONLY CLIMBS A SLOT AT A TIME FROM THE FIRST. A full slot read
+     * by itself further up (the list opened at a later piece, a block's own
+     * slot looked at) says nothing of the slots under it, which this
+     * connection has not read: the search still starts at the first.
+     */
+    {
+      const other = await capturesLine()
+      other.u.held.delete(0)
+      assert.deepEqual((await other.asks('/nam/heads/2/1')).heads.map((h) => [h.slot, h.empty]), [[2, false]])
+      other.t.sent.length = 0
+      const found = await other.asks('/nam/empty')
+      assert.deepEqual([found.slot, found.from], [0, 0], 'a full slot read on its own was taken to mean every slot under it is full')
+    }
+  })
+
+  test('an upload’s first look at its slot is asked again too, and the log says what came back when a slot goes unanswered', async () => {
+    /* The slot's own read before anything is written: silent once, and the capture still goes; nothing is written before the slot has said <EMPTY>. */
+    {
+      const { t, u, nam, asks, shaped, record } = await capturesLine()
+      u.quietSlot = 3
+      u.quietSlotTimes = 1
+      t.sent.length = 0
+      const got = await asks('/nam/slots/3', { method: 'POST', body: { words: record('After A Silence', 9).words } })
+      assert.deepEqual([got.slot, got.name], [3, 'After A Silence'])
+      const out = shaped().map(hex)
+      assert.deepEqual(out.slice(0, 2), [hex(nam.namSlotQuery(0x10, 3)), hex(nam.namSlotQuery(0x10, 3))], 'the slot was not asked again before anything was written')
+      assert.deepEqual(u.busy, [1, 0])
+    }
+    /* Silent three times: nothing was sent, and it says so. */
+    {
+      const { t, u, asks, record } = await capturesLine()
+      u.quietSlot = 3
+      u.quietSlotTimes = 3
+      t.sent.length = 0
+      const err = await asks('/nam/slots/3', { method: 'POST', body: { words: record('Never Sent', 9).words } }).then(() => null, (e) => e)
+      assert.equal(err?.status, 504)
+      assert.equal(err.message, 'The Axe-Fx III didn’t say what is in capture slot 004, asked 3 times. Nothing was sent.')
+      assert.deepEqual([u.busy, u.begun, u.chunks], [[], [], []], 'something of the capture went to a slot that never said it was empty')
+      assert.ok(!err.partial, 'a send that never began is offered again as one that stopped part-way')
+    }
+    /*
+     * WHAT THE LOG SAYS OF A SLOT THAT WENT UNANSWERED. "No answer" was one
+     * line for a question that never arrived, an answer damaged on the way
+     * and an answer that was only late: the next log from his phone has to
+     * say which.
+     */
+    {
+      const { t, u, asks } = await capturesLine()
+      /* An answer that came whole with a byte changed: heard, not taken, and said with its length and its checksum. */
+      u.damagedSlot = 1
+      u.damagedTimes = 1
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      const line = t.logs.find((l) => l.startsWith('no answer to capture slot 002 in 2500 ms'))
+      /* (The bytes counted are everything that arrived in the wait, the stand-in's own unasked short messages among them: at least the answer's 334.) */
+      assert.match(line, /^no answer to capture slot 002 in 2500 ms: (\d+) bytes came in meanwhile, 1 whole message that was not its answer \(the last 334 bytes, function 0x01, ITS CHECKSUM WRONG\)$/, line)
+      assert.ok(Number(line.match(/: (\d+) bytes/)[1]) >= 334, line)
+    }
+    {
+      const { t, u, asks } = await capturesLine()
+      /* An answer that was only late, inside the quiet: dropped, and said to have come late, with how late. */
+      u.slowSlot = 1
+      u.slowBy = 3000
+      u.slowTimes = 1
+      assert.equal((await asks('/nam/empty')).slot, 3)
+      assert.ok(t.logs.includes('no answer to capture slot 002 in 2500 ms: nothing came in meanwhile'))
+      const late = t.logs.find((l) => /^a capture slot’s answer came \d+ ms after the question it was too late for: dropped$/.test(l))
+      assert.ok(late, t.logs.filter((l) => /late|capture slot/.test(l)).join(' | '))
+      /* Three seconds after it was asked, give or take the moment the question waited its turn. */
+      const ms = Number(late.match(/came (\d+) ms/)[1])
+      assert.ok(ms >= 3000 && ms < 3200, late)
+    }
+    /* Any other question that goes unanswered says what came in too (here: nothing). */
+    {
+      const t = await onANamIII({ edit: () => false })
+      const hear = t.unit.hear
+      t.unit.hear = (b) => (b[0] === 0xf0 && b[5] === 0x0c ? undefined : hear(b))
+      await drive(t.clock, t.wire.request('/scene').catch(() => null))
+      const miss = t.logs.find((l) => /^no answer to /.test(l))
+      assert.ok(miss === undefined || /: (nothing came in meanwhile|\d+ bytes? came in meanwhile)/.test(miss), miss)
+    }
+  })
+
+  test('the card says which slot the search is at, and the device hands the search’s progress to the wire alone', async () => {
+    const words = await import('../mobile/src/lib/tone3000Words.js')
+    assert.equal(words.LOOKING_FOR_SLOT, 'Looking for an empty slot on the unit…')
+    assert.equal(words.lookingForSlot('014'), 'Looking for an empty slot on the unit… checking slot 014')
+    assert.equal(words.lookingForSlot('014', 1), words.lookingForSlot('014'))
+    assert.equal(words.lookingForSlot('014', 2), 'Looking for an empty slot on the unit… slot 014 didn’t answer, asking it again')
+    assert.equal(words.lookingForSlot('014', 3), words.lookingForSlot('014', 2))
+    for (const line of [words.LOOKING_FOR_SLOT, words.lookingForSlot('014'), words.lookingForSlot('014', 2)]) assert.doesNotMatch(line, /this phone|\bbeta\b|tried|tested/i)
+    /* The card: the first line, then the slot as the search tells it, in the slot's own words (one more than the wire's number). */
+    const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
+    assert.ok(card.includes('setSend({ id: m.id, line: LOOKING_FOR_SLOT })'))
+    assert.ok(card.includes('const found = await namEmptySlotHere({ onProgress: (at, asking) => { if (alive.current && Number.isInteger(at)) setSend({ id: m.id, line: lookingForSlot(namSlotSaid(at), asking) }) } })'), 'the card does not say which slot the search is at')
+    /* And how many were found taken counts the ones this connection had read before (`from`). */
+    assert.ok(card.includes('const taken = (Number.isInteger(found.from) ? found.from : 0) + found.heads.length'))
+    assert.ok(card.includes('`The unit’s first ${taken} capture slots are all taken. Clear one on the unit, then send again.`'))
+    /* The device: only a function is handed on, and only to the device's own wire. */
+    const device = src('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.ok(device.includes("export const namEmptySlotHere = ({ onProgress } = {}) => captureAsks('/nam/empty', typeof onProgress === 'function' ? { onProgress } : {})"))
+    /* The wire's route hands it to the search. */
+    assert.ok(src('mobile/src/lib/bleWire.js').includes("if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(() => namEmptySlot(opts.onProgress))"))
   })
 
   /*

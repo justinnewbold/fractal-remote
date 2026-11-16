@@ -99,7 +99,7 @@ import { deviceNoun } from '../lib/device-word'
 import { logDebug } from '../lib/debugLog'
 import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
-import { capturesNote, getSays, namBlockSaid, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
+import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, namBlockSaid, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
 import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
@@ -549,11 +549,18 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       setStopped((was) => Object.fromEntries(Object.entries(was).filter(([key]) => key !== String(m.id))))
       let slot = again
       if (slot === null) {
-        setSend({ id: m.id, line: 'Looking for an empty slot on the unit…' })
-        const found = await namEmptySlotHere()
+        setSend({ id: m.id, line: LOOKING_FOR_SLOT })
+        /* Over an adapter the search is a question a slot, and says which it is at (lib/tone3000Words lookingForSlot); through a computer it is one answer and tells nothing. */
+        const found = await namEmptySlotHere({
+          onProgress: (at, asking) => {
+            if (alive.current && Number.isInteger(at)) setSend({ id: m.id, line: lookingForSlot(namSlotSaid(at), asking) })
+          }
+        })
         if (!alive.current) return
         if (found.slot === null) {
-          setSend({ id: m.id, line: `The unit’s first ${found.heads.length} capture slots are all taken. Clear one on the unit, then send again.` })
+          /* How many were found taken: the ones read this time, after the ones this connection had already read full (`from`, the device's own wire). */
+          const taken = (Number.isInteger(found.from) ? found.from : 0) + found.heads.length
+          setSend({ id: m.id, line: `The unit’s first ${taken} capture slots are all taken. Clear one on the unit, then send again.` })
           return
         }
         slot = found.slot

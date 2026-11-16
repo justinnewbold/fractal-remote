@@ -217,6 +217,52 @@ not kept. Slot 257 (the last) listed the same head as slot 029 in
 the recording, so it may not be a slot of its own: it is never a target,
 and is not offered as a pick until it is understood.
 
+### The search for an empty slot over Bluetooth (15 November 2026)
+
+His log, an iPhone on 1.90.81, an Axe-Fx III through a WIDI Uhost: four
+taps on Preview and Get, and four times "no answer to capture slot NNN in
+2500 ms" (014, 031, 028, 024). By the clock the search asked from 001 each
+time, about 270 ms a slot, and 96 questions were answered and 4 were not.
+Slots 001 to 030 and more are full on his unit, so every search had thirty
+or more questions to get through, lost one, gave up, and began again from
+001 at the next tap. Nothing was sent to the unit in any of the four.
+
+Since 1.90.83 (bleWire):
+
+- `namSlotSure` asks a slot that said nothing again, up to `NAM_SLOT_ASKS`
+  (3) times. Each asking waits the quiet out first (`namQuietUntil`, as
+  ever), and when a re-asked slot answers a new quiet is begun, so that an
+  answer to the earlier asking, arriving late, is dropped and never handed
+  to the next slot's question. The search uses it, and so does an upload's
+  first look at its slot. The list's read (`namHeads`) does not: its
+  caller asks again by its own rule.
+- `namFullTo` is how far up from the first slot every slot has read full
+  on this connection. It climbs one slot at a time, falls back when a slot
+  at or under it reads empty, and is gone with the connection. The search
+  starts after it. It is never used to decide a write: an upload reads its
+  slot itself.
+- `GET /nam/empty` answers `{ slot, heads, from }` over the wire, `from`
+  being the first slot it asked, and tells its caller which slot it is at
+  as it goes (`onProgress(slot, asking)`), which the card draws.
+- No message of an upload (0x54, 0x55, 0x56) is ever sent a second time.
+  A 0x55 carries no offset; if the unit took one and its answer was lost,
+  a second would be filed after it, and the closing word (every word
+  XORed) cannot tell.
+
+Why a slot's answer goes missing is not known. The log lines added to
+tell, under each "no answer to capture slot":
+
+| the line says | what it points to |
+| --- | --- |
+| "nothing came in meanwhile" | the question never reached the unit, or the whole answer was lost |
+| "N bytes came in meanwhile and made no whole message" | an answer cut short on the way |
+| "a whole message that was not its answer (…, ITS CHECKSUM WRONG)" | an answer damaged on the way |
+| "a whole message that was not its answer (…, its checksum right)" | something else the unit said; the answer itself still lost |
+| "a capture slot’s answer came N ms after the question it was too late for: dropped" | the answer was only late (then `WAIT.namSlot` is too short for that adapter) |
+
+And one line a search: "looked for an empty capture slot from 001: 33
+answered in 9.1 s, 1 asked again; 034 is empty".
+
 ## Through the computer, or the Raspberry Pi
 
 "But this will only work over Bluetooth or plugged in directly? Why not over
