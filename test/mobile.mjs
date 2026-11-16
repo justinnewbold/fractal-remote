@@ -14758,7 +14758,7 @@ export function run(test) {
     const start = dev.indexOf('export async function setParamConfirmed(')
     const body = dev.slice(start, dev.indexOf('\n}\n', start) + 2).replace('export async function', 'async function')
     const asked = dev.match(/^const askedAs = .*$/m)[0]
-    const bench = ({ answers, wire = () => ({ ok: true }), preferred = true }) => {
+    const bench = ({ answers, wire = () => ({ ok: true }), preferred = true, oneWay = false }) => {
       const sent = []
       const values = []
       const logs = []
@@ -14779,6 +14779,7 @@ export function run(test) {
           return a
         },
         preferredEncoding: () => preferred,
+        oneWayKnobs: () => oneWay,
         rememberEncoding: (eid, id, continuous) => remembered.push(continuous),
         logDebug: (...line) => logs.push(line.join(' ')),
         READ_BACK_AGAIN_MS: 0,
@@ -14819,6 +14820,29 @@ export function run(test) {
     /* And one whose second check heard nothing says so, not "didn't take". */
     const e = bench({ answers: [2, 2, quiet(), quiet()] })
     assert.deepEqual(await e.run(), { ok: false, continuous: null, retried: true, actual: null, unverified: true })
+
+    /*
+     * THROUGH THE COMPUTER, AN FM3, FM9 OR AXE-FX III IS ONE WAY ONLY TOO. The
+     * computer sends the other way, as ForgeFX's typed write of the 0-to-1
+     * place, which the unit takes in the setting's own units: a miss that was
+     * heard is answered with what the unit holds, and nothing more is sent.
+     */
+    const g = bench({ answers: [2, 2], oneWay: true })
+    assert.deepEqual(await g.run(), { ok: false, continuous: null, retried: false, actual: 2 })
+    assert.deepEqual(g.sent, [true], 'a gen-3 knob through the computer was sent the typed way after a miss')
+    assert.equal(g.reads(), 2)
+    assert.ok(g.logs.some((l) => /did not take .*a gen-3 knob is never sent the other way/.test(l)), g.logs.join(' | '))
+    /* A typed way remembered for it from before is not used either: its place goes first, and alone. */
+    const h = bench({ answers: [1.312], oneWay: true, preferred: false })
+    assert.deepEqual(await h.run(), { ok: true, continuous: true, retried: false })
+    assert.deepEqual(h.sent, [true], 'a remembered typed way was sent to a gen-3 knob')
+    /* Heard nothing: as for every unit, written once and said as not checked. */
+    const q = bench({ answers: [quiet(), quiet()], oneWay: true })
+    assert.deepEqual(await q.run(), { ok: false, continuous: null, retried: false, unverified: true, actual: null })
+    assert.deepEqual(q.sent, [true])
+    /* Which units: the computer's own word for the gen-3 units, kept from the last detect. */
+    assert.match(dev, /^const oneWayKnobs = \(\) => chainCaps\?\.gridRouting === true$/m)
+    assert.match(dev, /^  chainCaps = res\?\.capabilities \?\? null$/m)
 
     /* A setting the unit keeps as a whole number (gen3-edit isWhole): 10.46 is asked as 10, sent as 10's place, and a read of 10 is a write that took, not a miss. */
     const bits = { name: 'Bit Reduce', min: 0, max: 24, whole: true }

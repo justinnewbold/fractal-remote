@@ -1066,7 +1066,17 @@ async function readParamValue(eid, paramId) {
  * the device rounds — asking for 40 Hz can read back 39.998.
  */
 export async function setParamConfirmed(eid, paramId, value, param) {
-  const first = preferredEncoding(eid, paramId)
+  /*
+   * ONE WAY ONLY ON AN FM3, FM9 OR AXE-FX III (the units whose driver lays
+   * cables, `gridRouting`; 16 November 2026, the phone's rule too, in
+   * mobile/src/lib/device.js). ForgeFX's other way sends the 0-to-1 place as
+   * a TYPED value, which a gen-3 unit takes in the setting's own units: on
+   * his FM3 that put Look-Ahead Time at its maximum and Bit Reduce at
+   * nought. So a gen-3 knob is sent its place, checked once, and a miss is
+   * said as one with no second write.
+   */
+  const oneWay = lastCaps?.gridRouting === true
+  const first = oneWay ? true : preferredEncoding(eid, paramId)
 
   const a = await setParam(eid, paramId, value, param, first)
   const checkA = await landed(eid, paramId, value)
@@ -1101,6 +1111,7 @@ export async function setParamConfirmed(eid, paramId, value, param) {
    * time in an encoding nothing had suggested was needed.
    */
   if (checkA.stale) return { ok: false, continuous: null, retried: false, unverified: true }
+  if (oneWay) return { ok: false, continuous: null, retried: false }
 
   const b = await setParam(eid, paramId, value, param, !first)
   const checkB = await landed(eid, paramId, value)

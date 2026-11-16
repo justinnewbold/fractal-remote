@@ -4847,6 +4847,64 @@ test('a write nobody could check is not written again on a guess', async () => {
   }
 })
 
+test('an FM3, FM9 or Axe-Fx III knob that misses is never sent the typed way through the computer; an AM4 still is', async () => {
+  /*
+   * His FM3, 16 November 2026: a knob's check missed, the app sent it again
+   * the other way, and ForgeFX's other way is a TYPED write of the 0-to-1
+   * place, which a gen-3 unit takes in the setting's own units. Look-Ahead
+   * Time went to its maximum and Bit Reduce to nought. On the units whose
+   * driver lays cables (`gridRouting`) a knob is sent its place alone.
+   */
+  const store = { 'forgefx.host': 'http://unit.test' }
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const puts = []
+  let caps = { gridRouting: true }
+  const ok = (body) => ({ ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify(body) })
+  globalThis.fetch = async (url, options = {}) => {
+    const method = options.method || 'GET'
+    const path = String(url).replace('http://unit.test', '')
+    if (path === '/device/detect') return ok({ name: 'FM3', capabilities: caps })
+    if (path === '/device') return ok({})
+    if (method === 'PUT') puts.push([path, JSON.parse(options.body).continuous])
+    /* The unit holds 2 whatever is sent: a miss the check heard. */
+    if (method === 'GET' && path.endsWith('/params')) return ok({ named: [{ id: 21, name: 'Look-Ahead Time', value: 2 }] })
+    return ok({ ok: true })
+  }
+
+  try {
+    const fx = await import('../src/lib/forgefx.js')
+    await fx.detect()
+    const res = await fx.setParamConfirmed(41, 21, 1.312, { name: 'Look-Ahead Time', min: 0, max: 2 })
+    assert.deepEqual(res, { ok: false, continuous: null, retried: false })
+    assert.deepEqual(puts, [['/preset/blocks/41/params/21', true]], 'a gen-3 knob was sent the typed way after a miss')
+
+    /* An AM4 (no cables) keeps the other way, for the fault it is there for. */
+    caps = { gridRouting: false, slotModel: 'linear', slotCount: 4 }
+    puts.length = 0
+    await fx.detect()
+    const am4 = await fx.setParamConfirmed(42, 21, 1.312, { name: 'Look-Ahead Time', min: 0, max: 2 })
+    assert.equal(am4.retried, true)
+    assert.deepEqual(puts.map((p) => p[1]), [true, false], 'an AM4 lost the other way')
+  } finally {
+    /* Nothing of this unit is left for the tests after it. */
+    globalThis.fetch = async () => ok({})
+    try {
+      const fx = await import('../src/lib/forgefx.js')
+      await fx.detect()
+    } catch {}
+    delete globalThis.fetch
+    delete globalThis.localStorage
+  }
+})
+
 test('“port not open” becomes something a guitarist can act on', async () => {
   /*
    * Eighty lines of one debug log, all of them this:

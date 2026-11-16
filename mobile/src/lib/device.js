@@ -1392,6 +1392,9 @@ export const READ_BACK_AGAIN_MS = 400
  */
 const askedAs = (value, param) => (param?.whole === true && Number.isFinite(value) ? Math.round(value) : value)
 
+/* A unit whose every knob goes one way only (setParamConfirmed): the three gen-3 units, by the computer's own word for them. */
+const oneWayKnobs = () => chainCaps?.gridRouting === true
+
 export async function setParamConfirmed(eid, paramId, value, param) {
   value = askedAs(value, param)
   const norm = toNormalized(value, param)
@@ -1449,7 +1452,17 @@ export async function setParamConfirmed(eid, paramId, value, param) {
    */
   const unsent = (r) => r !== null && typeof r === 'object' && r.unsent === true
 
-  let first = preferredEncoding(eid, paramId)
+  /*
+   * AND THROUGH THE COMPUTER THE SAME (16 November 2026). An FM3, FM9 or
+   * Axe-Fx III (the units whose driver lays cables, `gridRouting`) is sent a
+   * knob's place and nothing else, by this end, whatever the wire would do:
+   * ForgeFX's other way (setParam with continuous false) sends the 0-to-1
+   * place as a TYPED value, which the unit takes in the setting's own units,
+   * so a miss the check heard was followed by a write that put the knob at
+   * its minimum or maximum. What the check read is the answer.
+   */
+  const oneWay = oneWayKnobs()
+  let first = oneWay ? true : preferredEncoding(eid, paramId)
   let sent = await write(first)
   /* The way remembered for this knob (through a computer, say) is one this wire never sends: the other one is the first. */
   if (unsent(sent)) {
@@ -1476,6 +1489,11 @@ export async function setParamConfirmed(eid, paramId, value, param) {
   if (!heard) {
     logDebug('set', `${who}: the unit answered neither read, so nothing more was sent`, `asked ${value}, sent ${first ? 'continuous' : 'discrete'}`)
     return { ok: false, continuous: null, retried: false, unverified: true, actual: null }
+  }
+
+  if (oneWay) {
+    logDebug('set', `${who} did not take`, `asked ${value}, unit holds ${actual === null ? 'nothing readable' : actual}; a gen-3 knob is never sent the other way`)
+    return { ok: false, continuous: null, retried: false, actual }
   }
 
   sent = await write(!first)
