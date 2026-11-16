@@ -1067,9 +1067,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * through: the rig's half-minute "which preset are you on?" went between
      * two lots of a capture that takes half a minute over Bluetooth, and a
      * pretend unit showed a preset, a blocks and a scene question inside
-     * one upload. Whether that is why Justin's first send was not kept is
-     * not known (lib/nam-install: the name's check byte is the likelier
-     * reason); it is not what Axe-Edit does, so it is not done. What was
+     * one upload. That was not why Justin's first send was not kept (it
+     * was the name's 32nd byte, sent as a nought: lib/nam-install); it is
+     * not what Axe-Edit does either, so it is not done. What was
      * asked meanwhile stays in the line and goes when the capture is over.
      */
     if (captureBusy) {
@@ -4013,7 +4013,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const seconds = ((took ?? time.now()) - started) / 1000
       /* A slot that still reads empty after every message was taken was not kept: said so here, and by the card. */
       const reads = !after ? 'the slot did not read back' : after.empty ? `the slot STILL READS “${after.name}”: the unit took every message and did not keep it` : `the slot now reads “${after.name}”`
-      /* How long the name is goes in the log with its check byte: the recording proves the byte for a name that fills all 31 places, and a shorter one is the same rule on trust. */
+      /* How long the name is goes in the log with its 32nd byte ("check byte", the log's old word for it: 0x60 whatever the name, lib/nam-install NAM_NAME_BYTE_AXE). */
       let named = 0
       while (named < 31 && ((words[named >> 2] >>> ((named & 3) * 8)) & 0xff) !== 0) named++
       /* A name filled out with spaces to all 31 places (namRecord's `fill`) is said so: which shape a unit kept is the thing to know. The request says it; read off the name's last place, a long name cut at a space said it too. */

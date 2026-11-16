@@ -156,28 +156,32 @@ export function run(test) {
   })
 
   test('a .nam file becomes the record a unit keeps: seven lines of text, four numbers, 14,017 floats in the file’s order, ten "not a number"s', async () => {
-    const { namRecord, namCheck, NAM_RECORD_WORDS, NAM_HEAD_WORDS, NAM_WEIGHTS, NAM_A2_NETWORKS, NAM_TAIL_NANS } = await lib()
+    const { namRecord, namCheck, NAM_NAME_BYTE_AXE, NAM_RECORD_WORDS, NAM_HEAD_WORDS, NAM_WEIGHTS, NAM_A2_NETWORKS, NAM_TAIL_NANS } = await lib()
     const { bitsFloat, floatBits } = await sx()
     assert.deepEqual([NAM_HEAD_WORDS, NAM_WEIGHTS, [...NAM_A2_NETWORKS], NAM_TAIL_NANS], [68, 14017, [1871, 12146], 10])
     const rec = namRecord(a2({ metadata: { loudness: -11.75, gain: 0.25 } }), { name: 'Orange Amp: Flat EQ, Gain 6, AK47 and more', by: 'tone3000', make: 'Orange OTR 120 2X12', model: 'Orange OTR 120 2X12', gearType: 'amp_cab', toneType: 'crunch' })
     assert.equal(rec.ok, true)
     assert.equal(rec.words.length, NAM_RECORD_WORDS)
     assert.ok(rec.words.every((w) => Number.isInteger(w) && w >= 0 && w <= 0xffffffff))
-    /* The name: 31 characters and its check byte, the 31 XORed together. For this name that is 0x60, which is the byte Axe-Edit sent after the same 31 characters. */
+    /*
+     * The name: 31 characters and 0x60, the byte Axe-Edit sent after the
+     * same 31 characters. That name happens to XOR to 0x60, which is how
+     * the byte was once taken for a check of the name; it is not one
+     * (settled 16 November 2026), and every name gets 0x60.
+     */
+    assert.equal(NAM_NAME_BYTE_AXE, 0x60)
     assert.equal(rec.name, 'Orange Amp: Flat EQ, Gain 6, AK')
     assert.equal(rec.words[0], 0x6e61724f)
     assert.equal(rec.words[1], 0x41206567)
-    assert.equal(rec.words[7] >>> 24, 0x60, 'the name’s 32nd byte is not the check byte Axe-Edit sent')
+    assert.equal(rec.words[7] >>> 24, 0x60, 'the name’s 32nd byte is not the byte Axe-Edit sent')
     assert.equal(namCheck([...'Orange Amp: Flat EQ, Gain 6, AK'].map((c) => c.charCodeAt(0))), 0x60)
-    /* A shorter name: the rest of the field is noughts, so the check byte is the name's own characters XORed, still in the 32nd place. */
+    /* A shorter name: the rest of the field is noughts, and 0x60 still goes in the 32nd place, never the name's own characters XORed. */
     const short = namRecord(a2({ metadata: { name: 'Plexi' } }))
     assert.equal(short.name, 'Plexi')
-    assert.equal(short.words[7], (0x50 ^ 0x6c ^ 0x65 ^ 0x78 ^ 0x69) << 24)
-    for (const r of [rec, short]) {
-      let x = 0
-      for (let i = 0; i < 8; i++) x ^= (r.words[i] & 0xff) ^ ((r.words[i] >>> 8) & 0xff) ^ ((r.words[i] >>> 16) & 0xff) ^ (r.words[i] >>> 24)
-      assert.equal(x, 0, 'a name’s 32 bytes do not XOR to nought')
-    }
+    assert.equal(short.words[7], 0x60 << 24)
+    assert.deepEqual([short.byte, short.xor], [0x60, 0x50 ^ 0x6c ^ 0x65 ^ 0x78 ^ 0x69])
+    /* Whatever it is asked: the `check` it once took packs nothing else. */
+    for (const check of ['xor', 'axe', 0x7c, 0]) assert.equal(namRecord(a2({ metadata: { name: 'Plexi' } }), { check }).words[7], 0x60 << 24, `asked for ${check}`)
     /* No other line of text carries one. */
     assert.equal(rec.words[15] >>> 24, 0)
     assert.equal(rec.words[8], 0x656e6f74, '"tone", where who made it starts')

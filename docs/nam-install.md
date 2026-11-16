@@ -47,7 +47,7 @@ slot number is a guess, so the code names no slot over 127
 
 | Where | What |
 | --- | --- |
-| bytes 0–31 | the name: 31 characters and one more byte. Axe-Edit sent 0x60 there, which is the other 31 XORed together (`namCheck`) for the name it sent. Whether the byte is that XOR for any name, or 0x60 every time, is not settled (below: two kept, three dropped). The unit's own list answers a NUL in its place. |
+| bytes 0–31 | the name: 31 characters and one more byte, 0x60, whatever the name (`NAM_NAME_BYTE_AXE`; settled 16 November 2026, below). Axe-Edit sent 0x60 there, which happens to be the other 31 XORed together (`namCheck`) for the name it sent; it is no check of the name. The unit's own list answers a NUL in its place. |
 | bytes 32–63 | who made it (`modeled_by`) |
 | bytes 64–95 | the gear's make |
 | bytes 96–127 | the gear's model |
@@ -68,15 +68,15 @@ one that was loaded is "Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57": all
 floats, in the file's order; its loudness and gain are the two numbers
 before them; and its `weights_hash` is the thirty-two bytes. Packed by
 `namRecord`, the file is the record Axe-Edit sent, word for word, the
-name's check byte (0x60) included. The other two files (other microphones)
+name's 32nd byte (0x60) included. The other two files (other microphones)
 share not one number with it. The files are not in the repository either
 (TONE3000's terms: a capture is fetched when a player asks, and not kept).
 
-## The 32nd byte of the name is not settled: two kept, three dropped
+## The 32nd byte of the name is 0x60: settled 16 November 2026
 
 14 November 2026, through his Raspberry Pi. The first captures sent from
 the app that his unit kept, and the ones it dropped, every message of each
-answered "taken":
+answered "taken" (the last two rows are 16 November):
 
 | What became of it | The byte | The capture |
 | --- | --- | --- |
@@ -85,24 +85,31 @@ answered "taken":
 | dropped, three times, two slots | `02` | FNDR BFSR VB Edge WRM2 CAB FREE |
 | dropped | `1D`, and `3D` with its name filled out | CL Gain 1 Bright |
 | dropped | `1D`, filled out or not | CL Gain 3 |
+| dropped, four more times | `02` (through his Pi, on a computer app that put the name XORed in) | FNDR BFSR VB Edge WRM2 CAB FREE |
+| **kept, the first time it went so** | `60` (over Bluetooth, slot 038) | FNDR BFSR VB Edge WRM2 CAB FREE |
+| kept | `60` (slot 037) | EVH 5150III 100S stealth green |
 
 The byte was the name XORed, as the section below explains. Every byte
 kept, and Axe-Edit's own `60`, has `60`'s two bits set; none dropped has.
-So the likelier reading is that the byte is no check of the name, and that
-Axe-Edit sends `60` every time: the one name it was recorded sending
-happens to XOR to `60`. It is not proven. The other reading, that the XOR
-is right and the three were dropped for something in their files, fits what
-was seen as well.
+That was the likelier reading on 14 November, and the 16th settled it: the
+one capture dropped every time it went with its name XORed was kept the
+first time it went with `60`. The byte is no check of the name, and
+Axe-Edit sends `60` every time; the one name it was recorded sending
+happens to XOR to `60`.
 
-So from 1.90.70 a capture the unit takes and does not keep is sent again
-another way, into the same slot (`mobile/src/lib/captureSend.js`,
-`CAPTURE_WAYS`): `60` with the file's hash, the name XORed with the hash,
-then each with no hash (noughts, as Fractal's own captures have). The log
-says what each try sent and what the unit did with it, with the file's own
-notes once. The computer no longer writes the XOR over the byte the phone
-packed (ForgeFX `namNameChecked`, 64c44a7), and answers which byte went
-and how long the closing message took. The filling out of a short name
-with spaces, below, is no longer sent: a short name was kept as it was.
+So from 1.90.88 `namRecord` packs `60` there for every capture, and there
+is nothing else it can pack. From 1.90.70 to 1.90.87 a capture the unit
+took and did not keep was sent again with the name XORed as well; those
+ways are gone. What is left (`mobile/src/lib/captureSend.js`,
+`CAPTURE_WAYS`) is `60` with the file's hash, then `60` with no hash
+(noughts, as Fractal's own captures have), into the same slot. The log
+still says what the name XORs to, once, with the file's own notes. The
+computer no longer writes the XOR over the byte the phone packed (ForgeFX
+`namNameChecked`, 64c44a7), and answers which byte went and how long the
+closing message took; through one older than that the name XORed goes
+whatever was packed, and the phone's log says to update the computer app.
+The filling out of a short name with spaces, below, is no longer sent: a
+short name was kept as it was.
 
 ## The name's check byte, and the first send that was not kept
 
@@ -115,12 +122,10 @@ capture and did not keep it.
 
 0x60 is the other 31 bytes of that name XORed together, so the name field
 XORs to nought. That byte was the one difference between the app's record
-and Axe-Edit's, and `namRecord` now sends it. This is the best explanation
-of the bytes, not something seen to work yet: until a send from the app is
-kept by a unit, treat it as likely and not proven. For a name shorter than
-31 characters the byte still goes 32nd (the rest of the field is noughts,
-so it is the name's own characters XORed); only a 31-character name has
-been seen.
+and Axe-Edit's, and from 1.90.60 `namRecord` sent the name XORed there for
+every name. That was written down as likely and not proven, and half of it
+was wrong: the byte matters (a NUL is never kept), but it is 0x60 for every
+name, not the name XORed (above, settled 16 November 2026).
 
 **A short name is sent as it is first, and filled out only if the unit
 drops that** (1.90.61). The unit's own list shows short names with nothing
@@ -332,9 +337,10 @@ meanwhile goes after it. The rests are the phone's numbers (`NAM_REST`),
 "it is over" is said even when the start went unanswered, a slot that reads
 `<EMPTY>` is asked once more, and the computer's log has the same line as
 the phone's, the closing message's time in it. And the computer puts the
-name's check byte into a record that came without it (`namNameChecked`):
-the one thing it ever does to a record, so that a copy of the phone app from
-before 1.90.60 cannot send one the unit drops. A computer app from before
+name's 32nd byte into a record that came with a nought there
+(`namNameChecked`): the one thing it ever does to a record, so that a copy
+of the phone app from before 1.90.60 cannot send one the unit drops. That
+byte was the name XORed until ForgeFX acdd38d, and is 0x60 from it. A computer app from before
 that release lets other requests in between a capture's messages, so the
 computer (or the Raspberry Pi) is updated before a send through it is
 judged.

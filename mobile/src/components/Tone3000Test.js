@@ -569,9 +569,9 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}…` })
       logDebug('tone3000', `sending capture ${m.id} (“${rec.name}”) to slot ${said}${again !== null ? ', over what a stopped send left there' : ''}`)
       /*
-       * The send, and the second try for a short name the unit took and did
-       * not keep (lib/captureSend, which says why and is run whole in a
-       * test). The card's part is the lines on the screen.
+       * The send, and the try without the file's hash for one the unit took
+       * and did not keep (lib/captureSend, which says why and is run whole
+       * in a test). The card's part is the lines on the screen.
        */
       const went = await sendCapture({
         text: texts.current[m.id],

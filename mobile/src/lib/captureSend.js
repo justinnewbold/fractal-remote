@@ -7,37 +7,31 @@
  * part is the words on the screen; this is what is sent, in what order, and
  * what is made of the unit's answers.
  *
- * WHY THERE ARE WAYS (14 November 2026). His unit KEPT two captures sent
- * from the app and DROPPED three, every one of the 130 messages answered
- * "taken" each time. The 32nd byte of the name, which the app had been
- * filling with the name XORed (the one byte Axe-Edit was seen to send,
- * 0x60, is that for its name), was 0x7C and 0x78 in the two kept and 0x02,
- * 0x1D, 0x3D and 0x1D in the ones dropped: every byte kept has 0x60's two
- * bits set, and none dropped has. So the likelier reading is that the byte
- * is no check of the name and Axe-Edit sends 0x60 every time. It is not
- * proven, and the other reading (the XOR is right, and the three were
- * dropped for something in the file) fits what was seen too. So a capture
- * the unit takes and does not keep is sent again another way, into the same
- * slot, until one is kept or the ways run out:
+ * THE NAME'S 32ND BYTE IS 0x60, AND NOTHING ELSE IS SENT THERE (settled 16
+ * November 2026, lib/nam-install NAM_NAME_BYTE_AXE has the whole of it).
+ * From 1.90.70 to 1.90.87 a capture the unit took and did not keep was sent
+ * again with the name XORed there as well, because two captures sent that
+ * way had been kept and three dropped. Then "FNDR BFSR VB Edge WRM2 CAB
+ * FREE" was dropped every time it went with its name XORed (0x02) and KEPT
+ * the first time it went with 0x60, and "EVH 5150III 100S stealth green"
+ * was kept with 0x60 too. So the XOR ways are gone, and the ways left are:
  *
  *   1. 0x60 in the name's 32nd place, as Axe-Edit sent, with the file's hash
- *   2. the name XORed there (the way two were kept), with the file's hash
- *   3. 0x60, and no hash (noughts, as Fractal's own captures have)
- *   4. the name XORed, and no hash
+ *   2. 0x60, and no hash (noughts, as Fractal's own captures have)
  *
  * A way that would send the same record as one already sent is left out (a
- * file with no hash has two ways, a name that XORs to 0x60 one byte). The
- * log says what each way sent and what the unit did with it, with the
- * file's own notes once: one session's log is meant to settle which rule
- * the unit keeps to. THE FILLING OUT OF A SHORT NAME WITH SPACES IS GONE: a
- * short name (Jcm800) was kept as it was, and two filled out were dropped.
+ * file with no hash has one way). The log says what each way sent and what
+ * the unit did with it, with the file's own notes once. THE FILLING OUT OF
+ * A SHORT NAME WITH SPACES IS GONE: a short name (Jcm800) was kept as it
+ * was, and two filled out were dropped.
  *
  * THROUGH A COMPUTER APP OLDER THAN THE ONE THAT SENDS THE BYTE AS PACKED,
  * the computer writes the name XORed over whatever byte came (ForgeFX
- * namNameChecked, before 64c44a7). Its answer does not say which byte went
- * (`nameByte`), which is how it is known: the 0x60 ways are then the XOR
- * ways over again and are left out, and the log says to update the computer
- * app.
+ * namNameChecked, before 64c44a7), and the unit drops most of those. Its
+ * answer does not say which byte went (`nameByte`), which is how it is
+ * known: the log says the name XORed went and to update the computer app,
+ * and a file with no hash, whose two ways would be the same XORed record,
+ * is sent once.
  *
  * AND WHAT AN INDEPENDENT READ OF THE FIRST VERSION FOUND, which still
  * holds: a unit that files a send LATE (the slot reads <EMPTY> at both
@@ -51,12 +45,10 @@
  */
 import { NAM_EMPTY, namRecord } from './nam-install.js'
 
-/** The ways a capture is sent, in the order they are tried. `said` is for the log. */
+/** The ways a capture is sent, in the order they are tried: 0x60 in the name's 32nd place each time (namRecord packs nothing else), with the file's hash and then without. `said` is for the log. */
 export const CAPTURE_WAYS = Object.freeze([
-  Object.freeze({ check: 'axe', hash: true, said: 'the name byte Axe-Edit sent, with the file’s hash' }),
-  Object.freeze({ check: 'xor', hash: true, said: 'the name XORed as its byte, with the file’s hash' }),
-  Object.freeze({ check: 'axe', hash: false, said: 'the name byte Axe-Edit sent, no hash' }),
-  Object.freeze({ check: 'xor', hash: false, said: 'the name XORed as its byte, no hash' })
+  Object.freeze({ hash: true, said: 'the name byte Axe-Edit sent, with the file’s hash' }),
+  Object.freeze({ hash: false, said: 'the name byte Axe-Edit sent, no hash' })
 ])
 
 /** The ways in order with `first` moved to the front: the way a unit last kept one, or the way that was going when a send stopped. Anything else is the plain order. */
@@ -124,9 +116,9 @@ export async function sendCapture({ text, named, slot, replace = false, order = 
    * What has GONE, as "byte:hash", so no record is sent twice. The byte is
    * the one the sender says went. A sender that does not say is an older
    * computer app (`old`), which writes the name XORed over whatever byte
-   * is packed: from its first answer on, every way's byte IS the XOR, so a
-   * 0x60 way is the XOR way over again and is found already gone,
-   * whichever of the two was tried first.
+   * is packed: from its first answer on, every way's byte IS the XOR, so
+   * for a file with no hash the second way is the first over again, and
+   * is found already gone.
    */
   const gone = new Set()
   let old = false
@@ -136,7 +128,7 @@ export async function sendCapture({ text, named, slot, replace = false, order = 
   let late = false
   for (const i of ways) {
     const w = CAPTURE_WAYS[i]
-    const r = namRecord(text, { ...named, check: w.check, hash: w.hash })
+    const r = namRecord(text, { ...named, hash: w.hash })
     if (!r.ok) continue
     if (gone.has(`${old ? r.xor : r.byte}:${r.hashed}`)) continue
     if (tries > 0) onNext(tries + 1)
@@ -170,7 +162,7 @@ export async function sendCapture({ text, named, slot, replace = false, order = 
     if (!told) old = true
     gone.add(`${went}:${r.hashed}`)
     const closing = Number.isFinite(next?.closing) ? `, the closing message answered in ${Math.round(next.closing)} ms` : ''
-    const swapped = told ? '' : ` (${hex(r.byte)} was packed, and the computer app did not say which byte went: AN OLDER COMPUTER APP, WHICH PUTS THE NAME XORED IN. Update the computer app, and the other byte can be tried)`
+    const swapped = told ? '' : ` (${hex(r.byte)} was packed, and the computer app did not say which byte went: AN OLDER COMPUTER APP, WHICH PUTS THE NAME XORED IN, and the unit drops most of those. Update the computer app, so that 0x60 goes)`
     const kept = next?.name !== NAM_EMPTY
     log(`try ${tries}, way ${i + 1} (${w.said}): name byte ${hex(went)}${swapped}, ${r.hashed ? 'with' : 'without'} a hash; went in ${Number(next?.seconds ?? 0).toFixed(1)} s${closing}; the unit reads the slot as ${said(next)}${kept && next?.name ? `: KEPT${over ? '' : ` THIS WAY${tries > 1 ? `, after ${tries - 1} it did not keep` : ''}`}` : ''}`)
     if (kept) break
