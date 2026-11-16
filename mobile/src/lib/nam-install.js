@@ -18,11 +18,10 @@
  *                    ("amp_cab"), the tone's kind ("crunch"), and a seventh
  *                    Axe-Edit sent as noughts (some captures on a unit hold
  *                    "TONE3000" there; the unit keeps both kinds).
- *                    The name is 31 characters and A CHECK BYTE: its
- *                    32nd byte is the other 31 XORed together, so the
- *                    field XORs to nought (`namCheck`). Axe-Edit sent
- *                    0x60 there, which is exactly that for the name it
- *                    sent; the unit's own list answers a NUL in its place.
+ *                    The name is 31 characters and ONE MORE BYTE, 0x60,
+ *                    whatever the name (`NAM_NAME_BYTE_AXE`, below):
+ *                    Axe-Edit sent 0x60 there, and the unit's own list
+ *                    answers a NUL in its place.
  *   bytes 224..255   the file's own `weights_hash` ("nam-content-v1:" and
  *                    64 hex digits), as its 32 bytes. Fractal's own captures
  *                    have noughts there, so a file with none sends noughts.
@@ -37,10 +36,10 @@
  * THE PACKING IS PROVEN (`NAM_PACKING_PROVEN`, 13 November 2026): the file
  * that was loaded ("Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57") packed by
  * `namRecord` is the record Axe-Edit sent, word for word: all 14,017
- * numbers, the four before them, the thirty-two bytes and the name's check
+ * numbers, the four before them, the thirty-two bytes and the name's 32nd
  * byte.
  *
- * THAT CHECK BYTE WAS LEFT OUT AT FIRST, AND THE UNIT DID NOT KEEP THE
+ * THAT BYTE WAS LEFT OUT AT FIRST, AND THE UNIT DID NOT KEEP THE
  * CAPTURE. The first build took Axe-Edit's 32nd byte for something the unit
  * had written over and sent a NUL. Justin's first send (14 November 2026,
  * over Bluetooth) was answered "taken" at every one of the 130 messages, and
@@ -115,7 +114,7 @@ export const NAM_EMPTY = '<EMPTY>'
 export const NAM_HEADS_MOST = 32
 
 const FIELD = 32
-/** How many characters a capture's name has room for: the 32nd place is its check byte. */
+/** How many characters a capture's name has room for: the 32nd place is 0x60 (`NAM_NAME_BYTE_AXE`). */
 export const NAM_NAME_PLACES = FIELD - 1
 const NAN_BITS = 0x7fc00000
 
@@ -139,29 +138,34 @@ const field = (text) => {
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? floatBits(x) : NAN_BITS)
 
 /**
- * THE 32ND BYTE OF THE NAME IS NOT SETTLED (14 November 2026). Axe-Edit sent
- * 0x60 there for the one capture it was seen to load, which is that name's
- * other 31 bytes XORed together, so from 1.90.60 the app sent the XOR
- * (`namCheck`). His unit then KEPT two captures sent that way and DROPPED
- * three, every message "taken" each time:
+ * THE 32ND BYTE OF THE NAME IS 0x60, WHATEVER THE NAME (settled 16 November
+ * 2026). It is no check of the name. Axe-Edit sent 0x60 there for the one
+ * capture it was seen to load, which happens to be that name's other 31
+ * bytes XORed together, so from 1.90.60 the app sent the name XORed
+ * (`namCheck`) and from 1.90.70 tried both. What his unit did:
  *
  *   kept     0x7C  Jcm800 (a short name, as it was)
  *   kept     0x78  MES DRECF RD Gain2 BAL O808 CAB
- *   dropped  0x02  FNDR BFSR VB Edge WRM2 CAB FREE (three times, two slots)
+ *   dropped  0x02  FNDR BFSR VB Edge WRM2 CAB FREE (three times on 14
+ *                  November, and four more on the 16th through his
+ *                  Raspberry Pi, on a computer app that put the XOR in)
  *   dropped  0x1D  CL Gain 1 Bright (0x3D with its name filled out: dropped too)
  *   dropped  0x1D  CL Gain 3
+ *   KEPT     0x60  FNDR BFSR VB Edge WRM2 CAB FREE, the first time it went
+ *                  with 0x60 (16 November, over Bluetooth, slot 038)
+ *   kept     0x60  EVH 5150III 100S stealth green (the same day, slot 037)
  *
- * Every byte kept, Axe-Edit's own included, has 0x60's two bits set, and
- * none dropped has. So the byte may be no check of the name at all, and
- * Axe-Edit may send 0x60 every time: one recording cannot tell the two
- * apart, since that name happens to XOR to 0x60. `NAM_NAME_BYTE_AXE` is
- * the byte Axe-Edit sent, and `namRecord` packs either (`check`); which a
- * unit keeps is found out by sending (lib/captureSend), and the log says.
- * A short name needs no filling out: one was kept as it was.
+ * Every byte kept has 0x60's two bits set, and none dropped has; the one
+ * capture dropped every time it went with its name XORed was kept the first
+ * time it went with 0x60. Axe-Edit sends 0x60, and `namRecord` packs 0x60
+ * there for every capture: there is nothing else it can pack. The name
+ * XORed is still worked out (`xor`), for the log alone, which says it,
+ * since a computer app older than ForgeFX 64c44a7 puts it there whatever
+ * was packed. A short name needs no filling out: one was kept as it was.
  */
 export const NAM_NAME_BYTE_AXE = 0x60
 
-/** A name's first 31 bytes XORed together: one of the two bytes tried in its 32nd place. */
+/** A name's first 31 bytes XORed together: NOT what goes in its 32nd place (above), only what the log says of it. */
 export const namCheck = (bytes) => {
   let x = 0
   for (let i = 0; i < FIELD - 1; i++) x ^= bytes[i] & 0xff
@@ -182,11 +186,10 @@ export const namCheck = (bytes) => {
  * in what comes back is the name without the spaces, and `filled` says
  * whether any were added.
  *
- * `said.check` is the 32nd byte of the name: 'axe' for the byte Axe-Edit
- * sent (`NAM_NAME_BYTE_AXE`), anything else for the name XORed (above:
- * which is right is not settled). `said.hash === false` leaves the file's
+ * The 32nd byte of the name is always `NAM_NAME_BYTE_AXE`, 0x60 (above);
+ * nothing in `said` changes it. `said.hash === false` leaves the file's
  * hash out (noughts, as Fractal's own captures have). What comes back says
- * what was packed: `byte`, `xor` (the name XORed, whichever went in),
+ * what was packed: `byte` (0x60), `xor` (the name XORed, for the log),
  * `hashed`, and `facts`, the file's own notes for the log.
  */
 export function namRecord(text, said = {}) {
@@ -226,9 +229,9 @@ export function namRecord(text, said = {}) {
       }
     }
   }
-  /* The 32nd byte of the name: with a nought there the unit took every message and filed the slot as empty. Which of the two it wants is not settled (above). */
+  /* The 32nd byte of the name: 0x60, as Axe-Edit sends it (above). With a nought there the unit took every message and filed the slot as empty; with the name XORed it dropped most. */
   const xor = namCheck(head)
-  const byte = said.check === 'axe' ? NAM_NAME_BYTE_AXE : xor
+  const byte = NAM_NAME_BYTE_AXE
   head[FIELD - 1] = byte
   /* The seventh line of text: noughts, as Axe-Edit sent it. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
   while (head.length < 224) head.push(0)

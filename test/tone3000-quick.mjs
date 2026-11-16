@@ -101,8 +101,9 @@ export function run(test) {
      * before anything asks whether the page is there: forgotten, the same
      * capture was offered again and went into a second slot.
      */
-    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\) if \(went\.got\.name && Number\.isInteger\(went\.way\)\) keptWay = went\.way \} if \(!alive\.current\) return if \(!went\.ok\) \{/)
-    assert.equal((card.match(/\bplace\(m\.id, slot,/g) || []).length, 1)
+    assert.match(card, /const \{ slot, went \} = await captureToSlot\(\{ id: m\.id, name: rec\.name, again, find, send, log: \(line\) => logDebug\('tone3000', `capture \$\{m\.id\}: \$\{line\}`\) \}\) if \(went === null\) return if \(went\.ok && went\.got\.name && went\.got\.name !== NAM_EMPTY && Number\.isInteger\(went\.way\)\) keptWay = went\.way if \(!alive\.current\) return if \(!went\.ok\) \{/)
+    /* Placed by lib/captureSend captureToSlot (run whole in test/bluetooth.mjs, "one capture into one slot"), which has no page to ask after: never by the page itself. */
+    assert.ok(!/\bplace\(m\.id/.test(card), 'the page places a capture itself')
     /* The steps and the note are said for the place the page is in, never the Developer page's by default. */
     assert.match(card, /\{stepsFor\(where\)\.map\(/)
     assert.match(card, /\{stepsFoot\(where\)\}/)

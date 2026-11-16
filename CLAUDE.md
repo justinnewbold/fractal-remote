@@ -2102,15 +2102,24 @@ the capture on the unit, which is the hard half.
     0x60'S TWO BITS SET AND NONE DROPPED HAS. So the likelier reading is
     that the byte is no check of the name and Axe-Edit sends 0x60 every
     time (its one recorded name happens to XOR to 0x60, which is how the
-    XOR was believed). NOT PROVEN: the other reading (the XOR is right and
-    the three were dropped for something in their files) fits too.
-    - *Since 1.90.70 a capture the unit takes and does not keep is sent
-      again another way* (lib/captureSend `CAPTURE_WAYS`, run whole by a
-      test against a unit keeping to each rule): 0x60 with the file's
-      hash, the name XORed with the hash, then each with no hash. A way
-      that would send the same record twice is left out, the way the unit
-      last kept one by goes first for the next capture (`keptWay`), and
-      the filling out of short names is gone (one was kept as it was).
+    XOR was believed). SETTLED AND DONE, 16 NOVEMBER 2026 (his log):
+    "FNDR BFSR VB Edge WRM2 CAB FREE" (XORs to 0x02) was dropped every
+    time it went with its name XORed, four more times through the Pi on a
+    computer app that put the XOR in, and KEPT the first time it went with
+    0x60 (over Bluetooth, slot 038); "EVH 5150III 100S stealth green" was
+    kept with 0x60 (slot 037). 0X60 IS THE ONLY BYTE, AT BOTH ENDS, since
+    1.90.88: `namRecord` packs nothing else (no `check` any more; the name
+    XORed is worked out only for the log's "XORs to"), and the computer
+    (ForgeFX acdd38d) puts 0x60, never the XOR, into a record that came
+    with a nought.
+    - *A capture the unit takes and does not keep is sent once more*
+      (lib/captureSend `CAPTURE_WAYS`, run whole by a test): 0x60 with the
+      file's hash, then 0x60 with no hash. From 1.90.70 to 1.90.87 the
+      name XORed was tried too; those ways are gone. A way that would send
+      the same record twice is left out (a file with no hash has one), the
+      way the unit last kept one by goes first for the next capture
+      (`keptWay`), and the filling out of short names is gone (one was
+      kept as it was).
     - *The log is written to settle it in one session*: the file's own
       notes once (its texts, loudness, gain, levels, whether it has a
       hash), then for each try the byte that went, with or without the
@@ -2121,12 +2130,11 @@ the capture on the unit, which is the hard half.
       whatever the phone packed, so through the Pi the phone could not
       try 0x60. It sends what it is given and answers `nameByte` and
       `closing`. Through an older computer app the answer has neither,
-      the phone knows the XOR went, leaves the 0x60 ways out and its log
-      says to update the computer app. HIS PI HAS TO TAKE THAT UPDATE
-      before a send through it tries 0x60.
-    - If 0x60 is kept every time, make it the only byte and drop the
-      ways. If the name XORed is what is kept, the three were dropped for
-      their files, and the facts line is where to look.
+      the phone knows the XOR went (the unit drops most of those) and its
+      log says to update the computer app. HIS PI HAS TO TAKE THAT UPDATE
+      before a send through it carries 0x60.
+    - *0x60 was kept every time, so it is the only byte and the XOR ways
+      are dropped* (done 16 November 2026, 1.90.88, above).
     - *Two readers and a skeptic each went through it before it went
       out.* Fixed, each with a test seen to fail without it (33 in all):
       through an older computer app the same record went twice when the
@@ -2195,7 +2203,8 @@ the capture on the unit, which is the hard half.
     the name's other 31 bytes XORed together, so the name field XORs to
     nought (`namCheck`); `namRecord` sends it since 1.90.60. LIKELY, NOT
     PROVEN: it is the best reading of the bytes, and it stays "likely"
-    until a send from the app is kept by his unit. The lesson either way:
+    until a send from the app is kept by his unit. (It was not: the byte
+    is 0x60 for every name, settled 16 November 2026, above.) The lesson either way:
     A BYTE AXE-EDIT SENDS IS SENT, even one the unit seems to throw away;
     "the unit overwrote it" was a guess from one sample.
   - *The card after that send*: "this whole screen is confusing to me. What
