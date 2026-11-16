@@ -15,7 +15,9 @@ import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
 import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
-import { METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
+import { BEAT_LOCK_FOR_EVERYONE, METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
+import { BEAT_LOCK, beatLockOn, moveFor, notTooSoon } from './beatLock'
+import { followUnitBeat } from './unitBeat'
 
 /**
  * THE METRONOME SETTING, and the two things it drives.
@@ -370,6 +372,35 @@ export function useEdgeFlash() {
 }
 
 /*
+ * WHETHER THIS DEVICE'S BEAT IS ON THE UNIT'S RIGHT NOW (lib/beatLock): the
+ * unit's own beat has been heard in the last twenty seconds while this
+ * device kept a beat beside it, and the device's beat was put on it. The
+ * words that say the two can be apart say they are in step instead
+ * (lib/edgeFlash apartOrInStep), and go back by themselves when the unit's
+ * beat stops being heard.
+ */
+let inStep = false
+let inStepTimer = null
+const stepWatchers = new Set()
+function noteInStep(on) {
+  clearTimeout(inStepTimer)
+  inStepTimer = on ? setTimeout(() => noteInStep(false), BEAT_LOCK.heldMs) : null
+  if (inStep === on) return
+  inStep = on
+  for (const fn of stepWatchers) fn()
+}
+export function useInStep() {
+  return useSyncExternalStore(
+    (fn) => {
+      stepWatchers.add(fn)
+      return () => stepWatchers.delete(fn)
+    },
+    () => inStep,
+    () => inStep
+  )
+}
+
+/*
  * Every beat the phone clicks, for anything else that lights on it — the
  * green dot on Tap — so it lights with the click and the edge flash rather
  * than on a clock of its own.
@@ -560,6 +591,15 @@ function probeLag(player, lags, lead, asked) {
  * tap carry on and nothing lights; with the click on the unit alone, or the
  * sound picked Off, for an account offered the choice, the beat runs here in
  * silence, no sound and no tap, only for the light.
+ *
+ * AND WHERE THE UNIT CLICKS TOO, THE BEAT HERE GOES ONTO THE UNIT'S
+ * (lib/beatLock), for an account it is switched on for: while the unit's
+ * own beat can be heard (lib/unitBeat), what the beats here are counted
+ * from is moved so the click heard, or in silence the light, lands on it.
+ * The first beat waits for the unit's when one is already known; a move
+ * later on never brings two clicks closer than half a beat; and a move too
+ * small to hear is not made. With no beat heard from the unit, nothing here
+ * is any different from before.
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
@@ -571,18 +611,26 @@ export function usePhoneClick(bpm, onBeat) {
   const on = sound || silent
   const beat = beatMs(bpm)
   const running = Boolean(on && beat)
+  /* Only beside a unit that is clicking: a device keeping time alone has nothing to line up with. Never in the demo. */
+  const follow = beatLockOn({ admin: useBluetoothAdmin(), everyone: BEAT_LOCK_FOR_EVERYONE }) && clicks(s, can, heardOn).unit && !isDemo()
   useEffect(() => {
     if (!on || !beat) return undefined
     let startedAt = 0
     let timer = null
     let alive = true
     let n = 0
+    /* When the last click was asked for, and where the unit's beat is believed to be (lib/beatLock): null for neither yet. */
+    let clicked = null
+    let unitAt = null
+    /* Whether the beats here have something to be counted from yet: the sound is made ready first. */
+    let started = false
     /* The flashes and taps still to come, cleared when the click stops: none lands after it. */
     const later = new Set()
     const lags = []
     const step = () => {
       if (!alive) return
       const asked = Date.now()
+      clicked = asked
       const sounding = sound ? click() : null
       if (sound && n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge), asked)
       /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. In silence there is no sound to wait for. */
@@ -604,21 +652,52 @@ export function usePhoneClick(bpm, onBeat) {
       clearTimeout(releaseTimer)
       releaseTimer = null
     }
+    /*
+     * The beat here onto the unit's: what the beats are counted from moves
+     * by the least that puts the click heard (`lead` after its beat), or in
+     * silence the light, on the unit's beat; then the next beat is booked
+     * afresh, never a second click within half a beat of the last.
+     */
+    const align = () => {
+      if (!alive || !started || !unitAt) return
+      noteInStep(true)
+      const by = moveFor(startedAt, unitAt, beat, sound ? flashLead(Platform.OS, nudge) : 0)
+      if (!by) return
+      startedAt += by
+      clearTimeout(timer)
+      const due = notTooSoon(nextBeat(startedAt, Date.now(), beat), clicked, beat)
+      timer = setTimeout(step, Math.max(0, due - Date.now()))
+      logDebug('metronome', `this device’s beat moved ${Math.abs(Math.round(by))} ms ${by > 0 ? 'later' : 'earlier'}, onto the unit’s (known to within ${Math.round(unitAt.half)} ms)`)
+    }
+    const unfollow = follow
+      ? followUnitBeat({
+          beat,
+          onWindow: (window) => {
+            unitAt = window
+            align()
+          }
+        })
+      : null
     setClicking(true)
     /* The sound is made ready only where there is one: a beat kept in silence opens no audio. */
     ;(sound ? prepareClick() : Promise.resolve()).finally(() => {
       if (!alive) return
       startedAt = Date.now()
-      step()
+      started = true
+      /* The unit's beat already known: the first beat here is the next one on it, not this moment. Else now, as ever. */
+      if (unitAt) align()
+      if (timer === null) step()
     })
     return () => {
       alive = false
+      unfollow?.()
+      if (follow) noteInStep(false)
       clearTimeout(timer)
       for (const t of later) clearTimeout(t)
       later.clear()
       setClicking(false)
       if (sound) releaseLater()
     }
-  }, [on, sound, flash, beat, onBeat])
+  }, [on, sound, flash, beat, onBeat, follow])
   return running
 }

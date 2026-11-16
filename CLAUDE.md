@@ -2933,28 +2933,68 @@ beat and the device makes no sound and no tap, and opens no audio.
   only, and for every other account the edge flashes with the device's own
   click and never without it, whatever the device has kept. It opens when
   he says so, with its What's new line in that pull request.
-- **The light keeps the unit's tempo, not its beat.** The unit does not
-  tell the app when its beats fall, so the light and the unit's click can
-  be part of a beat apart, and NOTHING in the app lines them up. The page
-  and the volume pop-up say so where the unit clicks. Do not promise they
-  are locked, and never say a press of Tap starts them together: the words
-  said that until 16 November 2026 and it was never true. Tap works the
-  tempo out on the device and sends the unit a NUMBER (lib/tempo), so the
-  unit's beat stays where it was.
+- **The light keeps the unit's tempo, and its beat only where the unit
+  sends one.** A unit does not answer "where is your beat": the app can
+  read its tempo and nothing more. So the light and the unit's click can
+  be part of a beat apart, and the page and the volume pop-up say so where
+  the unit clicks ("The light keeps the unit's tempo, not its exact
+  beat"). Never say a press of Tap starts them together: the words said
+  that until 16 November 2026 and it was never true. Tap works the tempo
+  out on the device and sends the unit a NUMBER (lib/tempo), so the unit's
+  beat stays where it was.
 
   > "The metronome is not matching up properly into the sound coming out
   > of speakers. There's a delay." (16 November 2026, the light on his
   > account against his Axe-Fx III's own click, through the Pi)
 
-  What it would take: the unit's beat reaching the app. Over Bluetooth a
-  gen-3 unit's beat message is recognised and thrown away (bleWire
-  `isBeatPush`), and none has been seen from a real unit. Through a
-  computer the engine only counts such frames (ForgeFX registryCore's
-  persistent onFrame) and sends no beat on; that is an engine change and
-  a computer release, and the phone would also need the time between it
-  and the computer, which nothing measures. On Linux (the Pi) the engine
-  reaches an Axe-Fx III through its USB-MIDI port, the port a unit with
-  Send Realtime Sysex on would send beats down, if it sends them there.
+- **The device's beat on the unit's own beat: built 16 November 2026, HIS
+  ACCOUNT ONLY** (`BEAT_LOCK_FOR_EVERYONE` in mobile/src/lib/features.js,
+  false). A gen-3 unit with Send Realtime Sysex on (Setup → MIDI/Remote)
+  sends one short message on its tempo's beat. Where the unit clicks and
+  the device lights or clicks beside it, the device now listens for that
+  beat and moves its own onto it:
+
+  - **Through the computer** the computer app notes the moment each beat
+    arrives and answers GET /tempo/beat with how long ago the last one was
+    (ForgeFX server/src/unitBeat.ts, pinned at a32e129). The phone times
+    its own question, so the beat fell in a WINDOW between "asked − age"
+    and "answered − age" on the phone's clock: always true however lopsided
+    the road, and as narrow as the round trip was quick. Every window is
+    joined with the ones before (mobile/src/lib/beatLock.js `joined`), so
+    the belief narrows. A few questions quickly, then one every six
+    seconds; a computer app from before the answer existed says so once
+    and is not asked again for ten minutes.
+  - **Over Bluetooth or the USB cable** the beat reaches the device itself:
+    bleWire hands it on (`{ type: 'beat', at }`), the store passes it to
+    lib/beatBus, and lib/unitBeat weighs one every two seconds. Never for
+    400 ms after a tap the device sent (the same message comes back as its
+    answer), and never from an AM4 or a VP4.
+  - **The move** (lib/metronome `usePhoneClick`): what the device's beats
+    are counted from shifts by the least that puts the click HEARD (its
+    lead after the beat, shared `flashLead`), or in silence the light, on
+    the unit's beat. Never two clicks within half a beat, and a move under
+    8 ms is not made. While a beat has been heard in the last twenty
+    seconds the words say "In step with the unit's beat" in place of the
+    "can be apart" sentence (lib/edgeFlash `apartOrInStep`), and go back by
+    themselves.
+  - **Nothing is sent to the unit for any of it.** A unit that sends no
+    beat changes nothing, and the log says why once ("the unit has sent no
+    beat (Send Realtime Sysex may be off on it: Setup → MIDI/Remote)").
+  - **NOT SEEN ON A UNIT.** Whether his Axe-Fx III sends the message down
+    its USB port at all, on every beat or only a bar's first (the note of
+    Fractal's third-party MIDI document in test/bluetooth.mjs has it sent
+    on each down beat; either lines up), and how near its own click, are all unknown until his log says "the unit's beat is heard
+    through the computer". So no word in the app promises it: "in step" is
+    said only while it is so. If no beat ever comes through the computer,
+    the next thing to try is not more listening: it is a way to line them
+    up by hand.
+  - **It opens with the switch**, in a pull request with its What's new
+    line, when he has seen it line up. The computer half needs nothing
+    switched: it only answers what it has heard.
+  - Held by test/beat-lock.mjs (the rules and the follower, run), the click
+    bench in test/mobile.mjs (the real click moved by the real follower),
+    test/bluetooth.mjs (the wire handing the beat on) and ForgeFX
+    test/drivers/unit-beat.test.ts.
 - **The sound is a choice of four, with Off among them: built 16 November
   2026, HIS ACCOUNT ONLY, behind the same switch.**
 

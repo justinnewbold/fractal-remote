@@ -52,6 +52,8 @@ export default 'Drawn'
 export const useMetronome = () => world.setting
 export const useUnitHeardOn = () => world.heard
 export const useEdgeFlash = () => world.choice
+/* Whether the device's beat is on the unit's right now (lib/beatLock): not, unless a test says so. */
+export const useInStep = () => world.inStep === true
 export const setMetronome = async (...a) => { world.asked.push(['setMetronome', ...a]); return world.answer }
 export const setMetronomeSound = async (...a) => { world.asked.push(['setMetronomeSound', ...a]); return world.answer }
 export const setEdgeFlash = (on) => { world.asked.push(['setEdgeFlash', on]) }

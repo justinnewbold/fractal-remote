@@ -22,10 +22,13 @@
  * is. For every other account nothing changes: the edge flashes with the
  * device's own click, as it always has, and never without it.
  *
- * ONE THING IT CANNOT DO: the unit does not tell the app when its beats
- * fall, only how fast they are. So the light keeps the unit's tempo, not
- * its beat: the two can be a part of a beat apart, and nothing in the app
- * lines them up. The words say so (`EDGE_WORDS.apart`).
+ * ONE THING IT CANNOT DO BY ITSELF: the unit does not answer when its
+ * beats fall, only how fast they are. So the light keeps the unit's tempo,
+ * not its beat: the two can be a part of a beat apart, and the words say
+ * so (`EDGE_WORDS.apart`). Only where the unit SENDS its beat and it is
+ * heard (lib/beatLock: his account, a gen-3 unit with Send Realtime Sysex
+ * on) is the light moved onto it, and the words say that instead, only
+ * while it is so (`EDGE_WORDS.inStep`, `apartOrInStep`).
  *
  * They used to end "Press Tap to start them together", and that was never
  * true: Tap works the tempo out on the device and sends the unit a NUMBER
@@ -107,7 +110,9 @@ export const EDGE_WORDS = Object.freeze({
   on: 'Flash the edge of the screen: on',
   off: 'Flash the edge of the screen: off',
   note: (noun) => `The edge of the screen lights on every beat, wherever the click is. With the click on the unit alone, this ${noun} lights and stays silent.`,
-  apart: 'The light keeps the unit’s tempo, not its exact beat'
+  apart: 'The light keeps the unit’s tempo, not its exact beat',
+  /* Said in its place only while the unit's own beat is being heard and this device's beat is on it (apartOrInStep). */
+  inStep: 'In step with the unit’s beat'
 })
 
 /** Where "no sound" is kept, on the device. */
@@ -189,8 +194,9 @@ export const SOUND_WORDS = Object.freeze({
  *          wherever the flash does not change what is true
  *   unit   whether the unit's own click can be switched from here
  *   demo   the demo, whose unit makes no sound at all
+ *   inStep whether the device's beat is on the unit's right now
  */
-export function soundLine({ quiet = false, edge = true, where = 'unit', note = '', unit = false, demo = false, noun = 'phone' } = {}) {
+export function soundLine({ quiet = false, edge = true, where = 'unit', note = '', unit = false, demo = false, noun = 'phone', inStep = false } = {}) {
   if (quiet === true) {
     /*
      * Where the unit's own click is out of the app's hands (over Bluetooth,
@@ -206,9 +212,17 @@ export function soundLine({ quiet = false, edge = true, where = 'unit', note = '
   /* The shared note says "with a flash", which is not so with the flash switched off. */
   if (where === 'phone' && edge !== true) return SOUND_WORDS.deviceNoFlash(noun)
   /* Wherever the unit clicks with the edge lit, alone or with the device: its click and the light are two clocks. */
-  if (where !== 'phone' && edge === true && unit === true) return `${note}. ${EDGE_WORDS.apart}`
+  if (where !== 'phone' && edge === true && unit === true) return `${note}. ${apartOrInStep(inStep)}`
   return note
 }
+
+/**
+ * What is said of the unit's click against the light: that the two can be
+ * apart, or, only while the unit's own beat is being heard and the device's
+ * beat has been put on it (lib/beatLock, lib/metronome useInStep), that
+ * they are in step.
+ */
+export const apartOrInStep = (inStep) => (inStep === true ? EDGE_WORDS.inStep : EDGE_WORDS.apart)
 
 /**
  * The line under a place on Settings → Metronome: the shared rule's note,

@@ -117,7 +117,7 @@ export function run(test) {
       'the switch is drawn for an account it is not offered to, or is not the one switch'
     )
     assert.match(settings, /EDGE_WORDS\.note\(deviceNoun\(\)\)/, 'the device in hand is named when the words are shown')
-    assert.match(settings, /edgeChoice\.on && unitCan\.can && clickSetting\.where !== 'phone' \? ` \$\{EDGE_WORDS\.apart\}\.` : ''/, 'it is not said that the light and the unit’s click can be apart, where the unit clicks')
+    assert.match(settings, /edgeChoice\.on && unitCan\.can && clickSetting\.where !== 'phone' \? ` \$\{apartOrInStep\(beatInStep\)\}\.` : ''/, 'it is not said that the light and the unit’s click can be apart, where the unit clicks')
     /* The words. */
     const said = [r.EDGE_WORDS.section, r.EDGE_WORDS.on, r.EDGE_WORDS.off, r.EDGE_WORDS.note('iPad'), r.EDGE_WORDS.apart].join(' ')
     assert.match(r.EDGE_WORDS.note('iPad'), /this iPad lights and stays silent/)
@@ -261,7 +261,7 @@ export function run(test) {
     assert.match(sw, /const answer = await setMetronomeSound\(key, slug, clickHere\)/)
     assert.equal(sw.match(/setMetronomeSound\(/g).length, 1)
     /* The line under them is the rule’s, for an account offered the choice; every other account reads what it always read. */
-    assert.match(sw, /const where = choice\.offered \? choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, demo, noun: deviceNoun\(\) \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
+    assert.match(sw, /const where = choice\.offered \? choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, demo, noun: deviceNoun\(\), inStep \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
     /* Never "nothing to click to" with the sound picked Off. */
     assert.match(sw, /const sounding = deviceSounds\(\{ clicks: clicks\(setting, unitCan\.can, heard\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/)
 

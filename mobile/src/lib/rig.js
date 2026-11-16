@@ -46,6 +46,7 @@ import {
 import { chainActs, chainSwitches, chainView } from './chain-view'
 import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutline, outlineChain } from './chain-outline'
 import { blockCatalog } from './blockCatalog'
+import { unitBeatHeard } from './beatBus'
 import { unitByKey } from './demoUnits'
 import { AMP_BOOST, AMP_OFF_SAYS, BOOST, BOOST_LOADING, BOOST_NO_UNIT, BOOST_UNREAD, BOOST_WAIT, OTHER_AMP_SAYS, ampPedal, boostAt, boostFor, boostOf, boostReadPath, boostRequest, boostState, isAm4, keptBoost, pedalUnit, unitMissing } from './am4-boost'
 
@@ -655,6 +656,12 @@ export function onConfigDoc(fn) {
  */
 export function handleEvent(event) {
   if (!event) return
+
+  /* The unit's own tempo beat, heard over Bluetooth or the cable: for whoever is keeping this device's beat (lib/beatBus, lib/unitBeat), and nothing else here. */
+  if (event.type === 'beat') {
+    unitBeatHeard(event.at)
+    return
+  }
 
   if (event.type === 'config' && typeof event.id === 'string') {
     for (const fn of [...configWatchers]) {
