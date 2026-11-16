@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from '@babel/parser'
 import babelTraverse from '@babel/traverse'
 
-import { compareWithBuild, sameAsStores } from '../scripts/next-store.mjs'
+import { compareWithBuild, sameAsStores, NOT_THE_BUILD } from '../scripts/next-store.mjs'
 import { storeVersionProblem, withStoreVersion } from '../scripts/store-version.mjs'
 
 /* CommonJS interop: @babel/traverse's default export is on `.default` under
@@ -916,13 +916,16 @@ export function run(test) {
     const second = step(update, 'Publish for the next store version\'s testers')
     assert.ok(first.at < second.at, 'the testers’ update goes before the store copies’ own, so a failure in it would keep theirs back')
     assert.match(second.body, /if: \$\{\{ hashFiles\('docs\/pending\/next-store\.json'\) != '' && \(inputs\.update_channel \|\| 'both'\) != 'preview' \}\}/, 'the testers’ update is published with no next store version out, or on a preview-only run')
-    const order = ['bash scripts/apply-pending.sh', '(cd mobile && npm ci)', 'node scripts/next-store.mjs', 'eas update', '--branch production']
+    const order = ['bash scripts/apply-pending.sh', '(cd mobile && npm ci)', 'node scripts/next-store.mjs || check=$?', `if [ "$check" -ne 0 ] && [ "$check" -ne ${NOT_THE_BUILD} ]; then exit "$check"; fi`, 'eas update', '--branch production', `if [ "$check" -eq ${NOT_THE_BUILD} ]; then`, 'exit 1\n          fi']
     let last = -1
     for (const part of order) {
       const at = second.body.indexOf(part)
-      assert.ok(at > last, `the testers’ update does not run ${part} in its place (patches, packages, the check, then production)`)
+      assert.ok(at > last, `the testers’ update does not run ${part} in its place (patches, packages, the check, stopped on anything but "not the build's", production, then red if it was not the build's)`)
       last = at
     }
+    /* "Not the build's" is the script's own number, and the store copies' own fingerprint is never that number. */
+    assert.equal(NOT_THE_BUILD, 3)
+    assert.match(read('scripts/next-store.mjs'), /\n  if \(!reaches\) process\.exit\(strict \? 1 : NOT_THE_BUILD\)\n\}/, 'a testers’ update that is not the build’s is not told apart from one that would reach the store copies')
     assert.doesNotMatch(second.body, /--branch preview|git (commit|push)/, 'the testers’ update reaches the preview branch, or commits what it patched')
 
     /* docs/pending/next-store.json, once a build is out: its number, the two fingerprints it carries, and its watch's hash. */
@@ -950,7 +953,6 @@ export function run(test) {
       assert.ok(at > was, `the testers job does not run ${part} in its place (patches, packages, then the strict check)`)
       was = at
     }
-    assert.match(read('scripts/next-store.mjs'), /\n  if \(strict && !reaches\) process\.exit\(1\)\n/, 'the strict check does not fail when the testers’ build no longer matches')
   })
 
   test('a store build’s own number: three numbers, one digit last, never below a store', () => {
@@ -1002,7 +1004,7 @@ export function run(test) {
     assert.deepEqual(sameAsStores(stores, now), ['ios'], 'a testers’ update with the store copies’ iPhone fingerprint is let through, and every App Store customer would take the waiting patches’ code')
     assert.deepEqual(sameAsStores({ ios: '8'.repeat(40), android: '9'.repeat(40) }, now), [], 'a testers’ update unlike the store copies is held back')
     const ns = read('scripts/next-store.mjs')
-    assert.match(ns, /const same = sameAsStores\(stores, now\)\n  if \(same\.length\) \{\n[^\n]+\n    process\.exit\(1\)\n  \}\n  if \(strict && !reaches\) process\.exit\(1\)/, 'a testers’ update that would reach the store copies is not stopped in both modes')
+    assert.match(ns, /const same = sameAsStores\(stores, now\)\n  if \(same\.length\) \{\n[^\n]+\n    process\.exit\(1\)\n  \}\n[^]*?\n  if \(!reaches\) process\.exit\(strict \? 1 : NOT_THE_BUILD\)/, 'a testers’ update that would reach the store copies is not stopped in both modes, before anything else is asked')
     assert.match(ns, /execFileSync\('git', \['show', 'HEAD:mobile\/fingerprint\.json'\]/, 'the store copies’ fingerprint is not read from the commit as it was before the patches went in')
     /* Its watch hash is scripts/fingerprint.mjs's, word for word, or the two would disagree about one watch. */
     const body = (src, head) => {
@@ -1033,35 +1035,35 @@ export function run(test) {
       git('config', 'core.autocrlf', 'false')
       git('add', '-A')
       git('commit', '-qm', 'base')
-      /* second.patch only applies after first.patch, so the order is the README's or nothing. */
+      /* a-second.patch only applies after z-first.patch, so the order is the README's or nothing, and the README's is not the alphabet's: a script that went by the file names would put a-second.patch in first, and fail. */
       writeFileSync(join(dir, 'file.txt'), 'two\n')
-      writeFileSync(join(dir, 'docs/pending/first.patch'), git('diff'))
+      writeFileSync(join(dir, 'docs/pending/z-first.patch'), git('diff'))
       git('commit', '-qam', 'two')
       writeFileSync(join(dir, 'file.txt'), 'three\n')
-      writeFileSync(join(dir, 'docs/pending/second.patch'), git('diff'))
+      writeFileSync(join(dir, 'docs/pending/a-second.patch'), git('diff'))
       git('reset', '-q', '--hard', 'HEAD~1')
       assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'one\n')
 
       table()
       let r = run()
       assert.equal(r.code, 1, 'patch files that are not in the README’s table were applied in no known order')
-      assert.match(r.out, /first\.patch is not in docs\/pending\/README\.md's table/)
+      assert.match(r.out, /(z-first|a-second)\.patch is not in docs\/pending\/README\.md's table/)
 
-      table('first.patch', 'second.patch', 'gone.patch')
+      table('z-first.patch', 'a-second.patch', 'gone.patch')
       r = run()
       assert.equal(r.code, 1, 'a patch the README lists and that is not there went unnoticed')
       assert.match(r.out, /lists gone\.patch, and there is no such file/)
       assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'one\n', 'patches were applied before every listed one was found to be there')
 
-      table('first.patch', 'second.patch')
+      table('z-first.patch', 'a-second.patch')
       r = run()
       assert.equal(r.code, 0, r.out)
       assert.equal(readFileSync(join(dir, 'file.txt'), 'utf8'), 'three\n', 'the waiting patches did not all go in')
-      assert.ok(r.out.indexOf('Applying docs/pending/first.patch') < r.out.indexOf('Applying docs/pending/second.patch'), 'the patches went in out of the README’s order')
+      assert.ok(r.out.indexOf('Applying docs/pending/z-first.patch') < r.out.indexOf('Applying docs/pending/a-second.patch'), 'the patches went in out of the README’s order')
 
       /* A patch already in the tree is said and passed over, never applied twice. */
-      rmSync(join(dir, 'docs/pending/second.patch'))
-      table('first.patch')
+      rmSync(join(dir, 'docs/pending/a-second.patch'))
+      table('z-first.patch')
       writeFileSync(join(dir, 'file.txt'), 'two\n')
       r = run()
       assert.equal(r.code, 0, r.out)
@@ -1073,7 +1075,7 @@ export function run(test) {
       assert.equal(r.code, 1, 'a patch that neither applies nor is in the tree went unnoticed')
       assert.match(r.out, /first\.patch neither applies nor is already in the tree/)
 
-      rmSync(join(dir, 'docs/pending/first.patch'))
+      rmSync(join(dir, 'docs/pending/z-first.patch'))
       table()
       r = run()
       assert.equal(r.code, 0, r.out)

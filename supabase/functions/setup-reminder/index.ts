@@ -318,11 +318,24 @@ export function setupEmail(
    * switches' rule is checked against (test/server.mjs), not words in the
    * email any more.
    */
+  /*
+   * THE FM3: A WARNING, NOT A NEVER, since 16 November 2026 ("You're good to
+   * update the email that we talked about", Justin, of this sentence). The
+   * app and the website had said it since 15 November ("Instead of saying
+   * NEVER use a different Bluetooth device, just have a warning that devices
+   * on the FM3 may overheat and to use at their own risk"); the email said
+   * "use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master" until its
+   * redeploy. The guide's own words (public/bluetooth-guide.html), shorter:
+   * what may happen, at whose risk, what to do, what got hot, and the one
+   * that stays cool. Never "never", and never that another adapter stays
+   * cool or works on an FM3.
+   */
+  const FM3_HEAT = 'On an FM3, a Bluetooth adapter may overheat: use one at your own risk, and unplug it if it gets hot. The C2MIDI Pro and a WIDI Master both got very hot on one. The WIDI Uhost with a CME U2MIDI Pro runs on USB power only, and stays cool.'
   const units = 'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only)'
   const edits = editing === true
     ? `${units}. You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
     : `${units}, with no editing or saving.`
-  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
+  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} ${FM3_HEAT}`
   /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */
   const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
   const help = first

@@ -48,6 +48,9 @@ import { fileURLToPath } from 'node:url'
 const PARTS = ['ios', 'android', 'watch']
 
 /** Per part, whether `now` is what the build carries, and what to say. */
+/* The update job's exit code for "published, but not the build's": mobile.yml reads this number. */
+export const NOT_THE_BUILD = 3
+
 export function compareWithBuild(recorded, now, { strict = false } = {}) {
   const lines = []
   let reaches = true
@@ -124,7 +127,15 @@ const main = () => {
     console.log(`::error::With docs/pending in, ${same.join(' and ')} is ${same.map((p) => now[p]).join(' and ')}, the store copies' own, so the testers' update would reach every customer. Nothing is published for the testers.`)
     process.exit(1)
   }
-  if (strict && !reaches) process.exit(1)
+  /*
+   * Strict (web.yml's testers job): any part that is not the build's fails
+   * the pull request. Otherwise (the update job) the update is published all
+   * the same, since one that matches no build reaches nobody, and THEN the
+   * step goes red, so the testers taking nothing more is seen on the day it
+   * starts, not when one of them asks why (an independent read, before the
+   * 2.0.0 pair). The store copies' own fingerprint, above, stops it in both.
+   */
+  if (!reaches) process.exit(strict ? 1 : NOT_THE_BUILD)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

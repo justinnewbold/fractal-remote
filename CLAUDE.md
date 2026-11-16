@@ -176,7 +176,10 @@ the new one. So a test line, with nothing committed for the build:
   production branch, which a store build listens on). scripts/next-store.mjs
   says in the log whether that second update still matches the build; it
   stops matching when a patch, a package or anything native changes after
-  the build, and then the testers take nothing until another build.
+  the build, and then the testers take nothing until another build. Such an
+  update is published all the same (it reaches nobody) and THEN the step
+  goes red (`NOT_THE_BUILD`, exit 3), so the day it starts is seen; one
+  whose fingerprint would be the store copies' own is never published.
 - *Release day*, on Justin's word: the pull request that applies
   docs/pending to main the usual way (README steps, the version to the
   store build's or past it), deletes the patch files AND next-store.json,
@@ -495,7 +498,12 @@ test first, and under these rules:
   steps for the WIDI Master or the C2MIDI Pro on an FM3, which did not
   work. Still never a sentence that says an adapter stays cool or works on
   an FM3 but the U2MIDI Pro. The setup email's FM3 sentence is the
-  server's, and changes only with his yes and a redeploy.
+  server's, and changes only with his yes and a redeploy; it said "never
+  the C2MIDI Pro or a WIDI Master" until 16 November 2026, when he gave
+  that yes ("You're good to update the email that we talked about"), and
+  says the same warning now (`FM3_HEAT` in the function). The Google Play
+  description still said "Never plug the C2MIDI Pro or a WIDI Master into
+  an FM3" that day: it changes only when he asks for it on Google Play.
 - **Setup and Troubleshooting are by unit and by adapter, in tabs.** "With
   tabs so we don't have to sort through so much information not relevant
   to the unit and device they are using" (15 November 2026). How to connect
@@ -931,7 +939,11 @@ what the computer sends for the same edit, and a test holds it there.
     name on Axe-Edit's page, every bank, number and length of an impulse
     response, and Tone Match's start, match and export controls. Dynamic
     Distortion's Type is a switch, not a model. One way only for all of
-    them, and none has been turned on a unit. An FM9 has no hand-written
+    them. TURNED ON HIS AX3 AND RIGHT, 16 November 2026: "I verified knobs
+    are working correctly on the 5 AX3 blocks" (Justin; which connection
+    he used, over Bluetooth or through the Pi, was not said, and no log
+    came with it). Still his account only (`OWN_KNOBS_FOR_EVERYONE`) until
+    he says to open them. An FM9 has no hand-written
     list: there these blocks keep their on and off and no knobs.
   - *THE CODEC HAS A MINED TABLE FOR FIVE OF THE SIX, AND IT PUT TWO
     NAMES RIGHT* (found 13 November 2026). forgefx-midi's AXE3_PARAMS
@@ -978,10 +990,10 @@ what the computer sends for the same edit, and a test holds it there.
     for its place) is taken there. A NAM's knob was never sent the typed
     way, and since 16 November 2026 no gen-3 knob is (gen3-edit "ONE WAY
     ONLY", below under "What made knobs not take"). NOT TURNED YET: the NAM
-    block's six switches (Edit draws none, so there is nothing to tap),
-    and every knob of the other five blocks in the list, which is why
-    they have a switch of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and
-    did not open with the NAM block's.
+    block's six switches (Edit draws none, so there is nothing to tap).
+    The knobs of the other five blocks in the list, which have a switch
+    of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and did not open with
+    the NAM block's, were turned on his AX3 on 16 November 2026 (above).
 - **A block's list settings in Edit, under its knobs: built 13 November
   2026, HIS ACCOUNT ONLY** ("Yes, I like B for the edit screen" and "Menu
   style B", of three ways shown on a NAM block; the picture is in the
