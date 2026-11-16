@@ -43,6 +43,17 @@ export const bluetoothOn = () => on
 export const overBluetooth = (caps) => caps?.via === 'bluetooth'
 
 /**
+ * Whether reading this unit's chain takes half a minute: a gen-3 unit's
+ * whole preset (bleWire gen3DumpGrid) down a Bluetooth adapter, 25 seconds
+ * from his Axe-Fx III over a WIDI Master (report 913f344a). Not on the
+ * unit's own USB cable into the phone (`onCable`, lib/bluetooth
+ * useCableNow), where it is a moment; not an AM4 (`slotModel` 'linear'),
+ * whose chain is one small answer; never through the computer. Quick build
+ * says so before the tap and under its card.
+ */
+export const gridReadTakesLong = (caps, onCable) => overBluetooth(caps) && onCable !== true && caps?.slotModel === 'grid'
+
+/**
  * Turn the mode on or off, and hand over the wire once the adapter is
  * connected (or null when it drops). Turning it off forgets the wire too, so
  * a stale one can never answer after the player has switched back.

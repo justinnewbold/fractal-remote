@@ -90,7 +90,7 @@ export const startersStatus = (list) => {
 /* While it builds: over Bluetooth this takes seconds, so each step says itself. */
 export const CHECKING_EMPTY = 'Checking the preset is still empty…'
 export const placingLine = (name) => `Placing ${name || 'a block'}…`
-export const JOINING = 'Joining the row…'
+export const JOINING = 'Joining the blocks…'
 export const READING_BACK = 'Reading the chain back…'
 export const READING_BLOCKS = 'Reading which blocks the unit has…'
 /** Under the name box once a chain is kept. */
@@ -207,6 +207,56 @@ export const BLOCKS_NOT_READ = 'The unit did not answer when the app asked which
 export const TRY_AGAIN = 'Try again'
 export const undoMissedLine = (names) => `Undo did not take everything back out: ${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} still in. The chain has been read again.`
 
+/*
+ * THE CARD WHILE IT BUILDS. "Looks like everything worked. We need better
+ * feedback. Let him know the chain is building correctly, like a spinning
+ * circle or dots that are moving or something, as sometimes it feels like
+ * it's just frozen even though it's just thinking in the background cause
+ * it's taking longer over Bluetooth" (Justin, report 913f344a, 16 November
+ * 2026: his Axe-Fx III over a WIDI Master, 56 seconds from the tap to the
+ * result, 51 of them two reads of the whole preset with one line of text
+ * that did not move). Three steps, the one going with a turning circle, and
+ * a bar where how far it has got is known.
+ */
+export const STEPS_BUILD = Object.freeze(['Check the preset is empty', 'Put in the blocks and join them', 'Check what landed'])
+export const STEPS_UNDO = Object.freeze(['Check nothing has changed', 'Take the blocks back out', 'Check what is left'])
+export const readingFrom = (unit) => `Reading the preset from your ${unit || 'unit'}…`
+export const readingBack = (unit) => `Reading the preset back from your ${unit || 'unit'}…`
+/** Steps sent out of the plan's, under step 2's bar. */
+export const sentOf = (k, n) => `${k} of ${n}`
+/* Before the tap and under the card, where the preset is read down a Bluetooth adapter (Edit's takesLong). His first such build was 56 seconds; an FM3's or FM9's preset is half the size. */
+export const TAKES_LONG = 'Over Bluetooth this takes about half a minute to a minute.'
+/* Switched away, the phone stops the app, the read stops part-way and the build fails (no Bluetooth in the background). */
+export const KEEP_OPEN = 'Keep the app open until it’s done.'
+export const BUILDING = 'Building…'
+/* The Undo's button while its card is up: the card says which step it is on, so the button says only that it is working (it said "Taking the blocks back out…" through all three steps, the first and last of which take nothing out). */
+export const UNDO_BUSY = 'Undoing…'
+
+/**
+ * What the card shows: the three steps (`kind` 'build' or 'undo'), each
+ * 'done', 'now' or 'next' by `step` (1, 2 or 3); the line under the one
+ * going (the preset being read on 1 and 3, the line handed in on 2); and
+ * how far it has got, where that is known.
+ *
+ * On steps 1 and 3, `got` and `of` are the bytes of the preset read so far
+ * and the size known for the unit (bleWire gen3DumpGrid); on 2, the steps
+ * sent before the one going and the plan's count. `percent` is null where
+ * nothing says how far (through the computer, whose read tells nothing),
+ * never below 0, at most 99 until `got` reaches `of`, and 100 only then:
+ * a bar that fills before the end would be the frozen screen again, the
+ * other way round. `tally` is what stands beside the bar.
+ */
+export function buildPanel({ kind = 'build', step = 1, got = null, of = null, line = null, unit = null } = {}) {
+  const labels = kind === 'undo' ? STEPS_UNDO : STEPS_BUILD
+  const at = [1, 2, 3].includes(step) ? step : 1
+  const rows = labels.map((label, i) => ({ n: i + 1, label, state: i + 1 < at ? 'done' : i + 1 === at ? 'now' : 'next' }))
+  const known = Number.isFinite(got) && Number.isFinite(of) && of > 0
+  const percent = known ? (got >= of ? 100 : Math.max(0, Math.min(99, Math.floor((100 * got) / of)))) : null
+  const said = at === 1 ? readingFrom(unit) : at === 3 ? readingBack(unit) : line || null
+  const tally = percent === null ? null : at === 2 ? sentOf(Math.min(Math.max(0, got) + 1, of), of) : `${percent}%`
+  return { rows, line: said, percent, tally }
+}
+
 /** Every word above that a player reads, for the test that holds them. */
 export const SHOWN_WORDS = () => [
   QUICK_BUILD_TITLE, QUICK_BUILD_SUB, QUICK_BUILD_HOW, NOTHING_SAVED, NOTHING_SAVED_ON_UNIT, YOUR_CHAIN, BLOCKS_HEAD, MORE_CHIP, CHAIN_NONE_YET,
@@ -223,7 +273,8 @@ export const SHOWN_WORDS = () => [
   READ_FAILED, PRESET_MOVED, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'no answer'), undoneLine(1), undoneLine(5),
   undoMissedLine(['Amp']), UNDO_NOT_READ, undoSub(0), undoneLine(0), undoNotJoinedLine(3), undoNotJoinedLine(3, 1), undoNotJoinedLine(3, 4), undoWiringLeftLine(0), undoWiringLeftLine(2), BLOCKS_NOT_READ, TRY_AGAIN,
   NO_BLOCKS_TITLE, stoppedEarlyLine(), stoppedEarlyLine(['Input 1']), endsPutLine(['Input 1']), endsPutLine(['Input 1', 'Output 1']), PRESET_MOVED_BEFORE, PRESET_MOVED_AFTER, UNDO_MOVED_AFTER, UNIT_QUIET, UNIT_QUIET_BEFORE, stoppedLine({ kind: 'place', row: 1, col: 2, name: 'Amp' }, 'The unit did not answer in time.', false),
-  notAddedLine(['Cab'], 2, false, 2), endMissingLine(['Output 1'], 2), endMissingLine(['Input 1', 'Output 1'], 1)
+  notAddedLine(['Cab'], 2, false, 2), endMissingLine(['Output 1'], 2), endMissingLine(['Input 1', 'Output 1'], 1),
+  ...STEPS_BUILD, ...STEPS_UNDO, readingFrom('Axe-Fx III'), readingFrom(''), readingBack('FM3'), readingBack(null), sentOf(4, 11), TAKES_LONG, KEEP_OPEN, BUILDING, UNDO_BUSY
 ]
 
 /* ---------------------------------------------------------------- */
@@ -716,8 +767,11 @@ const listedEnd = (palette, end) =>
  * message and the corrected one are the same bytes, so a chain there does
  * not depend on which computer app sends them, and a player's may well be
  * from before the correction. Row 3 of the two, the nearer to the second,
- * where a chain used to go. NOT SEEN ON A UNIT YET: that row 3 joins rests
- * on the old message being right where it and the corrected one agree.
+ * where a chain used to go. SEEN TO JOIN TWICE, on Justin's Axe-Fx III, 16
+ * November 2026: from the phone over a WIDI Master ("6 in, 0 not;
+ * connected", report 913f344a), and through his Raspberry Pi on computer
+ * app 1.90.63, older than the correction ("9 in, 0 not; connected", report
+ * adc7d553). On an FM3 or FM9, not seen yet.
  */
 export const homeRow = (rows) => (rows >= 6 ? 2 : rows > 1 ? 1 : 0)
 

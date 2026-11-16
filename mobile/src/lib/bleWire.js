@@ -144,6 +144,7 @@ import {
   gridProof,
   gridShaped,
   gridSize,
+  dumpBytes,
   noProof,
   parseGridDump,
   parseGridLive
@@ -253,8 +254,10 @@ export const WAIT = {
    * bytes, a quarter of a second down an adapter. The preset whole is 24,680
    * bytes from an FM3 or FM9 and 49,336 from an Axe-Fx III: eight seconds
    * and sixteen at 31,250 baud, and a Bluetooth link can be slower than the
-   * jack, so the whole is given a minute and a half and timed by its bytes
-   * (the longest the unit may go quiet between two frames is the gap).
+   * jack (his Axe-Fx III's took 25.0 s and 25.9 s over a WIDI Master, report
+   * 913f344a, 16 November 2026), so the whole is given a minute and a half
+   * and timed by its bytes (the longest the unit may go quiet between two
+   * frames is the gap).
    */
   gridLive: 2500,
   gridDumpGap: 2500,
@@ -860,8 +863,25 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * "which scene?" asked straight after it are the same bytes (0C 02 both
    * ways), so a guard with a longer memory throws away the answer.
    */
-  let lastSent = { messages: [], copies: [], at: -Infinity }
+  let lastSent = { messages: [], copies: [], at: -Infinity, asked: false }
   let echoes = 0
+  /*
+   * COPIES OF A QUESTION, COUNTED ON THEIR OWN, and what the empty-preset
+   * rule and the MIDI THRU alarm go by (heard). A unit answers some WRITES
+   * with the write itself, byte for byte: a block's on and off and its
+   * channel (answersItself), and Quick build's "select a cell" on Justin's
+   * Axe-Fx III over a WIDI Master (report 913f344a, 16 November 2026: the
+   * third select of his first build came back 104 ms after it went, and the
+   * alarm rang over a rig wired right). Which other writes a unit answers so
+   * (a cable, a put of block 0 in an Undo) nobody has seen. Counted with the
+   * questions, each such write left an empty preset on that connection
+   * reading as the unit not answering. A unit never answers a QUESTION with
+   * the question itself (the one that does, "which blocks?" of an empty
+   * preset, says so: `opts.same`), so a copy of one is an echo whatever
+   * else is wired, and a plug in THRU or one that loops still echoes the
+   * questions. `echoes` still counts every copy (counts(), the Echo test).
+   */
+  let questionEchoes = 0
   let thruTold = false
   let foreign = null
   let pushes = 0
@@ -1024,10 +1044,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * the last message sent (the third within 46 ms), and the third wrote
    * "the unit is echoing what it receives: the white plug may be in the
    * Axe-Fx III's MIDI THRU, not OUT" into the log of a rig wired right. And
-   * a count that is not nought is what makes a preset with no blocks wait
+   * a count that is not nought was what made a preset with no blocks wait
    * for a second copy of its answer (`opts.same`, below), which never
    * comes: after one block switched on or off, an empty preset read as the
-   * unit not answering, the very thing that rule was written to mend.
+   * unit not answering, the very thing that rule was written to mend. Since
+   * 16 November 2026 that rule and the alarm go by the copies of QUESTIONS
+   * alone (questionEchoes), so no write a unit answers with itself, in this
+   * list or not, can trip either; this list keeps `echoes` (the Echo test,
+   * counts()) to a second copy of these.
    *
    * Never a question (7F in the value's place): an echoed "which tempo?"
    * is the echo this guard exists for.
@@ -1246,7 +1270,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* Whoever asked may need to know when it really left, which can be long after it was asked for (a capture slot's question waits behind Play: namSlotHead). */
     if (typeof job.opts.sent === 'function') job.opts.sent(job.started)
     const messages = job.opts.messages ? job.out : [job.out]
-    lastSent = { messages: [], copies: [], at: job.started }
+    lastSent = { messages: [], copies: [], at: job.started, asked: job.priority !== PRI.write && job.priority !== PRI.editWrite }
     for (const m of messages) {
       /*
        * A THROW ON THE WAY OUT IS A SEND THAT FAILED. Nothing caught one
@@ -1472,15 +1496,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * So a question that says what its own bytes coming back mean
      * (`opts.same`) is answered by them, on a unit that has answered
      * something else on this connection, so a plug that loops with no unit
-     * behind it is never an empty preset. Where nothing has been echoed on
-     * this connection, the first copy is the unit's answer. Where something
-     * has (MIDI Thru on), the first copy is the echo, dropped as ever, and
-     * the second is the answer; a full list behind the echo is still read
-     * as the list it is.
+     * behind it is never an empty preset. Where no question has come back
+     * on this connection (questionEchoes), the first copy is the unit's
+     * answer. Where one has (MIDI Thru on), the first copy is the echo,
+     * dropped as ever, and the second is the answer; a full list behind the
+     * echo is still read as the list it is.
      */
     if (ownEcho && job && job.opts.same !== undefined && answered && sameBytes(f, job.out)) {
       job.sames = (job.sames || 0) + 1
-      if (echoes === 0 || job.sames >= 2) {
+      if (questionEchoes === 0 || job.sames >= 2) {
         job.back = f
         return end(job, job.opts.same)
       }
@@ -1491,17 +1515,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
        * The first copy of a SET the unit answers with the set itself is
        * that answer (answersItself): dropped as ever, since whoever sent it
        * waits for nothing, and COUNTED AS NO ECHO. A second copy of the same
-       * message is one: with a plug in THRU both come, and the count still
-       * climbs a write at a time. A plug that only loops, with no unit
-       * behind it, gives one copy of a SET and is not counted for it; its
-       * copies of the questions are, as ever.
+       * message is one in `echoes`: with a plug in THRU both come. A plug
+       * that only loops, with no unit behind it, gives one copy of a SET and
+       * is not counted for it; its copies of the questions are, as ever, and
+       * they alone ring the alarm.
        */
       if (ownEcho && copy === 1 && answersItself(f)) return
       echoes++
-      if (echoes >= 3 && !thruTold) {
+      /* Only a copy of a question goes toward the alarm and the empty-preset rule (questionEchoes): another unit's question (askAround), or one of this unit's own. */
+      if (ownEcho && !lastSent.asked) return
+      questionEchoes++
+      /* Which copy it was, so the next log says what set the count going without a replay: the first, and the third (which rings the alarm). */
+      const which = () => `${toHex(f)}${sentAs >= 0 ? `, copy ${copy} of it, ${Math.round(now - lastSent.at)} ms after it went` : ', a question asked of the other units'}`
+      if (questionEchoes === 1) say(`the first copy of a question to come back on this connection: ${which()}`)
+      if (questionEchoes >= 3 && !thruTold) {
         thruTold = true
         /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
         say(unit === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on')
+        say(`the copy that made it three: ${which()}`)
       }
       return
     }
@@ -3339,9 +3370,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * unit says nothing when its own footswitch changes preset: the phone
    * learns of it by asking, on a clock, and that clock's questions are
    * skipped while anything else is on the line, which the preset is for
-   * eight or sixteen seconds. So a unit stepped on during the read was not
-   * counted as moved, the read vouched for the chain (chainSeen), and the
-   * first writes of a build went into the preset it had been stepped to.
+   * seconds on end (25 from his Axe-Fx III over a WIDI Master). So a unit
+   * stepped on during the read was not counted as moved, the read vouched
+   * for the chain (chainSeen), and the first writes of a build went into the
+   * preset it had been stepped to.
    * Asked here, off the clock, the move is counted before the read vouches
    * for anything; a unit that will not say is not vouched for either.
    */
@@ -3387,13 +3419,38 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { frame: got.frame, live: parseGridLive(got.frame, model) }
   }
 
-  /* The preset as it is being edited, whole, for the grid in it: the read the computer app uses. */
-  async function gen3DumpGrid() {
+  /*
+   * The preset as it is being edited, whole, for the grid in it: the read the
+   * computer app uses.
+   *
+   * `onProgress({ got, of })`, where whoever asked wants to show it going
+   * (Quick build's bar: "sometimes it feels like it's just frozen even
+   * though it's just thinking in the background cause it's taking longer
+   * over Bluetooth", Justin, report 913f344a): the bytes of it kept so far
+   * against the size this unit's preset is known to be (gen3-grid
+   * dumpBytes), told at the ask and at every frame kept. Never `of` or more
+   * before the foot, whatever came (a preset in more chunks than known stops
+   * short of the end), and `of` itself at the foot. Nothing more is sent and
+   * nothing waits for it: a callback that throws is dropped here, since a
+   * screen that has gone cannot stop the read it started.
+   */
+  async function gen3DumpGrid(onProgress) {
     /* The request for the preset is no grid frame, so the way out does not hold it to the job in hand: asked here, as the chain's own frames are asked there. */
     if (!chainOn()) throw unsupported()
     const frames = []
     let head = false
     const started = time.now()
+    const of = dumpBytes(model)
+    let kept = 0
+    const tell = (foot) => {
+      if (typeof onProgress !== 'function' || !of) return
+      try {
+        onProgress({ got: foot ? of : Math.min(kept, of - 1), of })
+      } catch {
+        // A screen that has gone cannot stop the read it started.
+      }
+    }
+    tell(false)
     const got = await ask(buildGridDump(model), null, WAIT.gridDumpGap, 'the preset, for where its blocks are', {
       cap: WAIT.gridDumpAll,
       priority: 'editRead',
@@ -3403,6 +3460,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         if (part === 'head') head = true
         else if (!head) return undefined
         frames.push(f)
+        kept += f.length
+        tell(part === 'foot')
         if (part !== 'foot') return null
         return parseGridDump(frames, model) || { broken: true }
       }
@@ -3426,8 +3485,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (lib/gen3-grid says why both). Answered as the computer answers it:
    * rows and columns from zero, a shunt by the block id the unit files it
    * under, `fromRows` the rows of the column before that feed a cell.
+   * `onProgress` goes to the preset's read alone (gen3DumpGrid): never to
+   * the live read, and a grid kept a moment tells nothing.
    */
-  function gen3Grid() {
+  function gen3Grid(onProgress) {
     return inGrid(async () => {
       /* (A grid kept is one read at this same count, so the chain has been seen at it: chainSeen.) */
       if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < STRUCTURE_FRESH_MS) return gridKept.value
@@ -3448,7 +3509,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       let grid = liveGrid === true ? gridFromLive(live, gridProved) : null
       const source = grid ? 'live' : 'preset'
       if (!grid) {
-        grid = await gen3DumpGrid()
+        grid = await gen3DumpGrid(onProgress)
         /* Is the unit still on the preset these were read from? Asked BEFORE anything is made of the two reads together: a live answer from one preset laid against the next one's grid would settle the proof on nothing, and write "DISAGREES" in the log he reads it from. */
         await gen3StillHere(at)
         if (asked) {
@@ -4667,7 +4728,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* The chain read as a grid and changed from here, only where it is open to this account (chainOn): his alone so far. Nobody else is ever answered, and a wire made without `chain` answers these as it always did, "not over Bluetooth". */
     if (chainOn()) {
       if (method === 'GET' && path === '/blocks') return editRoute(async () => (am4 ? AM4_PALETTE.map((b) => ({ ...b })) : gen3Palette()))
-      if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid()))
+      if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid(opts?.onProgress)))
       if (method === 'PUT' && path === '/preset/grid/cell') return editRoute(() => (am4 ? am4PlaceSlot(body) : gen3PlaceCell(body)))
       if (method === 'POST' && path === '/preset/grid/cable' && !am4) return editRoute(() => gen3Cable(body))
     }

@@ -512,7 +512,8 @@ export function run(test) {
     assert.match(qb, /count: landed\.unread \? 0 : landed\.landed\.filter\(\(p\) => !p\.end\)\.length, ran: tried,/)
     assert.match(qb, /text: undoNotJoinedLine\(unjoined, d\.count\)/)
     /* The Undo reads the chain first, refuses over a swapped block, and only then writes; its read back asks after the wiring too. */
-    assert.match(qb, /now = await gridCells\(\)[\s\S]*undoStale\(d\.plan, now, d\.ran\)[\s\S]*UNDO_STALE[\s\S]*beginChainWrite\(\)[\s\S]*runPlan\(d\.undo/)
+    /* (The read tells the card how far it has got, step 1's bar: never more than that.) */
+    assert.match(qb, /now = await gridCells\(\{ onProgress: toldFor\(1\) \}\)[\s\S]*undoStale\(d\.plan, now, d\.ran\)[\s\S]*UNDO_STALE[\s\S]*beginChainWrite\(\)[\s\S]*runPlan\(d\.undo/)
     assert.match(qb, /const unjoined = after === null \? null : undoUnjoined\(d\.plan, after, d\.ran\)/)
     assert.match(qb, /: unjoined !== null \? \{ bad: true, text: undoNotJoinedLine\(unjoined, d\.count\) \} : d\.plan\.wiringKnown === false \? \{ bad: false, text: undoWiringLeftLine\(d\.count\) \} : \{ bad: false, text: undoneLine\(d\.count\) \}/)
   })
@@ -795,8 +796,10 @@ export function run(test) {
 
   test('the screen says what the unit read back, and nothing when it read nothing: a build, and its Undo', () => {
     const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
-    /* Both reads start as "not read" and stay so when the unit does not answer. */
-    assert.equal((qb.match(/let after = null if \(on === 'same'\) \{ (?:if \(alive\.current\) setBusy\(READING_BACK\) )?await refreshBlocks\(\{ quiet: true \}\) try \{ after = await gridCells\(\) \} catch/g) || []).length, 2, 'a read that failed is taken for an empty chain')
+    /* Both reads start as "not read" and stay so when the unit does not answer. Each tells the card it is on step 3 and how far its read has got (BuildProgress), and nothing more. */
+    const readsBack = [...qb.matchAll(/let after = null if \(on === 'same'\) \{ toStep\('(build|undo)', 3\) (?:if \(alive\.current\) setBusy\(READING_BACK\) )?await refreshBlocks\(\{ quiet: true \}\) try \{ after = await gridCells\(\{ onProgress: toldFor\(3\) \}\) \} catch/g)]
+    assert.equal(readsBack.length, 2, 'a read that failed is taken for an empty chain')
+    assert.deepEqual(readsBack.map((m) => m[1]), ['build', 'undo'])
     assert.ok(!/let after = \[\]/.test(qb))
     assert.match(qb, /const landed = whatLanded\(plan, after, tried\)/)
     assert.match(qb, /const undo = undoSteps\(plan, tried\)/)
@@ -836,6 +839,96 @@ export function run(test) {
     assert.equal(s.startersStatus([{}, {}, {}]), '3 chains')
   })
 
+  /* ------------------------------------------------------------ the card while it builds */
+
+  /*
+   * "We need better feedback. Let him know the chain is building correctly,
+   * like a spinning circle or dots that are moving or something, as
+   * sometimes it feels like it's just frozen" (Justin, report 913f344a).
+   */
+  test('the card while it builds: three steps, the one going and the ones done, and a bar that is never full before the end', async () => {
+    const s = await lib()
+    assert.deepEqual([...s.STEPS_BUILD], ['Check the preset is empty', 'Put in the blocks and join them', 'Check what landed'])
+    assert.deepEqual([...s.STEPS_UNDO], ['Check nothing has changed', 'Take the blocks back out', 'Check what is left'])
+    const states = (p) => p.rows.map((r) => r.state)
+    assert.deepEqual(states(s.buildPanel({ step: 1 })), ['now', 'next', 'next'])
+    assert.deepEqual(states(s.buildPanel({ step: 2 })), ['done', 'now', 'next'])
+    assert.deepEqual(states(s.buildPanel({ step: 3 })), ['done', 'done', 'now'])
+    assert.deepEqual(s.buildPanel({ kind: 'undo', step: 2 }).rows.map((r) => r.label), [...s.STEPS_UNDO])
+    assert.deepEqual(s.buildPanel({ kind: 'build', step: 2 }).rows.map((r) => [r.n, r.label]), s.STEPS_BUILD.map((l, i) => [i + 1, l]))
+    /* What is said under the step going: the preset being read, from the unit by its name; on step 2 the line handed in. */
+    assert.equal(s.buildPanel({ step: 1, unit: 'Axe-Fx III' }).line, 'Reading the preset from your Axe-Fx III…')
+    assert.equal(s.buildPanel({ step: 3, unit: 'FM3' }).line, 'Reading the preset back from your FM3…')
+    assert.equal(s.buildPanel({ step: 1 }).line, 'Reading the preset from your unit…')
+    assert.equal(s.buildPanel({ step: 2, line: s.placingLine('Amp 1'), unit: 'FM3' }).line, 'Placing Amp 1…')
+    /* No bar where nothing says how far (through the computer, whose read tells nothing). */
+    for (const [got, of] of [[null, null], [5, null], [null, 100], [5, 0], [5, -1], [NaN, 100], [5, Infinity]]) assert.equal(s.buildPanel({ step: 1, got, of }).percent, null, `${got} of ${of}`)
+    /* Never full before the end, never below nothing, never not a number. */
+    const of = 49336
+    for (let got = 0; got < of; got += 997) {
+      const p = s.buildPanel({ step: 1, got, of })
+      assert.ok(Number.isInteger(p.percent) && p.percent >= 0 && p.percent <= 99, `${got}: ${p.percent}`)
+    }
+    assert.equal(s.buildPanel({ step: 1, got: of - 1, of }).percent, 99)
+    assert.equal(s.buildPanel({ step: 1, got: of, of }).percent, 100)
+    assert.equal(s.buildPanel({ step: 3, got: of + 3082, of }).percent, 100)
+    assert.equal(s.buildPanel({ step: 1, got: -20, of }).percent, 0)
+    assert.equal(s.buildPanel({ step: 1, got: 20168, of }).tally, '40%')
+    /* Step 2 counts the steps sent: the one going is the fourth of eleven. */
+    const sending = s.buildPanel({ step: 2, got: 3, of: 11 })
+    assert.deepEqual([sending.percent, sending.tally], [27, '4 of 11'])
+    assert.equal(s.buildPanel({ step: 2, got: 10, of: 11 }).tally, '11 of 11')
+    /* The words, plain and in the list every shown word is held to. */
+    assert.equal(s.TAKES_LONG, 'Over Bluetooth this takes about half a minute to a minute.')
+    assert.equal(s.KEEP_OPEN, 'Keep the app open until it’s done.')
+    assert.equal(s.BUILDING, 'Building…')
+    assert.equal(s.UNDO_BUSY, 'Undoing…')
+    const words = s.SHOWN_WORDS()
+    for (const w of [s.TAKES_LONG, s.KEEP_OPEN, s.BUILDING, s.UNDO_BUSY, ...s.STEPS_BUILD, ...s.STEPS_UNDO, s.readingFrom('Axe-Fx III'), s.readingBack('FM3'), s.sentOf(4, 11), s.JOINING]) assert.ok(words.includes(w), w)
+  })
+
+  test('Quick build draws the card in the sheet’s head while it builds: a turning circle, the picker hidden and kept, the ✕ faded, and the long wait said only where it is long', () => {
+    const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
+    /* React Native's own turning circle: no new package, so no new build. */
+    assert.match(qb, /import \{ AccessibilityInfo, ActivityIndicator, Image, Pressable, Text, TextInput, View \} from 'react-native'/)
+    assert.deepEqual([...qb.matchAll(/from '([^']+)'/g)].map((m) => m[1]).filter((m) => !/^(react|react-native|\.\.\/lib\/[\w-]+|\.\/\w+)$/.test(m)), [], 'Quick build reaches for a package')
+    assert.match(qb, /\{r\.state === 'now' \? \( <ActivityIndicator size="small" color=\{color\.signal\} \/> \)/)
+    assert.match(qb, /accessibilityRole="progressbar" accessibilityValue=\{\{ min: 0, max: 100, now: panel\.percent \}\}/)
+    assert.match(qb, /const panel = buildPanel\(\{ kind: stage\.kind, step: stage\.step, got: stage\.got, of: stage\.of, line, unit \}\)/)
+    /* Up while a run is, in the head (which never scrolls); gone wherever the run ends. */
+    assert.match(qb, /const building = !!busy && stage !== null/)
+    assert.match(qb, /head=\{building \? <BuildProgress stage=\{stage\} line=\{stage\.kind === 'undo' \? null : busy\} unit=\{unitName\} takesLong=\{takesLong\} \/> : null\}/)
+    assert.match(qb, /useEffect\(\(\) => \{ if \(!busy\) setStage\(null\) \}, \[busy\]\)/)
+    /* No chip can be tapped mid-build, and the picker is the same one after (More… still open for a build that failed). */
+    assert.match(qb, /<ChainPicker palette=\{palette\} picks=\{picks\} onPicks=\{setPicks\} room=\{room\} linear=\{shape\.linear\} hidden=\{building\} \/>/)
+    assert.match(qb, /<View style=\{hidden \? \{ display: 'none' \} : \{ gap: space\.md \}\}>/)
+    /* The foot's own line is not said twice, the button says Building…, the keep row waits, and the ✕ is faded while it runs. */
+    assert.match(qb, /\{busy && !building \? <Text accessibilityLiveRegion="polite"/)
+    assert.match(qb, /<Press label=\{busy \? BUILDING : buildLabel\(picks\.length\)\}/)
+    /* An Undo's button says only that it is working, and the card is not handed the button's words, so neither repeats nor contradicts the other. */
+    assert.match(qb, /<Press label=\{busy \? UNDO_BUSY : UNDO_LABEL\}/)
+    assert.match(qb, /<BuildProgress stage=\{stage\} line=\{stage\.kind === 'undo' \? null : busy\}/)
+    assert.ok(!/label=\{busy \? UNDOING/.test(qb), 'the Undo button says the blocks are coming out on every step')
+    assert.match(qb, /\{busy \? null : naming \? \(/)
+    assert.match(qb, /locked=\{!!busy\} >/)
+    /* The long wait, said before the tap and under the card, only where Edit says it is long. */
+    assert.match(qb, /\{takesLong && !busy \? <Text style=\{\{ color: color\.silkDim, fontSize: font\.small \}\}>\{TAKES_LONG\}<\/Text> : null\}/)
+    assert.match(qb, /\{takesLong \? \( <> <Text style=\{\{ color: color\.silkDim, fontSize: font\.small \}\}>\{TAKES_LONG\}<\/Text> <Text style=\{\{ color: color\.silkDim, fontSize: font\.small \}\}>\{KEEP_OPEN\}<\/Text> <\/> \) : null\}/)
+    assert.equal((qb.match(/\{TAKES_LONG\}/g) || []).length, 2)
+    /* A read's word moves only the step it was asked for, so a late one never moves another's bar. */
+    assert.match(qb, /const toldFor = \(step\) => \(p\) => \{ if \(alive\.current && p && Number\.isFinite\(p\.got\) && Number\.isFinite\(p\.of\)\) setStage\(\(s\) => \(s && s\.step === step \? \{ \.\.\.s, got: p\.got, of: p\.of \} : s\)\) \}/)
+    /* Every read is told, and told its own step: two of a build's, two of an Undo's. */
+    assert.deepEqual([...qb.matchAll(/await gridCells\((?:\{[^}]*\})?\)/g)].map((m) => m[0]), ['await gridCells({ onProgress: toldFor(1) })', 'await gridCells({ onProgress: toldFor(3) })', 'await gridCells({ onProgress: toldFor(1) })', 'await gridCells({ onProgress: toldFor(3) })'])
+    assert.match(qb, /toStep\('build', 1\) setBusy\(CHECKING_EMPTY\)/)
+    assert.match(qb, /toStep\('undo', 1\) setBusy\(UNDOING\)/)
+    /* Step 2 counted inside the hold, a build's and an Undo's. */
+    assert.match(qb, /const sending = sentCounter\('build', plan\.steps\.length\)/)
+    assert.match(qb, /const sending = sentCounter\('undo', d\.undo\.length\)/)
+    assert.match(qb, /placeBlock: held\(n, gone, sending\(/)
+    /* And Edit says whether it is long; this file never asks which wire it is on (the test above). */
+    assert.match(code(read('mobile/src/screens/Edit.js')).replace(/\s+/g, ' '), /takesLong=\{gridReadTakesLong\(caps, onCable\)\}/)
+  })
+
   /* ------------------------------------------------------------ the screens */
 
   test('the screens reach the unit through five calls of lib/device only, and never ask about the wire', () => {
@@ -854,7 +947,7 @@ export function run(test) {
     const qb = code(read('mobile/src/components/QuickBuild.js'))
     assert.match(qb, /import \{ blockCatalog, clearCell, gridCells, placeBlock, setCable \} from '\.\.\/lib\/device'/)
     assert.match(qb, /runPlan\(plan\.steps, wire\(plan, n, gone\)\)/, 'the build runs the plan through split-chain’s runPlan')
-    assert.match(qb, /beginChainWrite\(\)[\s\S]*runPlan\(plan\.steps[\s\S]*endChainWrite\(\{ refresh: false \}\)[\s\S]*refreshBlocks\(\{ quiet: true \}\)[\s\S]*gridCells\(\)[\s\S]*whatLanded\(/, 'guarded, read back, then said')
+    assert.match(qb, /beginChainWrite\(\)[\s\S]*runPlan\(plan\.steps[\s\S]*endChainWrite\(\{ refresh: false \}\)[\s\S]*refreshBlocks\(\{ quiet: true \}\)[\s\S]*gridCells\(\{ onProgress: toldFor\(3\) \}\)[\s\S]*whatLanded\(/, 'guarded, read back, then said')
     assert.match(qb, /const before = await where\(d\.n\)[\s\S]*text: before === 'moved' \? UNDO_STALE : READ_FAILED/, 'an Undo on another preset is refused')
     assert.match(qb, /shown !== d\.n\) \|\| undoStale\(d\.plan, now, d\.ran\)\) \{[\s\S]*UNDO_STALE/)
   })

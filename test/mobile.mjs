@@ -2447,9 +2447,11 @@ export function run(test) {
     assert.match(qb, /const n = ofNumber\(\) if \(!Number\.isInteger\(n\) \|\| n < 0\) \{ setBusy\(null\) setSaid\(READ_FAILED\) return \}/, 'a build is held to no preset at all')
     assert.match(qb, /const held = \(n, gone, call\) => async \(\.\.\.args\) => \{ gone\.unsent = true const on = gone\.moved \? 'moved' : await where\(n\) if \(on === 'moved'\) \{ gone\.moved = true throw new Error\(PRESET_MOVED\) \} if \(on !== 'same'\) throw new Error\(UNIT_QUIET\) gone\.unsent = false return call\(\.\.\.args\) \}/, 'a step of a build goes without asking the unit which preset it is on')
     assert.match(qb, /placeBlock: held\(n, gone, [\s\S]*clearCell: held\(n, gone, [\s\S]*setCable: held\(n, gone, /)
-    assert.match(qb, /runPlan\(d\.undo, \{ setCable: held\(d\.n, gone, setCable\), placeBlock: held\(d\.n, gone, placeBlock\), clearCell: held\(d\.n, gone, clearCell\) \}\)/, 'an Undo’s steps are not held to the preset')
+    /* (Each counted on the card as it goes, inside the hold: `sending` only says how many have gone, and calls through.) */
+    assert.match(qb, /runPlan\(d\.undo, \{ setCable: held\(d\.n, gone, sending\(setCable\)\), placeBlock: held\(d\.n, gone, sending\(placeBlock\)\), clearCell: held\(d\.n, gone, sending\(clearCell\)\) \}\)/, 'an Undo’s steps are not held to the preset')
+    assert.match(qb, /const sentCounter = \(kind, of\) => \{ let sent = 0 if \(alive\.current\) setStage\(\{ kind, step: 2, got: 0, of \}\) return \(call\) => \(\.\.\.args\) => \{ if \(alive\.current\) setStage\(\{ kind, step: 2, got: sent, of \}\) sent \+= 1 return call\(\.\.\.args\) \} \}/)
     /* The preset a build is for is taken BEFORE its chain is read, so the number the steps are held to is the one whose chain the plan was made from. */
-    assert.match(qb, /setBusy\(CHECKING_EMPTY\) const n = ofNumber\(\) if \(!Number\.isInteger\(n\) \|\| n < 0\) \{[^}]*\} let cells try \{ cells = await gridCells\(\) \}/, 'the preset number is taken after the chain was read')
+    assert.match(qb, /setBusy\(CHECKING_EMPTY\) const n = ofNumber\(\) if \(!Number\.isInteger\(n\) \|\| n < 0\) \{[^}]*\} let cells try \{ cells = await gridCells\(\{ onProgress: toldFor\(1\) \}\) \}/, 'the preset number is taken after the chain was read')
     assert.ok(!/const plan = planBuild[\s\S]*const n = ofNumber\(\)/.test(qb))
     /* Asked while the chain write is still held; then, moved: followed, nothing read back, and the words say whether the run was stopped, never began, or had finished. */
     assert.equal((qb.match(/const on = gone\.moved \? 'moved' : await where\((?:d\.)?n\) endChainWrite\(\{ refresh: false \}\) if \(on === 'moved'\) \{ followPresetAfterChainWrite\(\)/g) || []).length, 2)
@@ -4512,6 +4514,46 @@ export function run(test) {
     for (const file of ['mobile/src/components/Sheet.js', 'mobile/src/components/Volume.js']) {
       assert.match(read(file), /onPress=\{\(\) => \{\}\}/, `${file} closes when a press lands on the panel itself`)
     }
+  })
+
+  test('a sheet that cannot be closed just now says so: Quick build’s ✕ is faded while it builds, and every other sheet’s is as it was', () => {
+    /* Report 913f344a: the ✕ did nothing while a build ran and still looked live, one more thing that read as frozen. */
+    const sheet = read('mobile/src/components/Sheet.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(sheet, /scrollKey = undefined, locked = false, children \}\) \{/)
+    assert.match(sheet, /<View style=\{locked \? LOCKED_LOOK : undefined\}> <Pressable accessibilityRole="button" accessibilityState=\{locked \? \{ disabled: true \} : undefined\} disabled=\{locked\} accessibilityLabel="Close" onPress=\{onClose\}/)
+    assert.match(sheet, /const LOCKED_LOOK = \{ opacity: 0\.4 \}/)
+    /* Quick build alone asks for it, and only while it runs. */
+    const askers = ['mobile/src/components', 'mobile/src/screens'].flatMap((dir) => readdirSync(new URL(`../${dir}/`, import.meta.url)).filter((f) => f.endsWith('.js')).map((f) => `${dir}/${f}`)).filter((f) => /<Sheet\b/.test(read(f)) && /\blocked=\{/.test(read(f)))
+    assert.deepEqual(askers, ['mobile/src/components/QuickBuild.js'])
+    assert.match(read('mobile/src/components/QuickBuild.js').replace(/\s+/g, ' '), /tall locked=\{!!busy\} >/)
+  })
+
+  test('how far the chain read has got goes to the device’s own wire and never leaves the phone through the computer; the card names the unit as the rig does', async () => {
+    const told = () => {}
+    const { rig, relay, ble, device } = await rigOnTheBench({ short: 'Axe-Fx III', capabilities: { via: 'bluetooth', slotModel: 'grid', grid: { rows: 6, cols: 14 }, gridEdit: true } })
+    /* Through the computer: handed to the relay's request, which puts on the wire only what relaySend builds (below). */
+    relay.handed.length = 0
+    await device.gridCells({ onProgress: told })
+    await device.gridCells()
+    await device.gridCells({ onProgress: 'not a function' })
+    assert.deepEqual(relay.handed.map((h) => [h.line, h.onProgress === told, 'onProgress' in h]), [['GET /preset/grid', true, true], ['GET /preset/grid', false, false], ['GET /preset/grid', false, false]])
+    const relaySrc = read('mobile/src/lib/relay.js').replace(/\s+/g, ' ')
+    assert.match(relaySrc, /const ask = \{ id, method, path, body: options\.body \?\? null \}/)
+    assert.match(relaySrc, /const msg = \{ type: 'broadcast', event: 'req', payload: ask \}/)
+    assert.deepEqual([...relaySrc.matchAll(/\bask\.(\w+) =/g)].map((m) => m[1]), ['host', 'host'], 'something more is put on the relay with a request')
+    /* Over the device's own wire: handed to it as it is, as a capture's count is. */
+    const asked = []
+    ble.__wire({ request: (path, options) => (asked.push([path, options]), relay.remoteRequest(path, options)) })
+    await device.gridCells({ onProgress: told })
+    assert.equal(asked.at(-1)[0], '/preset/grid')
+    assert.equal(asked.at(-1)[1].onProgress, told)
+    /* The unit's name, from the detect answer through the Bluetooth seam, is the rig's deviceName; its capabilities carry none, so the card reads the rig. */
+    await rig.refreshAll()
+    assert.equal(rig.getState().deviceName, 'Axe-Fx III')
+    assert.equal(rig.getState().capabilities.short, undefined)
+    const s = await import('../shared/starter-chains.mjs')
+    assert.equal(s.readingFrom(rig.getState().deviceName), 'Reading the preset from your Axe-Fx III…')
+    ble.__wire(null)
   })
 
   test('the preset list opens on the preset you are playing', () => {
