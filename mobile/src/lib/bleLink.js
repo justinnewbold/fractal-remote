@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native'
 import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
   adapterBackUnderNewId,
+  adapterCameBack,
   adapterDevices,
   adapterName,
   bluetoothAdmin,
@@ -22,6 +23,7 @@ import {
   unitName
 } from './bluetooth'
 import { isCable } from './bleAdapters'
+import { notAnAdapter } from './bluetooth-gear'
 import { getState, handleEvent, refreshAll, reset as resetRig, set as setRig, stopWatching, subscribeRig, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
@@ -138,10 +140,12 @@ let wasOff = false
  * reconnects by itself has taken three seconds. Only where the first
  * connection of a round has already been made afresh by itself (`afresh`),
  * so with that, at least two connections' questions; never for a VP4, which
- * never answers, nor a unit on a USB cable. Down when the unit answers on a
- * connection (heardTheUnit), never on bytes that are no answer, and at a new
- * round (endNothingBack); a drop does not take it down, since the reset's
- * first step is the adapter switched off.
+ * never answers, a unit on a USB cable, or a footswitch picked as the
+ * adapter. Down when the unit answers on a connection (heardTheUnit), never
+ * on bytes that are no answer, and at a new round (endNothingBack); a drop
+ * does not take it down, since the reset's first step is the adapter
+ * switched off, nor does the same adapter back under a new id, which its
+ * steps make happen on an iPhone (adapterCameBack).
  */
 export const NOTHING_BACK_MS = 8000
 let quietCheck = null
@@ -455,8 +459,8 @@ async function connected(e) {
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
   /* The word as this connection starts: a 'present' kept from the one before is not this one's answer (rigMoved). */
   unitWord = getState().unit
-  /* And its watch for nothing at all coming back, not before NOTHING_BACK_MS; never for a VP4 or a USB cable. */
-  const quiet = made.unit !== 'vp4' && !onCable() ? watchQuiet(made, name) : null
+  /* And its watch for nothing at all coming back, not before NOTHING_BACK_MS; never for a VP4, a USB cable, or a footswitch picked as the adapter (its own line says so: shared/bluetooth-gear notAnsweringLine), which sends nothing until it is stepped on. */
+  const quiet = made.unit !== 'vp4' && !onCable() && !notAnAdapter(name) ? watchQuiet(made, name) : null
   /*
    * ONE QUESTION TO WAKE THE LINK, ITS ANSWER NOT USED. On the AM4 test the
    * first question after connecting went unanswered, and the same question a
@@ -808,10 +812,18 @@ function settingsMoved(s) {
   if (unit === seen.unit && adapter === seen.adapter) return
   const unitMoved = unit !== seen.unit
   const adapterMoved = adapter !== seen.adapter
+  /*
+   * THE SAME ADAPTER BACK UNDER A NEW ID (lib/bluetooth adapterCameBack): on
+   * an iPhone the reset card's own steps do that (restarted, forgotten and
+   * paired again), so it is the same round of nothing coming back, and the
+   * card stays on its step until the unit answers, or does not.
+   */
+  const cameBack = !unitMoved && adapterMoved && adapterCameBack(seen.adapter, adapter)
   seen = { unit, adapter }
   /* Another unit or adapter is a new round: one connection made afresh by itself is owed to it again, and nothing coming back was the last one's. */
   afresh = false
-  endNothingBack()
+  if (cameBack) stopQuiet()
+  else endNothingBack()
   const name = s.connectedTo
   attempt++
   clearTimer()
@@ -826,7 +838,7 @@ function settingsMoved(s) {
     }
     if (!running) return
     if (adapterMoved) {
-      say(adapter ? (isCable(s.adapter) ? 'a unit on a USB cable was chosen' : 'a different adapter was chosen') : 'the adapter was forgotten')
+      say(adapter ? (isCable(s.adapter) ? 'a unit on a USB cable was chosen' : cameBack ? 'the same adapter is back under a new id' : 'a different adapter was chosen') : 'the adapter was forgotten')
       if (touched) releaseAdapter()
       held = false
       delay = 0

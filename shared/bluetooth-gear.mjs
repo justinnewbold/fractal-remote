@@ -1457,8 +1457,6 @@ export const RESET_TITLES = Object.freeze({
   report: 'Send us a report'
 })
 
-const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1)
-
 /**
  * HOW THIS ADAPTER IS RESTARTED, by what powers it: `long`, the step itself,
  * and `short`, the same inside another sentence. `it` is the adapter as the
@@ -1476,7 +1474,8 @@ export function restartWords(unit, kind, it = 'the adapter') {
   if (kind === 'jack') {
     return {
       long: `Pull ${it}’s two cables out of the ${name}, and unplug its charger if it has one. Wait 10 seconds, then plug each one back where it came out.`,
-      short: 'pull its cables out and plug each one back where it came out'
+      /* The charger too, as in the step itself: a Jack on a charger with only its cables pulled stays on, and is never restarted. */
+      short: 'pull its cables out and unplug its charger if it has one, then plug each one back where it came out'
     }
   }
   return {
@@ -1520,11 +1519,19 @@ export function resetSteps({ unit, kind = null, adapter = null, os = 'ios', noun
   const back = (step) => (card ? `If ${it} isn’t back in about 15 seconds, tap Reconnect.` : step === 'restart' ? 'If it isn’t back in about 15 seconds, tap Stop, then Connect.' : 'Then tap Stop, then Connect.')
   const ios = os === 'ios'
   const steps = []
-  /* 1. THE ADAPTER RESTARTED, with the plugs first where it has never answered here, and one plug line where it was just moved here. */
+  /*
+   * 1. THE ADAPTER RESTARTED, with the plugs first where it is not known to
+   * have answered here, and one plug line where it was just moved here.
+   * Not known is not "never": the record starts empty on every device (lib/bluetooth
+   * adapterHeard: nothing is seeded, nor kept across a second device or a
+   * reinstall), so the line ASKS whether it is the first time, as
+   * Troubleshooting's first line does (firstTimeLine), and never says it
+   * has not answered before.
+   */
   steps.push({
     key: 'restart',
     lines: [
-      !answered ? `${from ? `It was just moved here from your ${from}` : `${capital(it)} hasn’t answered on your ${name} before`}, so check its plugs first. ${plugs}${thru ? ` ${thru}` : ''}` : null,
+      !answered ? `${from ? `It was just moved here from your ${from}, so check its plugs first.` : `First time with ${it} on your ${name}? Check its plugs first.`} ${plugs}${thru ? ` ${thru}` : ''}` : null,
       restart.long,
       answered && from ? `It was just moved here from your ${from}, so check its plugs too. ${plugs}` : null,
       `It should connect again by itself. ${back('restart')}`

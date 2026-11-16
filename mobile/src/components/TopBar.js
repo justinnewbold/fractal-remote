@@ -19,7 +19,7 @@ import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
-import { CONNECT_AGAIN, FIX_STEP_BY_STEP, connectAgainSub, notAnsweringLine, nothingBackLine } from '../lib/bluetooth-gear'
+import { CONNECT_AGAIN, FIX_STEP_BY_STEP, connectAgainSub, notAnAdapter, notAnsweringLine, nothingBackLine } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
@@ -825,9 +825,12 @@ function Which({ link, cable = false, quiet = false, nothing = false, unit = nul
    * the Bluetooth page, where the reset steps are, in place of Use a
    * different adapter, which is on that page too. Where some bytes came back
    * and no answer (a plug in THRU), and before the link has asked enough to
-   * know, the plugs line as before.
+   * know, the plugs line as before. And never for a footswitch picked as the
+   * adapter (notAnAdapter), which sends nothing until it is stepped on: its
+   * own line names it, with Use a different adapter, and the page draws no
+   * reset steps for one.
    */
-  const silentNothing = quiet && nothing
+  const silentNothing = quiet && nothing && !notAnAdapter(link?.macName)
   /*
    * A unit on a USB cable: the cable's words (lib/cableWords cableNote), and
    * the same one way back to the computer, named for it.

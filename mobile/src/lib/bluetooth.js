@@ -252,7 +252,9 @@ const takenIds = () => new Set(Object.entries(byUnit).filter(([key, a]) => key !
  *     keeping for this one (keepFor), until it answers here.
  *
  * Nothing is seeded: an adapter with no record is one not known to have
- * answered, and is told to check its plugs first.
+ * answered, and the card asks whether it is the first time with it there,
+ * and to check its plugs first (it never says it has not answered: the app
+ * only has no record of it).
  */
 const HEARD_KEY = 'fractal.bluetooth.heard'
 const HEARD_MAX = 8
@@ -294,7 +296,7 @@ export const adapterHeard = (unit, id) => ({
   answered: (unit && id && heard.answered[unit]?.[id]) || null,
   movedFrom: unit && id && heard.moved[unit]?.id === id ? heard.moved[unit].from : null
 })
-/* The same adapter under a new id (adapterBackUnderNewId): what it has answered goes with it, and so does the reset card's place. */
+/* The same adapter under a new id (sameAdapterBack, from chooseAdapter): what it has answered goes with it, and so does the reset card's place. */
 function carryHeard(was, id) {
   if (!was || !id || was === id) return
   if (now.reset?.adapter === was) keepReset({ ...now.reset, adapter: id })
@@ -363,8 +365,19 @@ export function resetStillNothing(keys) {
   announce()
   return next
 }
-/** The card's "answering again" has been seen: it goes. */
+/*
+ * THE CARD'S "ANSWERING AGAIN" IS UP FOR RESET_BACK_MS, and then goes by
+ * itself, here, whichever screen is showing: the page's own timer ran only
+ * while the page was open, so a unit that answered while the player was on
+ * Play left it set, and the line came up on the next visit to the page,
+ * perhaps an hour later.
+ */
+export const RESET_BACK_MS = 8000
+let backTimer = null
+/** The card's "answering again" has been seen, or its moment is over: it goes. */
 export function clearResetBack() {
+  if (backTimer) clearTimeout(backTimer)
+  backTimer = null
   if (!now.resetBack) return
   now = { ...now, resetBack: null }
   announce()
@@ -406,6 +419,8 @@ export function unitAnswered() {
   if (up) {
     logDebug('ble', `the ${unitName(unit)} answers: nothing coming back is over`)
     now = { ...now, nothingBack: false, resetBack: Date.now() }
+    if (backTimer) clearTimeout(backTimer)
+    backTimer = setTimeout(clearResetBack, RESET_BACK_MS)
   }
   if (changed || was || up) announce()
 }
@@ -896,7 +911,17 @@ export async function restoreBluetooth() {
   }
   try {
     const memo = await AsyncStorage.getItem(RESET_KEY)
-    now = { ...now, reset: settleReset(memo ? JSON.parse(memo) : null) }
+    const r = settleReset(memo ? JSON.parse(memo) : null)
+    /*
+     * CLOSING THE APP WAS THE STEP IT WAS ON ("Close the app and open it
+     * again"): opening it is that step done, so the card goes on to the one
+     * after it (resetSteps puts 'nearby' straight after 'reopen'), never the
+     * same step again under "These steps pick up where you left off".
+     */
+    if (r && r.step === 'reopen') {
+      now = { ...now, reset: { ...r, step: 'nearby', done: [...r.done.filter((k) => k !== 'reopen'), 'reopen'] } }
+      logDebug('ble', `reset steps: the app was opened again; next, “${RESET_TITLES.nearby}”`)
+    } else now = { ...now, reset: r }
   } catch {
     now = { ...now, reset: null }
   }
@@ -1042,11 +1067,48 @@ export function forgetAdapterFor(unit) {
   return true
 }
 
+/*
+ * THE SAME ADAPTER, BACK UNDER A NEW ID (iPhone, 16 November 2026). CoreMIDI
+ * gives an adapter connected again new ids, and the reset card's own steps
+ * (the adapter restarted, Forget it and pair it again, then Reconnect or Stop
+ * and Connect through Apple's screen) do exactly that. However it is chosen
+ * again (adapterBackUnderNewId, the pick after Apple's screen, the port that
+ * turns up just after it, a Connect after Stop), it is still the adapter it
+ * was: what it has answered and where it was just moved from go with it
+ * (carryHeard), so does the card's place, and bleLink keeps what it said
+ * about nothing coming back (adapterCameBack). The same name, the id it had
+ * no longer connected, and not an adapter kept for another unit (a second
+ * one of the same make). Never on Android, where an id is the adapter's own
+ * address and a new one is another adapter.
+ */
+function sameAdapterBack(was, dev) {
+  if (Platform.OS !== 'ios' || !was?.id || !dev?.id || was.id === dev.id || isCable(was) || isCable(dev)) return false
+  const name = adapterName(was)
+  if (!name || (adapterName(dev) || '').toLowerCase() !== name.toLowerCase()) return false
+  if (takenIds().has(dev.id)) return false
+  return !adapterDevices().some((d) => d.id === was.id && !d.offline)
+}
+/* The last adapter chosen as the same one back under a new id: { from, to } (chooseAdapter), or null. */
+let cameBack = null
+/** Whether `to` was chosen as the adapter `from`, back under a new id (sameAdapterBack): bleLink's settingsMoved, so the reset card is not taken down as at a new round. */
+export const adapterCameBack = (from, to) => !!cameBack && !!from && cameBack.from === from && cameBack.to === to
+/*
+ * The adapter forgotten to be looked for again, { unit, adapter }, until the
+ * next is chosen: the page's Connect for one gone (another) forgets it
+ * before Apple's screen, and the same one back there under a new id is
+ * still it (sameAdapterBack). Never one forgotten by hand, a cable, or one
+ * let go of by Use a different adapter, which says it is the wrong one.
+ */
+let forgot = null
+
 /** Use this adapter from now on. bleLink hears the change and connects to it. */
 export function chooseAdapter(dev) {
   if (!dev || typeof dev.id !== 'string' || !dev.id) return
   /* Never Apple's network session, whoever asks (bleAdapters isNetworkSession). */
   if (!isAdapter(dev)) return
+  /* The adapter this one may be the same as, back under a new id (sameAdapterBack): the one kept, or the one forgotten a moment ago to be looked for again (forgetAdapter `forgot`). */
+  const was = saved.adapter || (forgot && forgot.unit === saved.unit ? forgot.adapter : null)
+  forgot = null
   letGo.delete(dev.id)
   /* An adapter chosen, by the phone or by a tap, ends the memory of the one let go of (letGoOf). A USB cable chosen does not: it says nothing about which adapter is the right one. */
   if (!isCable(dev)) letGoOf = null
@@ -1056,6 +1118,13 @@ export function chooseAdapter(dev) {
   if (saved.adapter?.id === dev.id) {
     if (offered) announce()
     return
+  }
+  /* The same adapter under a new id: what it has answered, where it was just moved from and the reset card's place go with it, and bleLink is told it is no new round (adapterCameBack). */
+  const back = sameAdapterBack(was, dev)
+  cameBack = back ? { from: was.id, to: dev.id } : null
+  if (back) {
+    logDebug('ble', `${adapterName(dev)} is the same adapter as before, under a new id: what it has answered here, and the reset steps’ place, go with it`)
+    carryHeard(was.id, dev.id)
   }
   noteBeforeCable(dev)
   saved = { ...saved, adapter: keptAdapter(dev) }
@@ -1296,6 +1365,8 @@ const letGo = new Set()
 /** `byHand`: the player's own Forget, not the page making room for another (see letGo). */
 export function forgetAdapter({ byHand = false } = {}) {
   if (!saved.adapter) return
+  /* Forgotten to be looked for again, as the page's Connect does for one gone: the same one back under a new id is still it (`forgot`, sameAdapterBack). */
+  forgot = !byHand && !isCable(saved.adapter) ? { unit: saved.unit, adapter: saved.adapter } : null
   if (byHand && isCable(saved.adapter)) letGo.add(saved.adapter.id)
   saved = { ...saved, adapter: null }
   keepFor(saved.unit, null)
@@ -1330,8 +1401,9 @@ export function letGoOfKeptAdapter() {
   if (saved.on) setBluetooth(false)
   logDebug('ble', `a different adapter is wanted: ${adapterName(a) || 'the adapter from last time'} is let go of`)
   forgetAdapter()
-  /* And never taken straight back as "the only one here" (pickAdapter): he has just said it is the wrong one. */
+  /* And never taken straight back as "the only one here" (pickAdapter): he has just said it is the wrong one. Nor is one of the same name taken for it, with what it had (`forgot`). */
   letGoOf = a.id
+  forgot = null
   return true
 }
 
@@ -2128,8 +2200,7 @@ export function adapterBackUnderNewId() {
   )
   if (same.length !== 1) return false
   logDebug('ble', `${name} is connected to this ${deviceNoun()} again, under a new id in Apple’s list: that is the one used now`)
-  /* The same adapter: what it has answered, and where it was just moved, go with it (WHICH ADAPTER HAS ANSWERED WHICH UNIT). */
-  carryHeard(a.id, same[0].id)
+  /* The same adapter: what it has answered, and where it was just moved, go with it, there as wherever it is chosen again (chooseAdapter, sameAdapterBack). */
   chooseAdapter(same[0])
   return true
 }

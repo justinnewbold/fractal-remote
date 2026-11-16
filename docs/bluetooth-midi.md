@@ -437,11 +437,14 @@ too, and it hit him many times.
   connection is past its first eight seconds (`NOTHING_BACK_MS`: a unit
   still starting up says nothing for a while). Only on a connection after
   the round's first has been made afresh by itself, so never on the first
-  connection's questions alone. Never for a VP4, which never answers, or a
-  unit on a USB cable. Down when the unit answers on a connection (its
-  first questions, or the rig going to present), never on bytes that are no
-  answer, not at a drop, and at a new round (another unit or adapter,
-  Disconnect, Stop).
+  connection's questions alone. Never for a VP4, which never answers, a
+  unit on a USB cable, or a footswitch picked as the adapter (Play's note
+  keeps the footswitch's own line for it). Down when the unit answers on a
+  connection (its first questions, or the rig going to present), never on
+  bytes that are no answer, not at a drop, not when the same adapter comes
+  back under a new id on an iPhone (the card's own steps do that:
+  lib/bluetooth `adapterCameBack`), and at a new round (another unit or
+  adapter, Disconnect, Stop).
 - The Bluetooth page draws a reset card while it is up, one step at a time,
   each with Still nothing to the next, watching for the unit: restart the
   adapter by what powers it (a Uhost's USB power; a WIDI Master's or
@@ -453,16 +456,22 @@ too, and it hit him many times.
   the app, then other Bluetooth MIDI gear and devices nearby (CME's WIDI app
   only under a WIDI), then the plugs, then a report whose first line says
   the steps done. The card's place is kept on the phone, so closing the app
-  picks up where it was, and the log says which step it was on when the
-  unit answered: over a few cases that should tell the pairing from the
-  adapter.
+  picks up where it was (on the step after "Close the app and open it
+  again", which opening it has done), it goes with the same adapter back
+  under a new id however it is chosen again on an iPhone, and the log says
+  which step it was on when the unit answered: over a few cases that should
+  tell the pairing from the adapter. "The FM3 is answering again." is up
+  for eight seconds and goes by itself, whichever screen is showing.
 - The plugs are placed by what is known of this adapter on this unit (lib/
   bluetooth keeps, per unit and adapter, the day it last answered there,
   under its own key, and notes an adapter taken from another unit's keeping
   as just moved, until it answers): last where it has answered here; first,
   inside the restart, where it never has; and one plug line beside the
   restart where it was just moved here. Nothing is seeded, so every existing
-  customer starts as "not known", with the plugs first.
+  customer starts as "not known", with the plugs first; the line asks
+  ("First time with the WIDI Uhost on your FM3? Check its plugs first."),
+  and never says the adapter has not answered, which the app does not
+  know.
 - Play's note under the pill leads with "Nothing is coming back from WIDI
   Uhost, so the app can't hear the FM3." and Fix it step by step, which
   opens the page. Where some bytes came back and no answer, it is the plugs

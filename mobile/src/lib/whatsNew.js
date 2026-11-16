@@ -35,7 +35,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "Metronome: tapping the same choice again after your unit didn’t take a change now really asks the unit again. And over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time once you have switched a block on or off.",
+        "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time once you have switched a block on or off. And in the metronome, tapping the same choice again after your unit didn’t take a change now really asks the unit again.",
         "only": null
       }
     ]

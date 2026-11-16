@@ -26,7 +26,6 @@ import {
   checkSteps,
   chooseAdapter,
   chooseCableHere,
-  clearResetBack,
   connectOwedUntil,
   editOverBluetooth,
   saveOverBluetooth,
@@ -783,13 +782,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    */
   const goneLong = useLate(fixing && b.phase === 'connecting', RECONNECT_AFTER_MS)
   const fixReconnect = !fixing ? null : connected ? { sub: connectAgainSub(Platform.OS), go: () => connectBluetoothAgain() } : goneLong ? { sub: away ? appleScreenOpens() : undefined, go: reconnect } : null
-  /* The unit answered with the card up: said where the card was, for a moment (lib/bluetooth resetBack). */
+  /* The unit answered with the card up: said where the card was, for a moment (lib/bluetooth resetBack, which goes by itself after RESET_BACK_MS, whichever screen is showing). */
   const backAgain = !!b.resetBack && connected && unitState === 'present'
-  useEffect(() => {
-    if (!b.resetBack) return
-    const t = setTimeout(clearResetBack, BACK_SHOWN_MS)
-    return () => clearTimeout(t)
-  }, [b.resetBack])
   /*
    * ANOTHER UNIT'S ADAPTER, THE ONLY ONE HERE, at a Connect for a unit with
    * none of its own (lib/bluetooth offer, 16 November 2026): "Use WIDI Uhost
@@ -1131,9 +1125,8 @@ function useAdapterTab(tabs, adapter) {
 /* Troubleshooting's last step, by adapter or by cable. */
 const ANOTHER_UNIT = 'If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.'
 
-/* The reset card's Reconnect waits this long after the adapter goes, as its steps say ("about 15 seconds"); its "answering again" is up this long. */
+/* The reset card's Reconnect waits this long after the adapter goes, as its steps say ("about 15 seconds"). */
 const RECONNECT_AFTER_MS = 15000
-const BACK_SHOWN_MS = 8000
 
 /* True once `on` has held for `ms`, and false the moment it does not. */
 function useLate(on, ms) {
