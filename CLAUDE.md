@@ -4006,6 +4006,25 @@ never touched. It had hit two paying customers too.
   step. Troubleshooting has the same resets in the same words before the
   plugs. Connect again's line on an iPhone says it asks the unit again over
   the same link.
+- **WHAT AN INDEPENDENT READ FOUND, FIXED BEFORE IT WENT OUT (16 November
+  2026, 23 findings, each with a test seen to fail without its fix).** THE
+  CARD VANISHED ON THE RESETS THAT WORK: on an iPhone the same adapter comes
+  back from a restart or a fresh pairing under new CoreMIDI ids, the link
+  took that for a new round and dropped nothingBack, and the page fell back
+  to the plugs advice this card replaces; "answering again" was never said.
+  Now lib/bluetooth decides ONCE, in chooseAdapter, whether an adapter is
+  the same one back (an iPhone, the same name, its old id no longer
+  connected, not kept for another unit), and bleLink asks it
+  (`adapterCameBack`) and keeps nothingBack up; the answered record and the
+  card's place carry WHEREVER it is chosen again (Reconnect through Apple's
+  screen, Stop then Connect: forgetAdapter remembers what it forgot). A
+  footswitch connected as the adapter never gets nothingBack or Fix it step
+  by step. "The FM3 is answering again." lives 8 s (`RESET_BACK_MS`, a
+  timer in lib, whichever screen is up). A place saved on Close the app
+  comes back on the next step. The words never claim an adapter "hasn't
+  answered before" (nothing is seeded, so that was false for every
+  customer): "First time with the WIDI Uhost on your FM3? Check its plugs
+  first."
 - **THE PLUGS BY WHAT IS KNOWN, never dropped on bytes alone.** lib/bluetooth
   keeps, per unit and adapter, the day the adapter last answered that unit
   (`adapterHeard`, under its own key `fractal.bluetooth.heard`: keptAdapter
