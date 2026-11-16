@@ -3470,6 +3470,44 @@ as a refusal. And on an iPhone whose adapter has gone, the waiting screen
 offers Look for the adapter again from the first try that misses it
 (lib/bluetooth `useAdapterGone`), not after fifteen seconds.
 
+**And a unit answers a SET with the SET itself, which is no echo
+(1.90.84).** Justin's Axe-Fx III through a WIDI Uhost, 15 November 2026: a
+block's channel changed and two blocks switched off from Play, and at the
+third the log said "the unit is echoing what it receives: the white plug
+may be in the Axe-Fx III's MIDI THRU, not OUT". His plug was in OUT.
+Fractal's document for the FM3, FM9 and Axe-Fx III gives a block's on and
+off (0A), its channel (0B), the scene (0C) and the tempo (14) one message
+each way: sent with a value it sets, and the unit returns the same message
+with the value it is now on. So the answer to a SET it took is the phone's
+own bytes, and the echo guard counted each as an echo. Three and the log
+named a THRU plug; and ONE was enough to undo the paragraph above, since an
+empty preset's answer is taken at its first copy only where nothing has
+echoed on that connection: after any block switched on or off, a preset
+with no blocks read as the unit not answering again.
+
+- The first copy of such a SET to come back is the unit's answer and is
+  not counted (bleWire `answersItself`, and `lastSent.copies`, which counts
+  each sent message's copies whoever takes them). A second copy of the same
+  message is an echo: with a plug really in THRU both come, and the count
+  climbs a write at a time, so the line is still written for a rig wired
+  wrong. Never a question (7F in the value's place): the echo of "which
+  scene?" is what the guard exists for. Not on an AM4, whose messages are
+  another shape.
+- A plug that only loops, with nothing behind it, gives one copy of a SET,
+  which cannot be told from the unit's answer and is not counted; its
+  copies of the questions are, and they name it.
+- SEEN ON A UNIT: on and off and the channel (that log, three of three).
+  The tempo is by the document alone. The scene's set is not in the list:
+  it waits for exactly that answer and takes it itself, as it always has
+  (`allowEcho`).
+- THE PRETEND UNIT IN THE TESTS TOOK THESE SETS IN SILENCE, which is
+  kinder than a unit, so no test ever saw the answer. It answers them as
+  the document says now (`setsAnswered`, on by default), and every wire
+  test runs against that.
+- So "the unit is echoing what it receives" in a log from before 1.90.84,
+  from an FM3, FM9 or Axe-Fx III, says nothing about the plug unless Thru
+  is known to be on. In one from 1.90.84 on, it means two copies came back.
+
 **The adapter kept for a unit is not always the adapter it is on today.**
 Justin, 14 November 2026: "For some reason I can't get the aX3 to connect
 over Bluetooth, I restarted the Bluetooth device and I turned Bluetooth on

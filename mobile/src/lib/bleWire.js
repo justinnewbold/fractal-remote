@@ -845,7 +845,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * "which scene?" asked straight after it are the same bytes (0C 02 both
    * ways), so a guard with a longer memory throws away the answer.
    */
-  let lastSent = { messages: [], at: -Infinity }
+  let lastSent = { messages: [], copies: [], at: -Infinity }
   let echoes = 0
   let thruTold = false
   let foreign = null
@@ -898,6 +898,36 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const heldFor = (job) => (am4 || !job.opts.match || job.opts.fn === undefined || job.opts.fn === FN.PARAM ? 0 : lateFor(job.opts.fn))
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
+  /*
+   * A SET THE UNIT ANSWERS WITH THE SET ITSELF, BYTE FOR BYTE. Fractal's
+   * document for these units gives a block's on and off (0A), its channel
+   * (0B), the scene (0C) and the tempo (14) one message each way: sent with
+   * a value it sets, and "Returns" the same message with the value the unit
+   * is now on. So the answer to a SET that was taken is the phone's own
+   * bytes, and it is no echo.
+   *
+   * It was counted as one. Justin's Axe-Fx III, 15 November 2026: a channel
+   * change and two blocks switched off, each answered within 50 ms, and the
+   * third wrote "the unit is echoing what it receives: the white plug may
+   * be in the Axe-Fx III's MIDI THRU, not OUT" into the log of a rig wired
+   * right. And a count that is not nought is what makes a preset with no
+   * blocks wait for a second copy of its answer (`opts.same`, below), which
+   * never comes: after one block switched on or off, an empty preset read
+   * as the unit not answering, the very thing that rule was written to
+   * mend.
+   *
+   * Never a question (7F in the value's place): an echoed "which tempo?"
+   * is the echo this guard exists for. On and off and the channel are seen
+   * on a unit (that log); the tempo is by the document alone. THE SCENE IS
+   * NOT IN THIS LIST: its set waits for exactly this answer and takes it
+   * itself (allowEcho), as it always has, so its first copy never comes
+   * this far.
+   */
+  const answersItself = (m) =>
+    !am4 &&
+    Array.isArray(m) &&
+    m[4] === model &&
+    (((m[5] === FN.BYPASS || m[5] === FN.CHANNEL) && m.length === 11 && m[8] !== 0x7f) || (m[5] === FN.TEMPO && m.length === 10 && !(m[6] === 0x7f && m[7] === 0x7f)))
   /*
    * EVERY OTHER UNIT'S QUESTION askAround SENT ON THIS CONNECTION. A frame
    * identical to one is the phone's own coming back, however late: the
@@ -1097,7 +1127,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* Whoever asked may need to know when it really left, which can be long after it was asked for (a capture slot's question waits behind Play: namSlotHead). */
     if (typeof job.opts.sent === 'function') job.opts.sent(job.started)
     const messages = job.opts.messages ? job.out : [job.out]
-    lastSent = { messages: [], at: job.started }
+    lastSent = { messages: [], copies: [], at: job.started }
     for (const m of messages) {
       /*
        * A THROW ON THE WAY OUT IS A SEND THAT FAILED. Nothing caught one
@@ -1118,6 +1148,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return end(job, null, result === 'refused' ? failure('That message is never sent to the AM4.', 500, { refused: true }) : notConnected())
       }
       lastSent.messages.push(m)
+      /* How many times this message has come back, byte for byte (heard: the first copy of a SET is the unit's answer). */
+      lastSent.copies.push(0)
     }
     if (job.priority === PRI.write || job.priority === PRI.editWrite) say(`sent ${job.opts.what || 'a write'}: ${messages.map(toHex).join(' | ')}`)
     job.expire = () => {
@@ -1287,7 +1319,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * test, never under allowEcho: a slow echo of the AM4's question never
      * names an AM4, nor stops a connection whose unit has since answered.
      */
-    const ownEcho = isEcho(f, now) && !(job && job.opts.allowEcho)
+    /* Which of the messages just sent this is, byte for byte, and which copy of it to come back: counted whoever takes it, so a scene change's answer taken by its own wait (allowEcho) is the first copy, and a THRU plug's is the second. */
+    const sentAs = now - lastSent.at <= ECHO_MS ? lastSent.messages.findIndex((m) => sameBytes(m, f)) : -1
+    const copy = sentAs >= 0 ? ++lastSent.copies[sentAs] : 0
+    const ownEcho = sentAs >= 0 && !(job && job.opts.allowEcho)
     /*
      * THE ANSWER THAT IS THE QUESTION, BYTE FOR BYTE. "Which blocks?" is the
      * status frame with nothing in it, and a preset with no blocks answers
@@ -1314,8 +1349,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
     }
     if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {
-      echoes++
       count('own')
+      /*
+       * The first copy of a SET the unit answers with the set itself is
+       * that answer (answersItself): dropped as ever, since whoever sent it
+       * waits for nothing, and COUNTED AS NO ECHO. A second copy of the same
+       * message is one: with a plug in THRU both come, and the count still
+       * climbs a write at a time. A plug that only loops, with no unit
+       * behind it, gives one copy of a SET and is not counted for it; its
+       * copies of the questions are, as ever.
+       */
+      if (ownEcho && copy === 1 && answersItself(f)) return
+      echoes++
       if (echoes >= 3 && !thruTold) {
         thruTold = true
         /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
