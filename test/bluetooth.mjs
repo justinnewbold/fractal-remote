@@ -12152,7 +12152,7 @@ export function run(test) {
     /* The same with its comments taken out, for what is read across more than one line of it. */
     const bare = src('mobile/src/components/Tone3000Test.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     /* The send and its second try are lib/captureSend's (run whole in the test below); the card hands it the sender and draws the lines. */
-    assert.match(bare, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, order: captureOrder\(Number\.isInteger\(way\) \? way : keptWay\), install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, onProgress:/)
+    assert.match(bare, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, sentBefore: before !== null && again === null, order: captureOrder\(Number\.isInteger\(way\) \? way : keptWay\), install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, onProgress:/)
     /* The way the unit last kept one by is remembered while the app runs, and only a way the unit NAMED the capture after. */
     assert.match(bare, /let keptWay = null/)
     assert.match(bare, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\) if \(went\.got\.name && Number\.isInteger\(went\.way\)\) keptWay = went\.way \}/)
@@ -12170,7 +12170,7 @@ export function run(test) {
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ playing: false, done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
     /* And a slot that never said what it holds is not said to hold the capture. */
-    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{tries > 1 \? `, on try \$\{tries\}` : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
+    assert.match(card, /line: tries === 0 \? `In slot \$\{said\} as “\$\{got\.name\}”: the unit kept the last send after all\.` : got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\$\{tries > 1 \? `, on try \$\{tries\}` : ''\}\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
@@ -12565,6 +12565,43 @@ export function run(test) {
     assert.ok(slow.logs.some((l) => /^KEPT, way 1 \(the name byte Axe-Edit sent, with the file’s hash\): the unit filed it after the slot had twice read <EMPTY>, and the next try found it there\. Nothing more was sent$/.test(l)), slow.logs.join(' | '))
     assert.ok(!slow.logs.some((l) => /KEPT THIS WAY|NOT KEPT|still reads/.test(l)), slow.logs.join(' | '))
     assert.ok(late.got.seconds >= 0, 'the seconds of the send that was kept are not handed on')
+
+    /*
+     * AND A FILE WITH NO HASH, which has one way (an independent read, 16
+     * November 2026): a unit that files it late is never asked again in that
+     * send, and the card says "not kept". The card remembers the slot
+     * (lib/capturePlaced notKept) and sends the same capture there on the
+     * next tap, not over what is there: the slot holds it, so it was kept
+     * after all, nothing is sent, and no second copy goes into the next slot.
+     */
+    const { notKept, notKeptIn, forgetNotKept, place: placeIt } = await import('../mobile/src/lib/capturePlaced.js')
+    const slowBare = await bench()
+    slowBare.u.lateSlot = 3
+    slowBare.u.lateLooks = 2
+    const bare1 = await slowBare.send('Short One')
+    assert.deepEqual([bare1.got.name, bare1.tries, bare1.late], ['<EMPTY>', 1, false], 'the first send of a file with no hash was asked again')
+    notKept('cap-late', 3)
+    const bare2 = await slowBare.send('Short One', { with: { slot: notKeptIn('cap-late'), sentBefore: true } })
+    assert.deepEqual([bare2.ok, bare2.got.name, bare2.tries, bare2.late, bare2.way], [true, 'Short One', 0, true, null], 'a capture the unit filed late was not found in its slot')
+    assert.deepEqual(uploads(slowBare), [3], 'a second copy was sent to a unit that had kept the first')
+    assert.ok(slowBare.logs.some((l) => /^KEPT after all: the slot holds it, from the send before this one, which the unit filed after the slot had twice read <EMPTY>\. Nothing was sent$/.test(l)), slowBare.logs.join(' | '))
+    /* Not told the slot is its own, the same refusal is a refusal: a slot that holds the name from somewhere else is not claimed. */
+    await assert.rejects(slowBare.send('Short One'), (e) => e.status === 409)
+    /* What the card keeps: a slot per capture, gone once it is placed or forgotten, and nothing that is not a slot. */
+    assert.equal(notKeptIn('cap-late'), 3)
+    placeIt('cap-late', 3, true)
+    assert.equal(notKeptIn('cap-late'), null, 'a capture on the unit is still sent to its old slot')
+    notKept('cap-y', 4)
+    forgetNotKept('cap-y')
+    assert.equal(notKeptIn('cap-y'), null)
+    notKept('cap-z', 'slot 5')
+    assert.equal(notKeptIn('cap-z'), null)
+    /* And the card asks it: that slot first, the send told so, remembered on not kept, forgotten on anything else. */
+    const cardFlat = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
+    assert.match(cardFlat, /const before = again === null \? notKeptIn\(m\.id\) : null if \(slot === null && before !== null\) \{ slot = before/)
+    assert.match(cardFlat, /sentBefore: before !== null && again === null,/)
+    assert.match(cardFlat, /if \(went\.ok && went\.got\.name === NAM_EMPTY\) notKept\(m\.id, slot\) else forgetNotKept\(m\.id\)/)
+    assert.match(cardFlat, /\} catch \(err\) \{ \/\*[^*]*\*\/ forgetNotKept\(m\.id\)/)
 
     /* Refused because the slot holds ANOTHER capture (filled from somewhere else meanwhile): that is a refusal, and it is thrown as one, with the way that was going. */
     const taken = await bench()

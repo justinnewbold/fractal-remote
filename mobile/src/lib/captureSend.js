@@ -33,12 +33,15 @@
  * and a file with no hash, whose two ways would be the same XORed record,
  * is sent once.
  *
- * AND WHAT AN INDEPENDENT READ OF THE FIRST VERSION FOUND, which still
- * holds: a unit that files a send LATE (the slot reads <EMPTY> at both
- * looks, then holds it) has the next try refused "already holds"; refused
- * because the slot holds THIS capture, that is the try before it kept
- * (`heldAlready`), and nothing more is sent. And a try that stops part-way
- * says which way was going (`err.way`), so sent again it goes that way.
+ * AND WHAT AN INDEPENDENT READ OF THE FIRST VERSION FOUND: a unit that
+ * files a send LATE (the slot reads <EMPTY> at both looks, then holds it)
+ * has the next try refused "already holds"; refused because the slot holds
+ * THIS capture, that is the try before it kept (`heldAlready`), and nothing
+ * more is sent. A file with no hash has no next try in the same send, so
+ * the card remembers the slot (lib/capturePlaced `notKept`) and sends it
+ * there again on the next tap, where the same refusal says it was kept. And
+ * a try that stops part-way says which way was going (`err.way`), so sent
+ * again it goes that way.
  *
  * PURE: the sender is handed in, with the log and the one line the screen
  * needs. Nothing here knows a wire from a computer.
@@ -91,6 +94,7 @@ export function heldAlready(err, name) {
  * @param {object} c.named     what the app knows the capture by (namRecord's `said`)
  * @param {number} c.slot      the slot it goes into
  * @param {boolean} [c.replace] over what is there (only the page's own half-sent slot, and only over the device's own wire)
+ * @param {boolean} [c.sentBefore] `slot` is where an earlier send of this capture was taken and not kept (lib/capturePlaced notKept): a first try refused because the slot holds THIS capture is that send, filed late, and nothing is sent
  * @param {number[]} [c.order] the ways to try, by their place in CAPTURE_WAYS (`captureOrder`); all of them in order when left out
  * @param {(slot: number, words: number[], how: { replace: boolean, way: number, second: boolean }) => Promise<object>} c.install
  * @param {(line: string) => void} [c.log]
@@ -105,7 +109,7 @@ export function heldAlready(err, name) {
  *   read empty. A send that fails throws the sender's own failure, with
  *   `way` added: which way was going.
  */
-export async function sendCapture({ text, named, slot, replace = false, order = null, install, log = () => {}, onNext = () => {} }) {
+export async function sendCapture({ text, named, slot, replace = false, sentBefore = false, order = null, install, log = () => {}, onNext = () => {} }) {
   const plain = namRecord(text, named)
   if (!plain.ok) return { ok: false, why: plain.why }
   const said = (got) => `“${got?.name ?? 'nothing it would say'}”`
@@ -144,6 +148,12 @@ export async function sendCapture({ text, named, slot, replace = false, order = 
       next = heard(await install(slot, r.words, { replace: over, way: i, second: tries > 0 }))
     } catch (err) {
       /* The slot holds it: the try before was kept, and filed after both looks at the slot. Nothing more was sent. */
+      if (tries === 0 && sentBefore === true && heldAlready(err, plain.name)) {
+        late = true
+        got = { slot, name: plain.name, replaced: null, seconds: 0 }
+        log(`KEPT after all: the slot holds it, from the send before this one, which the unit filed after the slot had twice read ${NAM_EMPTY}. Nothing was sent`)
+        break
+      }
       if (tries > 0 && heldAlready(err, plain.name)) {
         late = true
         got = { ...got, name: plain.name }

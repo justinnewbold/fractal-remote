@@ -617,7 +617,7 @@ export function runPreviewAndGet(test) {
     assert.equal((kept.match(/const placed = new Map\(\)/g) || []).length, 1)
     assert.ok(kept.indexOf('const placed = new Map()') < kept.indexOf('export'), 'what is on the unit is not kept at the top of its file')
     assert.ok(!/new Map\(\)/.test(card.slice(card.indexOf('export default function Tone3000Test('))), 'the page keeps a list of its own')
-    assert.match(card, /import \{ isPlaced, place, placedNow, settled, unplace, watchPlaced \} from '\.\.\/lib\/capturePlaced'/)
+    assert.match(card, /import \{ forgetNotKept, isPlaced, notKept, notKeptIn, place, placedNow, settled, unplace, watchPlaced \} from '\.\.\/lib\/capturePlaced'/)
     assert.match(card, /const \[onUnit, setOnUnit\] = useState\(placedNow\)/)
     assert.deepEqual(kept.match(/placed\.(set|delete|clear)\(/g), ['placed.set(', 'placed.delete('])
     assert.ok(!/\bplaced\./.test(card), 'the page reaches into the list itself')

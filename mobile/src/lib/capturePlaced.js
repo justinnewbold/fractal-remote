@@ -23,9 +23,20 @@
  * the work says when it is over, kept or not, and every drawing looks
  * again.
  *
+ * AND WHERE ONE WAS TAKEN AND NOT KEPT (`notKept`, an independent read,
+ * 16 November 2026). A file with no hash has one way (lib/captureSend), so a
+ * unit that files it LATE (the slot reads <EMPTY> at both looks, then holds
+ * it) is never asked again in that send, and the card says "not kept". The
+ * next tap went looking for an empty slot, passed this one, which held it
+ * by then, and put a second copy in the next. So the slot is remembered,
+ * and the next send of the same capture goes into it again, not over what
+ * is there: a capture the unit filed late is found there and said as kept,
+ * and one it did not keep goes into the same empty slot.
+ *
  * PURE: no React, no wire. The page keeps what this answers and draws it.
  */
 const placed = new Map()
+const unkept = new Map()
 const watching = new Set()
 
 /** What is on the unit now, as a plain object of its own (changing it changes nothing kept here): { id: { slot, sure } }. */
@@ -48,7 +59,21 @@ const tell = () => {
 /** This capture is in `slot` now; `sure` is whether the unit named the slot as holding it. */
 export function place(id, slot, sure) {
   placed.set(String(id), { slot, sure })
+  unkept.delete(String(id))
   tell()
+}
+
+/** The unit took this capture into `slot` and then read the slot <EMPTY>: the next send of it goes there again. */
+export function notKept(id, slot) {
+  if (Number.isInteger(slot)) unkept.set(String(id), slot)
+}
+
+/** The slot this capture was last taken into and not kept, or null. */
+export const notKeptIn = (id) => (unkept.has(String(id)) ? unkept.get(String(id)) : null)
+
+/** Forget it: the send into it ended some other way (refused, stopped, kept). */
+export function forgetNotKept(id) {
+  unkept.delete(String(id))
 }
 
 /** The unit named its slot <EMPTY>: it is not on the unit after all. */

@@ -104,7 +104,7 @@ import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { captureLine, waitOver } from '../lib/captureLine'
-import { isPlaced, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
+import { forgetNotKept, isPlaced, notKept, notKeptIn, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
 import { captureOrder, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Avatar from './Avatar'
@@ -548,6 +548,12 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       /* Being sent again: its offer comes down, and goes back up only if this one stops too. */
       setStopped((was) => Object.fromEntries(Object.entries(was).filter(([key]) => key !== String(m.id))))
       let slot = again
+      /* Taken into a slot and not kept last time: that slot again, not over what is there, so one the unit filed late is found there and not sent into a second slot (lib/capturePlaced notKept). */
+      const before = again === null ? notKeptIn(m.id) : null
+      if (slot === null && before !== null) {
+        slot = before
+        logDebug('tone3000', `capture ${m.id} goes to slot ${namSlotSaid(slot)} again, where it was taken and not kept last time`)
+      }
       if (slot === null) {
         setSend({ id: m.id, line: LOOKING_FOR_SLOT })
         /* Over an adapter the search is a question a slot, and says which it is at (lib/tone3000Words lookingForSlot); through a computer it is one answer and tells nothing. */
@@ -578,6 +584,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         named,
         slot,
         replace: again !== null,
+        sentBefore: before !== null && again === null,
         /* The way that was going when a send stopped, else the way the unit last kept one, first. */
         order: captureOrder(Number.isInteger(way) ? way : keptWay),
         install: (to, words, how) =>
@@ -600,6 +607,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
        * capture was offered again and went into a second slot. Written down
        * before anything asks whether the page is there to be told.
        */
+      if (went.ok && went.got.name === NAM_EMPTY) notKept(m.id, slot)
+      else forgetNotKept(m.id)
       if (went.ok && went.got.name !== NAM_EMPTY) {
         place(m.id, slot, !!went.got.name)
         /* Only a way the unit named the capture after: that is one it kept. */
@@ -624,7 +633,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         return
       }
       /* A slot that never said what it holds (asked twice) is not said to hold the capture: the send went, and pointing NAM 1 at it is what finds out. */
-      setSend({ id: m.id, slot, done: true, line: got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${tries > 1 ? `, on try ${tries}` : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
+      setSend({ id: m.id, slot, done: true, line: tries === 0 ? `In slot ${said} as “${got.name}”: the unit kept the last send after all.` : got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${tries > 1 ? `, on try ${tries}` : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
       /* It is on the unit, by the unit's own word: felt as well as seen. */
       if (got.name) thud()
       /* Get stops here: it is on the unit, and what is playing is left alone. */
@@ -635,6 +644,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       /* Get from a held block: the block is playing it, so the errand is over and the pop-up is its knobs again. Only where the block said so: a pick that failed stays here, with its line. */
       if (back && nowPlaying && alive.current) onDone?.(nowPlaying)
     } catch (err) {
+      /* Refused (the slot holds another capture now) or stopped: the next tap looks for an empty slot, or goes back over the half-sent one as it always has. */
+      forgetNotKept(m.id)
       logDebug('tone3000', `capture ${m.id} was not sent: ${err?.message || err}`)
       if (!alive.current) return
       const line = err?.message || 'The capture was not sent.'

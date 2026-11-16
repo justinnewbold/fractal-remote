@@ -74,9 +74,10 @@ share not one number with it. The files are not in the repository either
 
 ## The 32nd byte of the name is 0x60: settled 16 November 2026
 
-14 November 2026, through his Raspberry Pi. The first captures sent from
-the app that his unit kept, and the ones it dropped, every message of each
-answered "taken" (the last two rows are 16 November):
+The first captures sent from the app that his unit kept, and the ones it
+dropped, every message of each answered "taken". The first five rows are
+14 November 2026, through his Raspberry Pi; the last three are the session
+his log dates 16 November (UTC), the evening of the 15th where he is:
 
 | What became of it | The byte | The capture |
 | --- | --- | --- |
@@ -324,8 +325,9 @@ and on USB the unit takes it in about a second.
 
 The Developer card's buttons are the same; lib/device sends by whichever way
 the device is connected. An older computer app is answered "Update the
-computer app to send a capture through it." **Nothing has been sent to a
-real unit through the computer yet.**
+computer app to send a capture through it." Captures have gone to his
+unit through the Raspberry Pi since 14 November 2026: the table above has
+what it kept and what it dropped.
 
 **The computer sends it as one piece, from the release that carries ForgeFX
 14e2c4f (1.90.61).** Each of the 130 messages used to be its own turn on the
