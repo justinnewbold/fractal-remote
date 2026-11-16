@@ -5,12 +5,12 @@ import { color, font, mono } from '../lib/theme'
 import { fromNormalized, toNormalized } from '../lib/scale'
 import { tick } from '../lib/feedback'
 import { keyTarget, settleWrites } from '../lib/knob-keys'
+import { dialAngle, litMarks } from '../lib/knob-dial'
 import { HOLD_MS, HOLD_SLOP } from '../lib/editMore'
 
 const face = Platform.select(mono)
 
-const START = 135 // degrees, 7 o'clock
-const SWEEP = 270 // to 5 o'clock
+/* Where the dial points (lib/knob-dial, the browser's knob's too): from half past seven through twelve to half past four, clockwise from twelve. */
 /** How many marks go round the dial. Odd, so one of them sits at twelve. */
 const TICKS = 21
 
@@ -187,8 +187,9 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
     })
   ).current
 
-  const lit = Math.round(norm * (TICKS - 1))
-  const angle = START + norm * SWEEP
+  /* Lit from the lowest mark, or from twelve for a setting centred on nought (Balance, Pan, an EQ's gain). */
+  const [lo, hi] = litMarks(norm, param, TICKS)
+  const angle = dialAngle(norm)
 
   return (
     <View style={{ alignItems: 'center' }}>
@@ -222,7 +223,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
         }}
         style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
       >
-        <Ring size={size} lit={lit} />
+        <Ring size={size} lo={lo} hi={hi} />
 
         {/* The body, and the pointer on it. */}
         <View
@@ -290,9 +291,9 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
  * changes, which for the eight is never and for the ninth is a few times a
  * second.
  */
-const Ring = memo(function Ring({ size, lit }) {
+const Ring = memo(function Ring({ size, lo, hi }) {
   return Array.from({ length: TICKS }, (_, i) => {
-    const on = i <= lit
+    const on = i >= lo && i <= hi
     return (
       <View
         key={i}
@@ -302,7 +303,7 @@ const Ring = memo(function Ring({ size, lit }) {
           width: size,
           height: size,
           alignItems: 'center',
-          transform: [{ rotate: `${START + (i / (TICKS - 1)) * SWEEP - 180}deg` }]
+          transform: [{ rotate: `${dialAngle(i / (TICKS - 1))}deg` }]
         }}
       >
         <View
@@ -328,7 +329,7 @@ const Pointer = memo(function Pointer({ size, angle }) {
         width: size,
         height: size,
         alignItems: 'center',
-        transform: [{ rotate: `${angle - 180}deg` }]
+        transform: [{ rotate: `${angle}deg` }]
       }}
     >
       <View

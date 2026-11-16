@@ -6858,6 +6858,10 @@ console.log('\nwhat’s new: what each update changed, on the phone and the webs
 const { run: whatsNew } = await import('./whats-new.mjs')
 whatsNew(test)
 
+console.log('\nwhere a knob points: half past seven to half past four, on both ends')
+const { run: knobDial } = await import('./knob-dial.mjs')
+knobDial(test)
+
 console.log('\nwhose app this is not: Fractal Audio’s letter')
 const { run: independent } = await import('./independent.mjs')
 independent(test)

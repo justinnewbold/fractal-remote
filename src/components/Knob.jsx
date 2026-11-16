@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toNormalized, fromNormalized } from '../lib/scale'
 import { keyTarget, settleWrites } from '../../shared/knob-keys.mjs'
+import { DIAL_START, DIAL_SWEEP, dialAngle, litFrom } from '../../shared/knob-dial.mjs'
 
 /**
  * A rotary control.
  *
  * Fractal's editors use knobs because the hardware does, and because a knob
  * shows where a value sits in its range at a glance in a way a number never
- * does. The arc is that: sweep from the 7 o'clock start to the current
- * position.
+ * does. The arc is that: from half past seven (the lowest) through twelve
+ * to half past four (the highest), lit from the lowest, or from twelve for
+ * a setting centred on nought (shared/knob-dial, the phone's too).
  *
  * Dragging is vertical only. Circular tracking sounds right and isn't — the
  * pointer leaves the knob, and small movements near the centre produce huge
@@ -39,9 +41,6 @@ import { keyTarget, settleWrites } from '../../shared/knob-keys.mjs'
  * The drag lives in a ref for that reason — nothing about starting one waits on
  * a render. The state flag exists only for what is drawn.
  */
-const START = 135 // degrees, 7 o'clock
-const SWEEP = 270 // to 5 o'clock
-
 export default function Knob({ param, value, onChange, onCommit, size = 58, label }) {
   // What owns the knob, in a ref: a touch identifier, or null for the mouse.
   // A ref because arming a drag must not wait for a render — see above.
@@ -196,7 +195,9 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
   const r = size / 2 - 4
   const cx = size / 2
   const cy = size / 2
-  const angle = START + norm * SWEEP
+  const angle = dialAngle(norm)
+  /* Lit from the lowest, or from twelve for a setting centred on nought (Balance, Pan, an EQ's gain). */
+  const from = dialAngle(litFrom(param))
 
   return (
     <div className="knob-wrap">
@@ -217,12 +218,12 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
         aria-valuemax={param?.max}
       >
         <svg width={size} height={size} aria-hidden="true">
-          <path d={arc(cx, cy, r, START, START + SWEEP)} className="knob-track" />
-          <path d={arc(cx, cy, r, START, angle)} className="knob-arc" />
+          <path d={arc(cx, cy, r, DIAL_START, DIAL_START + DIAL_SWEEP)} className="knob-track" />
+          <path d={arc(cx, cy, r, Math.min(from, angle), Math.max(from, angle))} className="knob-arc" />
           <circle cx={cx} cy={cy} r={r - 6} className="knob-body" />
           <circle
-            cx={cx + (r - 11) * Math.cos(toRad(angle))}
-            cy={cy + (r - 11) * Math.sin(toRad(angle))}
+            cx={polar(cx, cy, r - 11, angle).x}
+            cy={polar(cx, cy, r - 11, angle).y}
             r="2"
             className="knob-dot"
           />
@@ -241,20 +242,18 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
   )
 }
 
-function toRad(deg) {
-  return ((deg + 90) * Math.PI) / 180
+/* An angle clockwise from twelve (shared/knob-dial) as a point on the circle: up is minus y on a page. */
+function polar(cx, cy, r, deg) {
+  const rad = (deg * Math.PI) / 180
+  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) }
 }
 
+/* Clockwise from one angle to the other (SVG's sweep flag 1, on a page whose y runs down). */
 function arc(cx, cy, r, from, to) {
   const a = polar(cx, cy, r, from)
   const b = polar(cx, cy, r, to)
   const large = to - from > 180 ? 1 : 0
   return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`
-}
-
-function polar(cx, cy, r, deg) {
-  const rad = toRad(deg)
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
 }
 
 function fmt(n) {
