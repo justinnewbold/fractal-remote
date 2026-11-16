@@ -99,10 +99,10 @@
  * ones gen3-edit builds for any knob or switch on any gen-3 block, nothing
  * new on the wire, and fewer of them: a knob here is sent its place along
  * its travel (fn 0x01, 52 00) and never the typed write of the same place
- * that the app falls back to on other blocks when a write does not read
- * back as asked (`typedKnobs: false`; gen3-edit ONE WAY ONLY). One kind of
- * frame for a knob, one for a switch (its number, typed: 09 00), until the
- * unit has shown it takes them.
+ * that the app once fell back to when a write did not read back as asked
+ * (gen3-edit ONE WAY ONLY, which since 16 November 2026 holds every gen-3
+ * knob to that, after the typed way broke two settings on an FM3). One kind
+ * of frame for a knob, one for a switch (its number, typed: 09 00).
  *
  * The rows are the generated catalogs' own shape (scripts/gen3-knobs.mjs),
  * so gen3-edit reads them as it reads those. No pages: without them Edit
@@ -150,8 +150,8 @@
  * model: a model change is its own kind of write, and nobody has seen this
  * block take one.
  *
- * Every family is sent one way only, as the NAM block is (`typedKnobs:
- * false`). The NAM block's knobs have been turned on his unit and held (13
+ * Every family is sent one way only, as every gen-3 knob is (gen3-edit ONE
+ * WAY ONLY). The NAM block's knobs have been turned on his unit and held (13
  * November 2026); NOTHING ELSE HERE HAS BEEN TURNED ON A UNIT.
  *
  * THE COMPUTER APP SERVES THIS SAME LIST (ForgeFX server/src/ownBlocks.ts,
@@ -202,7 +202,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     stride: 67,
     channels: 1,
     typeId: null,
-    typedKnobs: false,
     knobs: [
       [3, 'Min Frequency', 20, 2000, 1, 'Hz'], // 32767 read as 200.0 Hz
       [4, 'Max Frequency', 2000, 20000, 1, 'Hz'], // 26079 read as 5000 Hz
@@ -228,7 +227,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     stride: 15,
     channels: 2,
     typeId: null,
-    typedKnobs: false,
     knobs: [
       [0, 'Freq', 40, 800, 1, 'Hz'], // 20045 read as 100.0 Hz
       [11, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
@@ -245,7 +243,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     stride: 22,
     channels: 1,
     typeId: null,
-    typedKnobs: false,
     knobs: [
       [0, 'Amount', 0, 100, 0, '%'], // end only: 65534 read as 100.0 %
       [1, 'Smoothing', 0, 100, 0, '%'], // end only: 0 read as 0.0 %
@@ -262,7 +259,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     stride: 20,
     channels: 4,
     typeId: null,
-    typedKnobs: false,
     knobs: [
       [2, 'Low Cut', 20, 2000, 1, 'Hz'], // end only: 0 read as 20.0 Hz
       [3, 'High Cut', 200, 20000, 1, 'Hz'], // end only: 65534 read as 20000 Hz
@@ -281,7 +277,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     stride: 14,
     channels: 4,
     typeId: null,
-    typedKnobs: false,
     knobs: [
       [1, 'Frequency', 20, 20000, 1, 'Hz'], // 30538 read as 500.0 Hz
       [2, 'Q', 0.1, 10, 1, null], // 22903 read as 0.500
@@ -303,7 +298,6 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     channels: 4,
     typeId: null,
     captureId: 0,
-    typedKnobs: false,
     knobs: [
       [1, 'Level', -80, 20, 0, 'dB'],
       [2, 'Balance', -100, 100, 0, '%'],

@@ -1380,6 +1380,8 @@ export async function setParamConfirmed(eid, paramId, value, param) {
      the unit is holding instead — which is the difference between "the app
      is broken" and "the unit is setting this itself". */
   let actual = null
+  /* Whether a read of the check now running came back with a number at all. */
+  let heard = false
   const agrees = () =>
     typeof actual === 'number' && Math.abs(actual - value) <= Math.max(0.05, Math.abs(value) * 0.02)
   const who = `${param?.name || `param ${paramId}`} on block ${eid}`
@@ -1391,6 +1393,7 @@ export async function setParamConfirmed(eid, paramId, value, param) {
    * of leaving it to be guessed.
    */
   const landed = async (continuous) => {
+    heard = false
     for (let go = 0; go < 2; go++) {
       if (go) await new Promise((r) => setTimeout(r, READ_BACK_AGAIN_MS))
       try {
@@ -1398,6 +1401,8 @@ export async function setParamConfirmed(eid, paramId, value, param) {
       } catch {
         actual = null
       }
+      if (typeof actual !== 'number') actual = null
+      else heard = true
       if (agrees()) return true
       logDebug(
         'set',
@@ -1408,19 +1413,55 @@ export async function setParamConfirmed(eid, paramId, value, param) {
     return false
   }
 
-  const first = preferredEncoding(eid, paramId)
-  await write(first)
+  /*
+   * A WAY THIS WIRE NEVER SENDS. Over Bluetooth or a unit's own USB cable a
+   * gen-3 knob is only ever sent its place along its travel (gen3-edit ONE
+   * WAY ONLY), and the other way is answered {ok: false, unsent: true}:
+   * nothing went, so there is nothing to read back for it.
+   */
+  const unsent = (r) => r !== null && typeof r === 'object' && r.unsent === true
+
+  let first = preferredEncoding(eid, paramId)
+  let sent = await write(first)
+  /* The way remembered for this knob (through a computer, say) is one this wire never sends: the other one is the first. */
+  if (unsent(sent)) {
+    first = !first
+    sent = await write(first)
+    if (unsent(sent)) return { ok: false, continuous: null, retried: false, unsent: true, actual: null }
+  }
   if (await landed(first)) {
     rememberEncoding(eid, paramId, first)
     return { ok: true, continuous: first, retried: false }
   }
 
-  await write(!first)
+  /*
+   * A CHECK THAT HEARD NOTHING IS NOT A REASON TO WRITE AGAIN (the browser's
+   * rule, src/lib/forgefx.js, which the phone had lost). The other way is
+   * there for one fault: a unit that took the write and holds another
+   * number. A unit that answered neither read has said nothing of the kind,
+   * and the other way is no repeat of the first: on an FM3 a typed write is
+   * taken in the setting's OWN units, so the 0-to-1 place sent that way put
+   * Look-Ahead Time (0 to 2 ms) at its maximum and Bit Reduce at nought
+   * (his FM3, 16 November 2026), after a check that had read nothing at all.
+   * So: no second write, no more reads, and Edit says it could not check.
+   */
+  if (!heard) {
+    logDebug('set', `${who}: the unit answered neither read, so nothing more was sent`, `asked ${value}, sent ${first ? 'continuous' : 'discrete'}`)
+    return { ok: false, continuous: null, retried: false, unverified: true, actual: null }
+  }
+
+  sent = await write(!first)
+  /* The other way is never sent to this knob (gen3-edit ONE WAY ONLY): what the first check read is the answer, and it is not read twice more. */
+  if (unsent(sent)) {
+    logDebug('set', `${who} did not take`, `asked ${value}, unit holds ${actual === null ? 'nothing readable' : actual}; the other way is never sent to it`)
+    return { ok: false, continuous: null, retried: false, unsent: true, actual }
+  }
   if (await landed(!first)) {
     rememberEncoding(eid, paramId, !first)
     return { ok: true, continuous: !first, retried: true }
   }
   logDebug('set', `${who} did not take`, `asked ${value}, unit holds ${actual === null ? 'nothing readable' : actual}`)
 
-  return { ok: false, continuous: null, retried: true, actual }
+  /* And a second check that heard nothing is said as one, not as a write the unit ignored (the browser's rule too). */
+  return { ok: false, continuous: null, retried: true, actual, ...(heard ? {} : { unverified: true }) }
 }

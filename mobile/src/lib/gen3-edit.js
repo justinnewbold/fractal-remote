@@ -304,7 +304,7 @@ const drawn = (page) => ({
  * @param {object} c
  * @param {number} c.model     the unit's model byte (fractal-sysex MODELS)
  * @param {object} c.blocks    effect id → [slug, family, name, palette page]
- * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; `channels` on a family that says how many channels it has (the III's own blocks: sliceOf); `typedKnobs: false` on a family whose knobs are only ever sent their place (ONE WAY ONLY, below); and `captureId` on a NAM block's, the setting a read finds its capture slot in (never a row: nothing here writes it)
+ * @param {object} c.families  family → {stride, typeId, knobs, switches, selectors}; `channels` on a family that says how many channels it has (the III's own blocks: sliceOf); and `captureId` on a NAM block's, the setting a read finds its capture slot in (never a row: nothing here writes it)
  * @param {object} c.rosters   slug → [[value, name, maker, based on] | null]
  * @param {object} c.pages     family → the editor's trimmed pages
  */
@@ -433,18 +433,22 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
   }
 
   /*
-   * ONE WAY ONLY. ForgeFX writes a knob two ways (knobFrame, below): its
-   * place along its travel (52 00), and, when the screen says so, the same
-   * place as a typed write (09 00), which the app falls back to when a write
-   * does not read back as asked (lib/device setParamConfirmed). Every family
-   * the codec's catalogs carry takes both, as the computer sends both. A
-   * family that says `typedKnobs: false` is sent the first and never the
-   * second: the Axe-Fx III's NAM block (lib/axefx3-own-knobs.js), whose rows
-   * were written by hand and not yet turned on a unit, so only the one frame
-   * every knob gets first is ever built for it, and only that one passes
-   * editAllowed.
+   * ONE WAY ONLY, FOR EVERY GEN-3 KNOB (16 November 2026). ForgeFX writes a
+   * knob two ways (setParam): its place along its travel (52 00), and, when
+   * asked, the same 0-to-1 place as a typed write (09 00), which the app
+   * fell back to when a write did not read back as asked (lib/device
+   * setParamConfirmed). But a gen-3 unit takes a typed write in the
+   * setting's OWN units, not as a place: on his FM3 the typed 0.328 put
+   * Look-Ahead Time (0 to 2 ms, 0 to 0.002 inside the unit) at its maximum,
+   * and the typed 0.4359 put Bit Reduce (a whole number, 0 to 24) at
+   * nought. It lands where asked only for a setting whose own range happens
+   * to be 0 to 1 (a 0-to-10 knob shown ten times over), and the catalog does
+   * not say which those are. So a knob is sent its place and nothing else:
+   * the second way asked for is {unsent}, no frame is built, and no typed
+   * write at a knob passes editAllowed. Its place has always been the way
+   * every knob goes first, and the III's NAM block's knobs, which were only
+   * ever sent that way, were turned on his unit and held (13 November 2026).
    */
-  const placeOnly = (b) => families[b.family].typedKnobs === false
 
   /* A model the block may be put on: one its list has at that number, and never a cab's. */
   const modelHere = (b, v) => Number.isInteger(v) && v >= 0 && !NO_MODELS.has(b.slug.toLowerCase()) && !!rosterOf(b.slug)[v]
@@ -452,10 +456,9 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
   /**
    * The frame for PUT /preset/blocks/<eid>/params/<id>, or why there is none:
    * {frame, what} or {refused}. As the computer sends it (ForgeFX setParam): a
-   * place along the travel when the screen says continuous, the number as it
-   * stands when it says not (lib/encoding.js); a switch always as its number.
-   * And {unsent} for the second way asked of a knob that is only sent the
-   * first (ONE WAY ONLY, above): no frame, and not a refusal to put up red.
+   * knob as its place along its travel; a switch always as its number. And
+   * {unsent} for a knob asked the typed way (ONE WAY ONLY, above): no frame,
+   * and not a refusal to put up red.
    */
   function knobFrame(model, eid, id, body) {
     const b = editBlock(eid)
@@ -469,8 +472,7 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     }
     if (!Number.isFinite(v)) return { refused: `${s.row[1]} needs a number.` }
     const n = clamp01(v)
-    if (body?.continuous === false && placeOnly(b)) return { unsent: `${s.row[1]} on block ${eid} is only sent its place, never the typed way` }
-    if (body?.continuous === false) return { frame: buildTyped(model, eid, id, n), what: `${s.row[1]} on block ${eid} to ${n.toFixed(4)} (typed)` }
+    if (body?.continuous === false) return { unsent: `${s.row[1]} on block ${eid} is only sent its place, never the typed way` }
     return { frame: buildKnob(model, eid, id, n), what: `${s.row[1]} on block ${eid} to ${n.toFixed(4)}` }
   }
 
@@ -497,8 +499,7 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
    *     block placed now, from 0 to 1;
    *   - a typed write (09 00) only at a setting the catalog names on such a
    *     block: a switch to one of its numbers, a model to one of its models,
-   *     a knob from 0 to 1 (ForgeFX's other way, above), unless its family
-   *     is sent one way only.
+   *     and never a knob (ONE WAY ONLY, above).
    */
   function editAllowed(f, placed, model = unitModel) {
     if (model !== unitModel) return null
@@ -527,7 +528,7 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     if (!Number.isFinite(x)) return null
     if (sub[0] === KNOB[0] && sub[1] === KNOB[1]) return s.kind === 'knob' && x >= 0 && x <= 1 ? 'block knob' : null
     if (sub[0] !== TYPED[0] || sub[1] !== TYPED[1]) return null
-    if (s.kind === 'knob') return !placeOnly(b) && x >= 0 && x <= 1 ? 'block knob (typed)' : null
+    if (s.kind === 'knob') return null
     if (s.kind === 'switch') return Number.isInteger(x) && x >= s.row[2] && x <= s.row[3] ? 'block switch' : null
     return modelHere(b, x) ? 'block model' : null
   }

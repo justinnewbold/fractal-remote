@@ -162,6 +162,15 @@ const didNotTake = (p, actual, params) => {
 }
 
 /**
+ * A knob whose check heard nothing back (lib/device setParamConfirmed
+ * `unverified`): the unit answered neither read, so the app cannot say
+ * whether it took, and does not say it didn't. "Didn't take" there was a
+ * guess, and the app's second try on the strength of it is what broke
+ * Look-Ahead Time and Bit Reduce on his FM3 (16 November 2026).
+ */
+const notChecked = (p) => `Couldn’t check that ${p.label || p.name} took: the unit didn’t answer. It may have.`
+
+/**
  * A word about a model whose name says nothing.
  *
  * "In the edit menu it says Null on the current effect." It does: the Filter
@@ -1322,10 +1331,18 @@ export function BlockPanel({
       /* Before the read-back, not after: the write is out and the unit is
          holding a value the slot does not, whatever the read says next. */
       noteEdited()
-      const fresh = await blockParams(eid)
-      setParams(fresh?.named || [])
-      setEnums(fresh?.enums || [])
-      if (!res.ok) onError(didNotTake(p, res.actual, fresh?.named || []))
+      /* A unit that answered neither read of the check: the words say the app could not check, and a third read that fails the same way does not put its own words over them. */
+      let fresh = null
+      try {
+        fresh = await blockParams(eid)
+      } catch (err) {
+        if (!res.unverified) throw err
+      }
+      if (fresh) {
+        setParams(fresh.named || [])
+        setEnums(fresh.enums || [])
+      }
+      if (!res.ok) onError(res.unverified ? notChecked(p) : didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
         if (prev[p.id] !== next) return prev
         const copy = { ...prev }

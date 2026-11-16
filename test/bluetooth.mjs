@@ -14109,14 +14109,13 @@ export function run(test) {
     assert.equal(hex(e.withNam.knobFrame(AX3, 206, 3, { value: 1, continuous: false }).frame), hex(g3.buildTyped(AX3, 206, 3, 1)))
     assert.equal(e.withNam.knobFrame(AX3, 206, 3, { value: 1 }).what, 'Bypass Mode on block 206 to 1')
     /*
-     * ONE WAY ONLY (gen3-edit `typedKnobs: false`). On every other block a
-     * knob has a second frame, the typed write of the same place, which the
-     * app falls back to when a write does not read back as asked. A NAM's
-     * knob has no such frame: asked for, none is built, and it is not a
-     * refusal either (the wire answers it as not done, below). An amp's knob
-     * through the same Edit still has both.
+     * ONE WAY ONLY (gen3-edit). A knob's typed write, the same place sent
+     * the other way, which the app once fell back to when a write did not
+     * read back as asked, is never built: asked for, none is built, and it
+     * is not a refusal either (the wire answers it as not sent, below). A
+     * NAM's knob never had it; since 16 November 2026 no gen-3 knob does,
+     * an amp's through the same Edit included.
      */
-    assert.equal((await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_FAMILIES.NAM.typedKnobs, false)
     for (const eid of [206, 207]) {
       for (const p of read.named) {
         const second = e.withNam.knobFrame(AX3, eid, p.id, { value: 0.5, continuous: false })
@@ -14124,9 +14123,9 @@ export function run(test) {
         assert.match(second.unsent, new RegExp(`^${p.name} on block ${eid} is only sent its place, never the typed way$`))
       }
     }
-    assert.deepEqual(e.withNam.knobFrame(AX3, 58, 1, { value: 0.5, continuous: false }).frame, g3.buildTyped(AX3, 58, 1, 0.5), 'an amp’s knob lost its second way')
+    assert.deepEqual(Object.keys(e.withNam.knobFrame(AX3, 58, 1, { value: 0.5, continuous: false })), ['unsent'], 'an amp’s knob was built the typed way')
     const k = await import('../mobile/src/lib/axefx3-knobs.js')
-    assert.ok(Object.values(k.AXE3_FAMILIES).every((f) => !('typedKnobs' in f)), 'a family of the codec’s is sent one way only')
+    assert.ok(Object.values(k.AXE3_FAMILIES).every((f) => !('typedKnobs' in f)), 'a family carries the old one-way flag')
     /* No frame can be built for a setting the list leaves out, or for any other number. */
     for (let pid = 0; pid < 128; pid++) {
       if (NAM_KNOB_IDS.includes(pid) || NAM_SWITCH_IDS.includes(pid)) continue
@@ -14183,7 +14182,7 @@ export function run(test) {
       assert.equal(e.withNam.editAllowed(raw(g3.KNOB, 195, pid, 0.5), placed), null, `setting ${pid} of an IR Player went as a knob`)
       assert.equal(e.withNam.editAllowed(raw(g3.TYPED, 195, pid, 1), placed), null, `setting ${pid} of an IR Player went typed`)
     }
-    /* And for a block the codec's catalog names, the two Edits give one answer to every frame tried here, the typed way for a knob with them. */
+    /* And for a block the codec's catalog names, the two Edits give one answer to every frame tried here: a knob as its place, never the typed way. */
     const kinds = new Set()
     for (const pid of [0, 1, 2, 9, 10, 15, 16, 126, 1999]) {
       for (const x of [0, 0.5, 1, 5, 13]) {
@@ -14193,7 +14192,8 @@ export function run(test) {
         }
       }
     }
-    assert.ok(kinds.has('block knob') && kinds.has('block knob (typed)'), 'a drive’s knob lost one of its two ways')
+    assert.ok(kinds.has('block knob'), 'a drive’s knob lost its place')
+    assert.ok(!kinds.has('block knob (typed)'), 'a drive’s knob went the typed way')
 
     /* THE SENDER (bleWire gen3Sender), asked at each send whether the NAM block's knobs are open: closed, or never told, nothing of a NAM's goes; open, the list above; and the bypass goes either way. */
     const { gen3Sender } = await import(WIRE)
@@ -14298,11 +14298,11 @@ export function run(test) {
     /* A quarter of the way along each, as the unit's sixteen bits hold it: Bright Cap's quarter is 10 × 1000^¼, 56.2 pF. */
     const quarter = [-55, -50, -10, 2.5, 2.5, 2.5, -5, 10 * 1000 ** 0.25]
     after.named.forEach((p, i) => assert.ok(Math.abs(p.value - quarter[i]) < 0.005, `${p.name} read back ${p.value}, not ${quarter[i]}`))
-    /* The second way of sending a knob (what the app asks for when a write does not read back as asked): nothing goes to a NAM, and it is answered as not done, not refused, so the screen reads the unit and says what it holds. */
+    /* The typed way asked of a knob (what the app once fell back to when a write did not read back as asked): nothing goes to a NAM, and it is answered as not sent, not refused, so the checked write goes no further with it. */
     t.sent.length = 0
     t.logs.length = 0
     const turns = t.unit.state.edits.length
-    assert.deepEqual(await put(207, 10, { value: 0.9, continuous: false }), { ok: false })
+    assert.deepEqual(await put(207, 10, { value: 0.9, continuous: false }), { ok: false, unsent: true })
     assert.deepEqual(theirs(), [], 'a NAM’s knob was sent the typed way')
     assert.equal(t.unit.state.edits.length, turns)
     assert.ok(t.logs.includes('Bass on block 207 is only sent its place, never the typed way: nothing sent'), t.logs.join(' | '))
@@ -14408,8 +14408,8 @@ export function run(test) {
       assert.equal(family, want.family)
       assert.equal(page, Number(eid), `${name} is painted as another block`)
       const fam = own.AXE3_OWN_FAMILIES[family]
-      /* One way only, no model, and the stride the unit's own whole read divides by. */
-      assert.equal(fam.typedKnobs, false, `${name}: a knob may go the typed way, which nobody has seen this block take`)
+      /* One way only (as every gen-3 knob: gen3-edit ONE WAY ONLY), no model, and the stride the unit's own whole read divides by. */
+      for (const [pid] of fam.knobs) assert.deepEqual(Object.keys(e.withNam.knobFrame(0x10, Number(eid), pid, { value: 0.5, continuous: false })), ['unsent'], `${name}: a knob may go the typed way`)
       assert.equal(fam.typeId, null, `${name} has a model setting`)
       assert.deepEqual(fam.selectors, {})
       assert.equal(fam.stride, want.stride)
@@ -15760,7 +15760,8 @@ export function run(test) {
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 13), placed), 'block model')
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 9999), placed), null)
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 62, 43, 3), placed), null, 'a cab picked as a model')
-    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 7, 0.4), placed), 'block knob (typed)')
+    /* A knob the typed way, never (gen3-edit ONE WAY ONLY: an FM3 takes a typed write in the setting's own units, not as a place). */
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 7, 0.4), placed), null, 'a knob went the typed way')
     const out = []
     let given = null
     const send = gen3Sender((b) => out.push(b), () => {}, 0x11, () => given)
@@ -15774,6 +15775,66 @@ export function run(test) {
     for (const f of [sx.buildSetTempoEdit(0x11, 120), sx.buildSetSceneEdit(0x11, 3), sx.buildSetChannelEdit(0x11, 58, 'B'), sx.buildGetScene(0x11), sx.buildStatusDump(0x11), sx.buildTunerPoll(0x11)]) {
       assert.equal(send(f), 'sent', `${hex(f)} stopped going to an FM3`)
     }
+  })
+
+  /*
+   * NO GEN-3 KNOB IS EVER SENT THE TYPED WAY (16 November 2026). When a
+   * knob's check did not read back as asked, the app sent the same 0-to-1
+   * place again as a typed write (09 00). A gen-3 unit takes a typed write in
+   * the setting's OWN units: his FM3's Look-Ahead Time (0 to 2 ms, 0.002 at
+   * most inside the unit) went to its maximum, and Bit Reduce (a whole
+   * number) to nought. It lands where asked only where the own range is 0 to
+   * 1, which no catalog row says, so no row of any gen-3 catalog, the III's
+   * hand-written ones with them, has a typed frame built or let out.
+   */
+  test('no gen-3 knob, on any unit or catalog, has a typed write built or passed: asked for, it is answered as not sent, and nothing goes', async () => {
+    const VALUES = [0, 0.004, 0.25, 0.328, 0.4359, 0.5, 1]
+    const placedFor = (blocks) => Object.keys(blocks).map(Number)
+    let rows = 0
+    for (const [unit, path, prefix, model] of [['fm3', FM3E, 'FM3', 0x11], ['fm9', G3.fm9.edit, 'FM9', 0x12], ['axefx3', G3.axefx3.edit, 'AXE3', 0x10]]) {
+      const e = await import(path)
+      const k = await import(G3[unit]?.knobs || FM3K)
+      const edits = [['catalog', e], ...(e.withNam ? [['with the hand-written blocks', e.withNam]] : [])]
+      for (const [which, ed] of edits) {
+        const blocks = which === 'catalog' ? k[`${prefix}_BLOCKS`] : { ...k[`${prefix}_BLOCKS`], ...(await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_BLOCKS }
+        const placed = placedFor(blocks)
+        const seen = new Set()
+        for (const [eid, b] of Object.entries(blocks)) {
+          const fam = ed.editBlock(Number(eid)) ? b[1] : null
+          if (!fam || seen.has(fam)) continue
+          seen.add(fam)
+          const families = which === 'catalog' ? k[`${prefix}_FAMILIES`] : { ...(await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_FAMILIES, ...k[`${prefix}_FAMILIES`] }
+          for (const row of families[fam].knobs) {
+            rows++
+            const made = ed.knobFrame(model, Number(eid), row[0], { value: 0.4359, continuous: false })
+            assert.deepEqual(Object.keys(made), ['unsent'], `${unit} ${which}: ${fam} ${row[1]} was built the typed way`)
+            for (const x of VALUES) {
+              assert.equal(ed.editAllowed(e.buildTyped(model, Number(eid), row[0], x), placed), null, `${unit} ${which}: ${fam} ${row[1]} typed ${x} passed`)
+            }
+            /* Its place along its travel still goes. */
+            assert.equal(ed.editAllowed(e.buildKnob(model, Number(eid), row[0], 0.4359), placed), 'block knob', `${unit} ${which}: ${fam} ${row[1]} lost its place`)
+          }
+        }
+      }
+    }
+    assert.ok(rows > 1000, `only ${rows} knob rows were tried`)
+
+    /* On the wire: an FM3's Look-Ahead Time asked the typed way is answered as not sent, nothing goes, and the log says so. */
+    const k3 = await import(FM3K)
+    const comp = Object.entries(k3.FM3_BLOCKS).find(([, b]) => b[1] === 'COMP')
+    const lookAhead = k3.FM3_FAMILIES.COMP.knobs.find((r) => r[1] === 'Look-Ahead Time')
+    assert.ok(comp && lookAhead, 'the FM3 catalog has no Look-Ahead Time to try')
+    const { settings } = await fm3Settings()
+    const eid = Number(comp[0])
+    const stride = k3.FM3_FAMILIES.COMP.stride
+    settings.set(eid, { count: stride * 4, values: Array(stride * 4).fill(0) })
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    t.unit.state.blocks.push({ eid, bypassed: false, channel: 0 })
+    const before = t.frames().length
+    const r = await drive(t.clock, t.wire.request(`/preset/blocks/${eid}/params/${lookAhead[0]}`, { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.328, continuous: false }) }))
+    assert.deepEqual(r, { ok: false, unsent: true })
+    assert.ok(t.frames().slice(before).every((f) => !(f[5] === 0x01 && (f[6] === 0x09 || f[6] === 0x52))), 'something was written')
+    assert.ok(t.logs.includes(`Look-Ahead Time on block ${eid} is only sent its place, never the typed way: nothing sent`), t.logs.join(' | '))
   })
 
   test('over Bluetooth, Edit reads an FM3 block, turns a knob and picks a model; a block not in the preset, a cab model or Edit closed sends nothing', async () => {
@@ -15951,7 +16012,9 @@ export function run(test) {
       assert.equal(hex(e.buildTyped(u.model, 58, u.type, 13)), u.bytes.typed)
       /* ForgeFX's driver: setParam(58, Gain, 0.7, continuous), the same typed, setType(58, 2), setType(70, 3) for the Delay. */
       assert.equal(hex(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: true }).frame), u.bytes.driverKnob, `the ${u.name}’s knob is not the computer’s`)
-      assert.equal(hex(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: false }).frame), u.bytes.driverTypedKnob)
+      /* The driver also sends the same place the typed way when asked (driverTypedKnob). The phone never does (gen3-edit ONE WAY ONLY: the unit takes a typed write in the setting's own units), and its way out refuses that very frame. */
+      assert.deepEqual(Object.keys(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: false })), ['unsent'])
+      assert.equal(e.editAllowed(u.bytes.driverTypedKnob.split(' ').map((b) => parseInt(b, 16)), FM3_STATUS.map(([eid]) => eid)), null, `the ${u.name}’s knob went the typed way`)
       assert.equal(hex(e.modelFrame(u.model, 58, 2).frame), u.bytes.driverModel, `the ${u.name}’s amp model is not the computer’s`)
       assert.equal(hex(e.modelFrame(u.model, 70, 3).frame), u.bytes.driverDelayModel, `the ${u.name}’s Delay model is not the computer’s`)
       /* And never the FM3's setting for it: the same edit on an FM3 is another number. */
@@ -16025,7 +16088,7 @@ export function run(test) {
       assert.equal(allowed(e.buildTyped(m, 58, u.type, 13), placed), 'block model')
       assert.equal(allowed(e.buildTyped(m, 58, u.type, 9999), placed), null, 'a model the unit does not have')
       assert.equal(allowed(e.buildTyped(m, 62, 43, 3), placed), null, 'a cab picked as a model')
-      assert.equal(allowed(e.buildTyped(m, 58, u.gain, 0.4), placed), 'block knob (typed)')
+      assert.equal(allowed(e.buildTyped(m, 58, u.gain, 0.4), placed), null, 'a knob went the typed way')
       assert.equal(allowed(e.buildTyped(m, 58, u.gain, 3), placed), null, 'a knob past its travel')
       assert.equal(allowed(e.buildTyped(m, 58, swId, swMax), placed), 'block switch')
       assert.equal(allowed(e.buildTyped(m, 58, swId, swMax + 1), placed), null, 'a switch past its last setting')

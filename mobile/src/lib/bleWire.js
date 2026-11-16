@@ -3464,10 +3464,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!ed.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = ed.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
-    /* The second way of sending a knob, asked of a block that is only sent the first (gen3-edit ONE WAY ONLY: the III's NAM): nothing goes, and it is answered as not done rather than refused, so the screen's own check reads the unit and says what it holds. */
+    /* The typed way asked of a knob, which a gen-3 knob is never sent (gen3-edit ONE WAY ONLY): nothing goes, and it is answered as not sent rather than refused, so the checked write (lib/device setParamConfirmed) goes no further with it and says what its own check read. */
     if (made.unsent) {
       say(`${made.unsent}: nothing sent`)
-      return { ok: false }
+      return { ok: false, unsent: true }
     }
     await gen3PlacedHere(e)
     movedSince(at, made.what)
