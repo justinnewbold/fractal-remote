@@ -2935,8 +2935,58 @@ beat and the device makes no sound and no tap, and opens no audio.
   he says so, with its What's new line in that pull request.
 - **The light keeps the unit's tempo, not its beat.** The unit does not
   tell the app when its beats fall, so the light and the unit's click can
-  be part of a beat apart; a press of Tap starts both together. The page
-  says so where the unit clicks. Do not promise they are locked.
+  be part of a beat apart, and NOTHING in the app lines them up. The page
+  and the volume pop-up say so where the unit clicks. Do not promise they
+  are locked, and never say a press of Tap starts them together: the words
+  said that until 16 November 2026 and it was never true. Tap works the
+  tempo out on the device and sends the unit a NUMBER (lib/tempo), so the
+  unit's beat stays where it was.
+
+  > "The metronome is not matching up properly into the sound coming out
+  > of speakers. There's a delay." (16 November 2026, the light on his
+  > account against his Axe-Fx III's own click, through the Pi)
+
+  What it would take: the unit's beat reaching the app. Over Bluetooth a
+  gen-3 unit's beat message is recognised and thrown away (bleWire
+  `isBeatPush`), and none has been seen from a real unit. Through a
+  computer the engine only counts such frames (ForgeFX registryCore's
+  persistent onFrame) and sends no beat on; that is an engine change and
+  a computer release, and the phone would also need the time between it
+  and the computer, which nothing measures. On Linux (the Pi) the engine
+  reaches an Axe-Fx III through its USB-MIDI port, the port a unit with
+  Send Realtime Sysex on would send beats down, if it sends them there.
+- **The sound is a choice of four, with Off among them: built 16 November
+  2026, HIS ACCOUNT ONLY, behind the same switch.**
+
+  > "Additionally, add a feature where you can either have sound on,
+  > sound off, or you can have it flash on the phone with sound or flash
+  > on the phone without sound on the phone only with sound playing on
+  > the phone, or on the device only playing with sound." (16 November
+  > 2026, with the volume pop-up's Metronome section on screen)
+
+  Every one of those was there but one: the flash with no click
+  ANYWHERE. With the metronome on something always made a sound. So the
+  volume pop-up, under Metronome on, has one row for the sound (Off, the
+  device, Unit, Both: only Off and the device where the unit's click
+  cannot be switched) and the flash's own switch, and Settings →
+  Metronome has No sound as the first of Where it clicks. Each of his is
+  a pair of those two.
+  - Off is kept on the DEVICE (`fractal.metronome.sound`, lib/edgeFlash
+    `QUIET_KEY`), never in shared/metronome.mjs, which is inside the
+    computer app: no new place, no computer release, and the watch is
+    told what it always was. Picking it does three things: the device is
+    held silent (`deviceSounds`), the place is set to the device, so the
+    shared rule tells the unit to stop clicking by the road it has always
+    used, and the flash is switched on, being all that is left. Picking a
+    place lets go of Off.
+  - Both pages go through `setMetronomeSound` (lib/metronome.js), so they
+    cannot disagree. Off is read only for an account offered the choice
+    (`useEdgeFlash().quiet`): a device handed to another account clicks.
+  - The pop-up has no scrolling in it (the slider is why), so on a window
+    under 600 tall the row and the flash are not drawn there and the
+    pop-up is on and off only, as it is for every other account. The
+    tempo box keeps to its one switch.
+  - It opens to everyone with the flash, by the same switch.
 - **Axiom** (justinnewbold/Axiom-Fractal-Grok, which he pointed at) has
   the same three places, Phone / Pedal / Both, and a green light by Tap,
   and no flash round the screen: the edge flash is this app's own.
@@ -3428,6 +3478,22 @@ by searching for the literal conditional that opens them and takes the first
 hit — so writing that same conditional higher up the file, *including inside
 a comment*, hands the test the wrong block. Both of those have happened. Give
 the condition a name instead.
+
+**On the phone, a touch handler made once keeps the render it was made
+in.** The volume pop-up is drawn by the top bar when the app opens, before
+any chain is read, and its slider's handler (`useRef(PanResponder.create(…))
+.current`) is that first render's for the life of the screen. Whatever it
+calls at the end of a drag read the Output block from that render: nothing.
+So a drag moved the level and then said "No output level to move yet — the
+chain is still loading", with 0.0 dB on screen, and the value the thumb
+came off on was never confirmed (16 November 2026; the writer had been
+fixed for the same thing and the landing had not). Anything such a handler
+reaches reads what it needs from a ref (`live.current`), never from the
+render. Reading the file as text could not see it: every line was right,
+and what was wrong was which render's line ran. test/volume-drag.mjs runs
+the real pop-up over several renders with stand-in hooks, and its last
+check puts the fault back to prove the bench catches it. Reach for that
+shape whenever a phone component's fault is about WHEN something was made.
 
 **Never write "this phone" into a sentence the app shows.**
 

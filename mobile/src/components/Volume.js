@@ -116,9 +116,15 @@ export default function Volume({ blocks, open, onClose, onError }) {
   const { width: width0 } = useWindowDimensions()
   const insets = useSafeAreaInsets()
 
-  const live = useRef({ param: null, value: null, width: 0, eid: null })
+  /*
+   * WHAT THE POP-UP KNOWS NOW, for everything that runs later than the render
+   * it was made in: the writer, the slider's touch handler and the landing at
+   * the end of a drag. The block, whether there is an Output block at all,
+   * and where an error is said, as well as the level.
+   */
+  const live = useRef({ param: null, value: null, width: 0, eid: null, present: false, onError: null })
   useEffect(() => {
-    live.current = { param, value, width, eid }
+    live.current = { param, value, width, eid, present: !!output, onError }
   })
 
   /*
@@ -206,6 +212,9 @@ export default function Volume({ blocks, open, onClose, onError }) {
         const next = clamp(from.current + (gesture.dx / w) * span, p.min, p.max)
         const rounded = Math.round(next * 100) / 100
         setValue(rounded)
+        /* On the ref now, as a press of − or + puts it: the thumb can come off
+           before the screen has drawn this value, and the landing reads the ref. */
+        live.current = { ...live.current, value: rounded }
         writer.current.send(rounded)
       },
       onPanResponderRelease: () => {
@@ -226,18 +235,30 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * The unit accepts a write it then ignores and says nothing about it, so the
    * one value that matters — the one you stopped on — is the one worth paying a
    * read-back for.
+   *
+   * IT READS THE BLOCK OFF THE REF, AS THE WRITER DOES. "When I tried to turn
+   * the decibels up or down, it gave me an error": No output level to move
+   * yet — the chain is still loading, with the level on screen and the chain
+   * read long before. The slider's touch handler is made once, on the first
+   * render, and the landing it calls at the end of a drag was the first
+   * render's too: from before the chain was read, holding no block for the
+   * life of the screen. So every drag moved the level (the writer reads the
+   * ref) and then said there was nothing to move, and the value the thumb
+   * came off on was never confirmed, nor Save told. Nothing in here may be
+   * read from the render: whichever render's landing is called, it is the
+   * same landing.
    */
   const land = async () => {
-    const { param: p, value: v } = live.current
+    const { param: p, value: v, eid: block, present, onError: say } = live.current
     if (!p || typeof v !== 'number') return
-    if (!Number.isInteger(eid)) {
-      noOutput(!!output, onError)
+    if (!Number.isInteger(block)) {
+      noOutput(present, say)
       return
     }
     try {
       const failed = await writer.current.settled()
-      if (failed) onError?.(failed.message)
-      const res = await setParamConfirmed(eid, p.id, v, p)
+      if (failed) say?.(failed.message)
+      const res = await setParamConfirmed(block, p.id, v, p)
       /* The level is a parameter like any other, so the Save button should
          know about it — see rig.noteEdited. */
       noteEdited()
@@ -250,14 +271,14 @@ export default function Volume({ blocks, open, onClose, onError }) {
            at a number the unit refused is a slider lying about the volume. */
         const holding = typeof res.actual === 'number' ? res.actual : null
         if (holding !== null) setValue(holding)
-        onError?.(
+        say?.(
           holding === null
             ? `The volume didn’t take. You asked for ${volumeLabel(v, p)}.`
             : `The volume didn’t take. You asked for ${volumeLabel(v, p)}; the unit says ${volumeLabel(holding, p)}.`
         )
       }
     } catch (err) {
-      onError?.(err.message)
+      say?.(err.message)
     }
   }
 
@@ -286,10 +307,10 @@ export default function Volume({ blocks, open, onClose, onError }) {
     }
   }
   const nudge = (direction) => {
-    const p = live.current.param
+    const { param: p, eid: block, present, onError: say } = live.current
     if (!p) return
-    if (!Number.isInteger(eid)) {
-      noOutput(!!output, onError)
+    if (!Number.isInteger(block)) {
+      noOutput(present, say)
       return
     }
     const next = nudged(live.current.value, p, volumeNudge(p) * direction)

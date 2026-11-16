@@ -24,8 +24,40 @@
  *
  * ONE THING IT CANNOT DO: the unit does not tell the app when its beats
  * fall, only how fast they are. So the light keeps the unit's tempo, not
- * its beat: the two can be a part of a beat apart. A press of Tap starts
- * both again together. The words say so (`EDGE_WORDS.apart`).
+ * its beat: the two can be a part of a beat apart, and nothing in the app
+ * lines them up. The words say so (`EDGE_WORDS.apart`).
+ *
+ * They used to end "Press Tap to start them together", and that was never
+ * true: Tap works the tempo out on the device and sends the unit a NUMBER
+ * (lib/tempo), so the unit's beat stays where it was. "The metronome is
+ * not matching up properly into the sound coming out of speakers. There's
+ * a delay." (Justin, 16 November 2026, the light against the unit's click.)
+ * Until the unit's beat reaches the app, the words promise nothing.
+ *
+ * AND NO SOUND AT ALL, AS A CHOICE (16 November 2026). "Add a feature where
+ * you can either have sound on, sound off, or you can have it flash on the
+ * phone with sound or flash on the phone without sound on the phone only
+ * with sound playing on the phone, or on the device only playing with
+ * sound." Every one of those was there but one, across two pages of
+ * Settings: the flash with no click ANYWHERE. With the metronome on,
+ * something always made a sound (shared clicks(): under Unit the device
+ * covers wherever the unit cannot click).
+ *
+ * So the sound is one row of four, in the volume pop-up beside the
+ * metronome's own switch and on Settings → Metronome: Off, this device,
+ * Unit, Both. Three of them are the shared rule's places as they are. Off
+ * is kept HERE, on the device (`QUIET_KEY`), and is two things together:
+ * the place is set to the device, so the shared rule switches the unit's
+ * own click off through the road it has always used, and the device's
+ * click is held silent (`deviceSounds`). The light is all that is left,
+ * through the silent beat above, so picking Off switches the light on.
+ * Nothing of it is in shared/metronome.mjs, which is inside the computer
+ * app: no new place, no computer release, and the Apple Watch is told what
+ * it always was.
+ *
+ * Picking a place is picking a sound: it lets go of Off. Off is read only
+ * for an account the choice is offered to, so a device handed to another
+ * account clicks as it always has.
  *
  * The rules, kept apart so they can be tested. Nothing here imports
  * anything.
@@ -71,5 +103,89 @@ export const EDGE_WORDS = Object.freeze({
   on: 'Flash the edge of the screen: on',
   off: 'Flash the edge of the screen: off',
   note: (noun) => `The edge of the screen lights on every beat, wherever the click is. With the click on the unit alone, this ${noun} lights and stays silent.`,
-  apart: 'The light keeps the unit’s tempo, not its exact beat. Press Tap to start them together.'
+  apart: 'The light keeps the unit’s tempo, not its exact beat'
 })
+
+/** Where "no sound" is kept, on the device. */
+export const QUIET_KEY = 'fractal.metronome.sound'
+
+/** The choice out of what is on disk: a sound unless it was switched off (there has always been one). */
+export const quietKept = (raw) => raw === 'off'
+
+/** And what goes on disk for it. */
+export const quietToKeep = (quiet) => (quiet === true ? 'off' : 'on')
+
+/** The key of the sound row's first choice. Never a place: the shared rule's places are 'unit', 'phone' and 'both'. */
+export const SOUND_OFF = 'none'
+
+/**
+ * Whether the device's own click sounds.
+ *
+ *   clicks   what the shared rule says of the device (clicks().phone)
+ *   offered  whether this account has the choice (edgeChoiceOn)
+ *   quiet    the choice itself: no sound
+ */
+export const deviceSounds = ({ clicks = false, offered = false, quiet = false } = {}) => clicks === true && !(offered === true && quiet === true)
+
+/**
+ * The sound row, in the order it is drawn: Off, then each place the shared
+ * rule offers here (placesFor: only the device where the unit's click cannot
+ * be switched). `places` is that list as it is, labels read when shown.
+ */
+export const soundChoices = (places = []) => [{ key: SOUND_OFF, label: SOUND_WORDS.off }, ...places.map((p) => ({ key: p.key, label: p.label }))]
+
+/** Which of them is lit: Off while it is quiet, or else the place the shared rule lights (`lit(key)`, placeLit). */
+export function soundLit({ quiet = false, places = [], lit = () => false } = {}) {
+  if (quiet === true) return SOUND_OFF
+  return places.find((p) => lit(p.key))?.key ?? null
+}
+
+/**
+ * What a pick changes.
+ *
+ *   Off      quiet, the place set to the device (which is what tells the
+ *            unit to stop clicking), and the light on, or nothing is left
+ *   a place  no longer quiet, and the place where the unit's click can be
+ *            switched; where it cannot, the saved place is kept for when
+ *            it can, as Settings has always kept it
+ */
+export function soundPicked(key, { can = false } = {}) {
+  if (key === SOUND_OFF) return { quiet: true, where: 'phone', edge: true }
+  return can === true ? { quiet: false, where: key } : { quiet: false }
+}
+
+/** The words of the sound row. `noun` is the device in hand, read when shown. */
+export const SOUND_WORDS = Object.freeze({
+  section: 'Sound',
+  off: 'Off',
+  /* On Settings → Metronome, where each choice is a full-width button with a line under it. */
+  noSound: 'No sound',
+  noSoundNote: 'Nothing clicks. The edge of the screen lights on every beat',
+  /* What a screen reader says for each choice: "Sound: Off", "Sound: Unit". */
+  said: (label) => `Sound: ${label}`,
+  flashOnly: 'No sound. The edge of the screen lights on every beat',
+  nothing: 'No sound and no flash, so nothing keeps time. Pick a sound, or switch the flash on',
+  deviceNoFlash: (noun) => `Clicks out loud on this ${noun}, with no flash`,
+  noTempo: (noun) => `No tempo from the unit yet, so the ${noun} has nothing to flash to`
+})
+
+/**
+ * The line under the sound row and the flash: what the metronome does now,
+ * for an account offered the choice. No full stop: whoever shows it ends
+ * the sentence, as it ends the shared rule's notes.
+ *
+ *   quiet  no sound
+ *   edge   the flash, on or off
+ *   where  the place that is lit ('unit', 'phone', 'both')
+ *   note   that place's own note from the shared rule, said as it is
+ *          wherever the flash does not change what is true
+ *   unit   whether the unit's own click can be switched from here
+ */
+export function soundLine({ quiet = false, edge = true, where = 'unit', note = '', unit = false, noun = 'phone' } = {}) {
+  if (quiet === true) return edge === true ? SOUND_WORDS.flashOnly : SOUND_WORDS.nothing
+  /* The shared note says "with a flash", which is not so with the flash switched off. */
+  if (where === 'phone' && edge !== true) return SOUND_WORDS.deviceNoFlash(noun)
+  /* The unit clicking alone, and the edge lit: the one case where the light and the sound are two clocks. */
+  if (where === 'unit' && edge === true && unit === true) return `${note}. ${EDGE_WORDS.apart}`
+  return note
+}

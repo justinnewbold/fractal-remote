@@ -1,0 +1,318 @@
+/**
+ * THE VOLUME POP-UP, RUN: a drag on the slider, from the launch that draws it
+ * before the chain is read to the thumb coming off
+ * (mobile/src/components/Volume.js).
+ *
+ * "When I tried to turn the decibels up or down, it gave me an error, which
+ * is showing on the play screen right now": No output level to move yet — the
+ * chain is still loading. (Justin, 16 November 2026, an Axe-Fx III through a
+ * Raspberry Pi, with the pop-up showing 0.0 dB.)
+ *
+ * The slider's touch handler is made once, on the pop-up's first render, and
+ * the top bar draws that first render when the app opens: before any chain
+ * has been read. The landing it called at the end of a drag was that first
+ * render's, holding no Output block for the life of the screen. So the drag
+ * moved the level (the writer reads the block off a ref) and then said there
+ * was nothing to move; the value the thumb came off on was never confirmed,
+ * and Save was never told.
+ *
+ * Every other check on this file reads it as text, and the text was right
+ * line by line: two guards, both refusing. What was wrong is WHICH render's
+ * guard ran, and only running it over several renders shows that. So the
+ * real file is bundled here with stand-ins for everything it draws with and
+ * everything it sends through, and driven the way the top bar drives it.
+ */
+import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const repo = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url))
+const read = (p) => readFileSync(repo(p), 'utf8')
+
+/*
+ * Hooks kept by the order they are called in, for one pop-up: a state keeps
+ * its value between renders, a ref is the same object every render, and an
+ * effect runs after the render when what it depends on changed. Setting a
+ * state draws nothing by itself: the bench says when the pop-up is drawn
+ * again, which is what lets it leave a drag between two draws.
+ */
+const STANDINS = `
+export const H = { slots: [], i: 0, effects: [], log: [], made: 0 }
+export function useState(init) {
+  const k = H.i++
+  if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
+  const s = H.slots[k]
+  return [s.v, (n) => { s.v = typeof n === 'function' ? n(s.v) : n }]
+}
+export function useRef(init) {
+  const k = H.i++
+  if (!(k in H.slots)) H.slots[k] = { current: init }
+  return H.slots[k]
+}
+export function useEffect(fn, deps) {
+  const k = H.i++
+  const prev = H.slots[k]
+  const changed = !prev || !deps || deps.some((d, j) => !Object.is(d, prev.deps[j]))
+  if (changed) H.effects.push(() => { prev?.cleanup?.(); const cleanup = fn(); H.slots[k] = { deps, cleanup } })
+}
+export const createElement = (type, props, ...children) => ({ type, props: props || {}, children })
+export const Fragment = 'Fragment'
+/* react-native: the touch handler is the handlers it was made with, so the bench can call them as a thumb does. */
+export const PanResponder = { create: (handlers) => { H.made++; return { panHandlers: handlers } } }
+export const Platform = { select: (o) => o?.ios ?? o?.default, OS: 'ios' }
+export const Modal = 'Modal', Pressable = 'Pressable', Text = 'Text', View = 'View', BlurView = 'BlurView'
+export const useWindowDimensions = () => ({ width: 390, height: 844 })
+export const useSafeAreaInsets = () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+/* The look: any colour, any size. */
+export const color = new Proxy({}, { get: () => '#000' }), font = new Proxy({}, { get: () => 12 }), mono = {}, radius = { lg: 8 }, space = new Proxy({}, { get: () => 8 }), TAP = 44
+export const paneRim = () => '#fff', ANY_WAY_UP = [], clearSides = () => ({ paddingLeft: 16, paddingRight: 16 })
+export const at = () => '#000'
+/* Note, Press and the metronome's switch: drawn as their names. */
+export default 'Drawn'
+/* The unit: one Output level, read once per open, and everything sent to it written down in order. */
+export const unit = { level: 0, holds: null }
+export const idOf = (b) => b?.effectId
+export const blockParams = async (eid) => { H.log.push(['read', eid]); return { named: [{ id: 0, name: 'Level', unit: 'dB', min: -80, max: 20, value: unit.level }] } }
+export const setParam = async (block, id, v) => { H.log.push(['write', block, v]) }
+export const setParamConfirmed = async (block, id, v) => { H.log.push(['confirmed', block, v]); return unit.holds === null ? { ok: true, actual: v } : { ok: false, actual: unit.holds } }
+export const noteEdited = () => { H.log.push(['edited']) }
+export const tick = () => {}
+export const logDebug = (...said) => { H.log.push(['log', ...said]) }
+`
+
+/**
+ * The pop-up on a bench. `source` is the file's text, so a check can run a
+ * copy with the fault put back and see that the bench catches it.
+ */
+async function bench(source = read('mobile/src/components/Volume.js')) {
+  const { build } = await import('esbuild')
+  const dir = mkdtempSync(join(tmpdir(), 'volume-drag-'))
+  try {
+    const standins = join(dir, 'standins.mjs')
+    writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+    writeFileSync(standins, STANDINS)
+    writeFileSync(join(dir, 'Volume.js'), source)
+    await build({
+      entryPoints: [join(dir, 'Volume.js')],
+      bundle: true,
+      format: 'esm',
+      outfile: join(dir, 'out.mjs'),
+      loader: { '.js': 'jsx' },
+      jsx: 'transform',
+      jsxFactory: '__h',
+      jsxFragment: '__F',
+      banner: { js: `import { createElement as __h, Fragment as __F } from ${JSON.stringify(standins)};` },
+      logLevel: 'silent',
+      plugins: [
+        {
+          name: 'standins',
+          setup(b) {
+            b.onResolve({ filter: /.*/ }, (a) => {
+              if (a.kind === 'entry-point') return undefined
+              /* The slider's own rules are the real ones: the writer that coalesces a drag, the step of a press, the label. */
+              if (a.path === '../lib/volume') return { path: repo('mobile/src/lib/volume.js') }
+              if (a.importer === repo('mobile/src/lib/volume.js')) return { path: repo(`mobile/src/lib/${a.path.replace(/^\.\//, '')}`) }
+              if (a.importer.startsWith(repo('mobile/src/lib/'))) return undefined
+              return { path: standins, external: true }
+            })
+          }
+        }
+      ]
+    })
+    const { default: Volume } = await import(pathToFileURL(join(dir, 'out.mjs')).href)
+    const { H, unit } = await import(pathToFileURL(standins).href)
+    const errors = []
+    /* The top bar hands over one function for errors, the same one every render. */
+    const onError = (m) => errors.push(m)
+    const wait = (ms) => new Promise((done) => setTimeout(done, ms))
+    let tree = null
+    const find = (n, is) => {
+      if (!n || typeof n !== 'object') return null
+      if (Array.isArray(n)) {
+        for (const c of n) {
+          const f = find(c, is)
+          if (f) return f
+        }
+        return null
+      }
+      if (n.props && is(n)) return n
+      return find(n.children, is) || find(n.props?.children, is)
+    }
+    const draw = async (props) => {
+      H.i = 0
+      tree = Volume({ onClose() {}, onError, ...props })
+      const run = H.effects
+      H.effects = []
+      for (const fn of run) fn()
+      await wait(2)
+    }
+    return {
+      H,
+      unit,
+      errors,
+      wait,
+      draw,
+      slider: () => find(tree, (n) => n.props.accessibilityRole === 'adjustable'),
+      button: (label) => find(tree, (n) => n.props.accessibilityLabel === label),
+      /** As the top bar does it: drawn at launch with no chain, then with the chain, then opened and its level read. */
+      async open(blocks, { launch = [] } = {}) {
+        await draw({ blocks: launch, open: false })
+        await draw({ blocks, open: false })
+        await draw({ blocks, open: true })
+        await draw({ blocks, open: true })
+        const track = find(this.slider(), (n) => typeof n.props.onLayout === 'function')
+        track?.props.onLayout({ nativeEvent: { layout: { width: 300 } } })
+        await draw({ blocks, open: true })
+      },
+      sent: () => H.log.filter((l) => l[0] !== 'read' && l[0] !== 'log'),
+      said: () => H.log.filter((l) => l[0] === 'log')
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+const OUTPUT = [{ slug: 'output', name: 'Output 1', effectId: 46 }]
+const LOADING = 'No output level to move yet — the chain is still loading.'
+
+export function run(test) {
+  test('volume: a drag on the slider lands on the Output block the unit has now, confirmed, with no error, though the pop-up was first drawn before the chain was read', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    const slider = b.slider()
+    assert.ok(slider, 'the slider was not drawn with an Output block and its level read')
+    /* A track 300 wide over 100 dB: 30 across is 10 dB up from 0. */
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    await b.draw({ blocks: OUTPUT, open: true })
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [], 'letting go of the slider said there was nothing to move')
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10], ['edited']], 'the value the thumb came off on was not confirmed on the Output block, or Save was not told')
+    assert.deepEqual(b.said(), [], 'the log says the chain has not been read')
+  })
+
+  test('volume: the thumb can come off before the screen has drawn the last value, and a drag that is taken away lands as one let go does', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    /* No draw between the move and the release: the value is only on the ref. */
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['confirmed', 46, 10], ['edited']], 'the landing confirmed the level from before the last move')
+
+    /* Taken away (a call coming in, the system's own gesture): the same landing. */
+    b.H.log.length = 0
+    await b.draw({ blocks: OUTPUT, open: true })
+    const again = b.slider()
+    again.props.onPanResponderGrant()
+    again.props.onPanResponderMove({}, { dx: -15 })
+    again.props.onPanResponderTerminate()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent(), [['write', 46, 5], ['confirmed', 46, 5], ['edited']])
+  })
+
+  test('volume: after another unit’s chain is read, a drag lands on that unit’s Output block, not the one the pop-up first saw', async () => {
+    const b = await bench()
+    /* First drawn WITH an Output block this time: a touch handler that kept the first render’s block would write to 46 for good. */
+    await b.open(OUTPUT, { launch: OUTPUT })
+    const other = [{ slug: 'output', name: 'Output 1', effectId: 50 }]
+    await b.draw({ blocks: other, open: true })
+    await b.draw({ blocks: other, open: true })
+    await b.draw({ blocks: other, open: true })
+    b.H.log.length = 0
+    const slider = b.slider()
+    assert.ok(slider, 'the slider is gone after the other unit’s level was read')
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    await b.draw({ blocks: other, open: true })
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent(), [['write', 50, 10], ['confirmed', 50, 10], ['edited']], 'the landing went to the Output block of the unit that was there first')
+  })
+
+  test('volume: a press of + and a turn of the screen reader’s dial are written, confirmed once the presses stop, and say nothing', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    b.slider().props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } })
+    await b.wait(420)
+    assert.deepEqual(b.errors, [])
+    const sent = b.sent()
+    assert.deepEqual(sent[0], ['write', 46, 1], 'a press of + did not go to the unit at once')
+    assert.deepEqual(sent.filter((l) => l[0] === 'confirmed'), [['confirmed', 46, 0]], 'the burst was not confirmed once, on the value it ended on')
+    assert.ok(sent.some((l) => l[0] === 'edited'), 'Save was not told')
+  })
+
+  test('volume: a level the unit will not hold is said where errors are said NOW, with what it holds, and the slider goes back to it', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.unit.holds = 0.8
+    /* Whoever draws the pop-up may hand it another place to say errors: the landing says them there, not where the first render was told. */
+    const now = []
+    const props = { blocks: OUTPUT, open: true, onError: (m) => now.push(m) }
+    await b.draw(props)
+    await b.draw(props)
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    await b.draw(props)
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(now, ['The volume didn’t take. You asked for +10.0 dB; the unit says +0.8 dB.'])
+    assert.deepEqual(b.errors, [], 'the error was said where the first render was told to say it')
+    await b.draw(props)
+    assert.equal(b.slider().props.accessibilityValue.now, 0.8, 'the slider is left pointing at a level the unit refused')
+  })
+
+  test('volume: with no chain read there is no slider to drag, and the two reasons for nothing to write to keep their own words', async () => {
+    const b = await bench()
+    await b.draw({ blocks: [], open: false })
+    await b.draw({ blocks: [], open: true })
+    await b.draw({ blocks: [], open: true })
+    assert.equal(b.slider(), null, 'a slider is drawn with no Output block to move')
+    assert.equal(b.button('Volume up'), null)
+    const src = read('mobile/src/components/Volume.js')
+    assert.ok(src.includes(`'${LOADING}'`), 'the still-loading sentence changed: the check below looks for it')
+    assert.match(src, /'This preset’s Output block came back without a level this app can move\.'/)
+  })
+
+  test('volume: this bench catches the fault when it is put back', async () => {
+    /*
+     * A check that cannot fail is not a check. The landing is given back the
+     * render it was made in, as it had it, and the same drag is run: the
+     * bench has to see the error he saw, or nothing above proves anything.
+     */
+    const now = read('mobile/src/components/Volume.js')
+    const fixed = [
+      ['const { param: p, value: v, eid: block, present, onError: say } = live.current', 'const { param: p, value: v } = live.current'],
+      ['if (!Number.isInteger(block)) {\n      noOutput(present, say)\n      return\n    }\n    try {', 'if (!Number.isInteger(eid)) {\n      noOutput(!!output, onError)\n      return\n    }\n    try {'],
+      ['if (failed) say?.(failed.message)', 'if (failed) onError?.(failed.message)'],
+      ['await setParamConfirmed(block, p.id, v, p)', 'await setParamConfirmed(eid, p.id, v, p)']
+    ]
+    let old = now
+    for (const [is, was] of fixed) {
+      assert.equal(old.split(is).length, 2, `the landing no longer reads “${is}”: this check puts the old line back by its text`)
+      old = old.replace(is, was).replace(/\bsay\?\.\(\n/g, 'onError?.(\n').replace('say?.(err.message)', 'onError?.(err.message)')
+    }
+    const b = await bench(old)
+    await b.open(OUTPUT)
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    await b.draw({ blocks: OUTPUT, open: true })
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [LOADING], 'the old landing ran clean on this bench, so the bench does not see what he saw')
+    assert.deepEqual(b.sent(), [['write', 46, 10]], 'the old landing confirmed the level after all')
+  })
+}

@@ -278,6 +278,14 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * — twenty seconds apart, on a preset whose chain had just been edited block
    * by block. One question now, asked in one place, so the button and the
    * write can no longer disagree about whether there is a volume to move.
+   *
+   * THOSE TWO LINES WERE PROBABLY NOT THAT (16 November 2026). A block with
+   * no id is logged in other words ("the unit reported an Output block with
+   * no id to write to"); "the chain has not been read" is what the slider
+   * wrote at the end of every DRAG, from a touch handler that kept the
+   * render from before any chain was read (components/Volume, the note over
+   * its landing). The one question asked here is still the right one; it was
+   * not what those lines were about.
    */
   const hasOutput = connected && Number.isInteger(idOf((blocks || []).find((b) => b?.slug === 'output')))
 

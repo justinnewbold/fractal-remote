@@ -112,7 +112,8 @@ async function clickOnTheBench(os = 'ios') {
   const files = {
     'package.json': '{ "type": "module" }',
     'react.js': 'export const useEffect = (fn) => { globalThis.__clickEffect = fn }\nexport const useSyncExternalStore = (sub, get) => get()\n',
-    'storage.js': 'export default { getItem: async () => null, setItem: async () => {} }\n',
+    /* The phone's disk: empty, unless a test says what was kept on it (globalThis.__clickDisk, read once as the file loads), and everything written to it is written down. */
+    'storage.js': 'export const kept = []\nexport default { getItem: async (k) => globalThis.__clickDisk?.[k] ?? null, setItem: async (k, v) => { kept.push([k, v]) } }\n',
     /* Players that write down what they are told, by which one. */
     'audio.js': `
       import { now } from './clock.js'
@@ -202,10 +203,11 @@ async function clickOnTheBench(os = 'ios') {
   const clock = await import(at('clock.js'))
   const audio = await import(at('audio.js'))
   const feedback = await import(at('feedback.js'))
+  const disk = await import(at('storage.js'))
   const settle = async () => {
     for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
   }
-  return { dir, click, unitEnd, log, clock, audio, feedback, settle }
+  return { dir, click, unitEnd, log, clock, audio, feedback, disk, settle }
 }
 
 /**
@@ -2059,7 +2061,7 @@ export function run(test) {
     assert.match(edit, /const res = await setParamConfirmed\(eid, p\.id, next, p\) [^}]*noteEdited\(\)/, 'a knob that landed does not count as unsaved work')
     assert.match(edit, /await setType\(eid, Number\(value\)\) noteEdited\(\)/, 'swapping the model does not count as unsaved work')
     assert.match(edit, /await bindModifier\(Number\(slot\), Number\(eid\), Number\(paramId\), Number\(source\)\) noteEdited\(\)/, 'attaching a modifier does not count as unsaved work')
-    assert.match(read('mobile/src/components/Volume.js').replace(/\s+/g, ' '), /const res = await setParamConfirmed\(eid, p\.id, v, p\) [^}]*noteEdited\(\)/, 'the volume does not count as unsaved work')
+    assert.match(read('mobile/src/components/Volume.js').replace(/\s+/g, ' '), /const res = await setParamConfirmed\(block, p\.id, v, p\) [^}]*noteEdited\(\)/, 'the volume does not count as unsaved work')
 
     /*
      * AND IT ALL GOES AT THE NEXT PRESET CHANGE, which is the honest half of
@@ -2109,7 +2111,13 @@ export function run(test) {
        before writing, and both now go through one place that says WHICH of the
        two reasons it is. Counted rather than matched, because one guard
        silently losing its check is the whole failure. */
-    assert.equal((vol.match(/if \(!Number\.isInteger\(eid\)\) \{ noOutput\(!!output, onError\) return \}/g) || []).length, 2, 'the volume writes to block "undefined" when the Output block is not known')
+    /* And each reads the block off the ref, with whether there is an Output
+       block at all and where an error is said: the landing at the end of a
+       drag is called from a touch handler made on the first render, before
+       any chain was read, and what it read from that render was nothing for
+       good (test/volume-drag.mjs runs it). */
+    assert.equal((vol.match(/if \(!Number\.isInteger\(block\)\) \{ noOutput\(present, say\) return \}/g) || []).length, 2, 'the volume writes to block "undefined" when the Output block is not known')
+    assert.ok(!/noOutput\(!!output, onError\)/.test(vol), 'a guard still reads the Output block from the render it was made in')
   })
 
   test('a burst of volume presses is confirmed once, and a chain write is not re-read per announcement', () => {
@@ -2516,7 +2524,7 @@ export function run(test) {
      * right after a scene switch, came back headless four times in a row.
      */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
-    assert.match(vol, /live\.current = \{ param, value, width, eid \}/, 'the block is not on the ref the writer reads')
+    assert.match(vol, /live\.current = \{ param, value, width, eid, present: !!output, onError \}/, 'the block is not on the ref the writer reads')
     assert.match(vol, /const \{ param: p, eid: block \} = live\.current/, 'the writer still closes over the first render\'s block')
     assert.match(vol, /return setParam\(block, p\.id, v, p\)/)
     assert.ok(!/setParam\(eid,/.test(vol), 'a write still goes to the render-time block')
@@ -3430,7 +3438,8 @@ export function run(test) {
        same jam by another name — while the one you stop on is. */
     const vol = read('mobile/src/components/Volume.js')
     assert.match(vol, /latestWriter\(\(v\) => \{[\s\S]{0,400}?setParam\(block, p\.id, v, p\)/, 'a drag confirms every value, which doubles the traffic it was written to avoid')
-    assert.match(vol, /await setParamConfirmed\(eid, p\.id, v, p\)/, 'the value the thumb stops on is never confirmed')
+    assert.match(vol, /await setParamConfirmed\(block, p\.id, v, p\)/, 'the value the thumb stops on is never confirmed')
+    assert.ok(!/setParamConfirmed\(eid,/.test(vol), 'the confirmed write still goes to the render-time block')
 
     /*
      * A speaker in the header, and what it opens is a POP-UP: "just an overlay
@@ -6079,7 +6088,7 @@ export function run(test) {
     assert.match(m.metronomeNote(unit, 'am4', 120), /only the phone keeps time/)
     /* The phone's own click hears the same rule, from the unit and the link it is on. */
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const sound = clicks\(s, can, heardOn\)\.phone/, 'the phone stays silent where the unit cannot click')
+    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const choice = useEdgeFlash\(\) (\/\*[^*]*\*\/ )?const sound = deviceSounds\(\{ clicks: clicks\(s, can, heardOn\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/, 'the phone stays silent where the unit cannot click')
     assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
     assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) \{ stopFollowing\(\) return \} switchUnit\(slug, true\)/)
     /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
@@ -6093,7 +6102,8 @@ export function run(test) {
     assert.equal(m.placeLit(unit, 'unit', true), true)
     assert.equal(m.placeLit(unit, 'phone', true), false)
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /on=\{placeLit\(clickSetting, p\.key, unitCan\.can\)\} onPress=\{\(\) => \(unitCan\.can \? changeClick\(\{ where: p\.key \}\) : null\)\}/, 'tapping the only row wipes a saved Unit')
+    /* For an account offered the sound as a choice the press goes through the sound's own picker, which keeps a saved Unit the same way (lib/edgeFlash soundPicked, test/edge-flash.mjs); for every other account it is as it was. */
+    assert.match(settings, /on=\{!edgeChoice\.quiet && placeLit\(clickSetting, p\.key, unitCan\.can\)\} onPress=\{\(\) => \(edgeChoice\.offered \? changeSound\(p\.key\) : unitCan\.can \? changeClick\(\{ where: p\.key \}\) : null\)\}/, 'tapping the only row wipes a saved Unit')
     const web = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(web, /placeLit\(clickSetting, p\.key, unitCan\.can\) \? ' ✓' : ''/)
     assert.match(web, /if \(!unitCan\.can\) return wakeScreenClick\(\) setClickSaid\(null\)/, 'the lit row’s press no longer lets the beep start')
@@ -6394,6 +6404,112 @@ export function run(test) {
       stopLit()
     } finally {
       globalThis.__clickAdmin = false
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the sound picked Off: nothing clicks at either end, the unit is told to stop, and the edge alone lights; a place picked is the sound back', async () => {
+    /*
+     * "Add a feature where you can either have sound on, sound off, or you
+     * can have it flash on the phone with sound or flash on the phone
+     * without sound." (Justin, 16 November 2026.) The flash with no click
+     * ANYWHERE was the one that did not exist: with the metronome on,
+     * something always made a sound. Run, not read: the phone's
+     * metronome.js beside a unit that writes down what it is told.
+     */
+    const { dir, click, unitEnd, clock, audio, feedback, disk, settle } = await clickOnTheBench('ios')
+    try {
+      globalThis.__clickAdmin = true
+      unitEnd.__answer(1)
+      /* Both ends clicking, and the flash switched off: the furthest from "the light alone". */
+      await click.setMetronome({ on: true, where: 'both' }, 'fm3')
+      click.setEdgeFlash(false)
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on'])
+
+      /* Off. The unit is told to stop by the road a place has always told it, and the light is switched on, being all that is left. */
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: true })
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off'], 'the unit’s own click was left on with the sound picked Off')
+      assert.deepEqual(click.metronome(), { on: true, where: 'phone', watch: false }, 'the metronome was switched off, or the place left on the unit')
+      assert.deepEqual(click.useEdgeFlash(), { offered: true, on: true, quiet: true }, 'Off left nothing at all: no sound and no light')
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true, 'no beat is kept for the light')
+      const stop = globalThis.__clickEffect()
+      const from = clock.now()
+      await clock.advance(1600)
+      assert.deepEqual(flashes.map((t) => t - from), [0, 500, 1000, 1500], 'the light is not on the beat')
+      assert.equal(audio.made.length, 0, 'a player was made with the sound picked Off')
+      assert.ok(!audio.calls.some((c) => /^(play|mode|session)/.test(c)), `the sound picked Off touched the sound: ${audio.calls.join(', ')}`)
+      assert.equal(feedback.ticks, 0, 'the sound picked Off still taps')
+      stop()
+      /* Kept on the device, under its own key, as the word a later launch reads. */
+      assert.deepEqual(disk.kept.filter(([k]) => k === 'fractal.metronome.sound'), [['fractal.metronome.sound', 'off']])
+
+      /* With the flash switched off as well there is nothing to keep a beat for. */
+      click.setEdgeFlash(false)
+      assert.equal(click.usePhoneClick(120, () => {}), false)
+      assert.equal(globalThis.__clickEffect(), undefined, 'a beat is kept with no sound and no light')
+      click.setEdgeFlash(true)
+
+      /* The same device in the hands of an account the choice is not offered to: it clicks, as it always has. */
+      globalThis.__clickAdmin = false
+      assert.deepEqual(click.useEdgeFlash(), { offered: false, on: true, quiet: false })
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stopOther = globalThis.__clickEffect()
+      await clock.advance(1100)
+      assert.ok(audio.calls.filter((c) => c.startsWith('play')).length >= 2, 'another account is left with a metronome that makes no sound and no way to give it one')
+      stopOther()
+      await clock.advance(3000)
+      globalThis.__clickAdmin = true
+
+      /* A place picked is the sound back: no longer quiet, the place written, the unit told. */
+      assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: true })
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off', 'fm3 on'], 'the unit was not told to click again')
+      assert.equal(click.metronome().where, 'unit')
+      assert.equal(click.useEdgeFlash().quiet, false, 'a place picked did not let go of Off')
+      assert.deepEqual(disk.kept.filter(([k]) => k === 'fractal.metronome.sound').map(([, v]) => v), ['off', 'on'])
+
+      /* Where the unit’s click cannot be switched (an AM4): the device row un-mutes and keeps the saved Unit for when it can. */
+      await click.setMetronomeSound('none', 'am4')
+      assert.equal(click.metronome().where, 'phone')
+      await click.setMetronome({ where: 'unit' }, 'am4')
+      const writes = unitEnd.writes.length
+      await click.setMetronomeSound('none', 'am4')
+      assert.equal(click.useEdgeFlash().quiet, true)
+      await click.setMetronome({ where: 'unit' }, 'am4')
+      assert.deepEqual(await click.setMetronomeSound('phone', 'am4'), { ok: true })
+      assert.equal(click.useEdgeFlash().quiet, false)
+      assert.equal(click.metronome().where, 'unit', 'the device row wiped a saved Unit where the unit cannot click')
+      assert.equal(unitEnd.writes.length, writes, 'an AM4 was written its metronome switch')
+    } finally {
+      globalThis.__clickAdmin = false
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the sound picked Off is still Off at the next launch, for the account it is offered to and nobody else', async () => {
+    globalThis.__clickDisk = { 'fractal.metronome': JSON.stringify({ on: true, where: 'phone', watch: false }), 'fractal.metronome.sound': 'off' }
+    const { dir, click, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      await settle()
+      globalThis.__clickAdmin = true
+      assert.deepEqual(click.useEdgeFlash(), { offered: true, on: true, quiet: true }, 'Off was not read back from the device')
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(1)), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(1100)
+      assert.ok(flashes.length >= 2, 'the light did not come back with it')
+      assert.equal(audio.made.length, 0, 'the click came back at launch with the sound picked Off')
+      stop()
+      globalThis.__clickAdmin = false
+      assert.equal(click.useEdgeFlash().quiet, false, 'Off is read for an account it is not offered to')
+    } finally {
+      globalThis.__clickAdmin = false
+      delete globalThis.__clickDisk
       rmSync(dir, { recursive: true, force: true })
     }
   })

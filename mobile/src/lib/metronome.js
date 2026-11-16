@@ -14,7 +14,7 @@ import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
-import { EDGE_KEY, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep } from './edgeFlash'
+import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
 import { METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
 
 /**
@@ -259,7 +259,47 @@ export function setEdgeFlash(on) {
   announce()
   AsyncStorage.setItem(EDGE_KEY, edgeToKeep(edge)).catch(() => {})
 }
-/** The choice, and whether whoever is signed in here is offered it: `{ offered, on }`. */
+
+/*
+ * NO SOUND, AS A CHOICE (lib/edgeFlash has the why): kept on the device, a
+ * sound until somebody picks Off, and read only for an account the choice is
+ * offered to.
+ */
+let quiet = false
+AsyncStorage.getItem(QUIET_KEY)
+  .then((raw) => {
+    quiet = quietKept(raw)
+    announce()
+  })
+  .catch(() => {})
+const setQuiet = (on) => {
+  if (quiet === (on === true)) return
+  quiet = on === true
+  announce()
+  AsyncStorage.setItem(QUIET_KEY, quietToKeep(quiet)).catch(() => {})
+}
+
+/**
+ * Pick the metronome's sound: Off (lib/edgeFlash SOUND_OFF) or one of the
+ * shared rule's places. The sound row in the volume pop-up and on Settings →
+ * Metronome both come through here, so the two cannot disagree.
+ *
+ * Off goes quiet FIRST, before the unit has answered: the device stops at
+ * the press. Then the place is set to the device, which is the shared rule
+ * switching the unit's own click off by the road it has always used, and
+ * the light is switched on, being all that is left. A place lets go of Off,
+ * and is written only where the unit's click can be switched, as Settings
+ * has always kept a saved Unit for when it can.
+ */
+export async function setMetronomeSound(key, slug, here = {}) {
+  const picked = soundPicked(key, { can: unitClick(slug, here).can })
+  setQuiet(picked.quiet)
+  if (picked.edge) setEdgeFlash(true)
+  if (!picked.where) return { ok: true }
+  return setMetronome({ where: picked.where }, slug, here)
+}
+
+/** The choices, and whether whoever is signed in here is offered them: `{ offered, on, quiet }`. `on` is the flash; `quiet` is no sound, false for an account not offered it. */
 export function useEdgeFlash() {
   const offered = edgeChoiceOn({ admin: useBluetoothAdmin(), everyone: METRONOME_FLASH_CHOICE_FOR_EVERYONE })
   const on = useSyncExternalStore(
@@ -270,7 +310,15 @@ export function useEdgeFlash() {
     () => edge,
     () => edge
   )
-  return { offered, on }
+  const silenced = useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => quiet,
+    () => quiet
+  )
+  return { offered, on, quiet: offered && silenced }
 }
 
 /*
@@ -461,15 +509,16 @@ function probeLag(player, lags, lead, asked) {
  *
  * `onBeat` is called only on a beat the edge of the screen is to light on
  * (lib/edgeFlash edgeBeat): with the choice switched off the click and the
- * tap carry on and nothing lights; with the click on the unit alone, for an
- * account offered the choice, the beat runs here in silence, no sound and no
- * tap, only for the light.
+ * tap carry on and nothing lights; with the click on the unit alone, or the
+ * sound picked Off, for an account offered the choice, the beat runs here in
+ * silence, no sound and no tap, only for the light.
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
   const { can, heard: heardOn } = useUnitCan()
-  const sound = clicks(s, can, heardOn).phone
   const choice = useEdgeFlash()
+  /* Never while it is quiet: the sound picked Off (lib/edgeFlash) is the device's too, and the light alone is left. */
+  const sound = deviceSounds({ clicks: clicks(s, can, heardOn).phone, offered: choice.offered, quiet: choice.quiet })
   const { flash, silent } = edgeBeat({ offered: choice.offered, edge: choice.on, metronomeOn: s.on, deviceClicks: sound })
   const on = sound || silent
   const beat = beatMs(bpm)
