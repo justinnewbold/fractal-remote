@@ -1339,8 +1339,8 @@ export function BlockPanel({
         if (!res.unverified) throw err
       }
       if (fresh) {
-        setParams(fresh.named || [])
-        setEnums(fresh.enums || [])
+        setParams(fresh?.named || [])
+        setEnums(fresh?.enums || [])
       }
       if (!res.ok) onError(res.unverified ? notChecked(p) : didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
