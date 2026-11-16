@@ -11323,6 +11323,24 @@ test('an update ready just after a windowless start installs then, and never on 
   assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'darwin', env: {} }).install, true)
   assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'win32', env: {} }).install, true)
   /*
+   * A Raspberry Pi with its WINDOW open is a pedalboard box too (16 November
+   * 2026: his Pi, opened with its window as the guide says and switched off
+   * at the wall, sat on 1.90.63 with 1.90.82 out, waiting for a quit that
+   * never comes). At power-on, before anybody plays, a waiting update goes
+   * in. Only on an ARM board on Linux, only the AppImage, only in the
+   * window after power-on.
+   */
+  for (const arch of ['arm64', 'armv7l']) {
+    assert.deepEqual(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', arch, env: appImage }), { install: true }, `a ${arch} Pi with its window open never installs a waiting update by itself`)
+    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 3 * 60 * 1000 + 1, platform: 'linux', arch, env: appImage }).install, false, 'a Pi restarts itself mid-set')
+    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', arch, env: {} }).install, false, 'a Pi’s .deb update is started where nobody can type its password')
+    assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform: 'linux', arch }), autostart.UPDATE_RETRY_MS, 'a Pi with its window open does not look again when its wifi was late')
+  }
+  for (const [platform, arch] of [['linux', 'x64'], ['darwin', 'arm64'], ['win32', 'arm64'], ['linux', '']]) {
+    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform, arch, env: appImage }).install, false, `a ${platform} ${arch} computer with somebody at it restarts itself`)
+    assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform, arch }), null)
+  }
+  /*
    * Changed on purpose, 13 October 2026 (1.87.23). This pinned the twice-a-day
    * look here, for a start with no window only. Every start now looks every
    * six hours, so the number lives with the rest of the update rules, in

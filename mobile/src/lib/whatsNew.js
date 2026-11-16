@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-16",
     "day": "16 November 2026",
-    "version": "1.90.85",
+    "version": "1.90.86",
     "lines": [
+      {
+        "text": "On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open. Before, it waited for the app to be quit, and switching the Pi off at the wall isn’t a quit, so it could sit on an old version.",
+        "only": null
+      },
       {
         "text": "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons.",
         "only": null

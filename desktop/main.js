@@ -1927,10 +1927,11 @@ function installIfUnattended() {
     hidden: startHidden,
     sinceLaunchMs: uptime() - launchedAt,
     platform: process.platform,
+    arch: process.arch,
     env: process.env
   })
   if (!verdict.install) {
-    if (startHidden) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
+    if (startHidden || boot.pedalboardBox({ platform: process.platform, arch: process.arch })) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
     return
   }
   installedUnattended = true
@@ -1949,7 +1950,7 @@ function installIfUnattended() {
  */
 function retryUpdateCheck() {
   if (updateRetry || !updates || !boot) return
-  const wait = boot.updateRetryDelay({ hidden: startHidden, kind: update?.kind, sinceLaunchMs: uptime() - launchedAt })
+  const wait = boot.updateRetryDelay({ hidden: startHidden, kind: update?.kind, sinceLaunchMs: uptime() - launchedAt, platform: process.platform, arch: process.arch })
   if (!wait) return
   updateRetry = later(() => {
     updateRetry = null

@@ -214,6 +214,9 @@ export function run(test) {
     assert.equal(windowFromAnswer({ ok: true, count: 9, age: 2900, gap: 2000 }, 1000, 1020, 500).window.mid, 1010 - 2900, 'a beat every bar is still a beat to stand on')
     assert.equal(why({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1400), 'slow', 'a round trip of most of a beat')
     assert.ok(windowFromAnswer({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1000 + 2 * (500 * BEAT_LOCK.widestOfBeat - BEAT_LOCK.slackMs), 500).window, 'the widest window that still says something is kept')
+    /* A quarter of a beat each side at most: wider, two windows could agree on two places at once. */
+    assert.equal(BEAT_LOCK.widestOfBeat, 0.25)
+    assert.equal(why({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1000 + 2 * (130 - BEAT_LOCK.slackMs)), 'slow', 'a window 130 ms wide each side of a 500 ms beat was used')
     assert.equal(why(null), 'bad')
     assert.equal(why({ ok: false, age: 40, gap: 500 }), 'bad')
     assert.equal(why({ ok: true, age: -1, gap: 500 }), 'bad')
@@ -527,6 +530,10 @@ export function run(test) {
       for (const w of f.windows) assert.ok(Math.abs(b.off(w)) <= w.half + 1e-6, `one late answer moved the belief ${b.off(w).toFixed(1)} ms off the beat`)
       assert.ok(!f.windows.some((w) => w.moved), 'one late answer was taken for the beat moving')
       assert.equal(f.windows.length, settled + 1, 'the late answer was handed on, or the one after it was not')
+      /* Forgotten: the questions go back to their usual pace. */
+      const agreed = b.asks[b.asks.length - 1]
+      await b.clock.advance(b.lock.BEAT_LOCK.everyMs)
+      assert.equal(b.asks[b.asks.length - 1] - agreed, b.lock.BEAT_LOCK.everyMs, 'a late answer forgotten still has the questions asked quickly')
 
       /* The unit's beat really moves (a tempo tapped at the unit): two answers say so, and it is followed. */
       b.unit.phase += 200
@@ -535,7 +542,24 @@ export function run(test) {
       assert.equal(last.moved, true, 'the beat moving was not followed')
       assert.ok(Math.abs(b.off(last)) <= last.half + 1e-6, 'followed to the wrong place')
       assert.equal(b.said.filter((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)).length, 1)
-      f.stop()
+
+      /* Answers that never agree with anything: asked quickly a few times, then at the usual pace, never every few hundred milliseconds for ever. */
+      let n = 0
+      const wild = f
+      wild.stop()
+      const g = b.follow(500, {
+        ask: async () => {
+          const now = b.clock.now()
+          b.asks.push(now)
+          const since = now - b.unit.phase - 100 * (n++ % 5)
+          return { answer: { ok: true, count: 9, age: ((since % 500) + 500) % 500, gap: 500 }, asked: now, answered: now }
+        }
+      })
+      await b.clock.advance(2000)
+      const from = b.asks.length
+      await b.clock.advance(30000)
+      assert.ok(b.asks.length - from <= 10, `${b.asks.length - from} questions in thirty seconds of answers that never agree`)
+      g.stop()
     } finally {
       b.done()
     }
@@ -562,12 +586,22 @@ export function run(test) {
       assert.ok(f.windows.length >= 1, 'the link came back and the beat was not taken up')
       f.stop()
 
-      /* An answer on its way home when the click stops goes nowhere. */
-      const slow = b.follow(500, { ask: b.computer(10, 200) })
-      await b.clock.advance(50)
+      /* An answer on its way home when the click stops goes nowhere: the follower has a belief, so one more answer would be handed on. */
+      let slowNow = false
+      const quick = b.computer(10, 10)
+      const slowOne = b.computer(10, 200)
+      const slow = b.follow(500, { ask: () => (slowNow ? slowOne() : quick()) })
+      await b.clock.advance(2000)
+      assert.ok(slow.windows.length >= 1, 'the bench is not where this test needs it')
+      slowNow = true
+      const had = slow.windows.length
+      const asked = b.asks.length
+      /* Stopped while the next answer is on its way home (210 ms there and back). */
+      while (b.asks.length === asked) await b.clock.advance(100)
+      assert.equal(slow.windows.length, had, 'the bench is not where this test needs it: the answer is home already')
       slow.stop()
       await b.clock.advance(5000)
-      assert.equal(slow.windows.length, 0, 'an answer that came after the stop was used')
+      assert.equal(slow.windows.length, had, 'an answer that came after the stop was used')
       assert.equal(b.clock.pending(), 0)
     } finally {
       b.done()

@@ -6674,6 +6674,7 @@ export function run(test) {
   })
 
   test('where the unit’s beat is known before the sound is ready, nothing clicks or lights until it is, and the very first click is on the unit’s beat', async () => {
+    for (const lands of [423, 440]) {
     const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
     try {
       unitEnd.__answer(1)
@@ -6682,7 +6683,9 @@ export function run(test) {
       await settle()
       globalThis.__clickAdmin = true
       globalThis.__clickBeatRoad = 'computer'
-      const unit = { phase: clock.now() + 423, beating: true }
+      /* 440: the click started the moment the sound is ready (400) is heard 40 later, on the unit's beat, so nothing moves. */
+      const from = clock.now()
+      const unit = { phase: from + lands, beating: true }
       globalThis.__clickBeatAsk = beatComputer(clock, unit)
       /* The players take 400 ms to load: the unit's beat is asked for twice, and answered, in the meantime. */
       globalThis.__clickLoadAt = clock.now() + 400
@@ -6702,11 +6705,58 @@ export function run(test) {
       for (const t of started) assert.ok(Math.abs(offBeat(t, unit, 40)) <= 1, `a click started at ${t} is heard ${offBeat(t, unit, 40)} ms off the unit’s beat`)
       for (let i = 1; i < started.length; i++) assert.equal(started[i] - started[i - 1], 500, 'a beat was dropped or doubled at the start')
       for (const t of flashes) assert.ok(Math.abs(offBeat(t, unit)) <= 1, `a flash ${offBeat(t, unit)} ms off the unit’s beat`)
+      if (lands === 440) assert.equal(started[0], from + 400, 'the first click waited a beat with nothing to move')
       assert.equal(click.useInStep(), true)
       stop()
     } finally {
       noBeatGlobals()
       rmSync(dir, { recursive: true, force: true })
+    }
+    }
+  })
+
+  test('through a slow or lopsided road the light still goes to where the unit’s beat most likely is, and is never said to be in step', async () => {
+    /*
+     * The relay is the internet: a window is half the round trip wide each
+     * side, and how lopsided the road is cannot be known. "In step" was said
+     * on a window a third of a beat wide (an independent read); now only
+     * within 20 ms.
+     */
+    for (const [there, back] of [
+      [100, 100],
+      [150, 50]
+    ]) {
+      const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const unit = { phase: clock.now() + 211, beating: true }
+        globalThis.__clickBeatAsk = async () => {
+          const asked = clock.now()
+          await new Promise((r) => clock.setTimeout(r, there))
+          const since = (((clock.now() - unit.phase) % 500) + 500) % 500
+          await new Promise((r) => clock.setTimeout(r, back))
+          return { answer: { ok: true, count: 9, age: since, gap: 500 }, asked, answered: clock.now() }
+        }
+        const flashes = []
+        assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(8000)
+        evenly(flashes, 'lights')
+        /* Where the road is even the middle is the beat itself; lopsided, it is off by half the difference, and that is all. */
+        const off = (back - there) / 2
+        const last = flashes.slice(-4)
+        for (const t of last) assert.ok(Math.abs(offBeat(t, unit) - off) <= 2, `a light ${offBeat(t, unit)} ms off the unit’s beat on a road ${there} there and ${back} back`)
+        assert.equal(click.useInStep(), false, `said to be in step on a window ${(there + back) / 2 + 10} ms wide each side`)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
     }
   })
 

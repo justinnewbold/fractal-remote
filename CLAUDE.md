@@ -3481,6 +3481,26 @@ push a desktop-v tag on that commit. A forced run whose version is already
 out stops red in the release job; it used to go green and put nothing on
 any computer.
 
+**How a computer takes its update, and a Raspberry Pi's.**
+
+> "I thought the pi apps auto update?" and "You're telling me I need to
+> update it myself?" (16 November 2026, his Pi 5 on 1.90.63 with 1.90.82
+> out.)
+
+Every computer app downloads its update by itself and puts it in when the
+app is QUIT, never mid-set (desktop/lib/updates.mjs). A box nobody quits
+(a Pi on a pedalboard is switched off at the wall) also puts a waiting
+update in during the first three minutes after it is switched on, before
+anybody is playing (`unattendedInstall` in desktop/lib/autostart.mjs).
+That used to be only for a start with NO window, and his Pi opens the app
+with its window (the guide's way), so it waited for a quit that never
+came. Since 1.90.86 an ARM board on Linux (`pedalboardBox`: a Pi) is
+treated as nobody there whether or not its window is open. Still only the
+AppImage (the .deb asks for a password), and still a download from an
+earlier run: the first power-on after a release downloads it, the next one
+puts it in. A Pi on a version older than 1.90.86 is still the old rule
+until it is quit once from its menu (Quit puts the waiting update in).
+
 **The red "Update the computer app" line means the phone needs it.**
 
 > "The red line only shows when the phone really needs something the
