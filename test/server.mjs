@@ -1135,8 +1135,8 @@ export function run(test) {
       'You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ' +
       /* No version numbers in the words since 11 November 2026: "You probably just leave out the version numbers though" (Justin). */
       'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. ' +
-      /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
-      'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.'
+      /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone: a warning at the owner's own risk since 16 November 2026, never a "never" (Justin, 15 November, of every screen and page). */
+      'On an FM3, a Bluetooth adapter may overheat: use one at your own risk, and unplug it if it gets hot. The C2MIDI Pro and a WIDI Master both got very hot on one. The WIDI Uhost with a CME U2MIDI Pro runs on USB power only, and stays cool.'
     const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
     /*
      * Asked for with editing off, by name: this is the paragraph every copy
@@ -1153,6 +1153,11 @@ export function run(test) {
       '. You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself). '
     )
     assert.notEqual(secondWithEdit, second, 'the Bluetooth paragraph no longer ends its units sentence where the editing sentence goes')
+    /* The FM3's words are a warning at the owner's own risk, never a "never", in the function itself as in every email it sends (16 November 2026). */
+    const fm3Words = read('supabase/functions/setup-reminder/index.ts').match(/const FM3_HEAT = '([^']+)'/)?.[1] ?? ''
+    assert.ok(fm3Words.startsWith('On an FM3, a Bluetooth adapter may overheat: use one at your own risk'), 'the setup email’s FM3 sentence is not the own-risk warning')
+    assert.doesNotMatch(fm3Words, /\bnever\b/i, 'the setup email tells an FM3 owner "never" again')
+    assert.ok(second.endsWith(fm3Words), 'the setup email’s Bluetooth paragraph does not end on the FM3’s warning')
     for (const kind of ['first', 'reminder']) {
       const e = setupEmail(kind, 'fan@example.com', { bluetooth: true, editing: true })
       assert.ok(e.text.includes(`\nBluetooth (no computer needed):\n\n${secondWithEdit}\n\nOr the computer (about five minutes):\n\n1. `), `with editing in it, the ${kind} email does not say Bluetooth under its own heading, then the computer’s`)
@@ -1271,7 +1276,7 @@ export function run(test) {
     const editLine = 'You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).'
     const on = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: true })
     const off = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: false })
-    assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, use a CME U2MIDI Pro`), 'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
+    assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, a Bluetooth adapter may overheat`),'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
     assert.ok(on.html.includes(editLine), 'the HTML email leaves out the editing sentence')
     assert.ok(!/no editing or saving/.test(on.text), 'the email says there is no editing beside the sentence that says there is')
     assert.ok(off.text.includes('(on a VP4, presets and scenes only), with no editing or saving. On an FM3') && !off.text.includes(editLine), 'with editing off, the Bluetooth paragraph is not what it was')

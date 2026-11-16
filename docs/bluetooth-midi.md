@@ -235,9 +235,12 @@ Now:
 - The record is ours (`TRIED_WAYS.fm3`, `TRIED_NOTES.fm3`): no screen says
   either adapter was tried or works.
 
-The setup email's FM3 sentence ("never the C2MIDI Pro or a WIDI Master") is
-the server's (supabase/functions/setup-reminder) and changes only with
-Justin's yes and a redeploy.
+The setup email's FM3 sentence is the server's
+(supabase/functions/setup-reminder) and changes only with Justin's yes and a
+redeploy. It said "never the C2MIDI Pro or a WIDI Master" until 16 November
+2026, when he gave that yes ("You're good to update the email that we talked
+about"): it is the same warning now, at the owner's own risk, with the
+U2MIDI Pro the one that stays cool.
 
 Sources: CME C2MIDI Pro manual v03
 (https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),

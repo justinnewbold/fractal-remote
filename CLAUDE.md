@@ -421,7 +421,12 @@ test first, and under these rules:
   steps for the WIDI Master or the C2MIDI Pro on an FM3, which did not
   work. Still never a sentence that says an adapter stays cool or works on
   an FM3 but the U2MIDI Pro. The setup email's FM3 sentence is the
-  server's, and changes only with his yes and a redeploy.
+  server's, and changes only with his yes and a redeploy; it said "never
+  the C2MIDI Pro or a WIDI Master" until 16 November 2026, when he gave
+  that yes ("You're good to update the email that we talked about"), and
+  says the same warning now (`FM3_HEAT` in the function). The Google Play
+  description still said "Never plug the C2MIDI Pro or a WIDI Master into
+  an FM3" that day: it changes only when he asks for it on Google Play.
 - **Setup and Troubleshooting are by unit and by adapter, in tabs.** "With
   tabs so we don't have to sort through so much information not relevant
   to the unit and device they are using" (15 November 2026). How to connect
