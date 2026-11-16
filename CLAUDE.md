@@ -2069,6 +2069,72 @@ making room (moving the blocks after the card along one) when the free
 space is further down the row. The browser's editor is another design and
 was not looked at for this.
 
+**Moving blocks in the chain editor keeps the row joined, since 1.91.5,
+for every account, at both ends.**
+
+> "Editing the chain, moving compressor after the NAM block caused the
+> sound to stop completely." (16 November 2026, his AX3 through the
+> Raspberry Pi, computer app 1.90.63)
+
+- *What his log showed.* The drag (Comp 1 from column 2 to after Flanger 1)
+  cleared columns 2 to 5 of row 3 and put four blocks back, eight writes
+  and not one join, then wrote "landed" four times: the check asked only
+  where each block was. On a gen-3 unit a join lives in the cell it FEEDS
+  (the rows of the column before), and a block put into a cell joins
+  nothing on his unit, so the row most likely read "fed from nothing" from
+  column 2 on. Moving Comp back was the same clear and put again. He saved
+  it so twice: preset 390 is very likely stored cut. The app said nothing:
+  the same read carried every block's feeds, and nobody looked at them.
+- *What a drag does now* (shared/chain-move.mjs, one plan for the phone's
+  Edit.js and the browser's GridEditor.jsx; the phone's copy is generated).
+  The grid is read first (GET /preset/grid, which has the bare wires the
+  chain read leaves out) and the joins into and out of every moved column
+  kept, each once. A move whose joins could not be made again is refused
+  BEFORE anything is cleared, in words under the row: out of a six-row
+  unit's top row from an even column, or, through a computer app older
+  than 1.90.82 (or one that does not say), a six-row join that computer
+  sends to the wrong cell (lib/gen3-grid `cableAsTheLaw`; rows 3 and 4,
+  his, are safe). Then the clear and put as before, the grid read again
+  and THE ROW WRITTEN TO THE LOG BEFORE ANYTHING IS MENDED ("move: row 3
+  straight after the move: column 2 Drive 1 (fed from nothing), …"), only
+  the joins now missing sent, and the row read again and checked. Still
+  cut, it says so under the row ("The blocks moved, but row 3 isn’t joined
+  at column 2, so there’s no sound past it.") with Join the row. A write
+  that throws puts the blocks back and joins them again the same way. The
+  "landed" line counts columns from one (it counted from nought).
+- *A row already cut is offered Join the row* whenever the chain editor
+  reads the chain (`rowCuts`, the grid read only when the chain read shows
+  a block fed from nothing): a block on an Input's row, before its Output,
+  fed from NOTHING, is joined from the cell before it on that row. Never
+  on a row with a parallel path, never on an AM4, VP4 or Axe-Fx II, never
+  over Bluetooth (no chain editor there). That mends 390 and any
+  customer's preset cut the same way. The browser's tap-to-move and
+  Replace read the rows they touched after, and say a row left cut (or
+  with an empty space mid-row, which nothing joins across) the same way.
+- *Settings are measured, never written back.* Before and after a move,
+  each moved block is read once (its params read): a NAM block's capture
+  slot and one knob of each, in the log only ("move: NAM 1 after: capture
+  001, Level 0 (was capture 040, …)"). Nothing on screen says whether they
+  were kept. Through the computer the capture comes with no name.
+- *STILL NOT KNOWN, AND HIS NEXT LOG SETTLES BOTH:* whether his unit keeps
+  a join through a clear and a put ("straight after the move" says "fed
+  from row 3" for keep, "fed from nothing" for drop; the "move: joins"
+  line says how many were missing), and whether a block's settings survive
+  being cleared and put back (the before and after lines). Which of the
+  unit's messages drops the join (the clear, the select, the put, or the
+  next cell's too) is not known either; the plan works for all of them. A
+  MIDI Monitor recording of Axe-Edit III dragging one block in a row would
+  settle the true move (its own message, or clear and put, and whether it
+  sends joins after).
+- *THE DEMO JOINS EVERY BLOCK IT PLACES*, so no test of a drag against it
+  could see this. Both mocks (mobile/src/lib/mockDevice.js and
+  src/lib/mockDevice.js) take `createMockDevice(unit, { joinsAsOnUnit:
+  true })`, which only the tests pass: a placed block joins nothing and an
+  emptied cell takes its joins with it. test/chain-move.mjs runs his drag on
+  it. The demo itself is unchanged.
+- The browser's half is inside the computer app, so this made a computer
+  release; COMPUTER_NEEDED did not move.
+
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
 1.90.58, and through the computer or the Raspberry Pi since 1.90.59. HIS UNIT HAS KEPT TWO CAPTURES

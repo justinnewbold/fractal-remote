@@ -253,7 +253,17 @@ const midiCarried = () => {
  */
 const summaryBlock = (b) => ({ effectId: b.effectId, slug: b.slug ?? null, name: b.name, instance: null })
 
-export function createMockDevice(unitKey = DEFAULT_UNIT) {
+export function createMockDevice(unitKey = DEFAULT_UNIT, { joinsAsOnUnit = false } = {}) {
+  /*
+   * FOR THE TESTS ONLY, AND OFF IN THE DEMO: a block put into a cell joins
+   * nothing, and a cell emptied takes its joins with it, as Justin's Axe-Fx
+   * III did on 15 and 16 November 2026 (a block placed into an empty cell
+   * read back "fed from nothing"; a drag that cleared and re-placed four
+   * blocks left the row silent). With it off, as the demo has it, every
+   * placed block is joined to its own row, so no test of a drag against the
+   * demo could see a row cut by one (shared/chain-move.mjs).
+   */
+  const placedJoinNothing = joinsAsOnUnit === true
   const unit = unitByKey(unitKey)
   const UNIT = unit.key
   /*
@@ -958,7 +968,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         effectId: blockId,
         row,
         col,
-        fromRows: joined || [row],
+        fromRows: placedJoinNothing ? [] : joined || [row],
         channel: 'A',
         type: 0
       }

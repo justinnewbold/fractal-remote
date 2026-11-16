@@ -3,7 +3,7 @@
     {
       "date": "2026-11-16",
       "day": "16 November 2026",
-      "version": "1.91.2",
+      "version": "1.91.5",
       "lines": [
         {
           "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a middle setting such as Pan lights up from the top. From version 1.90.0 of the app, Edit on an Axe-Fx III over Bluetooth or USB also has knobs for the IR Player, Vocoder, Crossover, Tone Match and Dynamic Distortion.",
@@ -18,7 +18,7 @@
           "only": null
         },
         {
-          "text": "On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open. Before, it waited for the app to be quit, and switching the Pi off at the wall isn’t a quit, so it could sit on an old version.",
+          "text": "Moving blocks in the chain editor no longer leaves the chain silent: the app joins the row up again and checks it, and offers Join the row for a row that was cut. On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open.",
           "only": null
         },
         {

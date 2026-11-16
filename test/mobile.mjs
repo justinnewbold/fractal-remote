@@ -2374,14 +2374,18 @@ export function run(test) {
        touched it, and deleted the computer's saved profile of the FM3. */
     assert.ok(!/dropReadCache|device\/cache'/.test(flat.replace(/\/\*.*?\*\//g, '')), 'a chain write deletes the computer’s profile of the unit again')
     assert.match(flat, /const astray = moves\.filter\(\(m\) => colOf\(m\) !== m\.to\)/, 'a move is not checked against the unit\'s answer')
-    assert.match(flat, /logDebug\('chain', `\$\{m\.block\.name\}: column \$\{m\.from\} → \$\{m\.to\}`/, 'a move leaves nothing in the log')
+    /* Columns from one, as the unit and the screen count them: the landed line printed them from nought ("column 1 → 4" for 2 → 5, 16 November 2026). */
+    assert.match(flat, /logDebug\('chain', `\$\{m\.block\.name\}: column \$\{colLabel\(m\.from\)\} → \$\{colLabel\(m\.to\)\}`/, 'a move leaves nothing in the log, or counts its columns from nought')
     assert.match(flat, /The unit did not keep the move: /, 'a move the unit dropped is silent')
-    /* Every clear and every placement is logged with the unit's answer, and
-       a refusal anywhere in the six is said on screen — a unit that quietly
-       ignores a command answers exactly like one that took it. */
-    assert.match(flat, /logDebug\('chain', `clear \$\{m\.block\.name\} from column \$\{m\.from \+ 1\}`, said\(r\)\)/, 'a clear is not logged with the unit\'s answer')
-    assert.match(flat, /logDebug\('chain', `place \$\{m\.block\.name\} at column \$\{m\.to \+ 1\}`, said\(last\)\)/, 'a placement is not logged with the unit\'s answer')
-    assert.match(flat, /The unit answered “refused” to \$\{refused\} of the \$\{answers\.length\} steps\./, 'a refusal in the middle of a move is not said')
+    /* Every clear and every placement is logged with the unit's answer (by the
+       shared move, lib/chain-move runMove, the browser's too), and a refusal
+       anywhere in the six is said on screen — a unit that quietly ignores a
+       command answers exactly like one that took it. */
+    const moveLib = read('shared/chain-move.mjs').replace(/\s+/g, ' ')
+    assert.match(flat, /const res = await moveBlocks\(\{ row: lane\.row, moves: steps, wire: moveWire,/, 'the move does not go through the shared plan')
+    assert.match(moveLib, /log\(`clear \$\{m\.name\} from column \$\{colLabel\(m\.from\)\}`, said\(r\)\)/, 'a clear is not logged with the unit\'s answer')
+    assert.match(moveLib, /log\(`place \$\{m\.name\} at column \$\{colLabel\(m\.to\)\}`, said\(r\)\)/, 'a placement is not logged with the unit\'s answer')
+    assert.match(flat, /The unit answered “refused” to \$\{refused\} of the \$\{res\.answers\.length\} steps\./, 'a refusal in the middle of a move is not said')
     /* Add and Remove check themselves the same way: the unit's own answer,
        off the fresh read, says whether the cell changed. */
     assert.match(flat, /const holds = \(row, col\) => \(getState\(\)\.allBlocks \|\| \[\]\)\.some\(\(b\) => b\.row === row && b\.col === col\)/)
@@ -2485,7 +2489,7 @@ export function run(test) {
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
-    assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 3, 'not every chain write (move, add, remove) is bracketed')
+    assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 4, 'not every chain write (move, add, remove, Join the row) is bracketed')
     assert.match(edit, /useKeepAwake\(\)/, 'the Edit screen lets the phone lock mid-write')
 
     /* A unit mid-switch reports slot -1, and nothing is filed under it. */
@@ -3671,13 +3675,18 @@ export function run(test) {
       !/ok === false/.test(move),
       'a move is being undone because the unit answered ok:false, which means nothing on this hardware'
     )
+    /* The writes themselves are the shared move's (lib/chain-move runMove), the browser's too. */
+    assert.match(move.replace(/\s+/g, ' '), /await moveBlocks\(\{ row: lane\.row, moves: steps, wire: moveWire,/, 'the move does not go through the shared plan')
+    const shared = read('shared/chain-move.mjs')
+    const run = shared.slice(shared.indexOf('export async function runMove'), shared.indexOf('export async function joinRow'))
+    assert.ok(!/ok === false\) (?:\{|throw|return)/.test(run), 'a move is being undone because the unit answered ok:false, which means nothing on this hardware')
     assert.match(
-      move,
-      /catch \(err\) \{\s*\n\s*for \(const m of moves\) await placeBlock\(lane\.row, m\.from, idOf\(m\.block\)\)\.catch/,
+      run,
+      /catch \(err\) \{[\s\S]*?for \(const m of cleared\) \{\s*try \{\s*await wire\.placeBlock\(row, m\.from, m\.id\)/,
       'a move that throws part-way leaves the blocks in no cell at all'
     )
     assert.ok(
-      move.indexOf('clearCell') < move.indexOf('placeBlock'),
+      run.indexOf('wire.clearCell') > 0 && run.indexOf('wire.clearCell') < run.indexOf('wire.placeBlock'),
       'a move places the block before clearing it, which asks the unit to hold one block in two cells'
     )
     assert.match(editor, /doubtfulWrite\(res\)/, 'nothing says what ok:false actually means here')
@@ -14435,8 +14444,8 @@ export function run(test) {
      * the move is dealt a second time on top of an answer that already has it;
      * never let go of at all and a failed write leaves the lane lying for ever.
      */
-    assert.match(edit, /await after\(last\) \/\* The unit has been asked again[^*]*\*\/ setSettling\(null\)/, 'the preview outlives the read that replaces it')
-    assert.match(edit, /finally \{ \/\*[^*]*\*\/ setSettling\(null\) endChainWrite\(\)/, 'a throw leaves the lane drawn in an order the unit never took')
+    assert.match(edit, /await after\(res\.answers\[res\.answers\.length - 1\] \?\? null\) \/\* The unit has been asked again[^*]*\*\/ setSettling\(null\)/, 'the preview outlives the read that replaces it')
+    assert.match(edit, /finally \{ \/\*[^*]*\*\/ setSettling\(null\) if \(writing\) endChainWrite\(\)/, 'a throw leaves the lane drawn in an order the unit never took')
   })
 
   test('a drag up or down the lane deals the blocks back into the same columns', async () => {

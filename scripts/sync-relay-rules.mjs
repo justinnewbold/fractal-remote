@@ -671,6 +671,19 @@ export const FILES = [
      browser's chain editor and the phone's move the same block to the same column. */
   { source: '../shared/lane-order.mjs', target: '../mobile/src/lib/laneOrder.js' },
   /*
+   * And what a drag does to the joins along the row: read before, refused
+   * where a join could not be made again, joined again after and checked,
+   * and a row already cut offered "Join the row". One plan for both chain
+   * editors, so a phone and a browser cannot leave the same row two ways
+   * (his Axe-Fx III's preset 390, 16 November 2026).
+   */
+  {
+    source: '../shared/chain-move.mjs',
+    target: '../mobile/src/lib/chain-move.js',
+    render: (text) =>
+      banner('../shared/chain-move.mjs') + text.replace("from './grid-plan.mjs'", "from './grid-plan.js'").replace("from './versions.mjs'", "from './versions.js'")
+  },
+  /*
    * The volume slider: which control it drives, how it reads, and how a drag
    * becomes writes a serial port can keep up with.
    *

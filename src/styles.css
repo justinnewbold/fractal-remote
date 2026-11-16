@@ -4136,6 +4136,20 @@ button.chain-block.lifting {
   color: var(--warn, var(--live));
 }
 
+/* A row that is cut, under its name, with Join the row (shared/chain-move.mjs). */
+.chain-cut {
+  margin: var(--s-1) 0 var(--s-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.chain-cut p {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: var(--f-1);
+}
+
 /* ---------- unsaved state ---------- */
 
 /* The unsaved panel that used to live at the foot of the page is gone — saving
