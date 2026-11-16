@@ -16,7 +16,7 @@ import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
 import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
 import { BEAT_LOCK_FOR_EVERYONE, METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
-import { BEAT_LOCK, beatLockOn, moveFor, notTooSoon } from './beatLock'
+import { BEAT_LOCK, beatLockOn, dueAfterMove, moveFor } from './beatLock'
 import { followUnitBeat } from './unitBeat'
 
 /**
@@ -656,7 +656,8 @@ export function usePhoneClick(bpm, onBeat) {
      * The beat here onto the unit's: what the beats are counted from moves
      * by the least that puts the click heard (`lead` after its beat), or in
      * silence the light, on the unit's beat; then the next beat is booked
-     * afresh, never a second click within half a beat of the last.
+     * afresh: never a second click within half a beat of the last, and
+     * never a beat dropped because the move put it just behind now.
      */
     const align = () => {
       if (!alive || !started || !unitAt) return
@@ -665,8 +666,9 @@ export function usePhoneClick(bpm, onBeat) {
       if (!by) return
       startedAt += by
       clearTimeout(timer)
-      const due = notTooSoon(nextBeat(startedAt, Date.now(), beat), clicked, beat)
-      timer = setTimeout(step, Math.max(0, due - Date.now()))
+      const now = Date.now()
+      const due = dueAfterMove(nextBeat(startedAt, now, beat), now, clicked, beat)
+      timer = setTimeout(step, Math.max(0, due - now))
       logDebug('metronome', `this device’s beat moved ${Math.abs(Math.round(by))} ms ${by > 0 ? 'later' : 'earlier'}, onto the unit’s (known to within ${Math.round(unitAt.half)} ms)`)
     }
     const unfollow = follow

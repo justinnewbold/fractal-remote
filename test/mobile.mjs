@@ -6575,6 +6575,47 @@ export function run(test) {
     })
   }
 
+  test('a small move that lands just before a beat is due does not drop that beat', async () => {
+    /*
+     * The beat here is counted from a moment, and a beat within ten
+     * milliseconds behind now is "this beat, already kept" to the count
+     * (shared nextBeat). A move a little EARLIER, a moment before a beat
+     * was due, put that beat just behind now: it was never lit, and the
+     * count booked the one after. Nearly two beats of dark.
+     */
+    const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      /* The unit's beat falls 2 ms after the question asked 6.9 s in (the questions are at 0, 300, 600, 900 and 6900 ms). */
+      const from = clock.now()
+      const unit = { phase: from + 402, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(6800)
+      assert.equal(unitEnd.beatAsks.length, 4)
+      assert.equal(flashes[flashes.length - 1], from + 6402, 'the bench is not where this test needs it')
+      /* The unit's beat drifts 25 ms earlier; the next answer says so 2 ms before the light was due. */
+      unit.phase -= 25
+      await clock.advance(1500)
+      assert.deepEqual(unitEnd.beatAsks.slice(4), [from + 6900], 'the question was not asked when this test needs it')
+      const gaps = flashes.slice(1).map((t, i) => t - flashes[i])
+      const longest = Math.max(...gaps.slice(1))
+      assert.ok(longest <= 625, `a beat was dropped: ${longest} ms between two lights (${flashes.slice(-4).map((t) => t - from).join(', ')})`)
+      for (const g of gaps.slice(1)) assert.ok(g >= 250, `two lights ${g} ms apart`)
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('where the unit’s beat is known before the sound is ready, nothing clicks or lights until it is, and the very first click is on the unit’s beat', async () => {
     const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
     try {

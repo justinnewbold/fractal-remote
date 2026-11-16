@@ -282,7 +282,7 @@ export function run(test) {
   })
 
   test('beat lock: the move puts the click heard, or in silence the light, on the unit’s beat, by the least there is', async () => {
-    const { moveFor, notTooSoon, BEAT_LOCK, wrap } = await rules()
+    const { moveFor, notTooSoon, dueAfterMove, BEAT_LOCK, wrap } = await rules()
     const beat = 500
     const random = seeded(3)
     for (let i = 0; i < 300; i++) {
@@ -308,6 +308,25 @@ export function run(test) {
     assert.equal(notTooSoon(1250, 1000, 500), 1250, 'half a beat on is soon enough')
     assert.equal(notTooSoon(1600, 1000, 500), 1600)
     assert.equal(notTooSoon(1200, null, 500), 1200, 'nothing clicked yet: nothing to be too soon after')
+
+    /*
+     * Nor is a beat dropped by a move. The last click was at 1000 and the
+     * next was due at 1500; at 1498 a move twelve earlier puts that beat at
+     * 1488, ten behind now, and the count calls the next one 1988.
+     */
+    assert.equal(dueAfterMove(1988, 1498, 1000, 500), 1498, 'a beat a move put ten milliseconds behind was dropped: nearly two beats between two clicks')
+    assert.equal(dueAfterMove(1988 + BEAT_LOCK.lateMs - 10, 1498 + BEAT_LOCK.lateMs - 10 + 10, 1000, 500), 1498 + BEAT_LOCK.lateMs, 'thirty behind is still clicked')
+    /* Too far behind to pass for that beat: the one after, as the count has it. */
+    assert.equal(dueAfterMove(1988, 1488 + BEAT_LOCK.lateMs + 1, 1000, 500), 1988, 'a click forty milliseconds late was made for a beat')
+    /* The beat just gone WAS the last click: nothing was dropped, and nothing is clicked again. */
+    assert.equal(dueAfterMove(2000, 1505, 1500, 500), 2000, 'the beat just clicked was clicked again')
+    /* A beat within the count's own ten milliseconds ahead is this beat: clicked on it, not before it. */
+    assert.equal(dueAfterMove(2005, 1500, 1000, 500), 1505, 'a beat five milliseconds ahead was clicked early or dropped')
+    /* A move later that leaves the next beat too soon after the last click: the one after (notTooSoon). */
+    assert.equal(dueAfterMove(1700, 1520, 1500, 500), 2200)
+    /* Before anything has clicked, the first beat is one squarely on the unit's. */
+    assert.equal(dueAfterMove(1988, 1498, null, 500), 1988, 'the first click of all was made late for a beat already gone')
+    assert.equal(dueAfterMove(NaN, 1498, 1000, 500), NaN)
   })
 
   test('following through the computer: a few quick questions, then one every few seconds, and each window holds the beat', async () => {

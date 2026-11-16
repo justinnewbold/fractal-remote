@@ -64,7 +64,9 @@ export const BEAT_LOCK = Object.freeze({
   /* A computer app with no such answer is not asked again for this long. */
   notAskedMs: 10 * 60 * 1000,
   /* Never two clicks closer than this much of a beat, whatever the move. */
-  apartOfBeat: 0.5
+  apartOfBeat: 0.5,
+  /* A beat a move has just put this far behind, and not clicked yet, is clicked now rather than dropped. */
+  lateMs: 30
 })
 
 /** `ms` into the half beat either side of nought: (−beat/2, beat/2]. */
@@ -175,6 +177,25 @@ export function moveFor(startedAt, window, beat, lead = 0) {
 export function notTooSoon(due, clicked, beat) {
   if (!Number.isFinite(due) || !(beat > 0) || !Number.isFinite(clicked)) return due
   return due - clicked < beat * BEAT_LOCK.apartOfBeat ? due + beat : due
+}
+
+/**
+ * The same, and a beat is not DROPPED by a move either.
+ *
+ * `next` is the beat the count says comes next after a move (shared
+ * nextBeat, at `now`). A move earlier can put the beat that was about to be
+ * clicked a little BEHIND now, and the count then calls it gone and books
+ * the one after: nearly two beats between two clicks. So where the beat
+ * before `next` is only just gone (lateMs) and has not been clicked (it is
+ * at least half a beat after the last click), it is clicked now. Never
+ * before anything has clicked at all: the first beat waits for one that is
+ * squarely on the unit's.
+ */
+export function dueAfterMove(next, now, clicked, beat) {
+  if (!Number.isFinite(next) || !(beat > 0) || !Number.isFinite(now) || !Number.isFinite(clicked)) return next
+  const gone = next - beat
+  if (now - gone <= BEAT_LOCK.lateMs && gone - clicked >= beat * BEAT_LOCK.apartOfBeat) return Math.max(now, gone)
+  return notTooSoon(next, clicked, beat)
 }
 
 /** What the log says of an answer that gave no window. */
