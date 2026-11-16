@@ -161,14 +161,33 @@ export function sliceOf(stride, bulk, channel, declared) {
   return { stride: s, channels, base: Math.min(Math.max(0, channel), channels - 1) * s }
 }
 
+/** A row the unit keeps as a whole number (scripts/gen3-knobs.mjs: a 1 in its seventh place). */
+export const isWhole = (k) => Array.isArray(k) && k.length === 7 && k[6] === 1
+
 /*
  * A knob's value off the wire: ForgeFX's #display. Its place along its
  * travel, and what its display shows, on its scale; a value the scale cannot
  * take (past 65534), or a knob with no range, is shown 0 to 10, as the
  * computer shows it.
+ *
+ * EXCEPT A WHOLE NUMBER (16 November 2026). The unit keeps Bit Reduce,
+ * Number of Taps and the rest of the codec's list (isWhole) as the number
+ * itself, not as a place out of 65534: his FM3's Bit Reduce at 10 read as
+ * 0.004, which is 10 out of 65534 of the way from 0 to 24. Such a value is
+ * the number the unit sent, held to the row's range, and its place is where
+ * that number sits in the range.
  */
 export function shownKnob(k, raw) {
   const [, , min, max, log, unit] = k
+  if (isWhole(k)) {
+    const value = Number.isFinite(raw) ? Math.max(min, Math.min(max, Math.round(raw))) : min
+    const out = { value, norm: (value - min) / (max - min) }
+    if (unit) out.unit = unit
+    out.min = min
+    out.max = max
+    out.whole = true
+    return out
+  }
   const norm = clamp01(raw / WIRE_FULL)
   if (k.length > 2 && Number.isInteger(raw) && raw >= 0 && raw <= WIRE_FULL && min < max && !(log && (min <= 0 || max <= 0))) {
     const v = log ? min * Math.pow(max / min, raw / WIRE_FULL) : min + (raw / WIRE_FULL) * (max - min)
@@ -448,6 +467,10 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
    * write at a knob passes editAllowed. Its place has always been the way
    * every knob goes first, and the III's NAM block's knobs, which were only
    * ever sent that way, were turned on his unit and held (13 November 2026).
+   *
+   * A setting the unit keeps as a whole number (isWhole: Bit Reduce, Number
+   * of Taps) has one way too, the other one: that number, typed, as the
+   * codec writes it, and never a place.
    */
 
   /* A model the block may be put on: one its list has at that number, and never a cab's. */
@@ -472,7 +495,18 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     }
     if (!Number.isFinite(v)) return { refused: `${s.row[1]} needs a number.` }
     const n = clamp01(v)
-    if (body?.continuous === false) return { unsent: `${s.row[1]} on block ${eid} is only sent its place, never the typed way` }
+    if (body?.continuous === false) return { unsent: isWhole(s.row) ? `${s.row[1]} on block ${eid} is a whole number, sent one way only` : `${s.row[1]} on block ${eid} is only sent its place, never the typed way` }
+    /*
+     * A WHOLE NUMBER IS SENT AS THAT NUMBER, typed, as the codec writes one
+     * (catalog.ts makeOrdinalEncode: float32 of the number, sub 09 00): the
+     * place asked for, put back into the row's range and rounded. That is its
+     * one way, as a place is every other knob's.
+     */
+    if (isWhole(s.row)) {
+      const [, label, min, max] = s.row
+      const whole = Math.max(min, Math.min(max, Math.round(min + n * (max - min))))
+      return { frame: buildTyped(model, eid, id, whole), what: `${label} on block ${eid} to ${whole} (a whole number)` }
+    }
     return { frame: buildKnob(model, eid, id, n), what: `${s.row[1]} on block ${eid} to ${n.toFixed(4)}` }
   }
 
@@ -496,10 +530,12 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
    *
    *   - a read (fn 0x1F) only of a block placed now;
    *   - a knob (52 00) only at a setting the catalog names as a knob of a
-   *     block placed now, from 0 to 1;
+   *     block placed now, from 0 to 1, and never one the unit keeps as a
+   *     whole number;
    *   - a typed write (09 00) only at a setting the catalog names on such a
    *     block: a switch to one of its numbers, a model to one of its models,
-   *     and never a knob (ONE WAY ONLY, above).
+   *     a whole-number setting to a whole number in its range, and never any
+   *     other knob (ONE WAY ONLY, above).
    */
   function editAllowed(f, placed, model = unitModel) {
     if (model !== unitModel) return null
@@ -526,9 +562,9 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     if (!s) return null
     const x = bitsFloat(fromSeptets32(f, 12))
     if (!Number.isFinite(x)) return null
-    if (sub[0] === KNOB[0] && sub[1] === KNOB[1]) return s.kind === 'knob' && x >= 0 && x <= 1 ? 'block knob' : null
+    if (sub[0] === KNOB[0] && sub[1] === KNOB[1]) return s.kind === 'knob' && !isWhole(s.row) && x >= 0 && x <= 1 ? 'block knob' : null
     if (sub[0] !== TYPED[0] || sub[1] !== TYPED[1]) return null
-    if (s.kind === 'knob') return null
+    if (s.kind === 'knob') return isWhole(s.row) && Number.isInteger(x) && x >= s.row[2] && x <= s.row[3] ? 'block whole number' : null
     if (s.kind === 'switch') return Number.isInteger(x) && x >= s.row[2] && x <= s.row[3] ? 'block switch' : null
     return modelHere(b, x) ? 'block model' : null
   }

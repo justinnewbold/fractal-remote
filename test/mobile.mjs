@@ -14270,8 +14270,10 @@ export function run(test) {
     const dev = read('mobile/src/lib/device.js')
     const start = dev.indexOf('export async function setParamConfirmed(')
     const body = dev.slice(start, dev.indexOf('\n}\n', start) + 2).replace('export async function', 'async function')
+    const asked = dev.match(/^const askedAs = .*$/m)[0]
     const bench = ({ answers, wire = () => ({ ok: true }), preferred = true }) => {
       const sent = []
+      const values = []
       const logs = []
       const remembered = []
       let reads = 0
@@ -14279,6 +14281,7 @@ export function run(test) {
         toNormalized: (v, p) => (v - p.min) / (p.max - p.min),
         put: async (path, b) => {
           sent.push(b.continuous)
+          values.push(b.value)
           return wire(b)
         },
         EDITING: {},
@@ -14294,8 +14297,8 @@ export function run(test) {
         READ_BACK_AGAIN_MS: 0,
         setTimeout: (f) => f()
       }
-      const run = new Function(...Object.keys(env), `${body}\nreturn setParamConfirmed`)(...Object.values(env))
-      return { run: () => run(46, 15, 1.312, { name: 'Look-Ahead Time', min: 0, max: 2 }), sent, logs, remembered, reads: () => reads }
+      const run = new Function(...Object.keys(env), `${asked}\n${body}\nreturn setParamConfirmed`)(...Object.values(env))
+      return { run: (value = 1.312, param = { name: 'Look-Ahead Time', min: 0, max: 2 }) => run(46, 15, value, param), sent, values, logs, remembered, reads: () => reads }
     }
     const quiet = () => new Error('The FM3 didn’t send the Compressor’s settings. Try again.')
 
@@ -14329,6 +14332,16 @@ export function run(test) {
     /* And one whose second check heard nothing says so, not "didn't take". */
     const e = bench({ answers: [2, 2, quiet(), quiet()] })
     assert.deepEqual(await e.run(), { ok: false, continuous: null, retried: true, actual: null, unverified: true })
+
+    /* A setting the unit keeps as a whole number (gen3-edit isWhole): 10.46 is asked as 10, sent as 10's place, and a read of 10 is a write that took, not a miss. */
+    const bits = { name: 'Bit Reduce', min: 0, max: 24, whole: true }
+    const w = bench({ answers: [10] })
+    assert.deepEqual(await w.run(10.46, bits), { ok: true, continuous: true, retried: false })
+    assert.deepEqual(w.values, [10 / 24])
+    /* A knob that is not one is asked as it was turned. */
+    const plain = bench({ answers: [10.46] })
+    assert.deepEqual(await plain.run(10.46, { name: 'Drive', min: 0, max: 24 }), { ok: true, continuous: true, retried: false })
+    assert.deepEqual(plain.values, [10.46 / 24])
 
     /* Edit says it in plain words. */
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')

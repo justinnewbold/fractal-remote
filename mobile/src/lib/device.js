@@ -1365,7 +1365,16 @@ export function setParam(eid, paramId, value, param, continuous) {
 /** How long to give the unit before the second read of a value that came back wrong. */
 export const READ_BACK_AGAIN_MS = 400
 
+/*
+ * A setting the unit keeps as a whole number (over Bluetooth or a cable,
+ * gen3-edit isWhole: Bit Reduce, Number of Taps) is asked for, and checked,
+ * as the whole number it will be: 10.46 is sent as 10, and a read of 10 is
+ * what was asked, not a miss.
+ */
+const askedAs = (value, param) => (param?.whole === true && Number.isFinite(value) ? Math.round(value) : value)
+
 export async function setParamConfirmed(eid, paramId, value, param) {
+  value = askedAs(value, param)
   const norm = toNormalized(value, param)
   if (norm === null) {
     // A guessed value is worse than no value: it lands somewhere real and

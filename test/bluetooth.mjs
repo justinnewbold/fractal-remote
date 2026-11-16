@@ -15693,7 +15693,7 @@ export function run(test) {
     assert.deepEqual(k.FM3_BLOCKS[58], ['amp', 'DISTORT', 'Amp', 58])
     assert.deepEqual(k.FM3_BLOCKS[119], ['drive', 'FUZZ', 'Drive', 118])
     for (const [family, f] of Object.entries(k.FM3_FAMILIES)) {
-      for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
+      for (const knob of f.knobs) assert.ok(knob.length === 2 || ((knob.length === 6 || (knob.length === 7 && knob[6] === 1)) && knob[2] < knob[3]), `${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
       for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${family} ${label}: options that are not its numbers`)
     }
     assert.equal(k.FM3_FAMILIES.DISTORT.stride, 144)
@@ -15805,6 +15805,8 @@ export function run(test) {
           seen.add(fam)
           const families = which === 'catalog' ? k[`${prefix}_FAMILIES`] : { ...(await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_FAMILIES, ...k[`${prefix}_FAMILIES`] }
           for (const row of families[fam].knobs) {
+            /* A whole number's one way is the typed one (the next test). */
+            if (row[6] === 1) continue
             rows++
             const made = ed.knobFrame(model, Number(eid), row[0], { value: 0.4359, continuous: false })
             assert.deepEqual(Object.keys(made), ['unsent'], `${unit} ${which}: ${fam} ${row[1]} was built the typed way`)
@@ -15826,15 +15828,121 @@ export function run(test) {
     assert.ok(comp && lookAhead, 'the FM3 catalog has no Look-Ahead Time to try')
     const { settings } = await fm3Settings()
     const eid = Number(comp[0])
-    const stride = k3.FM3_FAMILIES.COMP.stride
-    settings.set(eid, { count: stride * 4, values: Array(stride * 4).fill(0) })
     const t = await onTheLine('fm3', { edit: () => true, settings })
-    t.unit.state.blocks.push({ eid, bypassed: false, channel: 0 })
     const before = t.frames().length
     const r = await drive(t.clock, t.wire.request(`/preset/blocks/${eid}/params/${lookAhead[0]}`, { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.328, continuous: false }) }))
     assert.deepEqual(r, { ok: false, unsent: true })
     assert.ok(t.frames().slice(before).every((f) => !(f[5] === 0x01 && (f[6] === 0x09 || f[6] === 0x52))), 'something was written')
     assert.ok(t.logs.includes(`Look-Ahead Time on block ${eid} is only sent its place, never the typed way: nothing sent`), t.logs.join(' | '))
+  })
+
+  /*
+   * A WHOLE NUMBER IS READ AND WRITTEN AS ONE (16 November 2026). The codec
+   * lists the settings each unit keeps as a whole number (forgefx-midi
+   * gen3/fm3 discreteOverlay.ts FM3_FAMILY_JOIN_DISCRETE, and the FM9's and
+   * the III's own, applied by devices/gen3/factory.ts) and writes them as
+   * that number, typed. The phone drew them as knobs: Bit Reduce at 10 read
+   * as 0.004 on his FM3 (10 out of 65534 of the way from 0 to 24). The
+   * generator marks them (a 1 in a seventh place), and these are the rows,
+   * every one, as scripts/gen3-knobs.mjs wrote them from the pinned codec.
+   */
+  const WHOLE_ROWS = {
+    fm3: ['CABINET:4 0..188', 'CABINET:5 0..188', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:67 0..3', 'TENTAP:7 1..10'],
+    fm9: ['CABINET:4 0..15', 'CABINET:5 0..15', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:69 0..3', 'TENTAP:7 1..10'],
+    axefx3: ['CABINET:4 0..188', 'CABINET:5 0..188', 'DELAY:21 0..1', 'FUZZ:16 0..24', 'MEGATAP:3 1..128', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:17 0..1', 'REVERB:66 0..3', 'TENTAP:7 1..10']
+  }
+  const KNOBS_OF = { fm3: [FM3K, 'FM3'], fm9: ['../mobile/src/lib/fm9-knobs.js', 'FM9'], axefx3: ['../mobile/src/lib/axefx3-knobs.js', 'AXE3'] }
+
+  test('every setting the codec keeps as a whole number is generated as one, not as a plain knob: these rows and no others', async () => {
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    for (const [unit, [path, prefix]] of Object.entries(KNOBS_OF)) {
+      const k = await import(path)
+      const marked = []
+      for (const [fam, f] of Object.entries(k[`${prefix}_FAMILIES`])) {
+        for (const row of f.knobs) {
+          assert.ok(row.length === 2 || row.length === 6 || (row.length === 7 && row[6] === 1), `${unit} ${fam} ${row[1]}: a row of another shape`)
+          if (g3.isWhole(row)) {
+            marked.push(`${fam}:${row[0]} ${row[2]}..${row[3]}`)
+            assert.ok(Number.isInteger(row[2]) && Number.isInteger(row[3]) && row[2] < row[3] && row[4] === 0, `${unit} ${fam} ${row[1]}: a whole number with no whole range`)
+          }
+        }
+      }
+      assert.deepEqual(marked, WHOLE_ROWS[unit], `${unit}: not the codec’s whole numbers (run scripts/gen3-knobs.mjs on the pinned codec)`)
+    }
+    /*
+     * AND AGAINST THE CODEC ITSELF, where it is at hand (its checkout beside
+     * this one, built, or FORGEFX_MIDI): every knob row whose setting the
+     * unit's list names is a whole number. A new pin that adds one shows here.
+     */
+    const { existsSync } = await import('node:fs')
+    const { pathToFileURL } = await import('node:url')
+    const root = process.env.FORGEFX_MIDI || new URL('../../forgefx-midi/', import.meta.url).pathname
+    const dist = (p) => `${root.replace(/\/$/, '')}/dist/gen3/${p}/index.js`
+    if (!existsSync(dist('fm3'))) return
+    const lists = {
+      fm3: [(await import(pathToFileURL(dist('fm3')).href)).FM3_FAMILY_JOIN_DISCRETE, (await import(pathToFileURL(dist('fm3')).href)).FM3_PARAMS_BY_FAMILY],
+      fm9: [(await import(pathToFileURL(dist('fm9')).href)).FM9_ROUNDTRIP_DISCRETE, (await import(pathToFileURL(dist('fm9')).href)).FM9_PARAMS_BY_FAMILY],
+      axefx3: [(await import(pathToFileURL(dist('axe-fx-iii')).href)).III_ROUNDTRIP_DISCRETE, (await import(pathToFileURL(dist('axe-fx-iii')).href)).PARAMS_BY_FAMILY]
+    }
+    for (const [unit, [whole, params]] of Object.entries(lists)) {
+      const [path, prefix] = KNOBS_OF[unit]
+      const k = await import(path)
+      let named = 0
+      for (const [fam, f] of Object.entries(k[`${prefix}_FAMILIES`])) {
+        for (const row of f.knobs) {
+          const sym = (params[fam] || []).find((p) => p.paramId === row[0])?.name
+          if (sym === undefined || whole[sym] === undefined) continue
+          named++
+          assert.ok(g3.isWhole(row), `${unit} ${fam} ${row[1]} (${sym}) is a whole number to the codec and a plain knob here`)
+          assert.ok(row[3] <= whole[sym], `${unit} ${fam} ${row[1]} goes past the ${whole[sym]} the codec allows`)
+        }
+      }
+      assert.equal(named, WHOLE_ROWS[unit].length, unit)
+    }
+  })
+
+  test('a whole number reads as the number the unit keeps, and a turn is written as that number, typed, which the way out passes', async () => {
+    const e = await import(FM3E)
+    const k = await import(FM3K)
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const row = k.FM3_FAMILIES.FUZZ.knobs.find((r) => r[1] === 'Bit Reduce')
+    assert.deepEqual(row, [16, 'Bit Reduce', 0, 24, 0, null, 1])
+    /* Bit Reduce at 10 reads as 10: it read 0.004 (10 of 65534 along 0 to 24). */
+    assert.deepEqual(e.shownKnob(row, 10), { value: 10, norm: 10 / 24, min: 0, max: 24, whole: true })
+    for (const [raw, shown] of [[0, 0], [1, 1], [24, 24], [25, 24], [28566, 24]]) assert.equal(e.shownKnob(row, raw).value, shown, `raw ${raw}`)
+    /* In a block's read, on its channel. */
+    const { settings, set } = await fm3Settings()
+    set(118, 16, 0, 10)
+    const bits = e.blockParamsOf(118, settings.get(118), { channel: 0 }).named.find((p) => p.id === 16)
+    assert.deepEqual([bits.name, bits.value, bits.whole, bits.min, bits.max], ['Bit Reduce', 10, true, 0, 24])
+
+    /* A turn to 10.46 (Edit's knob, 0.4359 of the way along): the typed write of 10, the codec's own frame for it. */
+    const made = e.knobFrame(0x11, 118, 16, { value: 10.46 / 24, continuous: true })
+    assert.deepEqual(made.frame, e.buildTyped(0x11, 118, 16, 10))
+    /* forgefx-midi at the pinned commit: createModernFractalCodec(0x11).buildSetParameter(118, 16, 10), the frame its writer sends for Bit Reduce 10. */
+    assert.equal(hex(made.frame), 'F0 00 01 74 11 01 09 00 76 00 10 00 00 00 00 09 04 00 00 00 00 77 F7')
+    assert.equal(made.what, 'Bit Reduce on block 118 to 10 (a whole number)')
+    for (const [at, n] of [[0, 0], [1, 24], [0.5, 12], [0.02, 0], [0.98, 24]]) assert.deepEqual(e.knobFrame(0x11, 118, 16, { value: at }).frame, e.buildTyped(0x11, 118, 16, n), `${at} of the way`)
+    assert.ok(g3.isWhole(row))
+    /* The other way asked is not sent: its one way is the number. */
+    assert.deepEqual(Object.keys(e.knobFrame(0x11, 118, 16, { value: 0.4359, continuous: false })), ['unsent'])
+    /* THE WAY OUT: the typed whole number passes, within the range; a place, a fraction, or past the end, never. */
+    const placed = FM3_STATUS.map(([eid]) => eid)
+    assert.equal(e.fm3EditAllowed(made.frame, placed), 'block whole number')
+    for (const n of [0, 1, 12, 24]) assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 118, 16, n), placed), 'block whole number')
+    for (const x of [0.4359, 10.5, 25, 100]) assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 118, 16, x), placed), null, `typed ${x} passed`)
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 118, 16, 0.4359), placed), null, 'a whole number went as a place')
+    /* A plain knob beside it is as it was. */
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 118, 1, 0.5), placed), 'block knob')
+
+    /* Over the wire: the typed 10 goes, the pretend FM3 keeps 10, and the read says 10. */
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    const before = t.frames().length
+    assert.deepEqual(await ask('/preset/blocks/118/params/16', { method: 'PUT', body: JSON.stringify({ value: 10.46 / 24, continuous: true }) }), { ok: true })
+    assert.deepEqual(t.frames().slice(before).filter((f) => f[5] === 0x01 && f.length === 23).map(hex), [hex(e.buildTyped(0x11, 118, 16, 10))])
+    assert.deepEqual(t.unit.state.edits.at(-1), { eid: 118, pid: 16, sub: 0x09, value: 10 })
+    assert.equal((await ask('/preset/blocks/118/params')).named.find((p) => p.id === 16).value, 10)
   })
 
   test('over Bluetooth, Edit reads an FM3 block, turns a knob and picks a model; a block not in the preset, a cab model or Edit closed sends nothing', async () => {
@@ -15986,7 +16094,7 @@ export function run(test) {
       /* Which ids are blocks is the codec's, the same on every gen-3 unit (gen3Sender tells an Edit-shaped write by it); the settings in them are each unit's own. */
       assert.deepEqual(B, fm3.FM3_BLOCKS)
       for (const [family, f] of Object.entries(F)) {
-        for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${u.name} ${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
+        for (const knob of f.knobs) assert.ok(knob.length === 2 || ((knob.length === 6 || (knob.length === 7 && knob[6] === 1)) && knob[2] < knob[3]), `${u.name} ${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
         for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${u.name} ${family} ${label}: options that are not its numbers`)
       }
       /* Its own numbers, not the FM3's: the amp's Gain and model setting, the Delay's model (DELAY_MODEL, never the routing DELAY_TYPE), the amp's stride. */
