@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-16",
+      "version": "1.90.84",
+      "lines": [
+        "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it could still say the unit did not answer in time once you had switched a block on or off. It no longer does."
+      ]
+    },
+    {
       "date": "2026-11-15",
       "version": "1.90.82",
       "lines": [

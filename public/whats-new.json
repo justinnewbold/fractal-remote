@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-16",
+      "day": "16 November 2026",
+      "version": "1.90.84",
+      "lines": [
+        {
+          "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it could still say the unit did not answer in time once you had switched a block on or off. It no longer does.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-15",
       "day": "15 November 2026",
       "version": "1.90.82",
@@ -259,25 +270,6 @@
         },
         {
           "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, with the Bluetooth symbol, and Stop is only offered for what’s really connected.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-05",
-      "day": "5 November 2026",
-      "version": "1.89.46",
-      "lines": [
-        {
-          "text": "Settings → Colors: tap a look to pick it, then Apply. You’re taken back to Play, with Undo there for a couple of seconds if you change your mind.",
-          "only": null
-        },
-        {
-          "text": "Creating an account now asks for your first and last name, so we know who we’re helping when you write to us. If you already have an account, nothing changes and you won’t be asked.",
-          "only": null
-        },
-        {
-          "text": "Share what gear works (Settings → Troubleshooting) now notes a unit on a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. If you said yes before, it asks you once more. It’s still off unless you say yes, and never linked to you.",
           "only": null
         }
       ]

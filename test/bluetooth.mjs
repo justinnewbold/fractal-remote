@@ -198,6 +198,15 @@ function fakeGen3(sx, o) {
     looper: false,
     /* Answers the published scene, channel and tempo SETs with a refusal ("does not know that message", or the code given), rather than ignoring them. */
     refusePublished: false,
+    /*
+     * A SET it takes is answered with the SET itself, byte for byte, as
+     * Fractal's document says ("Returns" the same message) and as Justin's
+     * Axe-Fx III did for a block's on and off and its channel (his log, 15
+     * November 2026). The pretend unit used to take those in silence, which
+     * is kinder than a unit: nothing here ever saw the answer. `false` is
+     * that silence again.
+     */
+    setsAnswered: true,
     ...o
   }
   const state = {
@@ -320,19 +329,26 @@ function fakeGen3(sx, o) {
       case 0x14:
         if (p[0] === 0x7f && p[1] === 0x7f) return reply(0x14, sx.encode14(state.bpm))
         if (opt.refusePublished !== false) return reply(0x64, [0x14, refusalCode()])
-        if (opt.publishedTempo) state.bpm = sx.decode14(p[0], p[1])
+        if (opt.publishedTempo) {
+          state.bpm = sx.decode14(p[0], p[1])
+          if (opt.setsAnswered) reply(0x14, sx.encode14(state.bpm))
+        }
         return
       case 0x0a: {
         const bl = find(sx.decode14(p[0], p[1]))
         if (!bl) return reply(0x64, [0x0a, 0x07])
         bl.bypassed = p[2] === 1
+        if (opt.setsAnswered) reply(0x0a, [p[0], p[1], bl.bypassed ? 1 : 0])
         return
       }
       case 0x0b: {
         const bl = find(sx.decode14(p[0], p[1]))
         if (!bl) return reply(0x64, [0x0b, 0x07])
         if (opt.refusePublished !== false) return reply(0x64, [0x0b, refusalCode()])
-        if (opt.publishedChannel) bl.channel = p[2]
+        if (opt.publishedChannel) {
+          bl.channel = p[2]
+          if (opt.setsAnswered) reply(0x0b, [p[0], p[1], bl.channel])
+        }
         return
       }
       case 0x10:
@@ -2516,6 +2532,140 @@ export function run(test) {
     /* And a write's echo is not taken as a change made on the unit. */
     await t.post('/preset/blocks/58/bypass', { bypassed: true })
     assert.deepEqual(t.events, [{ type: 'changed', scope: 'grid' }])
+  })
+
+  /*
+   * THE UNIT'S OWN ANSWER TO A SET IS THE SET, AND IT IS NO ECHO. Justin's
+   * Axe-Fx III through a WIDI Uhost, 15 November 2026: a block's channel
+   * changed and two blocks switched off, each answered by the unit with the
+   * message itself (as Fractal's document says it does), and at the third
+   * the log said "the unit is echoing what it receives: the white plug may
+   * be in the Axe-Fx III’s MIDI THRU, not OUT". The rig was wired right. And
+   * with that count off nought, a preset with no blocks waited for a second
+   * copy of its answer that never comes (the test after this one).
+   */
+  test('a block switched, a channel, a scene or a tempo set: the unit’s answer is the message itself, and is never counted as an echo', async () => {
+    const tapsOn = async (t) => {
+      await t.post('/preset/blocks/58/bypass', { bypassed: true })
+      await t.post('/preset/blocks/58/bypass', { bypassed: false })
+      await t.post('/preset/blocks/58/channel', { channel: 'B' })
+      await t.post('/scene', { index: 2 })
+      await t.post('/tempo', { bpm: 96 })
+      await t.post('/preset/blocks/58/bypass', { bypassed: true })
+    }
+    const thruLine = (t) => t.logs.find((l) => /is echoing what it receives/.test(l))
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      /* A rig wired right: every set answered once, with its own bytes. Nothing is an echo. */
+      const t = await onTheLine(unit, { publishedChannel: true, publishedTempo: true })
+      /* Every whole message that reaches the wire, as it reaches it. */
+      const cameBack = []
+      const heard = t.wire.heard
+      t.wire.heard = (f) => {
+        cameBack.push(hex(f))
+        return heard(f)
+      }
+      await tapsOn(t)
+      /* THE PRETEND UNIT REALLY DID ANSWER EACH SET WITH THE SET, once, or everything under this proves nothing (it used to take them in silence, and then nothing is counted whatever the wire does). */
+      const sets = t.sent.map((x) => x.bytes).filter((b) => b[0] === 0xf0 && ((b[5] === 0x0a && b[8] !== 0x7f) || (b[5] === 0x0b && b[8] !== 0x7f) || (b[5] === 0x14 && !(b[6] === 0x7f && b[7] === 0x7f))))
+      /* (An FM3's tempo always goes FM3-Edit's way, another message: its published tempo set does not take.) */
+      assert.deepEqual(sets.map((b) => b[5]).sort(), unit === 'fm3' ? [0x0a, 0x0a, 0x0a, 0x0b] : [0x0a, 0x0a, 0x0a, 0x0b, 0x14], `${unit}: the on/off, channel and tempo sets were not sent the published way`)
+      /* Each came back as many times as it went (the same "off" goes twice in those taps). The tempo's once more: "which tempo?", asked after it to see that it took, is answered with the same bytes again. */
+      for (const set of new Set(sets.map(hex))) {
+        const went = sets.filter((b) => hex(b) === set)
+        assert.equal(cameBack.filter((h) => h === set).length, went.length + (went[0][5] === 0x14 ? 1 : 0), `${unit}: the pretend unit did not answer ${set} with the message itself, once for each time it was sent`)
+      }
+      assert.equal(t.wire.counts().echoes, 0, `${unit}: the unit’s own answers to its sets were counted as echoes`)
+      assert.equal(thruLine(t), undefined, `${unit}: a rig wired right was told about MIDI Thru`)
+      /* And so an empty preset, after all that, is read at its first answer. */
+      t.unit.state.blocks.length = 0
+      const asked = t.sent.length
+      assert.deepEqual((await t.get('/preset/blocks')).filter((b) => !b.fixed), [], `${unit}: an empty preset came back with blocks`)
+      assert.ok(!t.logs.some((l) => /no answer to the blocks/.test(l)), `${unit}: after a block was switched, an empty preset read as the unit not answering: ${t.logs.slice(-4).join(' | ')}`)
+      assert.equal(t.sent.slice(asked).filter((x) => x.bytes[5] === 0x13).length, 1)
+
+      /* A PLUG IN THRU: the echo and the answer both come back, two copies of each set, and the second is an echo. The alarm still rings, on writes alone. */
+      const thru = await onTheLine(unit, { thru: true, publishedChannel: true, publishedTempo: true })
+      await tapsOn(thru)
+      assert.ok(thruLine(thru), `${unit}: with a plug in THRU, nobody was told`)
+      /*
+       * And it is the SETS' second copies that are counted, not only the
+       * echoes of the questions the first taps asked while the ways were
+       * learned: four more sets, each one message now, each counted once.
+       */
+      await advance(thru.clock, 100)
+      const learnedAt = thru.wire.counts().echoes
+      for (const [path, body] of [['/preset/blocks/58/bypass', { bypassed: false }], ['/preset/blocks/58/bypass', { bypassed: true }], ['/preset/blocks/58/channel', { channel: 'A' }], ['/tempo', { bpm: 100 }]]) {
+        const before = thru.sent.length
+        await thru.post(path, body)
+        assert.equal(thru.sent.slice(before).filter((x) => x.bytes[0] === 0xf0).length, 1, `${unit}: ${path} was more than one message, so its count proves nothing`)
+        await advance(thru.clock, 100)
+      }
+      assert.equal(thru.wire.counts().echoes, learnedAt + 4, `${unit}: with a plug in THRU, two copies of each of four sets came back and ${thru.wire.counts().echoes - learnedAt} were counted`)
+
+      /*
+       * THE SCENE'S ANSWER IS TAKEN BY ITS OWN WAIT, and with a plug in
+       * THRU the copy that comes after it is still an echo: the copies are
+       * counted whoever takes them. One scene change first, so the way is
+       * learned and each change after it is one message.
+       */
+      const scenes = await onTheLine(unit, { thru: true })
+      await scenes.post('/scene', { index: 1 })
+      await advance(scenes.clock, 100)
+      const learned = scenes.wire.counts().echoes
+      for (const index of [2, 3, 4]) {
+        await scenes.post('/scene', { index })
+        /* A tap is not followed by the next within milliseconds: the second copy lands while its message is still the last one sent. */
+        await advance(scenes.clock, 100)
+      }
+      assert.ok(scenes.wire.counts().echoes >= learned + 3, `${unit}: with a plug in THRU, three scene changes counted ${scenes.wire.counts().echoes - learned} echoes`)
+
+      /* A unit that takes its sets and says nothing (as the pretend one always did): nothing comes back, nothing is counted. */
+      const mute = await onTheLine(unit, { setsAnswered: false, sceneEcho: false, publishedChannel: true, publishedTempo: true })
+      await tapsOn(mute)
+      assert.equal(mute.wire.counts().echoes, 0)
+
+      /*
+       * A PLUG THAT ONLY LOOPS, the unit behind it gone quiet (heard once,
+       * so that writes still go): one copy of each set comes back, which is
+       * not counted, since it cannot be told from the unit's answer; the
+       * copies of the QUESTIONS are counted, as ever, and they name it.
+       */
+      const loop = await onTheLine(unit, {})
+      await loop.get('/scene')
+      loop.unit.hear = (b) => {
+        if (b[0] === 0xf0) loop.say([...b], 1)
+      }
+      await loop.post('/preset/blocks/58/bypass', { bypassed: true })
+      await loop.post('/preset/blocks/58/bypass', { bypassed: false })
+      assert.equal(loop.wire.counts().echoes, 0, `${unit}: the one copy of a set that a looping plug gives was counted`)
+      for (let i = 0; i < 3; i++) await loop.get('/scene').catch(() => null)
+      assert.ok(loop.wire.counts().echoes >= 3, `${unit}: the echo of a question was not counted (${loop.wire.counts().echoes})`)
+      assert.ok(thruLine(loop), `${unit}: a plug that loops was not named`)
+    }
+    /* A QUESTION'S echo is never its answer: 7F in the value's place is "which?", and the echo of that is the echo the guard exists for. The tempo's question is the one of this rule's kinds the app asks. */
+    const asked = await onTheLine('fm3', { thru: true })
+    for (let i = 0; i < 3; i++) {
+      const before = asked.wire.counts().echoes
+      assert.deepEqual(await asked.get('/tempo'), { bpm: 120 })
+      await advance(asked.clock, 100)
+      assert.equal(asked.wire.counts().echoes, before + 1, 'the echo of "which tempo?" was taken for an answer, or not counted once')
+    }
+    for (let i = 0; i < 3; i++) await asked.get('/scene')
+    assert.ok(asked.wire.counts().echoes >= 6, 'the echo of "which scene?" was not counted')
+    /* And only within the echo's own time (ECHO_MS): the same bytes a third of a second after they went are not the phone hearing itself, and a copy just inside it is. */
+    for (const [after, counted] of [[300, 0], [200, 1]]) {
+      const late = await onTheLine('fm3')
+      await late.get('/scene')
+      await advance(late.clock, after - 1)
+      late.say(late.sx.buildGetScene(0x11), 1)
+      await advance(late.clock, 10)
+      assert.equal(late.wire.counts().echoes, counted, `a copy of the question ${after} ms after it went`)
+    }
+    /* The rule, in the file: only the first copy, only of a set, and never on an AM4. */
+    const wire = flat('mobile/src/lib/bleWire.js')
+    assert.ok(wire.includes('if (ownEcho && copy === 1 && answersItself(f)) return echoes++'), 'the first copy of a set is not let through before the count')
+    assert.ok(wire.includes('const copy = sentAs >= 0 ? ++lastSent.copies[sentAs] : 0'))
+    assert.match(wire, /const answersItself = \(m\) => !am4 && Array\.isArray\(m\) && m\[4\] === model && \(\(\(m\[5\] === FN\.BYPASS \|\| m\[5\] === FN\.CHANNEL\) && m\.length === 11 && m\[8\] !== 0x7f\) \|\| \(m\[5\] === FN\.TEMPO && m\.length === 10 && !\(m\[6\] === 0x7f && m\[7\] === 0x7f\)\)\)/)
   })
 
   test('a preset with no blocks: the unit’s answer is the question’s own bytes, and is read as an empty chain, MIDI Thru on or off', async () => {
@@ -19179,7 +19329,7 @@ export function run(test) {
     /* In the file: kept for this connection only, as each is sent, and apart from allowEcho. */
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /if \(o\.am4 && !am4Allowed\(o\.frame\)\) continue askedAround\.push\(o\.frame\)/)
-    assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) (?:\/\*.*?\*\/ )?if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{.*?\} if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
+    assert.match(wire, /const ownEcho = sentAs >= 0 && !\(job && job\.opts\.allowEcho\) (?:\/\*.*?\*\/ )?if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{.*?\} if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
   })
 
   /*

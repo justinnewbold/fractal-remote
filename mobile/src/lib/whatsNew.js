@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-16",
+    "day": "16 November 2026",
+    "version": "1.90.84",
+    "lines": [
+      {
+        "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it could still say the unit did not answer in time once you had switched a block on or off. It no longer does.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-15",
     "day": "15 November 2026",
     "version": "1.90.82",
