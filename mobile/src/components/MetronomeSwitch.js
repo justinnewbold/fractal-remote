@@ -109,13 +109,13 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   /* Said for an account offered the choices wherever it is drawn, the tempo box too: with the sound Off, "clicks out loud" would not be so. */
   const where = choice.offered
     ? choice.quiet || unitCan.can
-      ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, noun: deviceNoun() })
+      ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, demo, noun: deviceNoun() })
       : unitCan.why
     : unitCan.can
       ? place?.note || ''
       : unitCan.why
   const sounding = deviceSounds({ clicks: clicks(setting, unitCan.can, heard).phone, offered: choice.offered, quiet: choice.quiet })
-  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard && !choice.quiet ? `Until the unit says its click is on, the ${deviceNoun()} keeps time as well.` : ''
+  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? `Until the unit says its click is on, the ${deviceNoun()} keeps time as well.` : ''
   const noTempo =
     setting.on && !beatMs(bpm)
       ? sounding

@@ -55,9 +55,13 @@
  * app: no new place, no computer release, and the Apple Watch is told what
  * it always was.
  *
- * Picking a place is picking a sound: it lets go of Off. Off is read only
- * for an account the choice is offered to, so a device handed to another
- * account clicks as it always has.
+ * Picking a place is picking a sound: it lets go of Off, whoever picks it
+ * and from whichever page (lib/metronome setMetronome), so Off is only ever
+ * kept with the place on the device, and the unit is never left clicking
+ * under a lit Off. The place Off leaves behind is the device everywhere,
+ * so Off DOES replace a saved Unit, also where the unit's click cannot be
+ * switched. Off is read only for an account the choice is offered to, so a
+ * device handed to another account clicks as it always has.
  *
  * The rules, kept apart so they can be tested. Nothing here imports
  * anything.
@@ -144,10 +148,11 @@ export function soundLit({ quiet = false, places = [], lit = () => false } = {})
  * What a pick changes.
  *
  *   Off      quiet, the place set to the device (which is what tells the
- *            unit to stop clicking), and the light on, or nothing is left
+ *            unit to stop clicking, and what is kept from then on: a saved
+ *            Unit is replaced), and the light on, or nothing is left
  *   a place  no longer quiet, and the place where the unit's click can be
- *            switched; where it cannot, the saved place is kept for when
- *            it can, as Settings has always kept it
+ *            switched; where it cannot, the place kept is left as it is,
+ *            as Settings has always left it
  */
 export function soundPicked(key, { can = false } = {}) {
   if (key === SOUND_OFF) return { quiet: true, where: 'phone', edge: true }
@@ -160,11 +165,14 @@ export const SOUND_WORDS = Object.freeze({
   off: 'Off',
   /* On Settings → Metronome, where each choice is a full-width button with a line under it. */
   noSound: 'No sound',
-  noSoundNote: 'Nothing clicks. The edge of the screen lights on every beat',
   /* What a screen reader says for each choice: "Sound: Off", "Sound: Unit". */
   said: (label) => `Sound: ${label}`,
   flashOnly: 'No sound. The edge of the screen lights on every beat',
   nothing: 'No sound and no flash, so nothing keeps time. Pick a sound, or switch the flash on',
+  /* The same two where the unit's own click is out of the app's hands: it is the device that is silent. */
+  flashOnlyHere: (noun) => `No sound from this ${noun}. The edge of the screen lights on every beat`,
+  nothingHere: (noun) => `No sound from this ${noun} and no flash, so it keeps no time. Pick a sound, or switch the flash on`,
+  unitOwn: 'The app can’t switch the unit’s own click from here: if the unit is clicking, switch its Metronome off on the unit',
   deviceNoFlash: (noun) => `Clicks out loud on this ${noun}, with no flash`,
   noTempo: (noun) => `No tempo from the unit yet, so the ${noun} has nothing to flash to`
 })
@@ -180,12 +188,32 @@ export const SOUND_WORDS = Object.freeze({
  *   note   that place's own note from the shared rule, said as it is
  *          wherever the flash does not change what is true
  *   unit   whether the unit's own click can be switched from here
+ *   demo   the demo, whose unit makes no sound at all
  */
-export function soundLine({ quiet = false, edge = true, where = 'unit', note = '', unit = false, noun = 'phone' } = {}) {
-  if (quiet === true) return edge === true ? SOUND_WORDS.flashOnly : SOUND_WORDS.nothing
+export function soundLine({ quiet = false, edge = true, where = 'unit', note = '', unit = false, demo = false, noun = 'phone' } = {}) {
+  if (quiet === true) {
+    /*
+     * Where the unit's own click is out of the app's hands (over Bluetooth,
+     * on an AM4, on a unit with no switch) Off silences the device and
+     * nothing else: a unit that was clicking by its own switch still is.
+     * So it is the device that is called silent, and what to do about the
+     * unit is said. Never in the demo, whose unit makes no sound.
+     */
+    const own = unit !== true && demo !== true
+    if (!own) return edge === true ? SOUND_WORDS.flashOnly : SOUND_WORDS.nothing
+    return `${edge === true ? SOUND_WORDS.flashOnlyHere(noun) : SOUND_WORDS.nothingHere(noun)}. ${SOUND_WORDS.unitOwn}`
+  }
   /* The shared note says "with a flash", which is not so with the flash switched off. */
   if (where === 'phone' && edge !== true) return SOUND_WORDS.deviceNoFlash(noun)
-  /* The unit clicking alone, and the edge lit: the one case where the light and the sound are two clocks. */
-  if (where === 'unit' && edge === true && unit === true) return `${note}. ${EDGE_WORDS.apart}`
+  /* Wherever the unit clicks with the edge lit, alone or with the device: its click and the light are two clocks. */
+  if (where !== 'phone' && edge === true && unit === true) return `${note}. ${EDGE_WORDS.apart}`
   return note
 }
+
+/**
+ * The line under a place on Settings → Metronome: the shared rule's note,
+ * except under the device with the flash switched off, for an account
+ * offered the flash as a choice. The shared note says "with a flash".
+ */
+export const placeNote = (place, { offered = false, edge = true, noun = 'phone' } = {}) =>
+  place?.key === 'phone' && offered === true && edge !== true ? SOUND_WORDS.deviceNoFlash(noun) : place?.note || ''

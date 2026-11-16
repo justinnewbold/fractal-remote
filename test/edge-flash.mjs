@@ -177,7 +177,7 @@ export function run(test) {
       }
     }
     assert.equal(r.soundLit(), null)
-    /* Off: quiet, the place put on the device (which is what tells the unit to stop), and the light on. */
+    /* Off: quiet, the place put on the device (which is what tells the unit to stop), and the light on. Everywhere: it replaces a saved Unit also where the unit cannot click, so Off is never kept over a place the unit clicks at. */
     assert.deepEqual(r.soundPicked('none', { can: true }), { quiet: true, where: 'phone', edge: true })
     assert.deepEqual(r.soundPicked('none', { can: false }), { quiet: true, where: 'phone', edge: true }, 'Off where the unit cannot click leaves a saved Unit to click once it can')
     assert.equal(m.clicks({ on: true, where: r.soundPicked('none').where }, true, true).unit, false, 'the place Off leaves behind still has the unit clicking')
@@ -196,20 +196,43 @@ export function run(test) {
     /* Quiet: the light alone, or nothing at all, said as it is. */
     assert.equal(line({ quiet: true, edge: true, where: 'phone' }), 'No sound. The edge of the screen lights on every beat')
     assert.equal(line({ quiet: true, edge: false, where: 'phone' }), 'No sound and no flash, so nothing keeps time. Pick a sound, or switch the flash on')
+    /*
+     * Quiet where the unit's own click is out of the app's hands (over
+     * Bluetooth, on an AM4): Off silences the device and nothing else, so a
+     * unit clicking by its own switch still is. It is the device that is
+     * called silent, and what to do about the unit is said.
+     */
+    const own = 'The app can’t switch the unit’s own click from here: if the unit is clicking, switch its Metronome off on the unit'
+    assert.equal(line({ quiet: true, edge: true, where: 'phone', unit: false }), `No sound from this iPad. The edge of the screen lights on every beat. ${own}`)
+    assert.equal(line({ quiet: true, edge: false, where: 'phone', unit: false }), `No sound from this iPad and no flash, so it keeps no time. Pick a sound, or switch the flash on. ${own}`)
+    /* Never in the demo, whose unit makes no sound at all. */
+    assert.equal(line({ quiet: true, edge: true, where: 'phone', unit: false, demo: true }), 'No sound. The edge of the screen lights on every beat')
+    assert.equal(line({ quiet: true, edge: false, where: 'phone', unit: false, demo: true }), 'No sound and no flash, so nothing keeps time. Pick a sound, or switch the flash on')
     /* The device clicking with the flash switched off: the shared note says "with a flash", which is not so. */
     assert.match(note('phone'), /with a flash$/, 'the shared note changed: the line below was written against it')
     assert.equal(line({ where: 'phone', edge: true }), note('phone'))
     assert.equal(line({ where: 'phone', edge: false }), 'Clicks out loud on this iPad, with no flash')
-    /* The unit clicking alone with the edge lit: two clocks, and said so. */
+    /* Wherever the unit clicks with the edge lit, alone or with the device: two clocks, and said so. */
     assert.equal(line({ where: 'unit', edge: true }), `${note('unit')}. The light keeps the unit’s tempo, not its exact beat`)
+    assert.equal(line({ where: 'both', edge: true }), `${note('both')}. The light keeps the unit’s tempo, not its exact beat`, 'under Both the unit clicks on its own clock too, and the line reads as if they were one')
     assert.equal(line({ where: 'unit', edge: false }), note('unit'))
+    assert.equal(line({ where: 'both', edge: false }), note('both'))
     assert.equal(line({ where: 'unit', edge: true, unit: false }), note('unit'), 'the light is called apart from a click the unit is not making')
-    assert.equal(line({ where: 'both', edge: true }), note('both'))
+    assert.equal(line({ where: 'both', edge: true, unit: false }), note('both'))
+    /* Settings' line under each place: the shared note, but under the device with the flash switched off, for an account offered the flash as a choice. */
+    const phone = m.PLACES.find((p) => p.key === 'phone')
+    assert.equal(r.placeNote(phone, { offered: true, edge: false, noun: 'iPad' }), 'Clicks out loud on this iPad, with no flash')
+    assert.equal(r.placeNote(phone, { offered: true, edge: true, noun: 'iPad' }), note('phone'))
+    assert.equal(r.placeNote(phone, { offered: false, edge: false, noun: 'iPad' }), note('phone'), 'another account’s Settings changed: its edge always flashes with the device’s click')
+    for (const key of ['unit', 'both']) for (const edge of [true, false]) assert.equal(r.placeNote(m.PLACES.find((p) => p.key === key), { offered: true, edge, noun: 'iPad' }), note(key))
+    assert.equal(r.placeNote(null), '')
     /* The words. */
     const said = [
       ...Object.values(r.SOUND_WORDS).map((w) => (typeof w === 'function' ? w('iPad') : w)),
       line({ quiet: true, edge: true }),
       line({ quiet: true, edge: false }),
+      line({ quiet: true, edge: true, unit: false }),
+      line({ quiet: true, edge: false, unit: false }),
       line({ where: 'phone', edge: false }),
       line({ where: 'unit', edge: true })
     ].join(' ')
@@ -238,7 +261,7 @@ export function run(test) {
     assert.match(sw, /const answer = await setMetronomeSound\(key, slug, clickHere\)/)
     assert.equal(sw.match(/setMetronomeSound\(/g).length, 1)
     /* The line under them is the rule’s, for an account offered the choice; every other account reads what it always read. */
-    assert.match(sw, /const where = choice\.offered \? choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, noun: deviceNoun\(\) \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
+    assert.match(sw, /const where = choice\.offered \? choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, demo, noun: deviceNoun\(\) \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
     /* Never "nothing to click to" with the sound picked Off. */
     assert.match(sw, /const sounding = deviceSounds\(\{ clicks: clicks\(setting, unitCan\.can, heard\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/)
 
@@ -249,6 +272,11 @@ export function run(test) {
       /<Section>Where it clicks<\/Section> \{ \} \{edgeChoice\.offered \? \( <View style=\{\{ gap: space\.xs \}\}> <Press label=\{SOUND_WORDS\.noSound\} tone="live" on=\{edgeChoice\.quiet\} onPress=\{\(\) => changeSound\(SOUND_OFF\)\} \/>/,
       'No sound is drawn for an account it is not offered to, or is not first'
     )
+    /* The line under it is the pop-up's own for the state: what picking it gives (the light, which the pick switches on), or, lit with the flash switched off since, that nothing keeps time. Never "lights on every beat" under a flash that is off. */
+    assert.match(settings, /\{soundLine\(\{ quiet: true, edge: edgeChoice\.quiet \? edgeChoice\.on : true, unit: unitCan\.can, demo, noun: deviceNoun\(\) \}\)\}/, 'the line under No sound is not the rule’s for the state the device is in')
+    /* And under each place, the rule's: not "with a flash" with the flash switched off. */
+    assert.match(settings, /\{placeNote\(p, \{ offered: edgeChoice\.offered, edge: edgeChoice\.on, noun: deviceNoun\(\) \}\)\}/)
+    assert.doesNotMatch(settings, /\{p\.note\}/)
     assert.match(settings, /const said = await setMetronomeSound\(key, rigSlug, clickHere\)/)
     assert.match(settings, /on=\{!edgeChoice\.quiet && placeLit\(clickSetting, p\.key, unitCan\.can\)\}/, 'a place is lit under No sound')
     /* Flash timing moves the flash to meet the click: not offered with no click to meet. */
@@ -257,11 +285,12 @@ export function run(test) {
     const metronome = flat(read('mobile/src/lib/metronome.js'))
     /* Quiet is false for an account not offered the choice, wherever it is read. */
     assert.match(metronome, /return \{ offered, on, quiet: offered && silenced \}/)
-    /* The picker: quiet first, then the light, then the place through the setting’s own road to the unit. */
+    /* The picker: quiet first, then the light, then the place through the setting’s own road to the unit (past setMetronome, which lets go of Off for any place picked). */
     assert.match(
       metronome,
-      /export async function setMetronomeSound\(key, slug, here = \{\}\) \{ const picked = soundPicked\(key, \{ can: unitClick\(slug, here\)\.can \}\) setQuiet\(picked\.quiet\) if \(picked\.edge\) setEdgeFlash\(true\) if \(!picked\.where\) return \{ ok: true \} return setMetronome\(\{ where: picked\.where \}, slug, here\) \}/
+      /export async function setMetronomeSound\(key, slug, here = \{\}\) \{ const picked = soundPicked\(key, \{ can: unitClick\(slug, here\)\.can \}\) setQuiet\(picked\.quiet\) if \(picked\.edge\) setEdgeFlash\(true\) if \(!picked\.where\) return \{ ok: true \} return change\(\{ where: picked\.where \}, slug, here\) \}/
     )
+    assert.match(metronome, /export async function setMetronome\(patch, slug, here = \{\}\) \{ if \(patch && 'where' in patch\) setQuiet\(false\) return change\(patch, slug, here\) \}/, 'a place picked through the setting’s own door does not let go of Off')
     /* The tempo box keeps to its switch and its one block of words. */
     assert.doesNotMatch(flat(read('mobile/src/components/TempoBox.js')), /setMetronomeSound|soundChoices|SOUND_WORDS/)
   })

@@ -135,14 +135,31 @@ async function switchUnit(slug, on) {
   return said
 }
 
-/**
+/*
+ * WHAT THE UNIT WAS LAST ASKED FOR AND DID NOT TAKE, to ask again.
+ *
+ * The setting is kept before the unit is written, so that the device does
+ * what was asked at the press. But a unit that then refused, or could not
+ * be reached, was left as it was, and the next press of the same thing
+ * changed nothing in the setting: so nothing was written, the answer was
+ * "ok", and the words "the unit didn't take it … then try again" went away
+ * with the unit still doing what it had been told to stop. Found with the
+ * sound picked Off (16 November 2026): Off lit, the unit clicking, and a
+ * second press that sent nothing. So what was refused is remembered, for
+ * that unit, and a press that asks the same of it is written again though
+ * the setting no longer changes.
+ */
+let untold = null
+
+/*
  * Change the setting, and tell the unit if its half changed.
  *
- * Only the unit's half is written, and only when it changes: turning the
- * phone's tap on must not reach out and switch the unit's click off when
- * somebody had turned it on at the unit by hand.
+ * Only the unit's half is written, and only when it changes, or when it is
+ * what the unit last refused: turning the phone's tap on must not reach out
+ * and switch the unit's click off when somebody had turned it on at the unit
+ * by hand.
  */
-export async function setMetronome(patch, slug, here = {}) {
+async function change(patch, slug, here = {}) {
   /* Where the unit's click cannot be switched (an AM4, Bluetooth, the demo), its half never changes. */
   const can = unitClick(slug, here).can
   const before = clicks(setting, can).unit
@@ -150,16 +167,36 @@ export async function setMetronome(patch, slug, here = {}) {
   announce()
   AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
   const after = clicks(setting, can).unit
-  if (before === after) return { ok: true }
+  const again = can && untold !== null && untold.slug === slug && untold.on === after
+  if (before === after && !again) return { ok: true }
+  untold = null
   try {
-    return (await switchUnit(slug, after)) || { ok: true }
+    const said = (await switchUnit(slug, after)) || { ok: true }
+    if (said.ok === false && !said.unsupported) untold = { slug, on: after }
+    return said
   } catch (err) {
     /* A unit (or a link: Bluetooth refuses every setting write) that has no
        click to switch is not a unit that failed to take it. */
     if (isUnsupported(err)) return { ok: false, unsupported: true }
+    untold = { slug, on: after }
     logDebug('metronome', 'could not reach the unit', String(err?.message || err))
     return { ok: false, message: String(err?.message || err) }
   }
+}
+
+/**
+ * Change the setting, and tell the unit if its half changed (`change`,
+ * above).
+ *
+ * A place picked is a sound picked: it lets go of Off (lib/edgeFlash),
+ * whoever picks it and from whichever page. Settings' own row writes the
+ * place through here for an account not offered the sound as a choice, on a
+ * device another account may have left on Off; without this the unit came
+ * back to that account clicking under a lit Off.
+ */
+export async function setMetronome(patch, slug, here = {}) {
+  if (patch && 'where' in patch) setQuiet(false)
+  return change(patch, slug, here)
 }
 
 /**
@@ -272,7 +309,7 @@ AsyncStorage.getItem(QUIET_KEY)
     announce()
   })
   .catch(() => {})
-const setQuiet = (on) => {
+function setQuiet(on) {
   if (quiet === (on === true)) return
   quiet = on === true
   announce()
@@ -286,17 +323,19 @@ const setQuiet = (on) => {
  *
  * Off goes quiet FIRST, before the unit has answered: the device stops at
  * the press. Then the place is set to the device, which is the shared rule
- * switching the unit's own click off by the road it has always used, and
- * the light is switched on, being all that is left. A place lets go of Off,
- * and is written only where the unit's click can be switched, as Settings
- * has always kept a saved Unit for when it can.
+ * switching the unit's own click off by the road it has always used (and
+ * asking it again, if it refused: `untold`), and the light is switched on,
+ * being all that is left. So Off is only ever kept with the place on the
+ * device. A place lets go of Off, and is written only where the unit's click
+ * can be switched; where it cannot, the place kept is left as it is.
  */
 export async function setMetronomeSound(key, slug, here = {}) {
   const picked = soundPicked(key, { can: unitClick(slug, here).can })
   setQuiet(picked.quiet)
   if (picked.edge) setEdgeFlash(true)
   if (!picked.where) return { ok: true }
-  return setMetronome({ where: picked.where }, slug, here)
+  /* Past setMetronome, which would let go of the Off just set. */
+  return change({ where: picked.where }, slug, here)
 }
 
 /** The choices, and whether whoever is signed in here is offered them: `{ offered, on, quiet }`. `on` is the flash; `quiet` is no sound, false for an account not offered it. */

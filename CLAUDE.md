@@ -2977,16 +2977,41 @@ beat and the device makes no sound and no tap, and opens no audio.
     told what it always was. Picking it does three things: the device is
     held silent (`deviceSounds`), the place is set to the device, so the
     shared rule tells the unit to stop clicking by the road it has always
-    used, and the flash is switched on, being all that is left. Picking a
-    place lets go of Off.
+    used, and the flash is switched on, being all that is left.
+  - **Off is only ever kept with the place on the device.** Off sets the
+    place there everywhere, so it REPLACES a saved Unit, also over
+    Bluetooth or on an AM4; and any place picked lets go of Off, whoever
+    picks it and from whichever page (`setMetronome` does it for a
+    `where`; the picker goes past it through `change`). So the unit is
+    never left clicking under a lit Off, and nothing else has to ask
+    whether it is quiet: the unit's half is the shared rule's alone.
   - Both pages go through `setMetronomeSound` (lib/metronome.js), so they
     cannot disagree. Off is read only for an account offered the choice
     (`useEdgeFlash().quiet`): a device handed to another account clicks.
-  - The pop-up has no scrolling in it (the slider is why), so on a window
-    under 600 tall the row and the flash are not drawn there and the
-    pop-up is on and off only, as it is for every other account. The
-    tempo box keeps to its one switch.
+  - **A unit that did not take its switch is asked again** at the next
+    press of the same thing (`untold`, lib/metronome.js, for every
+    account). The setting is kept before the unit is written, so a second
+    press changed nothing and used to send nothing: Off lit, the unit
+    clicking, and "the unit didn't take it" gone.
+  - **Where the unit's own click is out of the app's hands** (over
+    Bluetooth, on an AM4, a unit with no switch) Off silences the device
+    and nothing else, so the line says "No sound from this phone" and how
+    to switch the unit's own click off, never a bare "No sound" over a
+    click in the speakers. Not in the demo, whose unit makes none.
+  - The words are one rule for both pages (`soundLine`, `placeNote`):
+    the light is called apart from the unit's click wherever the unit
+    clicks with the edge lit, under Both as under Unit; the device is not
+    said to click "with a flash" with the flash switched off; and with no
+    sound and no flash it says nothing keeps time.
+  - The pop-up has no scrolling round it (the slider is why), so the
+    metronome's part alone scrolls, in what the window leaves
+    (`metronomeRoom`, components/Volume): Done can always be reached. On
+    a window under 600 tall the row and the flash are not drawn there at
+    all and the pop-up is on and off only, as it is for every other
+    account. The tempo box keeps to its one switch.
   - It opens to everyone with the flash, by the same switch.
+  - Not seen on a phone: the row's fit on a narrow screen, the heights
+    and the scrolling are worked out from the theme's numbers, not drawn.
 - **Axiom** (justinnewbold/Axiom-Fractal-Grok, which he pointed at) has
   the same three places, Phone / Pedal / Both, and a green light by Tap,
   and no flash round the screen: the edge flash is this app's own.
@@ -3494,6 +3519,17 @@ and what was wrong was which render's line ran. test/volume-drag.mjs runs
 the real pop-up over several renders with stand-in hooks, and its last
 check puts the fault back to prove the bench catches it. Reach for that
 shape whenever a phone component's fault is about WHEN something was made.
+
+And a ref that every draw writes again is not a safe place for what a
+thumb sets. The first fix put the dragged level on that same ref, which an
+effect rewrites after every draw from what was drawn; the draw a touch-move
+asks for leaves its effect for later, and the next move can run first. So
+the draw of +10 could put +10 back over the +15 the thumb had moved to, and
+a thumb that came off then had +10 confirmed on a unit at +15 (found by the
+review, in the React Native renderer's own code, the same day). The level
+has its own ref now (`level`, set only by `show`), and the bench has
+`render` (draw, effects left waiting) and `flush` beside `draw`, because a
+bench that runs every effect at once cannot see this at all.
 
 **Never write "this phone" into a sentence the app shows.**
 

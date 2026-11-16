@@ -38,7 +38,7 @@ import { playingOf } from '../lib/relay-rules'
 import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
 import { setEdgeFlash, setFlashTiming, setMetronome, setMetronomeSound, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
-import { EDGE_WORDS, SOUND_OFF, SOUND_WORDS, deviceSounds } from '../lib/edgeFlash'
+import { EDGE_WORDS, SOUND_OFF, SOUND_WORDS, deviceSounds, placeNote, soundLine } from '../lib/edgeFlash'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -1870,12 +1870,17 @@ export default function Settings({
               NO SOUND, for an account offered it as a choice (lib/edgeFlash):
               the first of the row, as it is the first in the volume pop-up.
               Lit, nothing below it is: the place it leaves behind is the
-              device, and the device is silent.
+              device, and the device is silent. The line under it is the
+              volume pop-up's own for the same state (soundLine): what
+              picking it gives, the light alone, or, lit with the flash
+              switched off since, that nothing keeps time.
             */}
             {edgeChoice.offered ? (
               <View style={{ gap: space.xs }}>
                 <Press label={SOUND_WORDS.noSound} tone="live" on={edgeChoice.quiet} onPress={() => changeSound(SOUND_OFF)} />
-                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{SOUND_WORDS.noSoundNote}</Text>
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {soundLine({ quiet: true, edge: edgeChoice.quiet ? edgeChoice.on : true, unit: unitCan.can, demo, noun: deviceNoun() })}
+                </Text>
               </View>
             ) : null}
             {/* Only Phone where the unit's click cannot be switched: Unit and Both would click nowhere.
@@ -1888,7 +1893,9 @@ export default function Settings({
                   on={!edgeChoice.quiet && placeLit(clickSetting, p.key, unitCan.can)}
                   onPress={() => (edgeChoice.offered ? changeSound(p.key) : unitCan.can ? changeClick({ where: p.key }) : null)}
                 />
-                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{p.note}</Text>
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {placeNote(p, { offered: edgeChoice.offered, edge: edgeChoice.on, noun: deviceNoun() })}
+                </Text>
               </View>
             ))}
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
@@ -1896,7 +1903,7 @@ export default function Settings({
               {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}. ${
                 unitCan.can ? 'The unit’s own click is the steadiest one to play to.' : unitCan.why
               }${
-                unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard && !edgeChoice.quiet
+                unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
                   ? ` Until the unit says its click is on, the ${deviceNoun()} keeps time as well.`
                   : ''
               }`}
@@ -1913,7 +1920,7 @@ export default function Settings({
                 <Section>{EDGE_WORDS.section}</Section>
                 <Press label={edgeChoice.on ? EDGE_WORDS.on : EDGE_WORDS.off} tone="live" on={edgeChoice.on} onPress={() => setEdgeFlash(!edgeChoice.on)} />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}.` : ''}${edgeChoice.quiet && !edgeChoice.on ? ` ${SOUND_WORDS.nothing}.` : ''}`}
+                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}.` : ''}`}
                 </Text>
               </>
             ) : null}

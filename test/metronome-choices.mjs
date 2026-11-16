@@ -159,8 +159,11 @@ export function run(test) {
     assert.equal(d.button(FLASH_ON).props.on, true)
     assert.ok(d.button('Metronome on'))
     assert.ok(d.words.includes('SOUND'), 'the row has no heading')
-    /* The unit clicking alone with the edge lit is two clocks, and the line says so. */
+    /* The unit clicking with the edge lit is two clocks, alone or with the device, and the line says so. */
     assert.ok(d.words.includes('Clicks through the unit’s own outputs. The light keeps the unit’s tempo, not its exact beat.'), `the line under them: ${JSON.stringify(d.words)}`)
+    b.world.setting = { on: true, where: 'both', watch: false }
+    assert.ok(b.draw().words.includes('The unit clicks and the phone keeps time with it. The light keeps the unit’s tempo, not its exact beat.'), 'Both reads as if the light were on the unit’s beat')
+    b.world.setting = { on: true, where: 'unit', watch: false }
   })
 
   test('metronome choices: a press on the row goes to the one picker with where the unit is, and the flash’s switch turns the flash', async () => {
@@ -206,6 +209,15 @@ export function run(test) {
     d = b.draw()
     assert.ok(d.words.some((w) => /No tempo from the unit yet, so the phone has nothing to flash to\.$/.test(w)), JSON.stringify(d.words))
     assert.ok(!d.words.some((w) => /nothing to click to/.test(w)))
+    /* And with the flash off as well there is nothing waiting on a tempo: only that nothing keeps time. */
+    b.world.choice = { offered: true, on: false, quiet: true }
+    d = b.draw()
+    assert.ok(!d.words.some((w) => /nothing to flash to|nothing to click to/.test(w)), `a tempo is waited for with no sound and no flash: ${JSON.stringify(d.words)}`)
+    assert.ok(d.words.includes('No sound and no flash, so nothing keeps time. Pick a sound, or switch the flash on.'))
+    /* The metronome switched off says nothing about a tempo either. */
+    Object.assign(b.world, { setting: { on: false, where: 'phone', watch: false }, choice: { offered: true, on: true, quiet: true } })
+    assert.ok(!b.draw().words.some((w) => /No tempo/.test(w)))
+    b.world.setting = { on: true, where: 'phone', watch: false }
     /* The device clicking with the flash switched off is not "with a flash". */
     Object.assign(b.world, { bpm: 120, choice: { offered: true, on: false, quiet: false } })
     d = b.draw()
@@ -222,11 +234,29 @@ export function run(test) {
     await d.sounds[0].props.onPress()
     assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'none', 'fm3', { bluetooth: true, demo: false }])
     assert.ok(d.words.some((w) => /^Over Bluetooth/.test(w)), 'why the unit is not offered is no longer said')
+    /*
+     * Off over Bluetooth silences the device and nothing else: the app
+     * cannot switch the unit's own click from there, so a unit that was
+     * clicking still is. The line says whose sound is off, and what to do
+     * about the unit, rather than "No sound" over a click in the speakers.
+     */
+    Object.assign(b.world, { setting: { on: true, where: 'phone', watch: false }, choice: { offered: true, on: true, quiet: true } })
+    d = b.draw()
+    assert.deepEqual(d.lit, ['Off'])
+    assert.ok(
+      d.words.includes('No sound from this phone. The edge of the screen lights on every beat. The app can’t switch the unit’s own click from here: if the unit is clicking, switch its Metronome off on the unit.'),
+      `Off over Bluetooth: ${JSON.stringify(d.words)}`
+    )
+    Object.assign(b.world, { setting: { on: true, where: 'unit', watch: false }, choice: { offered: true, on: true, quiet: false } })
     /* In the demo the link is not Bluetooth, whatever the device has kept: the demo is why. */
     Object.assign(b.world, { demo: true })
     d = b.draw()
     await d.sounds[1].props.onPress()
     assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'phone', 'fm3', { bluetooth: false, demo: true }])
+    /* And Off there is plain No sound: the demo's unit makes none to warn about. */
+    Object.assign(b.world, { setting: { on: true, where: 'phone', watch: false }, choice: { offered: true, on: true, quiet: true } })
+    assert.ok(b.draw().words.includes('No sound. The edge of the screen lights on every beat.'))
+    Object.assign(b.world, { setting: { on: true, where: 'unit', watch: false }, choice: { offered: true, on: true, quiet: false } })
     /* An AM4 through the computer: the same two. */
     Object.assign(b.world, { demo: false, bluetooth: false, slug: 'am4' })
     assert.deepEqual(b.draw().sounds.map((s) => s.props.label), ['Off', 'Phone'])

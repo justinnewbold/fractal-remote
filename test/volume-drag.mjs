@@ -37,9 +37,16 @@ const read = (p) => readFileSync(repo(p), 'utf8')
  * effect runs after the render when what it depends on changed. Setting a
  * state draws nothing by itself: the bench says when the pop-up is drawn
  * again, which is what lets it leave a drag between two draws.
+ *
+ * AND AN EFFECT CAN RUN LATER THAN ITS DRAW. On a phone, the draw a
+ * touch-move asks for leaves its after-work for later, and the next move of
+ * the thumb can run first. \`draw\` runs it at once, as a press's draw does;
+ * \`render\` draws and leaves it waiting, and \`flush\` runs what waits. A
+ * check that only ever used \`draw\` could not see a value the after-work
+ * put back over a newer one, and for one commit that was exactly the fault.
  */
 const STANDINS = `
-export const H = { slots: [], i: 0, effects: [], log: [], made: 0 }
+export const H = { slots: [], i: 0, effects: [], log: [], made: 0, window: { width: 390, height: 844 } }
 export function useState(init) {
   const k = H.i++
   if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
@@ -62,9 +69,9 @@ export const Fragment = 'Fragment'
 /* react-native: the touch handler is the handlers it was made with, so the bench can call them as a thumb does. */
 export const PanResponder = { create: (handlers) => { H.made++; return { panHandlers: handlers } } }
 export const Platform = { select: (o) => o?.ios ?? o?.default, OS: 'ios' }
-export const Modal = 'Modal', Pressable = 'Pressable', Text = 'Text', View = 'View', BlurView = 'BlurView'
-export const useWindowDimensions = () => ({ width: 390, height: 844 })
-export const useSafeAreaInsets = () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+export const Modal = 'Modal', Pressable = 'Pressable', ScrollView = 'ScrollView', Text = 'Text', View = 'View', BlurView = 'BlurView'
+export const useWindowDimensions = () => H.window
+export const useSafeAreaInsets = () => H.insets || { top: 0, bottom: 0, left: 0, right: 0 }
 /* The look: any colour, any size. */
 export const color = new Proxy({}, { get: () => '#000' }), font = new Proxy({}, { get: () => 12 }), mono = {}, radius = { lg: 8 }, space = new Proxy({}, { get: () => 8 }), TAP = 44
 export const paneRim = () => '#fff', ANY_WAY_UP = [], clearSides = () => ({ paddingLeft: 16, paddingRight: 16 })
@@ -140,13 +147,21 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
       if (n.props && is(n)) return n
       return find(n.children, is) || find(n.props?.children, is)
     }
-    const draw = async (props) => {
+    /* Draw, and leave the after-work waiting. */
+    const render = (props) => {
       H.i = 0
       tree = Volume({ onClose() {}, onError, ...props })
+    }
+    /* Run the after-work that waits, oldest first. */
+    const flush = async () => {
       const run = H.effects
       H.effects = []
       for (const fn of run) fn()
       await wait(2)
+    }
+    const draw = async (props) => {
+      render(props)
+      await flush()
     }
     return {
       H,
@@ -154,6 +169,9 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
       errors,
       wait,
       draw,
+      render,
+      flush,
+      find: (is) => find(tree, is),
       slider: () => find(tree, (n) => n.props.accessibilityRole === 'adjustable'),
       button: (label) => find(tree, (n) => n.props.accessibilityLabel === label),
       /** As the top bar does it: drawn at launch with no chain, then with the chain, then opened and its level read. */
@@ -216,6 +234,105 @@ export function run(test) {
     await b.wait(20)
     assert.deepEqual(b.errors, [])
     assert.deepEqual(b.sent(), [['write', 46, 5], ['confirmed', 46, 5], ['edited']])
+  })
+
+  test('volume: a draw’s after-work that runs late never puts an older level back over the one the thumb has moved to', async () => {
+    /*
+     * The draw of +10 leaves its after-work waiting; the thumb moves on to
+     * +15; the after-work of the +10 draw runs; the thumb comes off. What is
+     * confirmed is where the thumb came off, +15: not the +10 that was drawn
+     * last, which would leave the unit at +10 under a slider showing +15.
+     */
+    const b = await bench()
+    await b.open(OUTPUT)
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    b.render({ blocks: OUTPUT, open: true })
+    slider.props.onPanResponderMove({}, { dx: 45 })
+    await b.flush()
+    slider.props.onPanResponderRelease()
+    await b.wait(20)
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15], ['edited']], 'the level confirmed is one the thumb had already left')
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.slider().props.accessibilityValue.now, 15)
+
+    /* The same for presses: three quick ones with a late draw between them step from each other, never from what was last drawn. */
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    b.render({ blocks: OUTPUT, open: true })
+    b.button('Volume up').props.onPress()
+    await b.flush()
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent().filter((l) => l[0] === 'confirmed'), [['confirmed', 46, 18]], 'three presses of + from +15 did not land on +18')
+  })
+
+  test('volume: a chain that goes away under the thumb takes its level with it: nothing is confirmed on a block that is not there', async () => {
+    /*
+     * The unit drops off mid-drag: the chain is emptied, and the thumb comes
+     * off after it. The level belonged to the block that went, and is
+     * forgotten with it, so there is nothing to land and nothing to say.
+     * (The two "nothing to write to" sentences are for a slider and a chain
+     * that disagree, which the drawing rules out: they are checked as words
+     * below, and cannot be reached from here.)
+     */
+    for (const gone of [[], [{ slug: 'output', name: 'Output 1' }]]) {
+      const b = await bench()
+      await b.open(OUTPUT)
+      const slider = b.slider()
+      slider.props.onPanResponderGrant()
+      slider.props.onPanResponderMove({}, { dx: 30 })
+      await b.draw({ blocks: gone, open: true })
+      slider.props.onPanResponderRelease()
+      await b.wait(20)
+      assert.deepEqual(b.sent(), [['write', 46, 10]], 'a level was confirmed on a block that is no longer there')
+      assert.deepEqual(b.errors, [])
+      await b.draw({ blocks: gone, open: true })
+      assert.equal(b.slider(), null, 'the slider is still drawn with no Output block to move')
+    }
+  })
+
+  test('volume: the metronome’s part scrolls on its own in what the window leaves, and the slider is never inside anything that scrolls', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    const inside = (n, is) => {
+      if (!n || typeof n !== 'object') return false
+      if (Array.isArray(n)) return n.some((c) => inside(c, is))
+      return (n.props && is(n)) || inside(n.children, is) || inside(n.props?.children, is)
+    }
+    const scrolls = b.find((n) => n.type === 'ScrollView')
+    assert.ok(scrolls, 'the metronome’s part cannot be scrolled: on a short window Done is pushed off the bottom')
+    /* Only the metronome is in it. The slider is dragged sideways, and a scroll view under a drag is the fight this pop-up was made to end. */
+    assert.ok(!inside(scrolls, (n) => n.props.accessibilityRole === 'adjustable'), 'the slider is inside a scroll view')
+    assert.ok(!inside(scrolls, (n) => n.props.label === 'Done'), 'Done scrolls away with the metronome')
+    assert.equal(scrolls.children.flat().filter(Boolean).length, 1, 'more than the metronome scrolls')
+    /* No taller than the window leaves once everything round it is drawn, and it does not grow to fill the panel when it is short. */
+    const around = (height, insets) => {
+      b.H.window = { width: 390, height }
+      b.H.insets = insets
+      b.render({ blocks: OUTPUT, open: true })
+      return height - (insets?.top || 0) - (insets?.bottom || 0) - b.find((n) => n.type === 'ScrollView').props.style.maxHeight
+    }
+    const fixed = around(844, { top: 0, bottom: 0, left: 0, right: 0 })
+    assert.ok(fixed > 0)
+    for (const height of [640, 667, 740, 956]) {
+      assert.equal(around(height, { top: 0, bottom: 0, left: 0, right: 0 }), fixed, `${height}: what is left for the metronome does not follow the window`)
+      assert.equal(around(height, { top: 47, bottom: 34, left: 0, right: 0 }), fixed, `${height}: the screen’s own edges are not left clear`)
+    }
+    assert.equal(b.find((n) => n.type === 'ScrollView').props.style.flexGrow, 0)
+    /* On a window with no room at all, the switch and a line of words are still whole. */
+    b.H.window = { width: 844, height: 300 }
+    b.H.insets = null
+    b.render({ blocks: OUTPUT, open: true })
+    assert.ok(b.find((n) => n.type === 'ScrollView').props.style.maxHeight >= 44, 'no room is left for the switch itself')
+    /* The sizes round it are the theme’s, so they move with it. */
+    const src = read('mobile/src/components/Volume.js')
+    assert.match(src, /const AROUND_METRONOME = 4 \* space\.xl \+ 4 \* space\.lg \+ VOLUME_ROW \+ 2 \* TAP \+ CLOSE_LINE\n/)
+    assert.match(src, /style=\{\{ flexGrow: 0, maxHeight: metronomeRoom\(height0, insets\) \}\}/)
   })
 
   test('volume: after another unit’s chain is read, a drag lands on that unit’s Output block, not the one the pop-up first saw', async () => {
@@ -294,7 +411,7 @@ export function run(test) {
      */
     const now = read('mobile/src/components/Volume.js')
     const fixed = [
-      ['const { param: p, value: v, eid: block, present, onError: say } = live.current', 'const { param: p, value: v } = live.current'],
+      ['const { param: p, eid: block, present, onError: say } = live.current\n    const v = level.current', 'const { param: p } = live.current\n    const v = level.current'],
       ['if (!Number.isInteger(block)) {\n      noOutput(present, say)\n      return\n    }\n    try {', 'if (!Number.isInteger(eid)) {\n      noOutput(!!output, onError)\n      return\n    }\n    try {'],
       ['if (failed) say?.(failed.message)', 'if (failed) onError?.(failed.message)'],
       ['await setParamConfirmed(block, p.id, v, p)', 'await setParamConfirmed(eid, p.id, v, p)']

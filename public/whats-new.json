@@ -10,6 +10,10 @@
           "only": null
         },
         {
+          "text": "Metronome: when your unit doesn’t take a change and the app says to try again, tapping the same choice again now really asks the unit again. Before, the second tap sent nothing.",
+          "only": null
+        },
+        {
           "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it could still say the unit did not answer in time once you had switched a block on or off. It no longer does.",
           "only": null
         }

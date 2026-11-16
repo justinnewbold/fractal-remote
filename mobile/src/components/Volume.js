@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Modal, PanResponder, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
+import { Modal, PanResponder, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -108,23 +108,44 @@ export default function Volume({ blocks, open, onClose, onError }) {
 
   const [param, setParamState] = useState(null)
   const [value, setValue] = useState(null)
+  /*
+   * THE LEVEL, WHERE IT IS READ FROM. The state above is what is drawn; this
+   * is the level as it was last set, by a thumb, a press, a read of the unit
+   * or the unit's own answer, and it is what everything that runs later
+   * reads: where a drag starts from, what a press steps from, what the
+   * landing confirms.
+   *
+   * It is set in the same breath as the state (`show`), and by nothing else.
+   * It used to ride on the ref below, which is written again after every
+   * draw from what was drawn: and a draw's after-work can run later than the
+   * next move of a thumb (React leaves it for after a touch-move's draw). So
+   * the draw of +10 could put +10 back over the +15 the thumb had since
+   * moved to, and a thumb that came off just then had +10 confirmed on a
+   * unit already at +15, under a slider showing +15, with nothing said.
+   */
+  const level = useRef(null)
+  const show = (v) => {
+    level.current = v
+    setValue(v)
+  }
   const [dragging, setDragging] = useState(false)
   /* Measured, because the thumb's position has to be a fraction of the real
      track rather than of a number typed here. */
   const [width, setWidth] = useState(0)
-  /* And the window, for how wide the panel itself should be. */
-  const { width: width0 } = useWindowDimensions()
+  /* And the window, for how wide the panel itself should be, and how tall the metronome's part of it may be. */
+  const { width: width0, height: height0 } = useWindowDimensions()
   const insets = useSafeAreaInsets()
 
   /*
    * WHAT THE POP-UP KNOWS NOW, for everything that runs later than the render
    * it was made in: the writer, the slider's touch handler and the landing at
-   * the end of a drag. The block, whether there is an Output block at all,
-   * and where an error is said, as well as the level.
+   * the end of a drag. The level's own control, how wide the track is, the
+   * block, whether there is an Output block at all, and where an error is
+   * said. Never the level itself: that is `level`, above, and why.
    */
-  const live = useRef({ param: null, value: null, width: 0, eid: null, present: false, onError: null })
+  const live = useRef({ param: null, width: 0, eid: null, present: false, onError: null })
   useEffect(() => {
-    live.current = { param, value, width, eid, present: !!output, onError }
+    live.current = { param, width, eid, present: !!output, onError }
   })
 
   /*
@@ -166,7 +187,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
      while this one is read. */
   useEffect(() => {
     setParamState(null)
-    setValue(null)
+    show(null)
   }, [eid])
   useEffect(() => {
     if (!open || !Number.isInteger(eid)) return undefined
@@ -180,7 +201,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
         setParamState(found)
         /* A press still settling from before a quick close and open is newer
            than this answer, which was asked before it landed. */
-        if (!settle.current.timer && !settle.current.landing) setValue(found ? found.value : null)
+        if (!settle.current.timer && !settle.current.landing) show(found ? found.value : null)
       } catch (err) {
         if (!stop) onError?.(err.message)
       } finally {
@@ -201,7 +222,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        from.current = live.current.value
+        from.current = level.current
         setDragging(true)
         tick()
       },
@@ -211,10 +232,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
         const span = p.max - p.min
         const next = clamp(from.current + (gesture.dx / w) * span, p.min, p.max)
         const rounded = Math.round(next * 100) / 100
-        setValue(rounded)
-        /* On the ref now, as a press of − or + puts it: the thumb can come off
-           before the screen has drawn this value, and the landing reads the ref. */
-        live.current = { ...live.current, value: rounded }
+        /* Drawn, and kept where the landing reads it: the thumb can come off before the screen has drawn this value. */
+        show(rounded)
         writer.current.send(rounded)
       },
       onPanResponderRelease: () => {
@@ -249,7 +268,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * same landing.
    */
   const land = async () => {
-    const { param: p, value: v, eid: block, present, onError: say } = live.current
+    const { param: p, eid: block, present, onError: say } = live.current
+    const v = level.current
     if (!p || typeof v !== 'number') return
     if (!Number.isInteger(block)) {
       noOutput(present, say)
@@ -265,12 +285,12 @@ export default function Volume({ blocks, open, onClose, onError }) {
       /* A newer value arrived while this one was being checked: its own
          check follows, and a miss against a value nobody wants any more is
          not a miss. */
-      if (live.current.value !== v) return
+      if (level.current !== v) return
       if (!res.ok) {
         /* Say what the unit is holding, and show it: a slider left pointing
            at a number the unit refused is a slider lying about the volume. */
         const holding = typeof res.actual === 'number' ? res.actual : null
-        if (holding !== null) setValue(holding)
+        if (holding !== null) show(holding)
         say?.(
           holding === null
             ? `The volume didn’t take. You asked for ${volumeLabel(v, p)}.`
@@ -313,9 +333,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
       noOutput(present, say)
       return
     }
-    const next = nudged(live.current.value, p, volumeNudge(p) * direction)
-    setValue(next)
-    live.current = { ...live.current, value: next }
+    const next = nudged(level.current, p, volumeNudge(p) * direction)
+    show(next)
     writer.current.send(next)
     clearTimeout(settle.current.timer)
     settle.current.timer = setTimeout(settleNow, NUDGE_SETTLE_MS)
@@ -467,7 +486,26 @@ export default function Volume({ blocks, open, onClose, onError }) {
             {/* "Make it so the metronome can be turned on and off in the volume
                 section of the app." Outside the level's own reading and no-level
                 notes: a unit with no level to move can still click. */}
-            <MetronomeSwitch />
+            {/*
+              ITS OWN SCROLLING, AND ONLY ITS OWN. The pop-up has no scroll
+              view round it, and must not: the slider above is dragged
+              sideways, and a scroll view under a drag is the fight this
+              pop-up was made to end. But the metronome's part grew a row of
+              sounds and the flash's switch, with a line under them that runs
+              to five on a narrow phone over Bluetooth, and the panel is
+              centred: too tall, and Done went off the bottom with no way to
+              reach it. So this part alone scrolls, in what the window leaves
+              once everything round it is drawn (metronomeRoom). The slider is
+              not inside it, and where it all fits nothing moves.
+            */}
+            <ScrollView
+              style={{ flexGrow: 0, maxHeight: metronomeRoom(height0, insets) }}
+              alwaysBounceVertical={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <MetronomeSwitch />
+            </ScrollView>
 
             <Press label="Done" height={TAP} tone="signal" onPress={onClose} />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, textAlign: 'center' }}>
@@ -483,6 +521,20 @@ export default function Volume({ blocks, open, onClose, onError }) {
 /* The slider's drawing: the track's thickness and the knob's size. */
 const TRACK = 6
 const KNOB = 28
+
+/*
+ * How tall the metronome's part may be: the window, less the screen's own
+ * edges, less everything drawn round it. That is the glass's padding and the
+ * panel's (space.xl each, top and bottom), the four gaps between the panel's
+ * five parts, the VOLUME row with its big number, the slider's row, Done, and
+ * the line under it. Never under the switch and one line of words, so on a
+ * window with no room at all the switch is still whole.
+ */
+const VOLUME_ROW = 44
+const CLOSE_LINE = 16
+const AROUND_METRONOME = 4 * space.xl + 4 * space.lg + VOLUME_ROW + 2 * TAP + CLOSE_LINE
+const LEAST_METRONOME = TAP + 2 * space.xl
+const metronomeRoom = (height, insets) => Math.max(LEAST_METRONOME, height - (insets?.top || 0) - (insets?.bottom || 0) - AROUND_METRONOME)
 
 /** What VoiceOver's rotor offers on the slider. */
 const ROTOR = [{ name: 'increment' }, { name: 'decrement' }]
