@@ -12,10 +12,10 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-16",
     "day": "16 November 2026",
-    "version": "1.90.90",
+    "version": "1.91.2",
     "lines": [
       {
-        "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a setting that sits in the middle, such as Balance or Pan, lights up from the top.",
+        "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a middle setting such as Pan lights up from the top. From version 1.90.0 of the app, Edit on an Axe-Fx III over Bluetooth or USB also has knobs for the IR Player, Vocoder, Crossover, Tone Match and Dynamic Distortion.",
         "only": null
       },
       {

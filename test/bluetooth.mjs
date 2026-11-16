@@ -15778,15 +15778,16 @@ export function run(test) {
   /*
    * "Open them to everyone" (Justin, 13 November 2026, after "Knobs all work
    * over Bluetooth correctly" on his own Axe-Fx III): the NAM block's knobs
-   * are every account's. The other five blocks in the hand-written list have
-   * not been turned from the app, and stay his.
+   * are every account's. The other five blocks in the hand-written list
+   * followed on 16 November 2026: "I verified knobs are working correctly on
+   * the 5 AX3 blocks", then "Yes, open the knobs for everyone now".
    */
-  test('the NAM block’s knobs are open to every account and the five unturned blocks’ are his alone: two switches in features, one level asked by the wire at each request, and one line in Edit for what is left to the unit', async () => {
+  test('the NAM block’s knobs and the five other own blocks’ are open to every account: two switches in features, one level asked by the wire at each request, and one line in Edit for what is left to the unit', async () => {
     const features = src('mobile/src/lib/features.js')
     assert.match(features, /^export const NAM_KNOBS_FOR_EVERYONE = true$/m, 'the NAM block’s knobs are his account’s alone again')
-    assert.match(features, /^export const OWN_KNOBS_FOR_EVERYONE = false$/m, 'the IR Player’s, Vocoder’s, Crossover’s, Tone Match’s and Dynamic Distortion’s knobs are open to every account before one has been turned and he has said so')
+    assert.match(features, /^export const OWN_KNOBS_FOR_EVERYONE = true$/m, 'the IR Player’s, Vocoder’s, Crossover’s, Tone Match’s and Dynamic Distortion’s knobs are his account’s alone again, after he turned them and said to open them')
     const f = await import('../mobile/src/lib/features.js')
-    assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, false])
+    assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list for his account (allUnits), the NAM block for everybody. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(ble, /import \{ CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
