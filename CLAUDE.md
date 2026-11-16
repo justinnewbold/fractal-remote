@@ -884,12 +884,18 @@ what the computer sends for the same edit, and a test holds it there.
   the catalog in axefx3-edit.js as a second Edit of the III's (`withNam`).
   - *Two switches in mobile/src/lib/features.js, and one level.*
     `NAM_KNOBS_FOR_EVERYONE` is true; `OWN_KNOBS_FOR_EVERYONE`, for the
-    other five blocks in the list (below), is false. lib/bluetooth turns
+    other five blocks in the list (below), is true since 16 November 2026
+    (1.91.2, "Yes, open the knobs for everyone now"). lib/bluetooth turns
     them into one answer (`ownKnobsLevel`), asked by the wire at each
-    request and each send: `true`, the whole list, for his account
-    (axefx3-edit `withNam`, named from when NAM was alone in it); `'nam'`,
-    the NAM block alone, for everybody (`namOnly`); false, the codec's
-    catalog as it was. Where a block is not in the account's Edit it is
+    request and each send: `true`, the whole list (axefx3-edit `withNam`,
+    named from when NAM was alone in it), his account's and, since
+    `OWN_KNOBS_FOR_EVERYONE` is on, everybody's; `'nam'`, the NAM block
+    alone (`namOnly`), which every other account had until 16 November
+    2026; false, the codec's catalog as it was. `OWN_KNOBS_FOR_EVERYONE`
+    is asked first, so WHILE IT IS ON THE NAM SWITCH DECIDES NOTHING:
+    turning `NAM_KNOBS_FOR_EVERYONE` off alone closes nothing, and taking
+    the NAM block's knobs back to his account means turning both off.
+    Where a block is not in the account's Edit it is
     marked `knobs: false`, Edit says "This block's knobs aren't in the app
     yet", and a read or write of Edit's at its id is refused at the way
     out (bleWire gen3Sender, `ownEditOf`). Edit's own door
@@ -942,8 +948,12 @@ what the computer sends for the same edit, and a test holds it there.
     them. TURNED ON HIS AX3 AND RIGHT, 16 November 2026: "I verified knobs
     are working correctly on the 5 AX3 blocks" (Justin; which connection
     he used, over Bluetooth or through the Pi, was not said, and no log
-    came with it). Still his account only (`OWN_KNOBS_FOR_EVERYONE`) until
-    he says to open them. An FM9 has no hand-written
+    came with it). OPEN TO EVERY ACCOUNT SINCE 1.91.2, the same day: "Yes,
+    open the knobs for everyone now" (`OWN_KNOBS_FOR_EVERYONE`, true). Over
+    Bluetooth or the unit's USB cable only, where Play already draws these
+    blocks for everybody; through the computer they are still New blocks
+    to every account but his (`OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE`),
+    and their list settings are his (`EDIT_SETTINGS_FOR_EVERYONE`). An FM9 has no hand-written
     list: there these blocks keep their on and off and no knobs.
   - *THE CODEC HAS A MINED TABLE FOR FIVE OF THE SIX, AND IT PUT TWO
     NAMES RIGHT* (found 13 November 2026). forgefx-midi's AXE3_PARAMS
@@ -992,8 +1002,9 @@ what the computer sends for the same edit, and a test holds it there.
     ONLY", below under "What made knobs not take"). NOT TURNED YET: the NAM
     block's six switches (Edit draws none, so there is nothing to tap).
     The knobs of the other five blocks in the list, which have a switch
-    of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and did not open with
-    the NAM block's, were turned on his AX3 on 16 November 2026 (above).
+    of their own (`OWN_KNOBS_FOR_EVERYONE`) and did not open with the NAM
+    block's, were turned on his AX3 on 16 November 2026 and opened to
+    every account the same day (above).
 - **A block's list settings in Edit, under its knobs: built 13 November
   2026, HIS ACCOUNT ONLY** ("Yes, I like B for the edit screen" and "Menu
   style B", of three ways shown on a NAM block; the picture is in the

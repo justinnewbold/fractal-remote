@@ -47,8 +47,11 @@ export const withNam = gen3Edit({
  * the other five blocks in the hand-written list had not been turned at all.
  * So every account gets the codec's catalog and the NAM block, and nothing
  * else of that list; the whole of it (`withNam`, above, whose name is from
- * when NAM was the only one in it) stays his account's until one of the five
- * has been turned (lib/features OWN_KNOBS_FOR_EVERYONE).
+ * when NAM was the only one in it) stayed his account's until the five had
+ * been turned. They were, and since 16 November 2026 (1.91.2, lib/features
+ * OWN_KNOBS_FOR_EVERYONE) every account is read through `withNam`, so this
+ * one is used by no account while that switch is on. It is kept for the day
+ * it is turned off.
  */
 const NAM_BLOCKS = Object.fromEntries(Object.entries(AXE3_OWN_BLOCKS).filter(([, b]) => b[1] === 'NAM'))
 export const namOnly = gen3Edit({
