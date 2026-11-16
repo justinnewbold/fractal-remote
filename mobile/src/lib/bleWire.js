@@ -950,6 +950,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   /* The Program Changes the app sent in the last OWN_PC_MS, oldest first: {low, bank, at, heard}. */
   let ownPcs = []
+  /* The longest this rig has taken to send one of the app's Program Changes back (its first copy), or nought on one that sends nothing back. */
+  let echoLag = 0
   /* The last bank select (CC 0) heard on each channel, {value, at}: what a Program Change after it names. */
   const bankHeard = new Map()
   /* The Program Change being heard again and again, or null: {low, bank, own, count, channels, first, last, sentAt, timer}. */
@@ -988,18 +990,26 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * unit is not on it, so the same preset again is a change (a controller
    * back to it was swallowed, and a knob turn waiting in Edit went into
    * that preset: an independent read, 16 November 2026). A passed send
-   * keeps only OWN_OLDER_PC_MS, for copies of it still on their way.
+   * keeps only while copies of it may still be on their way (`keeps`):
+   * OWN_OLDER_PC_MS, or this rig's own lag in sending one back (`echoLag`,
+   * learned from the copies heard) and PC_BURST_MS more, or PC_BURST_MS
+   * after its last copy (a slow burst still coming); a controller's change
+   * among the copies left the rest of them news (a fourth read).
    */
   function ownPcFor(low, channel, now) {
     const bank = bankOn(channel, now)
     const mine = ownLately(now)
     const newest = mine[mine.length - 1]
     const fits = (e) => e.low === low && (bank === null || bank === e.bank)
-    for (const e of mine) if (!e.heard && ((e === newest && !e.passed) || now - e.at <= OWN_OLDER_PC_MS) && fits(e)) return e
-    return newest && !newest.passed && fits(newest) ? newest : null
+    /* A passed send keeps OWN_OLDER_PC_MS, or as long as this rig has been seen to take to send a copy back and finish it, whether or not a copy of it has come yet. */
+    const keeps = (e) => !e.passed || now - e.at <= Math.max(OWN_OLDER_PC_MS, echoLag + PC_BURST_MS) || (e.lastCopy !== undefined && now - e.lastCopy <= PC_BURST_MS)
+    /* The oldest send not heard back that fits, within OWN_OLDER_PC_MS of going; else the newest, as long as it keeps (the loop asked of the newest only what this asks again). */
+    for (const e of mine) if (!e.heard && now - e.at <= OWN_OLDER_PC_MS && fits(e)) return e
+    return newest && keeps(newest) && fits(newest) ? newest : null
   }
   /* Its copies have come: the sends before it are over (copies come back in order), and it is not taken for a later change but as the unit's own preset. */
-  function ownPcHeard(e) {
+  function ownPcHeard(e, now) {
+    if (!e.heard) echoLag = Math.max(echoLag, now - e.at)
     e.heard = true
     ownPcs = ownPcs.filter((x) => x.at >= e.at)
   }
@@ -1796,6 +1806,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         pcBurst.count++
         pcBurst.channels.add(channel)
         pcBurst.last = now
+        if (pcBurst.send) pcBurst.send.lastCopy = now
         time.clearTimeout(pcBurst.timer)
         pcBurst.timer = time.setTimeout(endPcBurst, PC_BURST_MS)
         return
@@ -1803,9 +1814,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       endPcBurst()
       const mine = ownPcFor(low, channel, now)
       const own = mine !== null
-      pcBurst = { low, bank: own ? mine.bank : bank, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? mine.at : null, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
+      pcBurst = { low, bank: own ? mine.bank : bank, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? mine.at : null, send: mine, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
       if (own) {
-        ownPcHeard(mine)
+        mine.lastCopy = now
+        ownPcHeard(mine, now)
         return
       }
     }

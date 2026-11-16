@@ -3532,20 +3532,25 @@ within 600 ms of going (`OWN_OLDER_PC_MS`) and only until its copies, or a
 later send's, have come back (a controller taking the unit back to it is a
 real change). Nor is any send the app's own once a Program Change has been
 taken as news after it (`passed`): the unit has moved off it, so the same
-number again is a change, and only a copy within the 600 ms can still be
-its own. Copies of one number within 300 ms are one burst and one log
+number again is a change, except while copies of it may still be on their
+way: within 600 ms of going, or as long as this rig has taken to send one
+of the app's sends back (`echoLag`, learned on the connection) and 300 ms
+more, or within 300 ms of its last copy (a slow burst still coming). Copies of one number within 300 ms are one burst and one log
 line (`PC_BURST_MS`), split only by a bank select heard on that channel
 since the burst began. The app's own bank selects coming back are not the
-unit answering either, so a quiet unit stays quiet. Three independent reads
-went through it before it went out and found six ways a real change was
-swallowed or a copy was news; each has a test seen to fail without its fix
-(38 breaks in all). THE LESSON AGAIN: "remember more" swallowed a real
+unit answering either, so a quiet unit stays quiet. Four independent reads
+went through it before it went out and found eight ways a real change was
+swallowed or a copy was news; each has a test seen to fail without its fix. THE LESSON AGAIN: "remember more" swallowed a real
 change the first time; ask what a controller sending the same number would
 be taken for. Left as they are, by the third read's own verdict: on a rig
 that sends nothing back, a controller's change to a preset the app sent
 under 600 ms before is taken for the app's own (nothing can tell the two
 apart there, and the poll puts it right within two seconds); and the same
-preset sent twice inside 300 ms logs one burst for both.
+preset sent twice inside 300 ms logs one burst for both. And, from the
+fourth read: on the first preset change of a connection, on a rig that
+sends the app's copies back later than 600 ms, a controller's change before
+the copies come makes them news (a second "changed", and a log line); from
+the second change on the rig's lag is known.
 
 **A squash merge carries every commit message on the branch, and one
 `[skip ci]` in them stops everything on main.** On 6 November 2026 four
