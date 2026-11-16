@@ -3,8 +3,16 @@
     {
       "date": "2026-11-16",
       "day": "16 November 2026",
-      "version": "1.90.86",
+      "version": "1.90.87",
       "lines": [
+        {
+          "text": "In Edit on an Axe-Fx III, the NAM block’s knobs on channels B, C and D now show and change their own settings. Before, they read from the wrong place and said they didn’t take. Over Bluetooth or a USB cable, whole-number settings such as Bit Reduce now show the number your unit has.",
+          "only": null
+        },
+        {
+          "text": "In Edit on an FM3, FM9 or Axe-Fx III, a knob that didn’t read back as you set it is no longer sent again another way, which could throw a setting such as Bit Reduce to its lowest. And when your unit doesn’t answer, the app says it couldn’t check the change instead of saying it didn’t take.",
+          "only": null
+        },
         {
           "text": "On a Raspberry Pi, the computer app now puts in a waiting update by itself when the Pi is switched on, even with its window open. Before, it waited for the app to be quit, and switching the Pi off at the wall isn’t a quit, so it could sit on an old version.",
           "only": null

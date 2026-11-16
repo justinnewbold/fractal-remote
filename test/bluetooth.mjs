@@ -370,20 +370,25 @@ function fakeGen3(sx, o) {
        * values, the values in two pages, the footer. A block not in the
        * preset is refused, as a real one refuses it; `editDamage` spoils the
        * second page's checksum, and `editSilent` answers nothing.
+       * `editLate` is how long before its first byte, `editGap` a pause
+       * between the head and the first page, and `editShort` loses the
+       * second page on the way (the footer still comes).
        */
       case 0x1f: {
         const eid = sx.decode14(p[0], p[1])
         if (!opt.edit) return reply(0x64, [0x1f, 0x04])
         if (!find(eid) || !state.settings.has(eid)) return reply(0x64, [0x1f, 0x07])
+        /* `editBeats`: while saying nothing, the unit's tempo beat every so many ms (Send Realtime Sysex on), as a unit at a gig does. */
+        if (opt.editSilent && opt.editBeats) for (let k = 1; k <= 20; k++) say(sx.frame(model, 0x10, []), k * opt.editBeats)
         if (opt.editSilent) return
         const { count, values } = state.settings.get(eid)
         const page = (list) => sx.frame(model, 0x75, [0, 0, ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
         const half = Math.ceil(values.length / 2)
         const second = page(values.slice(half))
         if (opt.editDamage) second[second.length - 2] ^= 0x01
-        let t = say(sx.frame(model, 0x74, [...sx.encode14(eid), ...sx.encode14(count)]))
-        t = say(page(values.slice(0, half)), t + 2)
-        t = say(second, t + 2)
+        let t = say(sx.frame(model, 0x74, [...sx.encode14(eid), ...sx.encode14(count)]), opt.editLate)
+        t = say(page(values.slice(0, half)), t + 2 + (opt.editGap || 0))
+        if (!opt.editShort) t = say(second, t + 2)
         return say(sx.frame(model, 0x76, []), t + 2)
       }
       case 0x01: {
@@ -14039,6 +14044,93 @@ export function run(test) {
     }
   })
 
+  /*
+   * HIS III SENT A NAM BLOCK'S READ AS 108 VALUES (16 November 2026): four
+   * channels of 27, where the list says 18 a channel. 18 divides 108, and the
+   * app took that as six channels of 18, so channel B was read from value 18,
+   * in the middle of A: Bass showed 8 (B's own Level, 0 dB) and Bright Cap
+   * 10 pF (B's own Phase Invert, 0), read where Bass and Bright Cap should
+   * be, the numbers in his log, and every knob turned on B
+   * or D "didn't take". Channel A starts at nought either way and read
+   * right, which is how it looked: NAM knobs worked on A and nowhere else.
+   * Each channel here is its own numbers, with nine more values past the
+   * eighteen; B's Level is A's (0 dB) and its Bright Cap 470 pF, so the old
+   * cut gives exactly what his log said.
+   */
+  const NAM_PAST = (ch) => Array.from({ length: 9 }, (_, i) => 1000 * (ch + 1) + i)
+  const NAM_B_HERE = () => NAM_B().map((v, i) => (i === 1 ? 52427 : i === 15 ? 36526 : v))
+  const NAM_D_HERE = () => NAM_A().map((v, i) => (i === 10 ? 58981 : i === 0 ? 41 : v))
+  const nam108 = () => ({
+    count: 108,
+    values: [...NAM_A(), ...NAM_PAST(0), ...NAM_B_HERE(), ...NAM_PAST(1), ...NAM_A().map((v, i) => (i === 10 ? 6553 : v)), ...NAM_PAST(2), ...NAM_D_HERE(), ...NAM_PAST(3)]
+  })
+
+  test('a NAM block read as four channels of 27 (108 values) is cut into four: B from value 27, D from 81, the capture with them; a stride that makes more than four channels is not believed', async () => {
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const own = await import('../mobile/src/lib/axefx3-own-knobs.js')
+    /* Each of the III's own blocks says how many channels it has (docs/ax3-readings.md). */
+    assert.deepEqual(Object.fromEntries(Object.entries(own.AXE3_OWN_FAMILIES).map(([f, x]) => [f, x.channels])), { VOCODER: 1, CROSSOVER: 2, TONEMATCH: 1, IRPLAYER: 4, DYNADIST: 4, NAM: 4 })
+    const bulk = nam108()
+    for (const [ch, base] of [[0, 0], [1, 27], [2, 54], [3, 81]]) {
+      assert.deepEqual(e.withNam.sliceFor(206, bulk, { channel: ch }), { stride: 27, channels: 4, base }, `channel ${ch}`)
+      assert.deepEqual(e.sliceOf(18, bulk, ch, 4), { stride: 27, channels: 4, base })
+      /* And with no channel count to go on, a stride of 18 making six "channels" is not believed either: the count in four. */
+      assert.deepEqual(e.sliceOf(18, bulk, ch), { stride: 27, channels: 4, base })
+    }
+    const read = (ch) => e.withNam.blockParamsOf(206, bulk, { channel: ch })
+    const knobs = (r) => Object.fromEntries(r.named.map((p) => [p.name, p.value + 0]))
+    assert.deepEqual(knobs(read(0)), { Level: 0, Balance: 0, 'Input Gain': 0, Bass: 5, Mid: 5, Treble: 5, Bright: 0, 'Bright Cap': 469.979 })
+    /* B: its own numbers. Never "Bass 8, Bright Cap 10". */
+    const b = read(1)
+    assert.deepEqual(knobs(b), { Level: 0, Balance: 0, 'Input Gain': 10, Bass: 2, Mid: 7, Treble: 10, Bright: -10, 'Bright Cap': 469.979 }, 'channel B was read from another place')
+    const stack = b.enums.find((s) => s.id === NAM_SWITCH)
+    assert.equal(stack.options[stack.value].label, 'PLEXI')
+    /* The capture each channel is on, from the same place as its knobs. */
+    assert.deepEqual([0, 1, 3].map((ch) => read(ch).capture), [{ slot: 0 }, { slot: 28 }, { slot: 41 }], 'a capture was read off another channel')
+    /* C from 54 and D from 81: D was read from C's place when the stride won. */
+    assert.equal(knobs(read(2)).Bass, 1)
+    assert.equal(knobs(read(3)).Bass, 9)
+    /* His unit's 72-value read of 13 November is cut at 18 as ever. */
+    for (const [ch, base] of [[0, 0], [1, 18], [2, 36], [3, 54]]) assert.deepEqual(e.withNam.sliceFor(206, namRead(), { channel: ch }), { stride: 18, channels: 4, base })
+    assert.deepEqual(e.withNam.blockParamsOf(206, namRead(), { channel: 1 }).named.map((p) => p.value), [-10, 0, 10, 2, 7, 10, -10, 10])
+
+    /* NEVER MORE THAN FOUR, whatever the stride and the count: a block has channels A to D. */
+    for (const stride of [null, 0, 1, 2, 3, 5, 7, 10, 14, 15, 18, 20, 22, 27, 67, 144, 145]) {
+      for (let count = 0; count <= 600; count += 1) {
+        for (const declared of [undefined, 1, 2, 4, 5]) {
+          const cut = e.sliceOf(stride, { count, values: [] }, 3, declared)
+          assert.ok(cut.channels >= 1 && cut.channels <= 4, `${count} values at a stride of ${stride} made ${cut.channels} channels`)
+          assert.equal(cut.base, (cut.channels - 1) * cut.stride)
+        }
+      }
+    }
+    /* The block's own count wins: a Crossover (two channels) that one day sends two sets of 20 is cut in two, where the stride does not divide and the count in four would make four of 10. */
+    assert.deepEqual(e.sliceOf(15, { count: 40, values: [] }, 1, 2), { stride: 20, channels: 2, base: 20 })
+    assert.deepEqual(e.withNam.sliceFor(142, { count: 40, values: [] }, { channel: 1 }), { stride: 20, channels: 2, base: 20 })
+    /* A channel count that does not divide the read is not used: the stride, then the count in four. */
+    assert.deepEqual(e.sliceOf(15, { count: 30, values: [] }, 1, 4), { stride: 15, channels: 2, base: 15 })
+    assert.deepEqual(e.sliceOf(67, { count: 67, values: [] }, 2, 1), { stride: 67, channels: 1, base: 0 })
+  })
+
+  test('over Bluetooth, a NAM block on channel B that sends 108 values is read and turned on B, and the log says how the read was cut', async () => {
+    const t = await onANamIII({ edit: () => true, namKnobs: () => true, settings: new Map([[206, nam108()], [207, nam108()]]) })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    /* NAM 1 is on channel B in this preset (NAM_62). */
+    const one = await ask('/preset/blocks/206/params')
+    assert.deepEqual(one.named.map((p) => p.value + 0), [0, 0, 10, 2, 7, 10, -10, 469.979])
+    assert.deepEqual(one.capture, { slot: 28 })
+    assert.ok(
+      t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel B; the unit said 108 values and sent 108, 27 a channel, 4 channels, this one from value 27$/.test(l)),
+      t.logs.join(' | ')
+    )
+    /* Bass turned to a quarter: it lands on B (value 27 + 10, as the unit keeps it) and reads back a quarter, where it once read B's own Level. */
+    assert.deepEqual(await drive(t.clock, t.wire.request('/preset/blocks/206/params/10', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.25, continuous: true }) })), { ok: true })
+    assert.deepEqual(t.unit.state.edits.at(-1), { eid: 206, pid: 10, sub: 0x52, value: 0.25 })
+    assert.equal(t.unit.state.settings.get(206).values[27 + 10], Math.round(0.25 * 65534))
+    t.clock.set(t.clock.now() + 6000)
+    assert.equal((await ask('/preset/blocks/206/params')).named.find((p) => p.name === 'Bass').value, 2.5, 'the knob turned on B read back from another place')
+  })
+
   test('a NAM knob is written with the frame every gen-3 knob gets, byte for byte, and only that one; Edit’s way out passes only its read, its eight knobs and its five switches', async () => {
     const sx = await import(SX)
     const e = await import('../mobile/src/lib/axefx3-edit.js')
@@ -14091,14 +14183,13 @@ export function run(test) {
     assert.equal(hex(e.withNam.knobFrame(AX3, 206, 3, { value: 1, continuous: false }).frame), hex(g3.buildTyped(AX3, 206, 3, 1)))
     assert.equal(e.withNam.knobFrame(AX3, 206, 3, { value: 1 }).what, 'Bypass Mode on block 206 to 1')
     /*
-     * ONE WAY ONLY (gen3-edit `typedKnobs: false`). On every other block a
-     * knob has a second frame, the typed write of the same place, which the
-     * app falls back to when a write does not read back as asked. A NAM's
-     * knob has no such frame: asked for, none is built, and it is not a
-     * refusal either (the wire answers it as not done, below). An amp's knob
-     * through the same Edit still has both.
+     * ONE WAY ONLY (gen3-edit). A knob's typed write, the same place sent
+     * the other way, which the app once fell back to when a write did not
+     * read back as asked, is never built: asked for, none is built, and it
+     * is not a refusal either (the wire answers it as not sent, below). A
+     * NAM's knob never had it; since 16 November 2026 no gen-3 knob does,
+     * an amp's through the same Edit included.
      */
-    assert.equal((await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_FAMILIES.NAM.typedKnobs, false)
     for (const eid of [206, 207]) {
       for (const p of read.named) {
         const second = e.withNam.knobFrame(AX3, eid, p.id, { value: 0.5, continuous: false })
@@ -14106,9 +14197,9 @@ export function run(test) {
         assert.match(second.unsent, new RegExp(`^${p.name} on block ${eid} is only sent its place, never the typed way$`))
       }
     }
-    assert.deepEqual(e.withNam.knobFrame(AX3, 58, 1, { value: 0.5, continuous: false }).frame, g3.buildTyped(AX3, 58, 1, 0.5), 'an amp’s knob lost its second way')
+    assert.deepEqual(Object.keys(e.withNam.knobFrame(AX3, 58, 1, { value: 0.5, continuous: false })), ['unsent'], 'an amp’s knob was built the typed way')
     const k = await import('../mobile/src/lib/axefx3-knobs.js')
-    assert.ok(Object.values(k.AXE3_FAMILIES).every((f) => !('typedKnobs' in f)), 'a family of the codec’s is sent one way only')
+    assert.ok(Object.values(k.AXE3_FAMILIES).every((f) => !('typedKnobs' in f)), 'a family carries the old one-way flag')
     /* No frame can be built for a setting the list leaves out, or for any other number. */
     for (let pid = 0; pid < 128; pid++) {
       if (NAM_KNOB_IDS.includes(pid) || NAM_SWITCH_IDS.includes(pid)) continue
@@ -14165,7 +14256,7 @@ export function run(test) {
       assert.equal(e.withNam.editAllowed(raw(g3.KNOB, 195, pid, 0.5), placed), null, `setting ${pid} of an IR Player went as a knob`)
       assert.equal(e.withNam.editAllowed(raw(g3.TYPED, 195, pid, 1), placed), null, `setting ${pid} of an IR Player went typed`)
     }
-    /* And for a block the codec's catalog names, the two Edits give one answer to every frame tried here, the typed way for a knob with them. */
+    /* And for a block the codec's catalog names, the two Edits give one answer to every frame tried here: a knob as its place, never the typed way. */
     const kinds = new Set()
     for (const pid of [0, 1, 2, 9, 10, 15, 16, 126, 1999]) {
       for (const x of [0, 0.5, 1, 5, 13]) {
@@ -14175,7 +14266,8 @@ export function run(test) {
         }
       }
     }
-    assert.ok(kinds.has('block knob') && kinds.has('block knob (typed)'), 'a drive’s knob lost one of its two ways')
+    assert.ok(kinds.has('block knob'), 'a drive’s knob lost its place')
+    assert.ok(!kinds.has('block knob (typed)'), 'a drive’s knob went the typed way')
 
     /* THE SENDER (bleWire gen3Sender), asked at each send whether the NAM block's knobs are open: closed, or never told, nothing of a NAM's goes; open, the list above; and the bypass goes either way. */
     const { gen3Sender } = await import(WIRE)
@@ -14242,7 +14334,7 @@ export function run(test) {
     assert.deepEqual(two.named.map((p) => [p.id, p.name, p.value + 0]), [[1, 'Level', 0], [2, 'Balance', 0], [5, 'Input Gain', 0], [10, 'Bass', 5], [11, 'Mid', 5], [12, 'Treble', 5], [14, 'Bright', 0], [15, 'Bright Cap', 469.979]])
     assert.deepEqual([two.block, two.slug, two.type], ['NAM', 'nam', null])
     assert.deepEqual(two.enums.map((s) => [s.id, s.options[s.value].label]), [[3, 'THRU'], [6, 'NORMAL'], [7, 'OFF'], [8, 'POST'], [9, 'ACTIVE'], [13, 'SUM L+R']])
-    assert.ok(t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel A$/.test(l)), t.logs.join(' | '))
+    assert.ok(t.logs.some((l) => /^read the NAM’s settings in [\d.]+ s: 8 knobs, channel A; the unit said 72 values and sent 72, 18 a channel, 4 channels, this one from value 0$/.test(l)), t.logs.join(' | '))
     /* And which capture the channel is on: setting 0 as the unit holds it, a slot counted from nought (Axe-Edit's 001). It is in no list of knobs or switches; the picker in Edit reads it from here. */
     assert.deepEqual(two.capture, { slot: 0 })
     assert.ok(!two.named.some((p) => p.id === 0) && !two.enums.some((p) => p.id === 0), 'the capture came back as a knob or a switch: Edit would write it its own way')
@@ -14280,11 +14372,11 @@ export function run(test) {
     /* A quarter of the way along each, as the unit's sixteen bits hold it: Bright Cap's quarter is 10 × 1000^¼, 56.2 pF. */
     const quarter = [-55, -50, -10, 2.5, 2.5, 2.5, -5, 10 * 1000 ** 0.25]
     after.named.forEach((p, i) => assert.ok(Math.abs(p.value - quarter[i]) < 0.005, `${p.name} read back ${p.value}, not ${quarter[i]}`))
-    /* The second way of sending a knob (what the app asks for when a write does not read back as asked): nothing goes to a NAM, and it is answered as not done, not refused, so the screen reads the unit and says what it holds. */
+    /* The typed way asked of a knob (what the app once fell back to when a write did not read back as asked): nothing goes to a NAM, and it is answered as not sent, not refused, so the checked write goes no further with it. */
     t.sent.length = 0
     t.logs.length = 0
     const turns = t.unit.state.edits.length
-    assert.deepEqual(await put(207, 10, { value: 0.9, continuous: false }), { ok: false })
+    assert.deepEqual(await put(207, 10, { value: 0.9, continuous: false }), { ok: false, unsent: true })
     assert.deepEqual(theirs(), [], 'a NAM’s knob was sent the typed way')
     assert.equal(t.unit.state.edits.length, turns)
     assert.ok(t.logs.includes('Bass on block 207 is only sent its place, never the typed way: nothing sent'), t.logs.join(' | '))
@@ -14390,12 +14482,13 @@ export function run(test) {
       assert.equal(family, want.family)
       assert.equal(page, Number(eid), `${name} is painted as another block`)
       const fam = own.AXE3_OWN_FAMILIES[family]
-      /* One way only, no model, and the stride the unit's own whole read divides by. */
-      assert.equal(fam.typedKnobs, false, `${name}: a knob may go the typed way, which nobody has seen this block take`)
+      /* One way only (as every gen-3 knob: gen3-edit ONE WAY ONLY), no model, and the stride the unit's own whole read divides by. */
+      for (const [pid] of fam.knobs) assert.deepEqual(Object.keys(e.withNam.knobFrame(0x10, Number(eid), pid, { value: 0.5, continuous: false })), ['unsent'], `${name}: a knob may go the typed way`)
       assert.equal(fam.typeId, null, `${name} has a model setting`)
       assert.deepEqual(fam.selectors, {})
       assert.equal(fam.stride, want.stride)
-      const cut = e.sliceOf(fam.stride, reads[eid], 0)
+      assert.equal(fam.channels, want.channels, `${name}: not the channels the unit has`)
+      const cut = e.sliceOf(fam.stride, reads[eid], 0, fam.channels)
       assert.deepEqual([cut.stride, cut.channels, cut.base], [want.stride, want.channels, 0], `${name}: the whole read is not cut into its channels`)
       /* Every knob, and no other: the number in the read comes out as the unit showed it. */
       assert.deepEqual(fam.knobs.map((r) => [r[0], r[1]]), want.knobs.map((r) => [r[0], r[1]]), name)
@@ -15674,7 +15767,7 @@ export function run(test) {
     assert.deepEqual(k.FM3_BLOCKS[58], ['amp', 'DISTORT', 'Amp', 58])
     assert.deepEqual(k.FM3_BLOCKS[119], ['drive', 'FUZZ', 'Drive', 118])
     for (const [family, f] of Object.entries(k.FM3_FAMILIES)) {
-      for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
+      for (const knob of f.knobs) assert.ok(knob.length === 2 || ((knob.length === 6 || (knob.length === 7 && knob[6] === 1)) && knob[2] < knob[3]), `${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
       for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${family} ${label}: options that are not its numbers`)
     }
     assert.equal(k.FM3_FAMILIES.DISTORT.stride, 144)
@@ -15741,7 +15834,8 @@ export function run(test) {
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 13), placed), 'block model')
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 9999), placed), null)
     assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 62, 43, 3), placed), null, 'a cab picked as a model')
-    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 7, 0.4), placed), 'block knob (typed)')
+    /* A knob the typed way, never (gen3-edit ONE WAY ONLY: an FM3 takes a typed write in the setting's own units, not as a place). */
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 7, 0.4), placed), null, 'a knob went the typed way')
     const out = []
     let given = null
     const send = gen3Sender((b) => out.push(b), () => {}, 0x11, () => given)
@@ -15755,6 +15849,180 @@ export function run(test) {
     for (const f of [sx.buildSetTempoEdit(0x11, 120), sx.buildSetSceneEdit(0x11, 3), sx.buildSetChannelEdit(0x11, 58, 'B'), sx.buildGetScene(0x11), sx.buildStatusDump(0x11), sx.buildTunerPoll(0x11)]) {
       assert.equal(send(f), 'sent', `${hex(f)} stopped going to an FM3`)
     }
+  })
+
+  /*
+   * NO GEN-3 KNOB IS EVER SENT THE TYPED WAY (16 November 2026). When a
+   * knob's check did not read back as asked, the app sent the same 0-to-1
+   * place again as a typed write (09 00). A gen-3 unit takes a typed write in
+   * the setting's OWN units: his FM3's Look-Ahead Time (0 to 2 ms, 0.002 at
+   * most inside the unit) went to its maximum, and Bit Reduce (a whole
+   * number) to nought. It lands where asked only where the own range is 0 to
+   * 1, which no catalog row says, so no row of any gen-3 catalog, the III's
+   * hand-written ones with them, has a typed frame built or let out.
+   */
+  test('no gen-3 knob, on any unit or catalog, has a typed write built or passed: asked for, it is answered as not sent, and nothing goes', async () => {
+    const VALUES = [0, 0.004, 0.25, 0.328, 0.4359, 0.5, 1]
+    const placedFor = (blocks) => Object.keys(blocks).map(Number)
+    let rows = 0
+    for (const [unit, path, prefix, model] of [['fm3', FM3E, 'FM3', 0x11], ['fm9', G3.fm9.edit, 'FM9', 0x12], ['axefx3', G3.axefx3.edit, 'AXE3', 0x10]]) {
+      const e = await import(path)
+      const k = await import(G3[unit]?.knobs || FM3K)
+      const edits = [['catalog', e], ...(e.withNam ? [['with the hand-written blocks', e.withNam]] : [])]
+      for (const [which, ed] of edits) {
+        const blocks = which === 'catalog' ? k[`${prefix}_BLOCKS`] : { ...k[`${prefix}_BLOCKS`], ...(await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_BLOCKS }
+        const placed = placedFor(blocks)
+        const seen = new Set()
+        for (const [eid, b] of Object.entries(blocks)) {
+          const fam = ed.editBlock(Number(eid)) ? b[1] : null
+          if (!fam || seen.has(fam)) continue
+          seen.add(fam)
+          const families = which === 'catalog' ? k[`${prefix}_FAMILIES`] : { ...(await import('../mobile/src/lib/axefx3-own-knobs.js')).AXE3_OWN_FAMILIES, ...k[`${prefix}_FAMILIES`] }
+          for (const row of families[fam].knobs) {
+            /* A whole number's one way is the typed one (the next test). */
+            if (row[6] === 1) continue
+            rows++
+            const made = ed.knobFrame(model, Number(eid), row[0], { value: 0.4359, continuous: false })
+            assert.deepEqual(Object.keys(made), ['unsent'], `${unit} ${which}: ${fam} ${row[1]} was built the typed way`)
+            for (const x of VALUES) {
+              assert.equal(ed.editAllowed(e.buildTyped(model, Number(eid), row[0], x), placed), null, `${unit} ${which}: ${fam} ${row[1]} typed ${x} passed`)
+            }
+            /* Its place along its travel still goes. */
+            assert.equal(ed.editAllowed(e.buildKnob(model, Number(eid), row[0], 0.4359), placed), 'block knob', `${unit} ${which}: ${fam} ${row[1]} lost its place`)
+          }
+        }
+      }
+    }
+    assert.ok(rows > 1000, `only ${rows} knob rows were tried`)
+
+    /* On the wire: an FM3's Look-Ahead Time asked the typed way is answered as not sent, nothing goes, and the log says so. */
+    const k3 = await import(FM3K)
+    const comp = Object.entries(k3.FM3_BLOCKS).find(([, b]) => b[1] === 'COMP')
+    const lookAhead = k3.FM3_FAMILIES.COMP.knobs.find((r) => r[1] === 'Look-Ahead Time')
+    assert.ok(comp && lookAhead, 'the FM3 catalog has no Look-Ahead Time to try')
+    const { settings } = await fm3Settings()
+    const eid = Number(comp[0])
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    const before = t.frames().length
+    const r = await drive(t.clock, t.wire.request(`/preset/blocks/${eid}/params/${lookAhead[0]}`, { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.328, continuous: false }) }))
+    assert.deepEqual(r, { ok: false, unsent: true })
+    assert.ok(t.frames().slice(before).every((f) => !(f[5] === 0x01 && (f[6] === 0x09 || f[6] === 0x52))), 'something was written')
+    assert.ok(t.logs.includes(`Look-Ahead Time on block ${eid} is only sent its place, never the typed way: nothing sent`), t.logs.join(' | '))
+  })
+
+  /*
+   * A WHOLE NUMBER IS READ AND WRITTEN AS ONE (16 November 2026). The codec
+   * lists the settings each unit keeps as a whole number (forgefx-midi
+   * gen3/fm3 discreteOverlay.ts FM3_FAMILY_JOIN_DISCRETE, and the FM9's and
+   * the III's own, applied by devices/gen3/factory.ts) and writes them as
+   * that number, typed. The phone drew them as knobs: Bit Reduce at 10 read
+   * as 0.004 on his FM3 (10 out of 65534 of the way from 0 to 24). The
+   * generator marks them (a 1 in a seventh place), and these are the rows,
+   * every one, as scripts/gen3-knobs.mjs wrote them from the pinned codec.
+   * A CAB'S TYPE IS 0 TO 1023, the unit's own range: the codec's list says
+   * 188 (FM3, III) and 15 (FM9), the most one sweep read back, and a first
+   * cut drawn to those could not show or reach a Factory cab past them.
+   */
+  const WHOLE_ROWS = {
+    fm3: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:67 0..3', 'TENTAP:7 1..10'],
+    fm9: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'FUZZ:16 0..24', 'MEGATAP:3 1..64', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:69 0..3', 'TENTAP:7 1..10'],
+    axefx3: ['CABINET:4 0..1023', 'CABINET:5 0..1023', 'DELAY:21 0..1', 'FUZZ:16 0..24', 'MEGATAP:3 1..128', 'MEGATAP:25 1..32', 'PHASER:18 0..11', 'PITCH:71 0..31', 'PITCH:72 0..31', 'PITCH:73 2..16', 'PITCH:74 1..31', 'PLEX:86 0..10', 'REVERB:17 0..1', 'REVERB:66 0..3', 'TENTAP:7 1..10']
+  }
+  const KNOBS_OF = { fm3: [FM3K, 'FM3'], fm9: ['../mobile/src/lib/fm9-knobs.js', 'FM9'], axefx3: ['../mobile/src/lib/axefx3-knobs.js', 'AXE3'] }
+
+  test('every setting the codec keeps as a whole number is generated as one, not as a plain knob: these rows and no others', async () => {
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    for (const [unit, [path, prefix]] of Object.entries(KNOBS_OF)) {
+      const k = await import(path)
+      const marked = []
+      for (const [fam, f] of Object.entries(k[`${prefix}_FAMILIES`])) {
+        for (const row of f.knobs) {
+          assert.ok(row.length === 2 || row.length === 6 || (row.length === 7 && row[6] === 1), `${unit} ${fam} ${row[1]}: a row of another shape`)
+          if (g3.isWhole(row)) {
+            marked.push(`${fam}:${row[0]} ${row[2]}..${row[3]}`)
+            assert.ok(Number.isInteger(row[2]) && Number.isInteger(row[3]) && row[2] < row[3] && row[4] === 0, `${unit} ${fam} ${row[1]}: a whole number with no whole range`)
+          }
+        }
+      }
+      assert.deepEqual(marked, WHOLE_ROWS[unit], `${unit}: not the codec’s whole numbers (run scripts/gen3-knobs.mjs on the pinned codec)`)
+    }
+    /*
+     * AND AGAINST THE CODEC ITSELF, where it is at hand (its checkout beside
+     * this one, built, or FORGEFX_MIDI): every knob row whose setting the
+     * unit's list names is a whole number. A new pin that adds one shows here.
+     */
+    /* The generator takes the unit's own range for one, never the list's figure (the most one sweep read back). */
+    assert.match(src('scripts/gen3-knobs.mjs'), /\n        const hi = Math\.floor\(range\.displayMax\)\n/, 'a whole number’s range is cut to the most one sweep read back')
+    const { existsSync } = await import('node:fs')
+    const { pathToFileURL } = await import('node:url')
+    const root = process.env.FORGEFX_MIDI || new URL('../../forgefx-midi/', import.meta.url).pathname
+    const dist = (p) => `${root.replace(/\/$/, '')}/dist/gen3/${p}/index.js`
+    if (!existsSync(dist('fm3'))) return
+    const lists = {
+      fm3: [(await import(pathToFileURL(dist('fm3')).href)).FM3_FAMILY_JOIN_DISCRETE, (await import(pathToFileURL(dist('fm3')).href)).FM3_PARAMS_BY_FAMILY],
+      fm9: [(await import(pathToFileURL(dist('fm9')).href)).FM9_ROUNDTRIP_DISCRETE, (await import(pathToFileURL(dist('fm9')).href)).FM9_PARAMS_BY_FAMILY],
+      axefx3: [(await import(pathToFileURL(dist('axe-fx-iii')).href)).III_ROUNDTRIP_DISCRETE, (await import(pathToFileURL(dist('axe-fx-iii')).href)).PARAMS_BY_FAMILY]
+    }
+    for (const [unit, [whole, params]] of Object.entries(lists)) {
+      const [path, prefix] = KNOBS_OF[unit]
+      const k = await import(path)
+      let named = 0
+      for (const [fam, f] of Object.entries(k[`${prefix}_FAMILIES`])) {
+        for (const row of f.knobs) {
+          const sym = (params[fam] || []).find((p) => p.paramId === row[0])?.name
+          if (sym === undefined || whole[sym] === undefined) continue
+          named++
+          assert.ok(g3.isWhole(row), `${unit} ${fam} ${row[1]} (${sym}) is a whole number to the codec and a plain knob here`)
+          /* Its range is the unit's own, not the list's figure (the most one sweep read back): only the cab's Type goes past it. */
+          assert.ok(row[3] <= whole[sym] || (fam === 'CABINET' && row[1] === 'Type' && row[3] === 1023), `${unit} ${fam} ${row[1]} goes past the ${whole[sym]} the codec allows`)
+        }
+      }
+      assert.equal(named, WHOLE_ROWS[unit].length, unit)
+    }
+  })
+
+  test('a whole number reads as the number the unit keeps, and a turn is written as that number, typed, which the way out passes', async () => {
+    const e = await import(FM3E)
+    const k = await import(FM3K)
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const row = k.FM3_FAMILIES.FUZZ.knobs.find((r) => r[1] === 'Bit Reduce')
+    assert.deepEqual(row, [16, 'Bit Reduce', 0, 24, 0, null, 1])
+    /* Bit Reduce at 10 reads as 10: it read 0.004 (10 of 65534 along 0 to 24). */
+    assert.deepEqual(e.shownKnob(row, 10), { value: 10, norm: 10 / 24, min: 0, max: 24, whole: true })
+    for (const [raw, shown] of [[0, 0], [1, 1], [24, 24], [25, 24], [28566, 24]]) assert.equal(e.shownKnob(row, raw).value, shown, `raw ${raw}`)
+    /* In a block's read, on its channel. */
+    const { settings, set } = await fm3Settings()
+    set(118, 16, 0, 10)
+    const bits = e.blockParamsOf(118, settings.get(118), { channel: 0 }).named.find((p) => p.id === 16)
+    assert.deepEqual([bits.name, bits.value, bits.whole, bits.min, bits.max], ['Bit Reduce', 10, true, 0, 24])
+
+    /* A turn to 10.46 (Edit's knob, 0.4359 of the way along): the typed write of 10, the codec's own frame for it. */
+    const made = e.knobFrame(0x11, 118, 16, { value: 10.46 / 24, continuous: true })
+    assert.deepEqual(made.frame, e.buildTyped(0x11, 118, 16, 10))
+    /* forgefx-midi at the pinned commit: createModernFractalCodec(0x11).buildSetParameter(118, 16, 10), the frame its writer sends for Bit Reduce 10. */
+    assert.equal(hex(made.frame), 'F0 00 01 74 11 01 09 00 76 00 10 00 00 00 00 09 04 00 00 00 00 77 F7')
+    assert.equal(made.what, 'Bit Reduce on block 118 to 10 (a whole number)')
+    for (const [at, n] of [[0, 0], [1, 24], [0.5, 12], [0.02, 0], [0.98, 24]]) assert.deepEqual(e.knobFrame(0x11, 118, 16, { value: at }).frame, e.buildTyped(0x11, 118, 16, n), `${at} of the way`)
+    assert.ok(g3.isWhole(row))
+    /* The other way asked is not sent: its one way is the number. */
+    assert.deepEqual(Object.keys(e.knobFrame(0x11, 118, 16, { value: 0.4359, continuous: false })), ['unsent'])
+    /* THE WAY OUT: the typed whole number passes, within the range; a place, a fraction, or past the end, never. */
+    const placed = FM3_STATUS.map(([eid]) => eid)
+    assert.equal(e.fm3EditAllowed(made.frame, placed), 'block whole number')
+    for (const n of [0, 1, 12, 24]) assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 118, 16, n), placed), 'block whole number')
+    for (const x of [0.4359, 10.5, 25, 100]) assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 118, 16, x), placed), null, `typed ${x} passed`)
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 118, 16, 0.4359), placed), null, 'a whole number went as a place')
+    /* A plain knob beside it is as it was. */
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 118, 1, 0.5), placed), 'block knob')
+
+    /* Over the wire: the typed 10 goes, the pretend FM3 keeps 10, and the read says 10. */
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    const before = t.frames().length
+    assert.deepEqual(await ask('/preset/blocks/118/params/16', { method: 'PUT', body: JSON.stringify({ value: 10.46 / 24, continuous: true }) }), { ok: true })
+    assert.deepEqual(t.frames().slice(before).filter((f) => f[5] === 0x01 && f.length === 23).map(hex), [hex(e.buildTyped(0x11, 118, 16, 10))])
+    assert.deepEqual(t.unit.state.edits.at(-1), { eid: 118, pid: 16, sub: 0x09, value: 10 })
+    assert.equal((await ask('/preset/blocks/118/params')).named.find((p) => p.id === 16).value, 10)
   })
 
   test('over Bluetooth, Edit reads an FM3 block, turns a knob and picks a model; a block not in the preset, a cab model or Edit closed sends nothing', async () => {
@@ -15906,7 +16174,7 @@ export function run(test) {
       /* Which ids are blocks is the codec's, the same on every gen-3 unit (gen3Sender tells an Edit-shaped write by it); the settings in them are each unit's own. */
       assert.deepEqual(B, fm3.FM3_BLOCKS)
       for (const [family, f] of Object.entries(F)) {
-        for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${u.name} ${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
+        for (const knob of f.knobs) assert.ok(knob.length === 2 || ((knob.length === 6 || (knob.length === 7 && knob[6] === 1)) && knob[2] < knob[3]), `${u.name} ${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
         for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${u.name} ${family} ${label}: options that are not its numbers`)
       }
       /* Its own numbers, not the FM3's: the amp's Gain and model setting, the Delay's model (DELAY_MODEL, never the routing DELAY_TYPE), the amp's stride. */
@@ -15932,7 +16200,9 @@ export function run(test) {
       assert.equal(hex(e.buildTyped(u.model, 58, u.type, 13)), u.bytes.typed)
       /* ForgeFX's driver: setParam(58, Gain, 0.7, continuous), the same typed, setType(58, 2), setType(70, 3) for the Delay. */
       assert.equal(hex(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: true }).frame), u.bytes.driverKnob, `the ${u.name}’s knob is not the computer’s`)
-      assert.equal(hex(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: false }).frame), u.bytes.driverTypedKnob)
+      /* The driver also sends the same place the typed way when asked (driverTypedKnob). The phone never does (gen3-edit ONE WAY ONLY: the unit takes a typed write in the setting's own units), and its way out refuses that very frame. */
+      assert.deepEqual(Object.keys(e.knobFrame(u.model, 58, u.gain, { value: 0.7, continuous: false })), ['unsent'])
+      assert.equal(e.editAllowed(u.bytes.driverTypedKnob.split(' ').map((b) => parseInt(b, 16)), FM3_STATUS.map(([eid]) => eid)), null, `the ${u.name}’s knob went the typed way`)
       assert.equal(hex(e.modelFrame(u.model, 58, 2).frame), u.bytes.driverModel, `the ${u.name}’s amp model is not the computer’s`)
       assert.equal(hex(e.modelFrame(u.model, 70, 3).frame), u.bytes.driverDelayModel, `the ${u.name}’s Delay model is not the computer’s`)
       /* And never the FM3's setting for it: the same edit on an FM3 is another number. */
@@ -16006,7 +16276,7 @@ export function run(test) {
       assert.equal(allowed(e.buildTyped(m, 58, u.type, 13), placed), 'block model')
       assert.equal(allowed(e.buildTyped(m, 58, u.type, 9999), placed), null, 'a model the unit does not have')
       assert.equal(allowed(e.buildTyped(m, 62, 43, 3), placed), null, 'a cab picked as a model')
-      assert.equal(allowed(e.buildTyped(m, 58, u.gain, 0.4), placed), 'block knob (typed)')
+      assert.equal(allowed(e.buildTyped(m, 58, u.gain, 0.4), placed), null, 'a knob went the typed way')
       assert.equal(allowed(e.buildTyped(m, 58, u.gain, 3), placed), null, 'a knob past its travel')
       assert.equal(allowed(e.buildTyped(m, 58, swId, swMax), placed), 'block switch')
       assert.equal(allowed(e.buildTyped(m, 58, swId, swMax + 1), placed), null, 'a switch past its last setting')
@@ -17858,6 +18128,81 @@ export function run(test) {
     await assert.rejects(drive(damaged.clock, damaged.wire.request('/preset/blocks/58/params', { editing: true })), /came back damaged/)
     const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
     await assert.rejects(drive(silent.clock, silent.wire.request('/preset/blocks/58/params', { editing: true })), /didn’t send the Amp’s settings/)
+  })
+
+  /*
+   * EDIT'S READ OF A BLOCK IS GIVEN UP A SECOND AFTER IT WENT, IF NOTHING
+   * HAS COME BACK (16 November 2026). It waited 2.5 s for the first byte and
+   * held the line all that time, while a Play tap gives up in 1.5 s; a
+   * healthy read is done in 0.3 to 0.7 s. Once the answer has begun, the
+   * wait between its parts is the 2.5 s it always was.
+   */
+  test('Edit’s read of a block gives up a second after it went when nothing comes back, still waits out a pause once the answer has begun, and fewer values than the head said is damaged', async () => {
+    const { settings } = await fm3Settings()
+    const read = (t) => drive(t.clock, t.wire.request('/preset/blocks/58/params', { editing: true }))
+    /* Nothing at all: given up 1000 ms after the read went, not 2500, and the log says how long it waited. */
+    const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
+    await assert.rejects(read(silent), (err) => err.status === 504 && /didn’t send the Amp’s settings/.test(err.message))
+    const went = silent.sent.find((s) => s.bytes[5] === 0x1f)
+    assert.equal(silent.clock.now() - went.at, 1000, 'the read waited another length for its first byte')
+    assert.ok(silent.logs.includes('no answer to the settings of the Amp in 1000 ms: nothing came in meanwhile'), silent.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    /*
+     * AND THE UNIT'S TEMPO BEAT, OR ANY BYTE THAT IS NOT THE ANSWER, DOES NOT
+     * PUT IT BACK ON THE LONG WAIT (an independent read, 16 November 2026):
+     * with a beat every 300 ms it waited 2.5 s after each and ran to its cap.
+     */
+    const beating = await onTheLine('fm3', { edit: () => true, settings, editSilent: true, editBeats: 300 })
+    await assert.rejects(read(beating), (err) => err.status === 504)
+    const sentAt = beating.sent.find((s) => s.bytes[5] === 0x1f).at
+    assert.equal(beating.clock.now() - sentAt, 1000, 'a tempo beat kept Edit’s read waiting past its first second')
+    assert.ok(beating.logs.some((l) => /^no answer to the settings of the Amp in 1000 ms: /.test(l)), beating.logs.filter((l) => /no answer/.test(l)).join(' | '))
+    /* Its first byte late, but within the second: read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editLate: 800 }))).slug, 'amp')
+    /* A slow link, a page taking about three seconds to arrive: once the answer has begun, its own bytes keep the read waiting, so it is read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, rate: 0.3 }))).slug, 'amp')
+    /* Begun, then two seconds before the first page: the wait once anything has come is the gap, so it is read whole. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editGap: 2000 }))).slug, 'amp')
+    /* A page lost on the way and the footer after it: damaged, never a block read from the wrong places. */
+    await assert.rejects(read(await onTheLine('fm3', { edit: () => true, settings, editShort: true })), (err) => err.status === 502 && /came back damaged/.test(err.message))
+    /* The collector itself: a head of 8, four values and the footer is damaged; all eight is the block. */
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const sx = await import(SX)
+    const head = sx.frame(0x11, 0x74, [...sx.encode14(58), ...sx.encode14(8)])
+    const page = (list) => sx.frame(0x11, 0x75, [0, 0, ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
+    const foot = sx.frame(0x11, 0x76, [])
+    const run = (frames) => {
+      const c = g3.readAllCollector(0x11, 58)
+      let out
+      for (const f of frames) out = c(f)
+      return out
+    }
+    assert.deepEqual(run([head, page([1, 2, 3, 4]), foot]), { damaged: true })
+    assert.deepEqual(run([head, page([1, 2, 3, 4]), page([5, 6, 7, 8]), foot]), { count: 8, values: [1, 2, 3, 4, 5, 6, 7, 8] })
+    /* Other reads keep the wait they had: the whole-preset read and a capture slot's are not Edit's block read. */
+    assert.match(src('mobile/src/lib/bleWire.js').replace(/\s+/g, ' '), /firstMs: WAIT\.gen3ReadAllFirst,/)
+    assert.equal((src('mobile/src/lib/bleWire.js').match(/firstMs: /g) || []).length, 1, 'another read was given the short first wait')
+  })
+
+  /*
+   * A BLOCK SWITCHED TO ANOTHER CHANNEL FROM EDIT IS READ ON THAT CHANNEL
+   * (16 November 2026). The list of what is in the preset, which says each
+   * block's channel, is kept 400 ms (gen3PlacedHere); a channel switch did
+   * not drop it, so a read straight after the switch was cut at the channel
+   * the block had just left.
+   */
+  test('a block switched to another channel is read on that channel straight away, not on the one it was on a moment ago', async () => {
+    const { settings, set } = await fm3Settings()
+    set(58, 7, 0, 0)
+    set(58, 7, 1, 65534)
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    const ask = (path) => drive(t.clock, t.wire.request(path, { editing: true }))
+    t.unit.state.blocks.find((b) => b.eid === 58).channel = 0
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((p) => p.id === 7).value, 0)
+    const started = t.clock.now()
+    await t.post('/preset/blocks/58/channel', { channel: 'B' })
+    assert.equal(t.unit.state.blocks.find((b) => b.eid === 58).channel, 1, 'the pretend FM3 did not move')
+    assert.ok(t.clock.now() - started < 400, `the switch took ${t.clock.now() - started} ms, past the 400 the list is kept, so this proves nothing`)
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((p) => p.id === 7).value, 10, 'read on the channel it was on a moment ago')
   })
 
   /* ---------------------------------------------------------------- */
