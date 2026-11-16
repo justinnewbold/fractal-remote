@@ -21468,6 +21468,31 @@ export function run(test) {
     } finally {
       two.done()
     }
+    /* The same adapter back under a new id in Apple's list (adapterBackUnderNewId): what it answered, and the reset card's place, go with it. */
+    {
+      const NEW = { ...UHOST, id: 'u2' }
+      const at = Date.now()
+      const four = await bluetoothOnABench({
+        mod: { supported: () => true, devices: () => [{ ...UHOST, offline: true }, NEW], addListener: () => ({ remove() {} }) },
+        disk: {
+          'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm3', adapter: { id: UHOST.id, name: UHOST.name, driver: BT } }),
+          'fractal.bluetooth.heard': JSON.stringify({ answered: { fm3: { [UHOST.id]: '2026-11-16' } }, moved: {} }),
+          'fractal.bluetooth.reset': JSON.stringify({ unit: 'fm3', adapter: UHOST.id, step: 'forget', done: ['restart', 'bluetooth'], at })
+        }
+      })
+      try {
+        const b = four.ble
+        assert.equal(b.allowBluetooth(ADMINS[0]), true)
+        await b.restoreBluetooth()
+        assert.equal(b.resetStepNow(['restart', 'bluetooth', 'forget', 'report']), 'forget', 'the card’s place was not kept at a launch')
+        assert.equal(b.adapterBackUnderNewId(), true)
+        assert.equal(b.bluetoothSettings().adapter.id, NEW.id)
+        assert.equal(b.adapterHeard('fm3', NEW.id).answered, '2026-11-16', 'what it answered was lost under its new id')
+        assert.equal(b.resetStepNow(['restart', 'bluetooth', 'forget', 'report']), 'forget', 'the card started again under the adapter’s new id')
+      } finally {
+        four.done()
+      }
+    }
     /* A unit on a USB cable has no plugs or pairing to remember: no record. */
     const cable = { id: 'usb:1', name: 'AM4', driver: 'com.apple.AppleMIDIUSBDriver', offline: false }
     const three = await bluetoothOnABench({ mod: { supported: () => true, devices: () => [cable], addListener: () => ({ remove() {} }) }, disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: cable }) } })

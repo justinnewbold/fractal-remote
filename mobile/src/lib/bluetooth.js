@@ -294,9 +294,10 @@ export const adapterHeard = (unit, id) => ({
   answered: (unit && id && heard.answered[unit]?.[id]) || null,
   movedFrom: unit && id && heard.moved[unit]?.id === id ? heard.moved[unit].from : null
 })
-/* The same adapter under a new id (adapterBackUnderNewId): what it has answered goes with it. */
+/* The same adapter under a new id (adapterBackUnderNewId): what it has answered goes with it, and so does the reset card's place. */
 function carryHeard(was, id) {
   if (!was || !id || was === id) return
+  if (now.reset?.adapter === was) keepReset({ ...now.reset, adapter: id })
   let changed = false
   const answered = { ...heard.answered }
   for (const [unit, rows] of Object.entries(answered)) {
