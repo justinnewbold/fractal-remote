@@ -217,6 +217,78 @@ not kept. Slot 257 (the last) listed the same head as slot 029 in
 the recording, so it may not be a slot of its own: it is never a target,
 and is not offered as a pick until it is understood.
 
+### The search for an empty slot over Bluetooth (15 November 2026)
+
+His log, an iPhone on 1.90.81, an Axe-Fx III through a WIDI Uhost: four
+taps on Preview and Get, and four times "no answer to capture slot NNN in
+2500 ms" (014, 031, 028, 024). By the clock the search asked from 001 each
+time, about 270 ms a slot, and 93 questions were answered (13, 30, 27 and
+23) and 4 were not. Slots 001 to 030 and more are full on his unit, so
+every search had thirty or more questions to get through, lost one, gave
+up, and began again from 001 at the next tap. Nothing was sent to the unit
+in any of the four.
+
+Since 1.90.83 (bleWire):
+
+- `namSlotSure` asks a slot that said nothing again, up to `NAM_SLOT_ASKS`
+  (3) times. Each asking waits the quiet out first (`namQuietUntil`, as
+  ever), and when a re-asked slot answers a new quiet is begun, so that an
+  answer to another asking of it, arriving late, is dropped and never
+  handed to the next slot's question. That quiet runs to `WAIT.namSlot +
+  LATE_MS` (4.5 seconds) after the slot's question last LEFT THE PHONE
+  (`namAskedAt`, told by `pump` through the question's `sent` option), not
+  after an answer was taken and not after the question was asked for: a
+  search's question is Edit's kind of read, and waits for Play for two
+  seconds and more after a scene or preset change. So it runs until the
+  last asking's own answer can no longer come, by the allowance every
+  answer has here. The search uses
+  it, and so does an upload's first look at its slot, which lets go of its
+  hold (`captureBusy`) at each silence and takes it again at the next
+  asking, so nothing is refused during a quiet. The list's read
+  (`namHeads`) does not use it: its caller asks again by its own rule.
+- `namFullTo` is how far up from the first slot every slot has read full
+  on this connection. It climbs one slot at a time, falls back when a slot
+  at or under it reads empty, and is gone with the connection. The search
+  starts after it. It is never used to decide a write: an upload reads its
+  slot itself. And it is never the reason for "none empty": a search that
+  began past the first slot and found nothing empty reads the slots under
+  where it began before it answers, and then `from` is the first slot and
+  the heads are all of them, in order.
+- `GET /nam/empty` answers `{ slot, heads, from }` over the wire, `from`
+  being the first slot the heads start at, and tells its caller which slot
+  it is at as it goes (`onProgress(slot, asking)`), which the card draws.
+- No message of an upload (0x54, 0x55, 0x56) is ever sent a second time.
+  A 0x55 carries no offset; if the unit took one and its answer was lost,
+  a second would be filed after it, and the closing word (every word
+  XORed) cannot tell.
+
+Why a slot's answer goes missing is not known. The log says what came in
+while any question went unanswered, each thing as what it was, after "no
+answer to capture slot 014 in 2500 ms":
+
+| the line goes on | what it points to |
+| --- | --- |
+| ": nothing came in meanwhile" | the question never reached the unit, or the whole answer was lost |
+| ": N bytes came in meanwhile and made no whole SysEx message" | an answer cut short on the way |
+| "…, 1 whole message that was not its answer (the last 334 bytes, function 0x01, ITS CHECKSUM WRONG)" | an answer damaged on the way |
+| "…, 1 whole message that was not its answer (…, its checksum right)" | something else the unit said; the answer itself still lost |
+| "…, 1 copy of what was sent" | the phone's own message come back (MIDI Thru, or a plug in the THRU jack): no answer |
+| "…, 1 message not from this unit" | another maker's device, or a message to every Fractal unit |
+| "…, 1 message that was part of its answer" | a long answer that stalled part-way (an AM4's stored preset) |
+| "…, 1 short MIDI message" | a controller, or a Program Change from a footswitch: no part of any answer |
+| "…, 7 bytes that made no whole message" (after any of the above) | the start of an answer that never finished, beside whatever else came |
+
+A timing clock's bytes are never counted. A slot's answer that arrives
+during a quiet, with no slot's question waiting, has a line of its own: "a
+capture slot’s answer came with no question waiting, N ms after a slot was
+last asked: dropped" (N from when that question left the phone; the answer
+was only late, and if that is what the log shows, `WAIT.namSlot` is too
+short for that adapter).
+
+And one line a search: "looked for an empty capture slot from 001: 34
+answered in 9.4 s, 1 asked again; 034 is empty" (the count includes the
+empty slot itself).
+
 ## Through the computer, or the Raspberry Pi
 
 "But this will only work over Bluetooth or plugged in directly? Why not over

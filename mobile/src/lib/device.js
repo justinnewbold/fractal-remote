@@ -688,8 +688,18 @@ const captureAsksNow = async (path, onWire, throughComputer, needsComputer) => {
 }
 /** Whether a capture sent now goes through the computer (one message, no count as it goes) and not the device's own wire. */
 export const capturesThroughComputer = () => !demoDevice() && !onVp4 && !bluetoothWire()
-/** The first empty capture slot: { slot, heads: [{ slot, name, empty }] }, slot null where the first 128 are all taken. */
-export const namEmptySlotHere = () => captureAsks('/nam/empty')
+/**
+ * The first empty capture slot: { slot, heads: [{ slot, name, empty }], from? }, slot null where the first 128 are all taken.
+ *
+ * Over the device's own wire the search goes on from where this connection
+ * has read every slot full (`from`, with only the slots read this time in
+ * `heads`), a slot that says nothing is asked again, and `onProgress(slot,
+ * again)` is told each slot as it is asked: a question a slot is a quarter
+ * of a second each over an adapter, and thirty-odd of them were ten seconds
+ * with nothing on the screen (15 November 2026). Through the computer it is
+ * one request, answered whole from the first slot, and nothing is told.
+ */
+export const namEmptySlotHere = ({ onProgress } = {}) => captureAsks('/nam/empty', typeof onProgress === 'function' ? { onProgress } : {})
 /* Whoever keeps a list of the unit's captures (lib/captureListHere) is told when one has been sent: its list is out of date. */
 const captureWatchers = new Set()
 /* How many sends of a capture are waiting or going from this device (the card sends one at a time). */

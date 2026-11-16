@@ -2440,6 +2440,110 @@ the capture on the unit, which is the hard half.
     own factory captures). Whether a PICK from it has been made on the
     unit he has not said. Not built: the browser's (a computer release
     nobody has asked for), and anything that renames or removes a capture.
+- **Over Bluetooth, the search for an empty slot asks a silent slot
+  again, and carries on from where it got to (1.90.83, 15 November
+  2026).** His picture of a held NAM 1's TONE3000 sheet ("Not on your
+  Axe-Fx III — The Axe-Fx III didn't say what is in capture slot 024.")
+  and his log, an iPhone on 1.90.81 through a WIDI Uhost: four taps on
+  Preview and Get, each stopped at one slot that said nothing in 2.5
+  seconds (014, 031, 028, 024, a different one each time), and nothing
+  was ever sent. The search asked the slots one at a time from 001, gave
+  up at the first silence, kept nothing, and started from 001 at the next
+  tap; his unit has thirty-odd captures in a row, and four questions of
+  ninety-seven went unanswered (93 answered, 4 not), so it almost never
+  reached an empty slot.
+  - *A slot that says nothing is asked again, up to three times*
+    (bleWire `namSlotSure`, `NAM_SLOT_ASKS`), with the quiet kept before
+    each asking (a slot's answer does not say which slot it is, above)
+    AND AFTER THE ONE THAT ANSWERS, so an answer to an earlier asking that
+    comes late is never taken for the next slot's. That second quiet runs
+    until the last asking's own answer can no longer come (the wait and
+    the quiet, 4.5 seconds, counted from when that question LEFT THE
+    PHONE, `namAskedAt`, which pump tells: a search's question waits for
+    Play after a scene or preset change, two seconds and more), which is
+    how long an answer is allowed everywhere else on the wire. The same for an
+    upload's first look at its slot, which lets go of its hold on the
+    line during each quiet, so a tap is not refused while nothing is
+    going to the unit. Three silences running and the words say so:
+    "…asked 3 times. Nothing was sent. Tap again to keep looking."
+  - *The search goes on from where this connection has read every slot
+    full* (`namFullTo`): only "full" is remembered, only upward from the
+    first slot a slot at a time, and only for that connection (so the
+    words promise no slot: an adapter that drops answers drops
+    connections too). An upload still reads its own slot before it
+    writes, so the mark can make a search pass over a slot emptied since
+    and never make one write over a capture. "ALL TAKEN" IS ONLY SAID OF
+    SLOTS READ IN THAT SEARCH: where nothing is empty above the mark, the
+    slots under it are read again first, since the card then tells the
+    player to clear one on the unit. The answer says where it began
+    (`from`).
+  - *The card says which slot it is at* ("Looking for an empty slot on
+    the unit… checking slot 014", and "…slot 014 didn’t answer, asking it
+    again"; lib/tone3000Words `lookingForSlot`). Before, a search of
+    thirty slots was eight seconds of one unchanging line.
+  - *THE LIST'S OWN READ IS AS IT WAS* (`namHeads`: lib/captureList asks
+    again by its own rule), and AN UPLOAD'S MESSAGES ARE NEVER SENT AGAIN:
+    a 0x55 carries no place of its own, so one the unit took and whose
+    answer was lost would be filed twice, and the closing XOR would still
+    come out right. A send that stops part-way stops (a test counts the
+    messages).
+  - *WHY AN ANSWER GOES MISSING IS NOT KNOWN.* The app's own reading of
+    what comes in was run against a unit that answers as his did and lost
+    none, so it is most likely between the adapter and the phone: an
+    answer of 334 bytes damaged or cut, a question that never left, or an
+    answer that came late. THE LOG NOW SAYS WHICH, on every question that
+    goes unanswered, of any kind, on any unit: after "no answer to
+    capture slot 014 in 2500 ms" it says what came in meanwhile, each
+    thing as what it was. "nothing came in meanwhile": the question or
+    the whole answer was lost. "N bytes came in meanwhile and made no
+    whole SysEx message": an answer cut short. "…1 whole message that was
+    not its answer (the last 334 bytes, function 0x01, ITS CHECKSUM
+    WRONG)": an answer damaged on the way. "…1 copy of what was sent":
+    the phone's own message come back (MIDI Thru), which is no answer.
+    "…1 message that was part of its answer": a long answer that
+    stalled. "…1 short MIDI message": a controller or a footswitch's
+    Program Change, no part of any answer. "…7 bytes that made no whole
+    message", after any of those: the start of an answer beside them. A
+    timing clock's bytes are not counted. A slot's answer that
+    comes when no slot's question is waiting is said too ("a capture
+    slot’s answer came with no question waiting, 2610 ms after a slot was
+    last asked: dropped": only late), and each search ends in one line
+    (how many answered, how many were asked again, where it stopped).
+    READ THOSE LINES FIRST in his next log from a Bluetooth send.
+  - *WHAT AN INDEPENDENT READ FOUND before it went out* (four readers
+    and a skeptic for each, on a frozen copy), all fixed, each with a
+    test seen to fail without its fix (44 deliberate breaks): the quiet
+    after a slot asked again was counted from the answer, not the asking,
+    so a second answer slower than two seconds was handed to the next
+    slot, which read an empty slot as full for the rest of the
+    connection; once all 128 slots had read full the search asked the
+    unit nothing again, so "Clear one on the unit, then send again" could
+    not come true; an upload held the line through its re-asks' quiets,
+    refusing every tap for eleven seconds; "Tap again: the search carries
+    on from that slot" was untrue after a reconnect; the new log line
+    called an echo, another unit's message and the first frame of a
+    stalled answer "no whole message", and counted a timing clock's
+    bytes; and these notes had 96 for 93. THE LESSON AGAIN: every one of
+    them was in what the fix added (the second quiet, the mark, the log
+    line), not in what it mended. AND A SECOND READ, OF THOSE FIXES, found
+    two more, fixed the same way: the second quiet was counted from when
+    the question was asked for, not from when it left (a scene tapped in
+    the quiet holds the question back two seconds, and the next slot took
+    its answer); and a footswitch's Program Change read in the log as an
+    answer cut short. A third read, of those two, found the short
+    messages counted by the length the joiner rebuilds (a status byte for
+    each of a run sent with one), which hid an answer cut short beside a
+    swept controller: counted by the bytes that came now, and tested
+    through the joiner itself.
+  - NOT SEEN ON HIS UNIT: a search that finishes over Bluetooth, and a
+    whole send over the WIDI Uhost since (the 130 messages each need an
+    answer, of ten bytes or so, where a slot's is 334; the one Bluetooth
+    send on record, 14 November, had every one answered). Through a
+    computer or the Raspberry Pi the search is one request and none of
+    this is in it. Not done: looking at the unit's list for a capture of
+    the same name before sending a second copy (his "Jcm800" was already
+    in slot 034), and asking the phone's own Bluetooth whether a question
+    really left (native: a build).
 - **IT GOES TO THE PUBLIC IN THE NEXT STORE VERSION, AND NO BUILD UNTIL
   HE SAYS.** "After you have the screenshots built, let me know and show
   me those and then I'll let you know where to move forward and we'll do a

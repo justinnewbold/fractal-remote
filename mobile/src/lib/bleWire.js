@@ -258,6 +258,8 @@ export const ECHO_MS = 250
 export const NAME_GAP_MS = 600
 /** An answer this late is not taken as an answer to the next question. */
 export const LATE_MS = 2000
+/** How many times in all a capture slot is asked before it is called silent (namSlotSure). */
+export const NAM_SLOT_ASKS = 3
 /** The AM4's preset answer is reused for this long, so one screen load is one read. */
 export const STRUCTURE_FRESH_MS = 400
 /**
@@ -1090,6 +1092,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     current = job
     job.started = time.now()
+    /* What comes in while it is out, by kind: said if it goes unanswered (`cameBack`). `framed` is how many of the bytes the messages counted account for. */
+    job.came = { bytes: 0, framed: 0, own: 0, elsewhere: 0, parts: 0, short: 0, others: 0, last: null }
+    /* Whoever asked may need to know when it really left, which can be long after it was asked for (a capture slot's question waits behind Play: namSlotHead). */
+    if (typeof job.opts.sent === 'function') job.opts.sent(job.started)
     const messages = job.opts.messages ? job.out : [job.out]
     lastSent = { messages: [], at: job.started }
     for (const m of messages) {
@@ -1118,7 +1124,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (current !== job) return
       if (job.opts.match || job.opts.collect) {
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
-        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms`)
+        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms${cameBack(job)}`)
       }
       /* Given up on part-way through: the unit may still be sending the rest of it. */
       if (job.opts.collect && job.back) {
@@ -1128,6 +1134,54 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       end(job, null)
     }
     job.timer = time.setTimeout(job.expire, job.opts.ms ?? 0)
+  }
+
+  /*
+   * WHAT CAME BACK WHILE A QUESTION WENT UNANSWERED, for the log. "No
+   * answer" was one line for three different things (Justin's Axe-Fx III
+   * over a WIDI Uhost, 15 November 2026: four capture slots of ninety-seven
+   * unanswered, a different one each time): nothing at all came back (the
+   * question never reached the unit, or its answer never left the adapter),
+   * an answer came and was not taken (damaged on the way: its length and
+   * whether its checksum held are said), or part of one came and never
+   * finished.
+   *
+   * EVERYTHING THAT CAME IS SAID AS WHAT IT WAS, counted on the question
+   * itself (`job.came`), because the line is read to decide where an answer
+   * was lost. A timing clock's bytes are not counted (a unit may send them
+   * for ever). The phone's own message come back (MIDI Thru), a message
+   * from another unit on the line, and the frames a long answer got before
+   * it stalled are whole messages too, and each is named: said as "made no
+   * whole message", an echo read as an answer cut short (found in review
+   * before it went out). So is a short MIDI message (a Program Change when
+   * a footswitch is pressed): no part of any answer. Only bytes that none
+   * of those account for are said to have made no whole message.
+   */
+  function cameBack(job) {
+    const c = job.came
+    if (!c || (!c.bytes && !c.framed)) return ': nothing came in meanwhile'
+    const n = (count, one, many) => `${count} ${count === 1 ? one : many}`
+    const what = []
+    if (c.parts) what.push(n(c.parts, 'message that was part of its answer', 'messages that were part of its answer'))
+    if (c.own) what.push(n(c.own, 'copy of what was sent', 'copies of what was sent'))
+    if (c.elsewhere) what.push(n(c.elsewhere, 'message not from this unit', 'messages not from this unit'))
+    if (c.short) what.push(n(c.short, 'short MIDI message', 'short MIDI messages'))
+    if (c.others) {
+      const last = c.last
+      const sum = Array.isArray(last) && last.length >= 8 ? (checksumHeld(last) ? 'its checksum right' : 'ITS CHECKSUM WRONG') : 'too short to check'
+      what.push(`${n(c.others, 'whole message that was', 'whole messages that were')} not its answer (the last ${Array.isArray(last) ? last.length : 0} bytes, function 0x${Array.isArray(last) ? (last[5] & 0xff).toString(16).padStart(2, '0') : '??'}, ${sum})`)
+    }
+    if (!what.length) return `: ${n(c.bytes, 'byte', 'bytes')} came in meanwhile and made no whole SysEx message`
+    /* What the messages counted do not account for: the start of one that never finished (an answer cut short), beside whatever else came. */
+    const loose = c.bytes - c.framed
+    if (loose > 0) what.push(`${n(loose, 'byte', 'bytes')} that made no whole message`)
+    return `: ${n(Math.max(c.bytes, c.framed), 'byte', 'bytes')} came in meanwhile, ${what.join(', ')}`
+  }
+  /* A Fractal frame's check byte is the XOR of everything before it, kept to seven bits. */
+  const checksumHeld = (f) => {
+    let x = 0
+    for (let i = 0; i < f.length - 2; i++) x ^= f[i]
+    return (x & 0x7f) === f[f.length - 2]
   }
 
   function end(job, value, err) {
@@ -1173,16 +1227,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (closed || bytes == null || typeof bytes.length !== 'number') return
     /* Every byte, a timing clock's too: whether anything at all came back on this connection (bytesIn). */
     bytesIn += bytes.length
-    let real = false
+    let real = 0
+    /* The status bytes of short messages (a controller, a Program Change): never inside a SysEx frame, so each is one byte a short message accounts for. */
+    let statuses = 0
     for (let i = 0; i < bytes.length; i++) {
-      if ((bytes[i] & 0xff) < 0xf8) {
-        real = true
-        break
-      }
+      const b = bytes[i] & 0xff
+      if (b >= 0xf8) continue
+      real++
+      if (b >= 0x80 && b < 0xf0) statuses++
     }
     if (!real) return
     const now = time.now()
     const job = current
+    /* For the question that is out, if it goes unanswered (cameBack): never a timing clock's. */
+    if (job && job.came) {
+      job.came.bytes += real
+      job.came.framed += statuses
+    }
     if (job && job.opts.collect && job.timer !== undefined) {
       time.clearTimeout(job.timer)
       const left = (job.opts.cap ?? Infinity) - (now - job.started)
@@ -1194,9 +1255,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /** A whole SysEx frame from the joiner. */
   function heard(f) {
-    if (closed || !isFractal(f)) return
+    if (closed) return
     const now = time.now()
     const job = current
+    /* Each kind of message that is not the answer is counted for the question that is out, with its bytes (cameBack). */
+    const came = job && job.came ? job.came : null
+    const count = (kind) => {
+      if (!came) return
+      came[kind]++
+      came.framed += Array.isArray(f) ? f.length : 0
+    }
+    if (!isFractal(f)) {
+      count('elsewhere')
+      return
+    }
     /*
      * THE ECHO GUARD. With MIDI Thru on, the unit hands the phone its own
      * message straight back, and an echoed "which scene?" (0C 7F) reads as
@@ -1243,6 +1315,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {
       echoes++
+      count('own')
       if (echoes >= 3 && !thruTold) {
         thruTold = true
         /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
@@ -1251,6 +1324,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return
     }
     if (f[4] !== model) {
+      count('elsewhere')
       if (f[4] === 0x7f) return
       foreign = { model: f[4], at: now }
       if (!am4 && f[4] === MODELS.am4) heardAnAm4()
@@ -1269,6 +1343,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         job.back = f
         heardFromIt()
         if (got !== null) return end(job, got)
+        count('parts')
         time.clearTimeout(job.timer)
         const left = (job.opts.cap ?? Infinity) - (now - job.started)
         job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
@@ -1312,6 +1387,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         say(`the unit refused ${job.opts.what || 'it'}: ${rejectedWords(no.code)}`)
         return end(job, { rejected: no.code })
       }
+    }
+    /* Heard while a question was out and not its answer: counted, for the line if it goes unanswered (cameBack). */
+    if (came) {
+      count('others')
+      came.last = f
     }
     unasked(f, now)
   }
@@ -1465,6 +1545,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /** What the unit said that nobody was waiting for. */
   function unasked(f, now) {
+    /*
+     * A capture slot's answer in the quiet after a slot went unanswered or
+     * was asked again, when no slot's question is waiting: an answer that
+     * was only late, and said so, since "no answer" alone reads as a unit
+     * that said nothing. Counted from when a slot was last asked, which is
+     * all that is known: after a slot asked twice, which asking it answers
+     * is not.
+     */
+    if (!am4 && namQuietUntil > now && readNamSlot(f, model)) {
+      say(`a capture slot’s answer came with no question waiting, ${Math.round(now - namAskedAt)} ms after a slot was last asked: dropped`)
+      return
+    }
     if (lateFor(f[5]) >= 0) return
     if (am4) return
     const push = parseTunerPush(f, model)
@@ -1483,6 +1575,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /** A short message: only Program Change means anything here. */
   function heardShort(msg) {
     if (closed || !Array.isArray(msg) || !msg.length) return
+    /*
+     * For the question that is out, if it goes unanswered (cameBack): a
+     * short message is no part of any answer, and its bytes are not an
+     * answer cut short. ITS DATA BYTES ONLY: the joiner hands on a whole
+     * message, status byte and all, for each one of a run sent with the
+     * status said once (running status), and counted by that length seven
+     * controller messages hid the seven bytes of an answer cut short beside
+     * them (found in the third review). The status bytes are counted as
+     * they come (heardBytes).
+     */
+    if (current && current.came) {
+      current.came.short++
+      current.came.framed += msg.length - 1
+    }
     if (isEcho(msg, time.now())) return
     if ((msg[0] & 0xf0) >= 0x80 && (msg[0] & 0xf0) < 0xf0) heardAgain()
     if ((msg[0] & 0xf0) === 0xc0) {
@@ -3451,31 +3557,195 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * dropped.
    */
   let namQuietUntil = 0
-  /* What is left of that quiet, waited out: never longer than the quiet itself, whatever the clock does. */
+  /* When a slot's question last left the phone, answered or not: what the quiet after a slot asked again is counted from (namSlotSure), and how late a stray answer is said to be (unasked). */
+  let namAskedAt = 0
+  /* What is left of that quiet, waited out: never longer than the longest quiet there is (a slot asked again, namSlotSure), whatever the clock does. */
   const namQuiet = async () => {
-    const wait = Math.min(namQuietUntil - time.now(), LATE_MS)
+    const wait = Math.min(namQuietUntil - time.now(), WAIT.namSlot + LATE_MS)
     if (wait > 0) await pause(wait)
   }
+  /*
+   * HOW FAR UP FROM THE FIRST SLOT EVERY SLOT HAS READ FULL, ON THIS
+   * CONNECTION: -1 for none. Kept by every slot's read, whoever asked it
+   * (the search, the list, an upload's own looks), and it is all the search
+   * for an empty slot remembers: where to start.
+   *
+   * His Axe-Fx III has thirty-odd captures in a row from the first slot
+   * (15 November 2026), so every Preview and Get began with thirty-odd
+   * questions over Bluetooth, about ten seconds of them, and one that went
+   * unanswered threw all of it away: four taps, each starting again at the
+   * first slot, each stopped at a different one, none ever reaching an
+   * empty slot. Now a search goes on from where the last one got to.
+   *
+   * ONLY "FULL", NEVER "EMPTY", AND NEVER KEPT PAST THE CONNECTION. The slot
+   * the search answers is one it has just read, and an upload reads its slot
+   * again and writes only where that says <EMPTY> (namInstall), so nothing
+   * is written on the strength of this. The worst a wrong "full" can do is
+   * pass over a slot emptied on the unit since (on its front panel, or from
+   * Axe-Edit): the capture goes into a later empty slot, where Axe-Edit
+   * would have taken the first. A slot under the mark that reads <EMPTY>
+   * (to the list, say) brings the mark back down to it, and a search that
+   * finds no empty slot above the mark reads the ones under it again before
+   * it says there is none (namEmptySlot).
+   */
+  let namFullTo = -1
   async function namSlotHead(slot) {
     await namQuiet()
-    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true })
+    /*
+     * WHEN THE QUESTION LEFT THE PHONE, not when it was asked for (`sent`,
+     * told by pump as it goes). A search's question is Edit's kind of read,
+     * and after a scene or preset change those wait for Play, two seconds
+     * and more: counted from the asking, the quiet after a slot asked again
+     * ended that much before its answer's time was up, and the next slot
+     * took the answer (found in the second review, with a scene tapped in
+     * the quiet, before it went out).
+     */
+    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true, sent: (at) => (namAskedAt = at) })
     if (rejected(got)) throw failure(`The ${spec.name} would not say what is in capture slot ${namSlotSaid(slot)} (${rejectedWords(got.rejected)}). Its firmware may be older than the NAM block.`, 502)
     if (!got) {
       namQuietUntil = time.now() + LATE_MS
       throw failure(`The ${spec.name} didn’t say what is in capture slot ${namSlotSaid(slot)}.`, 504)
     }
+    if (got.empty) {
+      if (slot <= namFullTo) namFullTo = slot - 1
+    } else if (slot === namFullTo + 1) namFullTo = slot
     return got
   }
 
-  const namEmptySlot = () =>
-    captureRun({ list: true }, async () => {
-      const heads = []
-      for (let slot = 0; slot <= NAM_SLOT_PROVEN_MOST; slot++) {
+  /*
+   * A SLOT ASKED AGAIN WHEN IT SAYS NOTHING, up to NAM_SLOT_ASKS times in
+   * all: for the search for an empty slot and an upload's first look at its
+   * slot, where one unanswered question used to end the whole errand. (The
+   * list asks again by itself, lib/captureList, and is left as it is.)
+   *
+   * Asking a slot is only a read, so asking it again changes nothing on the
+   * unit. THE QUIET IS KEPT, TWICE. Before it is asked again, the quiet
+   * after the silence is waited out as ever (namSlotHead), so the answer
+   * that was only late cannot be handed to the next question. And after a
+   * slot asked again has answered, no OTHER slot is asked until that last
+   * asking's own answer can no longer come either: the answer taken may
+   * have been the first question's, later than anything allowed for, and
+   * then the second question's own answer is still on its way with nobody
+   * waiting. Both answers are this slot's, so this slot is never misfiled;
+   * the next slot, asked at once, would have been handed the second one,
+   * and every slot after it read one late.
+   *
+   * THAT QUIET IS COUNTED FROM WHEN THE SLOT'S QUESTION LAST LEFT THE
+   * PHONE (namAskedAt), not from when an answer was taken: the wait and
+   * the quiet from the asking, which is how long an answer is allowed for
+   * everywhere else here. Counted from
+   * the answer (the first cut), an answer taken a tenth of a second after
+   * the second asking left the next slot asked two seconds later, with the
+   * second asking's own answer still allowed two and a half more: handed
+   * that answer, an empty slot read as full, and was passed over for the
+   * rest of the connection (found in review, with a stand-in unit, before
+   * it went out). A lost answer costs some four seconds more for it.
+   *
+   * A slot that refuses (502) is not asked again: that is an answer.
+   *
+   * `held`, for an upload's first look: told true before each asking and
+   * false after a silence, so the upload's hold on the line is not kept
+   * through the quiet before the slot is asked again (namInstall).
+   */
+  async function namSlotSure(slot, onAgain, held) {
+    for (let n = 1; ; n++) {
+      try {
+        if (held) {
+          await namQuiet()
+          held(true)
+        }
         const head = await namSlotHead(slot)
-        heads.push({ slot, name: head.name, empty: head.empty })
-        if (head.empty) return { slot, heads }
+        if (n > 1) namQuietUntil = Math.max(namQuietUntil, namAskedAt + WAIT.namSlot + LATE_MS)
+        return head
+      } catch (err) {
+        if (held) held(false)
+        if (err?.status !== 504) throw err
+        if (n >= NAM_SLOT_ASKS) throw failure(`The ${spec.name} didn’t say what is in capture slot ${namSlotSaid(slot)}, asked ${n} times.`, 504, { slot, asked: n })
+        say(`asking capture slot ${namSlotSaid(slot)} again (${n + 1} of ${NAM_SLOT_ASKS})`)
+        try {
+          if (typeof onAgain === 'function') onAgain(n + 1)
+        } catch {
+          // A screen that has gone cannot stop the search it started.
+        }
       }
-      return { slot: null, heads }
+    }
+  }
+
+  /*
+   * THE FIRST EMPTY SLOT, from where this connection has read every slot
+   * full (namFullTo), each slot asked again if it says nothing
+   * (namSlotSure). `from` is the first slot it asked: the heads are only
+   * the ones read this time. `onProgress(slot, again)` is told the slot
+   * about to be asked, and which asking of it this is when it is not the
+   * first, for the line on the screen: thirty-odd questions over Bluetooth
+   * are ten seconds, and the screen said nothing in them.
+   *
+   * "NONE EMPTY" IS ONLY EVER SAID OF SLOTS READ IN THIS SEARCH. Where the
+   * search began past the first slot and found nothing empty above, the
+   * slots under where it began are read too before it answers: one may
+   * have been cleared on the unit since it read full, which is what the
+   * screen then tells the player to do ("Clear one on the unit, then send
+   * again"). The first cut answered "all taken" from the mark alone, and
+   * once every slot had read full it asked the unit nothing ever again on
+   * that connection (found in review before it went out). Then `from` is
+   * the first slot and the heads are all of them, in order.
+   */
+  const namEmptySlot = (onProgress) =>
+    captureRun({ list: true }, async () => {
+      let heads = []
+      let from = Math.min(namFullTo + 1, NAM_SLOT_PROVEN_MOST + 1)
+      const started = time.now()
+      let again = 0
+      /* How many slots have answered in this search, whichever part of it read them. */
+      let answered = 0
+      /* Where a search asked for now would begin: after what has read full, or at the first slot once that is all of them. */
+      const next = () => (namFullTo + 1 > NAM_SLOT_PROVEN_MOST ? 0 : namFullTo + 1)
+      const tell = (slot, n) => {
+        try {
+          if (typeof onProgress === 'function') onProgress(slot, n)
+        } catch {
+          // A screen that has gone cannot stop the search it started.
+        }
+      }
+      const done = (found) => {
+        say(`looked for an empty capture slot from ${namSlotSaid(from)}: ${answered} answered in ${((time.now() - started) / 1000).toFixed(1)} s${again ? `, ${again} asked again` : ''}; ${found === null ? `none empty up to ${namSlotSaid(NAM_SLOT_PROVEN_MOST)}` : `${namSlotSaid(found)} is empty`}`)
+        return { slot: found, heads, from }
+      }
+      /* The slots from `a` to `b`, in order, up to the first that says <EMPTY>: that slot, or null. */
+      const look = async (a, b) => {
+        for (let slot = a; slot <= b; slot++) {
+          tell(slot, 1)
+          let head
+          try {
+            head = await namSlotSure(slot, (n) => {
+              again++
+              tell(slot, n)
+            })
+          } catch (err) {
+            if (err?.status === 504 && err?.asked) {
+              /* "On this connection": what has read full is not kept past it (namFullTo), and the screen's words promise no slot. */
+              say(`gave up looking for an empty capture slot at ${namSlotSaid(slot)}: ${answered} answered in ${((time.now() - started) / 1000).toFixed(1)} s; the next search on this connection starts at ${namSlotSaid(next())}`)
+              throw failure(`${err.message} Nothing was sent. Tap again to keep looking.`, 504, { slot, asked: err.asked })
+            }
+            throw err
+          }
+          heads.push({ slot, name: head.name, empty: head.empty })
+          answered++
+          if (head.empty) return slot
+        }
+        return null
+      }
+      let found = await look(from, NAM_SLOT_PROVEN_MOST)
+      if (found === null && from > 0) {
+        const under = from - 1
+        say(`${from > NAM_SLOT_PROVEN_MOST ? `every capture slot up to ${namSlotSaid(NAM_SLOT_PROVEN_MOST)} has read full on this connection` : `no capture slot is empty from ${namSlotSaid(from)} up`}: reading ${under === 0 ? namSlotSaid(0) : `${namSlotSaid(0)} to ${namSlotSaid(under)}`} again, in case one has been cleared on the unit`)
+        const above = heads
+        heads = []
+        from = 0
+        found = await look(0, under)
+        heads = [...heads, ...above]
+      }
+      return done(found)
     })
 
   /*
@@ -3526,9 +3796,26 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* What is left of the quiet after a slot said nothing is waited out BEFORE the hold is taken: nothing is going to the unit during it, and a tap should not be refused for it. No other slot question can start a new quiet meanwhile: this run has the capture tools. */
       await namQuiet()
       const started = time.now()
-      /* Held from the slot's own read on, as the computer holds it: nothing goes between that read and the start either. captureRun lets go however this ends. */
-      captureBusy = true
-      const before = await namSlotHead(slot)
+      /*
+       * Held from the slot's own read on, as the computer holds it: nothing
+       * goes between that read and the start either. captureRun lets go
+       * however this ends. The slot is asked again if it says nothing
+       * (namSlotSure): nothing has been written yet, and nothing is until
+       * this slot has said <EMPTY>. THE HOLD IS LET GO OF AT EACH SILENCE
+       * AND TAKEN AGAIN AT THE NEXT ASKING, as it is not taken for the
+       * first quiet above: kept through three askings it refused every tap
+       * for eleven seconds in which nothing went to the unit but a slot's
+       * question (found in review before it went out).
+       */
+      const hold = (on) => {
+        captureBusy = on
+        /* What a silence held back goes now, in the quiet. */
+        if (!on) pump()
+      }
+      const before = await namSlotSure(slot, null, hold).catch((err) => {
+        if (err?.status === 504 && err?.asked) throw failure(`${err.message} Nothing was sent.`, 504, { slot, asked: err.asked })
+        throw err
+      })
       if (!before.empty && body?.replace !== true) throw failure(`Capture slot ${said} already holds “${before.name}”. Nothing was sent.`, 409, { holds: before.name })
       const told = await ex(on, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that a capture is coming', priority: 'write', capture: true })
       if (rejected(told)) throw failure(`The ${spec.name} refused the start of the transfer (${rejectedWords(told.rejected)}). Nothing was sent.`, 502)
@@ -4115,7 +4402,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     /* An Axe-Fx III's captures (lib/nam-install), only when the request says it is theirs and they are open to this account (captureOn): his alone. */
     if (opts?.capturing === true && captureOn() && part[0] === 'nam') {
-      if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(namEmptySlot)
+      if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(() => namEmptySlot(opts.onProgress))
       if (method === 'GET' && part.length === 4 && part[1] === 'heads' && isNum(part[2]) && isNum(part[3])) return editRoute(() => namHeads(Number(part[2]), Number(part[3])))
       if (method === 'POST' && part.length === 3 && part[1] === 'slots' && isNum(part[2])) return editRoute(() => namInstall(Number(part[2]), body, opts.onProgress))
       if (method === 'POST' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namPick(Number(part[2]), body))

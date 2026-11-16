@@ -61,6 +61,17 @@ export const SENT_TO_UNIT = 'Sent to your Axe-Fx III'
  * what is becoming of it at every moment, in words nobody can miss.
  */
 export const GETTING_CAPTURE = 'Getting it from TONE3000…'
+/*
+ * WHILE AN EMPTY SLOT IS LOOKED FOR. Over an adapter the unit is asked a
+ * slot at a time, a quarter of a second each, and his has thirty-odd
+ * captures before the first empty one: ten seconds in which the card said
+ * one unchanging line (15 November 2026). So it says which slot it is at,
+ * and when a slot that said nothing is being asked again. Through a
+ * computer the search is one answer and only the first line is ever seen.
+ */
+export const LOOKING_FOR_SLOT = 'Looking for an empty slot on the unit…'
+export const lookingForSlot = (slotSaid, again = 1) =>
+  again > 1 ? `Looking for an empty slot on the unit… slot ${slotSaid} didn’t answer, asking it again` : `Looking for an empty slot on the unit… checking slot ${slotSaid}`
 export const SENDING_TO_UNIT = 'Sending to your Axe-Fx III…'
 export const NOT_ON_UNIT = 'Not on your Axe-Fx III'
 /** The card's second line: which slot, and the capture's name. */
