@@ -84,6 +84,7 @@ export function run(test) {
     assert.match(knob, /import \{ dialAngle, litMarks \} from '\.\.\/lib\/knob-dial'/)
     assert.match(knob, /const \[lo, hi\] = litMarks\(norm, param, TICKS\)/, 'the ring is not lit by the rule')
     assert.match(knob, /const angle = dialAngle\(norm\)/, 'the pointer is not placed by the rule')
+    assert.match(knob, /<Pointer size=\{size\} angle=\{angle\} \/>/, 'the pointer is handed something besides the rule')
     /* Each mark at its own place along the travel, and the pointer at the value's, with no turn added: a view turned by an angle is turned clockwise, and its mark sits at its top, so this IS clockwise from twelve. */
     assert.match(knob, /transform: \[\{ rotate: `\$\{dialAngle\(i \/ \(TICKS - 1\)\)\}deg` \}\]/, 'the marks are turned by something besides the rule')
     assert.match(knob, /transform: \[\{ rotate: `\$\{angle\}deg` \}\]/, 'the pointer is turned by something besides the rule')

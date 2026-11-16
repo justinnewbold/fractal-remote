@@ -3181,6 +3181,16 @@ export function run(test) {
       await advance(t.clock, gap)
     }
   }
+  /* As a rig that sends everything back on every channel would: the bank select, CC 32 and the Program Change, on each. */
+  const sixteenWhole = async (t, n, gap = 2) => {
+    for (let ch = 0; ch < 16; ch++) {
+      t.wire.heardShort([0xb0 | ch, 0x00, n >> 7])
+      t.wire.heardShort([0xb0 | ch, 0x20, 0])
+      t.wire.heardShort([0xc0 | ch, n & 0x7f])
+      await advance(t.clock, gap)
+    }
+  }
+  const pcSentAt = (t, low) => t.sent.find((s) => s.bytes[0] === 0xc0 && s.bytes[1] === low)?.at
 
   test('THE APP’S OWN PROGRAM CHANGE BACK ON ALL SIXTEEN CHANNELS, after its job is over: no news, no line each, one line that says what came', async () => {
     const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
@@ -3202,16 +3212,79 @@ export function run(test) {
     assert.ok(+after >= 140 && +after < 400, `${after} ms after`)
   })
 
-  test('a knob turn waiting to go is not refused by the app’s own Program Change coming back', async () => {
-    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
-    await t.post('/preset/select', { number: 12 })
-    await advance(t.clock, 300)
-    t.events.splice(0)
-    const before = t.logs.length
-    await sixteen(t, 12, 2)
-    await advance(t.clock, 400)
-    assert.ok(!t.logs.slice(before).some((l) => /changed before that was sent|its preset changed/.test(l)), t.logs.slice(before).join(' | '))
-    assert.deepEqual(t.events, [])
+  test('a knob turn waiting to go is not refused by the app’s own Program Change coming back; one the app did not send refuses it', async () => {
+    for (const [why, copy, refused] of [
+      ['the app’s own, sixteen times', (t) => sixteen(t, 12, 0), false],
+      ['another preset’s, from the unit', (t) => t.wire.heardShort([0xc0, 13]), true]
+    ]) {
+      const { settings } = await fm3Settings()
+      const t = await onTheLine('fm3', { edit: () => true, settings, methods: { preset: 'pc', learned: { scene: 'published' } } })
+      await t.get('/preset')
+      await drive(t.clock, editRead(t, 58))
+      await t.post('/preset/select', { number: 12 })
+      const pcAt = pcSentAt(t, 12)
+      await t.get('/preset/blocks')
+      /* Edit's read of another block on the line, and the knob turn waiting behind it. */
+      const first = editRead(t, 66)
+      await flush()
+      const knob = t.wire.request('/preset/blocks/58/params/7', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.4, continuous: true }) }).then(() => 'sent', (e) => e)
+      await flush()
+      assert.ok(t.clock.now() - pcAt < 1500, `${why}: past the app’s own Program Change’s second and a half`)
+      await copy(t)
+      const [, turned] = await drive(t.clock, Promise.all([first, knob]))
+      if (refused) assert.equal(turned?.status, 409, `${why}: a knob turn waiting went into another preset`)
+      else {
+        assert.equal(turned, 'sent', `${why}: the knob turn waiting was refused: ${turned?.message}`)
+        assert.ok(!t.logs.some((l) => /not sent, the scene or preset changed first|its preset changed/.test(l)), t.logs.join(' | '))
+      }
+    }
+  })
+
+  test('NEXT TAPPED TWICE: the first preset’s copies, coming back after the second has gone, are the app’s own too', async () => {
+    for (const [gap, echo] of [[0, 200], [250, 280], [300, 350]]) {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      const one = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 12 }) })
+      await advance(t.clock, gap)
+      const two = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 13 }) })
+      for (let i = 0; i < 500 && pcSentAt(t, 12) === undefined; i++) await advance(t.clock, 1)
+      await advance(t.clock, pcSentAt(t, 12) + echo - t.clock.now())
+      assert.ok(pcSentAt(t, 13) !== undefined && pcSentAt(t, 13) < t.clock.now(), `${gap}: the second Program Change had not gone before the first one’s copies`)
+      await sixteenWhole(t, 12)
+      await advance(t.clock, 400)
+      await sixteenWhole(t, 13)
+      await drive(t.clock, Promise.all([one, two]))
+      await advance(t.clock, 600)
+      assert.deepEqual(pcNews(t), [], `${gap}: the first preset’s copies were news`)
+      assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, `${gap}: more preset changes than the two the app made`)
+      assert.equal(t.logs.filter((l) => PC_OWN.test(l)).length, 2, t.logs.join(' | '))
+    }
+  })
+
+  test('copies of one Program Change are one change only within one bank: the same number after another bank select is another preset', async () => {
+    /* A controller: preset 5, then preset 133 (bank 1, Program Change 5) 150 ms later. */
+    {
+      const t = await onTheLine('fm9')
+      await advance(t.clock, 300)
+      t.events.splice(0)
+      t.wire.heardShort([0xb0, 0x00, 0x00])
+      t.wire.heardShort([0xc0, 5])
+      await advance(t.clock, 150)
+      t.wire.heardShort([0xb0, 0x00, 0x01])
+      t.wire.heardShort([0xc0, 5])
+      assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, 'preset 133 straight after preset 5 was taken as a copy of it')
+    }
+    /* The app's preset 12 coming back, then a controller's preset 140 (bank 1, Program Change 12) close behind it. */
+    {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 12 })
+      t.events.splice(0)
+      await advance(t.clock, 100)
+      await sixteenWhole(t, 12)
+      await advance(t.clock, 200)
+      t.wire.heardShort([0xb3, 0x00, 0x01])
+      t.wire.heardShort([0xc3, 12])
+      assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }], 'preset 140 from a controller was taken for the app’s own 12')
+    }
   })
 
   test('a Program Change the app did not send, sixteen times over: one preset change, one line for it and one for the copies', async () => {
@@ -3282,8 +3355,9 @@ export function run(test) {
     for (let i = 0; i < 400 && !t.sent.some((s) => s.bytes[0] === 0xc0); i++) await advance(t.clock, 2)
     assert.ok(t.sent.some((s) => s.bytes[0] === 0xc0), 'no Program Change went')
     await advance(t.clock, 150)
-    await sixteen(t, 12, 2)
-    assert.ok(!t.logs.some((l) => /answers again/.test(l)), 'the app’s own Program Change was taken for the unit answering')
+    /* The whole of what the app sent, back on every channel: its bank selects as well as its Program Change. */
+    await sixteenWhole(t, 12)
+    assert.ok(!t.logs.some((l) => /answers again/.test(l)), 'the app’s own Program Change, or its bank select, was taken for the unit answering')
     await drive(t.clock, selecting).catch(() => {})
     t.wire.stopPolls()
   })

@@ -930,16 +930,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * within OWN_PC_MS, is the app's own: not news, and not the unit
    * answering either (something on the rig sends what it hears back out).
    * The bank goes with it: a Program Change after a bank select on its
-   * channel that names another bank is another preset, and news.
+   * channel that names another bank is another preset, and news. EVERY ONE
+   * the app sent in that time is remembered, not the last alone: Next
+   * tapped twice sends the second 120 ms after the first, before the first
+   * one's copies come back (an independent read, before it went out). And
+   * the bank selects sent with it, coming back, are the app's own too: not
+   * the unit answering, so a quiet unit stays quiet.
    *
    * And copies of one Program Change in a burst are one change: the first
    * is news, the rest are counted, and the log says once how many came,
    * on which channels and how long after the app's own.
    */
-  let ownPc = null
+  /* The Program Changes the app sent in the last OWN_PC_MS, oldest first: {low, bank, at}. */
+  let ownPcs = []
   /* The last bank select (CC 0) heard on each channel, {value, at}: what a Program Change after it names. */
   const bankHeard = new Map()
-  /* The Program Change being heard again and again, or null: {low, own, count, channels, first, last, timer}. */
+  /* The Program Change being heard again and again, or null: {low, bank, own, count, channels, first, last, sentAt, timer}. */
   let pcBurst = null
   const channelList = (set) => {
     const all = [...set].sort((a, b) => a - b)
@@ -960,12 +966,21 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (b.own) say(`the app’s own Program Change ${b.low} came back ${many}, from ${Math.round(b.first - b.sentAt)} ms after it was sent: not a preset change`)
     else if (b.count > 1) say(`Program Change ${b.low} came ${many}: taken as one preset change`)
   }
-  /** Whether a Program Change on `channel` (1–16) is a copy of the app's own, sent within OWN_PC_MS. */
-  function isOwnPc(low, channel, now) {
-    if (!ownPc || now - ownPc.at > OWN_PC_MS || low !== ownPc.low) return false
+  /* The bank last said on `channel` (1–16) within OWN_PC_MS, or null: what a Program Change on it now is in. */
+  function bankOn(channel, now) {
     const bank = bankHeard.get(channel)
-    return !bank || now - bank.at > OWN_PC_MS || bank.value === ownPc.bank
+    return bank && now - bank.at <= OWN_PC_MS ? bank.value : null
   }
+  const ownLately = (now) => (ownPcs = ownPcs.filter((e) => now - e.at <= OWN_PC_MS))
+  /** The app's own Program Change that one on `channel` is a copy of, the newest that fits, or null. */
+  function ownPcFor(low, channel, now) {
+    const bank = bankOn(channel, now)
+    const mine = ownLately(now)
+    for (let i = mine.length - 1; i >= 0; i--) if (mine[i].low === low && (bank === null || bank === mine[i].bank)) return mine[i]
+    return null
+  }
+  /* A bank select the app sent with one of its Program Changes, come back: CC 0 with its bank, or CC 32 with nought, within OWN_PC_MS. */
+  const ownBankSelect = (msg, now) => (msg[1] === 0x00 || msg[1] === 0x20) && ownLately(now).some((e) => (msg[1] === 0x00 ? msg[2] === e.bank : msg[2] === 0))
   /*
    * A SET THE UNIT ANSWERS WITH THE SET ITSELF, BYTE FOR BYTE. On these
    * units a block's on and off (0A), its channel (0B), the scene (0C) and
@@ -1745,10 +1760,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const channel = (msg[0] & 0x0f) + 1
     /* Before the echo guard: the app's own bank select coming back still says which bank a Program Change after it is in. */
     if (kind === 0xb0 && msg[1] === 0x00 && Number.isInteger(msg[2])) bankHeard.set(channel, { value: msg[2], at: now })
+    if (kind === 0xb0 && ownBankSelect(msg, now)) return
     if (kind === 0xc0 && Number.isInteger(msg[1])) {
       const low = msg[1]
-      /* Another copy in the burst it belongs to: counted, and nothing else. */
-      if (pcBurst && pcBurst.low === low && now - pcBurst.last <= PC_BURST_MS) {
+      const bank = bankOn(channel, now)
+      /* Another copy in the burst it belongs to: counted, and nothing else. Not one after a bank select that names another bank: that is another preset. */
+      if (pcBurst && pcBurst.low === low && now - pcBurst.last <= PC_BURST_MS && (pcBurst.bank === null || bank === null || bank === pcBurst.bank)) {
         pcBurst.count++
         pcBurst.channels.add(channel)
         pcBurst.last = now
@@ -1757,8 +1774,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return
       }
       endPcBurst()
-      const own = isOwnPc(low, channel, now)
-      pcBurst = { low, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? ownPc.at : null, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
+      const mine = ownPcFor(low, channel, now)
+      const own = mine !== null
+      pcBurst = { low, bank: own ? mine.bank : bank, own, count: 1, channels: new Set([channel]), first: now, last: now, sentAt: own ? mine.at : null, timer: time.setTimeout(endPcBurst, PC_BURST_MS) }
       if (own) return
     }
     if (isEcho(msg, now)) return
@@ -2373,7 +2391,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ---- preset ---- */
 
   /*
-   * Remembered as it leaves (ownPc), and forgotten if it never did: a
+   * Remembered as it leaves (ownPcs), and forgotten if it never did: a
    * footswitch's Program Change to the same preset is news then. Once it
    * has left, the job ends only when its wait is over, so a refusal after
    * that is a message of the three the adapter would not take, and the
@@ -2388,10 +2406,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       priority: 'write',
       sent: (at) => {
         mine = { low: n & 0x7f, bank: (n >> 7) & 0x7f, at }
-        ownPc = mine
+        ownPcs = [...ownLately(at), mine]
       }
     }).catch((err) => {
-      if (mine && ownPc === mine) ownPc = null
+      if (mine) ownPcs = ownPcs.filter((e) => e !== mine)
       throw err
     })
   }
