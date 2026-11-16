@@ -977,6 +977,8 @@ export function run(test) {
       const table = (...names) => writeFileSync(join(dir, 'docs/pending/README.md'), `# Waiting\n\n| Patch | What | Moves |\n|---|---|---|\n${names.map((n) => `| \`${n}\` | x | y |\n`).join('')}\nNot a row: \`stray.patch\` in a sentence.\n`)
       writeFileSync(join(dir, 'file.txt'), 'one\n')
       git('init', '-q')
+      /* Line endings as written, on every runner: Git for Windows turns them to CRLF on a checkout otherwise. */
+      git('config', 'core.autocrlf', 'false')
       git('add', '-A')
       git('commit', '-qm', 'base')
       /* second.patch only applies after first.patch, so the order is the README's or nothing. */
