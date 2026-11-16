@@ -2557,13 +2557,23 @@ export function run(test) {
     for (const unit of ['fm3', 'fm9', 'axefx3']) {
       /* A rig wired right: every set answered once, with its own bytes. Nothing is an echo. */
       const t = await onTheLine(unit, { publishedChannel: true, publishedTempo: true })
-      /* The pretend unit really does answer them so, or this proves nothing. */
-      const back = []
-      const say = t.unit.hear
+      /* Every whole message that reaches the wire, as it reaches it. */
+      const cameBack = []
+      const heard = t.wire.heard
+      t.wire.heard = (f) => {
+        cameBack.push(hex(f))
+        return heard(f)
+      }
       await tapsOn(t)
-      for (const { bytes } of t.sent) if (bytes[0] === 0xf0 && [0x0a, 0x0b].includes(bytes[5])) back.push(bytes)
-      assert.ok(back.length >= 4, `${unit}: the sets were not sent the published way (${back.length})`)
-      assert.equal(typeof say, 'function')
+      /* THE PRETEND UNIT REALLY DID ANSWER EACH SET WITH THE SET, once, or everything under this proves nothing (it used to take them in silence, and then nothing is counted whatever the wire does). */
+      const sets = t.sent.map((x) => x.bytes).filter((b) => b[0] === 0xf0 && ((b[5] === 0x0a && b[8] !== 0x7f) || (b[5] === 0x0b && b[8] !== 0x7f) || (b[5] === 0x14 && !(b[6] === 0x7f && b[7] === 0x7f))))
+      /* (An FM3's tempo always goes FM3-Edit's way, another message: its published tempo set does not take.) */
+      assert.deepEqual(sets.map((b) => b[5]).sort(), unit === 'fm3' ? [0x0a, 0x0a, 0x0a, 0x0b] : [0x0a, 0x0a, 0x0a, 0x0b, 0x14], `${unit}: the on/off, channel and tempo sets were not sent the published way`)
+      /* Each came back as many times as it went (the same "off" goes twice in those taps). The tempo's once more: "which tempo?", asked after it to see that it took, is answered with the same bytes again. */
+      for (const set of new Set(sets.map(hex))) {
+        const went = sets.filter((b) => hex(b) === set)
+        assert.equal(cameBack.filter((h) => h === set).length, went.length + (went[0][5] === 0x14 ? 1 : 0), `${unit}: the pretend unit did not answer ${set} with the message itself, once for each time it was sent`)
+      }
       assert.equal(t.wire.counts().echoes, 0, `${unit}: the unit’s own answers to its sets were counted as echoes`)
       assert.equal(thruLine(t), undefined, `${unit}: a rig wired right was told about MIDI Thru`)
       /* And so an empty preset, after all that, is read at its first answer. */
@@ -2576,8 +2586,21 @@ export function run(test) {
       /* A PLUG IN THRU: the echo and the answer both come back, two copies of each set, and the second is an echo. The alarm still rings, on writes alone. */
       const thru = await onTheLine(unit, { thru: true, publishedChannel: true, publishedTempo: true })
       await tapsOn(thru)
-      assert.ok(thru.wire.counts().echoes >= 3, `${unit}: with a plug in THRU, two copies of each set came back and ${thru.wire.counts().echoes} were counted`)
       assert.ok(thruLine(thru), `${unit}: with a plug in THRU, nobody was told`)
+      /*
+       * And it is the SETS' second copies that are counted, not only the
+       * echoes of the questions the first taps asked while the ways were
+       * learned: four more sets, each one message now, each counted once.
+       */
+      await advance(thru.clock, 100)
+      const learnedAt = thru.wire.counts().echoes
+      for (const [path, body] of [['/preset/blocks/58/bypass', { bypassed: false }], ['/preset/blocks/58/bypass', { bypassed: true }], ['/preset/blocks/58/channel', { channel: 'A' }], ['/tempo', { bpm: 100 }]]) {
+        const before = thru.sent.length
+        await thru.post(path, body)
+        assert.equal(thru.sent.slice(before).filter((x) => x.bytes[0] === 0xf0).length, 1, `${unit}: ${path} was more than one message, so its count proves nothing`)
+        await advance(thru.clock, 100)
+      }
+      assert.equal(thru.wire.counts().echoes, learnedAt + 4, `${unit}: with a plug in THRU, two copies of each of four sets came back and ${thru.wire.counts().echoes - learnedAt} were counted`)
 
       /*
        * THE SCENE'S ANSWER IS TAKEN BY ITS OWN WAIT, and with a plug in
@@ -2619,10 +2642,16 @@ export function run(test) {
       assert.ok(loop.wire.counts().echoes >= 3, `${unit}: the echo of a question was not counted (${loop.wire.counts().echoes})`)
       assert.ok(thruLine(loop), `${unit}: a plug that loops was not named`)
     }
-    /* A QUESTION'S echo is never its answer: 7F in the value's place is "which?", and the echo of that is the echo the guard exists for. */
+    /* A QUESTION'S echo is never its answer: 7F in the value's place is "which?", and the echo of that is the echo the guard exists for. The tempo's question is the one of this rule's kinds the app asks. */
     const asked = await onTheLine('fm3', { thru: true })
+    for (let i = 0; i < 3; i++) {
+      const before = asked.wire.counts().echoes
+      assert.deepEqual(await asked.get('/tempo'), { bpm: 120 })
+      await advance(asked.clock, 100)
+      assert.equal(asked.wire.counts().echoes, before + 1, 'the echo of "which tempo?" was taken for an answer, or not counted once')
+    }
     for (let i = 0; i < 3; i++) await asked.get('/scene')
-    assert.ok(asked.wire.counts().echoes >= 3, 'the echo of "which scene?" was taken for an answer')
+    assert.ok(asked.wire.counts().echoes >= 6, 'the echo of "which scene?" was not counted')
     /* And only within the echo's own time (ECHO_MS): the same bytes a third of a second after they went are not the phone hearing itself, and a copy just inside it is. */
     for (const [after, counted] of [[300, 0], [200, 1]]) {
       const late = await onTheLine('fm3')

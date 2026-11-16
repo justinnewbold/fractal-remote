@@ -899,28 +899,34 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
   /*
-   * A SET THE UNIT ANSWERS WITH THE SET ITSELF, BYTE FOR BYTE. Fractal's
-   * document for these units gives a block's on and off (0A), its channel
-   * (0B), the scene (0C) and the tempo (14) one message each way: sent with
-   * a value it sets, and "Returns" the same message with the value the unit
-   * is now on. So the answer to a SET that was taken is the phone's own
-   * bytes, and it is no echo.
+   * A SET THE UNIT ANSWERS WITH THE SET ITSELF, BYTE FOR BYTE. On these
+   * units a block's on and off (0A), its channel (0B), the scene (0C) and
+   * the tempo (14) are one message each way: sent with a value it sets,
+   * with 7F in the value's place it asks, and the unit answers in the same
+   * shape with the value it is now on. So the answer to a SET that was
+   * taken is the phone's own bytes, and it is no echo.
    *
    * It was counted as one. Justin's Axe-Fx III, 15 November 2026: a channel
-   * change and two blocks switched off, each answered within 50 ms, and the
-   * third wrote "the unit is echoing what it receives: the white plug may
-   * be in the Axe-Fx III's MIDI THRU, not OUT" into the log of a rig wired
-   * right. And a count that is not nought is what makes a preset with no
-   * blocks wait for a second copy of its answer (`opts.same`, below), which
-   * never comes: after one block switched on or off, an empty preset read
-   * as the unit not answering, the very thing that rule was written to
-   * mend.
+   * change and two blocks switched off, each answered while it was still
+   * the last message sent (the third within 46 ms), and the third wrote
+   * "the unit is echoing what it receives: the white plug may be in the
+   * Axe-Fx III's MIDI THRU, not OUT" into the log of a rig wired right. And
+   * a count that is not nought is what makes a preset with no blocks wait
+   * for a second copy of its answer (`opts.same`, below), which never
+   * comes: after one block switched on or off, an empty preset read as the
+   * unit not answering, the very thing that rule was written to mend.
    *
    * Never a question (7F in the value's place): an echoed "which tempo?"
-   * is the echo this guard exists for. On and off and the channel are seen
-   * on a unit (that log); the tempo is by the document alone. THE SCENE IS
-   * NOT IN THIS LIST: its set waits for exactly this answer and takes it
-   * itself (allowEcho), as it always has, so its first copy never comes
+   * is the echo this guard exists for.
+   *
+   * WHAT EACH RESTS ON. On and off and the channel: seen on a unit (that
+   * log, three of three). The tempo: NOT SEEN, and nothing in the codec's
+   * notes quotes Fractal's document for it; it is here on the pattern of
+   * the other three, and if a unit does not answer a tempo so, all that is
+   * lost is the count of one copy of a tempo set through a THRU plug. THE
+   * SCENE IS NOT IN THIS LIST: the document's "Returns" line for it is
+   * quoted in the codec, its set waits for exactly that answer and takes
+   * it itself (allowEcho), as it always has, so its first copy never comes
    * this far.
    */
   const answersItself = (m) =>

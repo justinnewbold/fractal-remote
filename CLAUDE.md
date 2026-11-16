@@ -3474,12 +3474,12 @@ offers Look for the adapter again from the first try that misses it
 (1.90.84).** Justin's Axe-Fx III through a WIDI Uhost, 15 November 2026: a
 block's channel changed and two blocks switched off from Play, and at the
 third the log said "the unit is echoing what it receives: the white plug
-may be in the Axe-Fx III's MIDI THRU, not OUT". His plug was in OUT.
-Fractal's document for the FM3, FM9 and Axe-Fx III gives a block's on and
-off (0A), its channel (0B), the scene (0C) and the tempo (14) one message
-each way: sent with a value it sets, and the unit returns the same message
-with the value it is now on. So the answer to a SET it took is the phone's
-own bytes, and the echo guard counted each as an echo. Three and the log
+may be in the Axe-Fx III's MIDI THRU, not OUT". His plug was in OUT. On an
+FM3, FM9 or Axe-Fx III a block's on and off (0A), its channel (0B), the
+scene (0C) and the tempo (14) are one message each way: sent with a value
+it sets, and the unit answers in the same shape with the value it is now
+on. So the answer to a SET it took is the phone's own bytes, and the echo
+guard counted each as an echo. Three and the log
 named a THRU plug; and ONE was enough to undo the paragraph above, since an
 empty preset's answer is taken at its first copy only where nothing has
 echoed on that connection: after any block switched on or off, a preset
@@ -3496,17 +3496,26 @@ with no blocks read as the unit not answering again.
 - A plug that only loops, with nothing behind it, gives one copy of a SET,
   which cannot be told from the unit's answer and is not counted; its
   copies of the questions are, and they name it.
-- SEEN ON A UNIT: on and off and the channel (that log, three of three).
-  The tempo is by the document alone. The scene's set is not in the list:
-  it waits for exactly that answer and takes it itself, as it always has
-  (`allowEcho`).
+- WHAT EACH RESTS ON. On and off and the channel: seen on a unit (that
+  log, three of three; only the third has a time, 46 ms). The tempo: NOT
+  SEEN, and the codec's notes quote Fractal's document for the scene's
+  "Returns" line only; it is in the list on the pattern of the others, and
+  if a unit does not answer a tempo so, all that is lost is the count of
+  one copy of a tempo set through a THRU plug. The scene's set is not in
+  the list: it waits for exactly that answer and takes it itself, as it
+  always has (`allowEcho`). Do not write that the document says this of
+  on and off, the channel or the tempo until somebody has read it there.
 - THE PRETEND UNIT IN THE TESTS TOOK THESE SETS IN SILENCE, which is
-  kinder than a unit, so no test ever saw the answer. It answers them as
-  the document says now (`setsAnswered`, on by default), and every wire
-  test runs against that.
+  kinder than a unit, so no test ever saw the answer. It answers a set it
+  takes with the set now (`setsAnswered`, on by default): on and off and
+  the channel in every wire test, the tempo only where a test says the
+  unit takes the published tempo (`publishedTempo`). A set it does not
+  take it still meets with silence; what a unit says then is not known.
 - So "the unit is echoing what it receives" in a log from before 1.90.84,
   from an FM3, FM9 or Axe-Fx III, says nothing about the plug unless Thru
-  is known to be on. In one from 1.90.84 on, it means two copies came back.
+  is known to be on. From 1.90.84 on, a set's first copy is not counted,
+  so the line takes three of: a second copy of a set, or any copy of a
+  question.
 
 **The adapter kept for a unit is not always the adapter it is on today.**
 Justin, 14 November 2026: "For some reason I can't get the aX3 to connect
