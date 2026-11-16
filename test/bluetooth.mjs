@@ -3475,6 +3475,25 @@ export function run(test) {
       const changed = t.events.filter((e) => e.type === 'changed').length
       assert.equal(changed, 1, `${name}: ${changed} preset changes for the controller’s one (sent at ${at}): ${t.logs.join(' | ')}`)
     }
+    /* The controller's change straight after the FIRST copy: the other fifteen are still the app's own. */
+    {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 250 - t.clock.now())
+      t.events.splice(0)
+      for (let ch = 0; ch < 16; ch++) {
+        t.wire.heardShort([0xc0 | ch, 12])
+        await advance(t.clock, 6)
+        if (ch === 0) {
+          controllerTo(t, 5)
+          await advance(t.clock, 6)
+        }
+      }
+      await advance(t.clock, 600)
+      const changed = t.events.filter((e) => e.type === 'changed').length
+      assert.equal(changed, 1, `after the first copy: ${changed} preset changes for the controller’s one: ${t.logs.join(' | ')}`)
+    }
   })
 
   test('the controller’s preset in another bank among the app’s copies (one of the sixteen with a different bank)', async () => {
@@ -3499,70 +3518,6 @@ export function run(test) {
     assert.equal(changed, 1, `${changed} preset changes for the controller’s one: ${t.logs.join(' | ')}`)
   })
 
-  test('the copies come in two waves (as the commit’s own "sent back once more" case), a controller’s change between', async () => {
-    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
-    await t.post('/preset/select', { number: 12 })
-    const at = pcSentAt(t, 12)
-    await advance(t.clock, at + 150 - t.clock.now())
-    await sixteenWhole(t, 12, 1)
-    await advance(t.clock, at + 300 - t.clock.now())
-    t.events.splice(0)
-    controllerTo(t, 5)
-    await advance(t.clock, at + 500 - t.clock.now())
-    t.wire.heardShort([0xc0, 12])
-    await advance(t.clock, 400)
-    const changed = t.events.filter((e) => e.type === 'changed').length
-    assert.equal(changed, 1, `${changed} preset changes for the controller’s one: ${t.logs.join(' | ')}`)
-  })
-
-  test('a rig that sends copies back 700 ms late (seen on the step before); a controller’s change before this step’s copies come', async () => {
-    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
-    await t.post('/preset/select', { number: 11 })
-    const at11 = pcSentAt(t, 11)
-    await advance(t.clock, at11 + 700 - t.clock.now())
-    await sixteenWhole(t, 11)
-    await advance(t.clock, 2000)
-    await t.post('/preset/select', { number: 12 })
-    const at = pcSentAt(t, 12)
-    await advance(t.clock, at + 150 - t.clock.now())
-    t.events.splice(0)
-    controllerTo(t, 5)
-    await advance(t.clock, at + 700 - t.clock.now())
-    await sixteenWhole(t, 12)
-    await advance(t.clock, 600)
-    const changed = t.events.filter((e) => e.type === 'changed').length
-    assert.equal(changed, 1, `${changed} preset changes for the controller’s one: ${t.logs.join(' | ')}`)
-  })
-
-  test('FM3 in Edit, a rig seen sending copies back 700 ms late; a controller’s change, then the app’s own copies refuse a knob turn', async () => {
-    const { settings } = await fm3Settings()
-    const t = await onTheLine('fm3', { edit: () => true, settings, methods: { preset: 'pc', learned: { scene: 'published' } } })
-    await t.get('/preset')
-    await drive(t.clock, editRead(t, 58))
-    await t.post('/preset/select', { number: 11 })
-    const at11 = pcSentAt(t, 11)
-    await advance(t.clock, at11 + 700 - t.clock.now())
-    await sixteenWhole(t, 11, 1)
-    await advance(t.clock, 2000)
-    await t.post('/preset/select', { number: 12 })
-    const at = pcSentAt(t, 12)
-    await advance(t.clock, at + 150 - t.clock.now())
-    controllerTo(t, 5)
-    await advance(t.clock, 100)
-    await t.get('/preset/blocks')
-    await drive(t.clock, editRead(t, 58))
-    await advance(t.clock, Math.max(0, at + 680 - t.clock.now()))
-    const first = editRead(t, 66)
-    await flush()
-    const knob = t.wire.request('/preset/blocks/58/params/7', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.4, continuous: true }) }).then(() => 'sent', (e) => e)
-    await flush()
-    const copiesAt = t.clock.now() - at
-    assert.ok(copiesAt > 600 && copiesAt < 900, `copies at ${copiesAt}`)
-    await sixteenWhole(t, 12, 0)
-    const [, turned] = await drive(t.clock, Promise.all([first, knob]))
-    assert.equal(turned, 'sent', `copies ${copiesAt} ms after the send: the knob turn waiting was refused by the app’s own copies: ${turned?.status} ${turned?.message} | ${t.logs.filter((l) => /Program Change|not sent/.test(l)).join(' | ')}`)
-  })
-
   test('a slow burst of the app’s copies (30 ms a channel), a controller’s change among its last few', async () => {
     const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
     await t.post('/preset/select', { number: 12 })
@@ -3579,6 +3534,71 @@ export function run(test) {
     await advance(t.clock, 600)
     const changed = t.events.filter((e) => e.type === 'changed').length
     assert.equal(changed, 1, `${changed} preset changes for the controller’s one: ${t.logs.join(' | ')}`)
+  })
+
+  test('a lone copy of the app’s Program Change after its burst is over and a controller’s change is news: it cannot be told from a controller going back', async () => {
+    const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+    await t.post('/preset/select', { number: 12 })
+    const at = pcSentAt(t, 12)
+    await advance(t.clock, at + 150 - t.clock.now())
+    await sixteenWhole(t, 12, 1)
+    await advance(t.clock, at + 300 - t.clock.now())
+    t.events.splice(0)
+    controllerTo(t, 5)
+    await advance(t.clock, at + 700 - t.clock.now())
+    t.wire.heardShort([0xc0, 12])
+    await advance(t.clock, 400)
+    assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, `a lone 12 after the controller’s 5 was taken for the app’s own: ${t.logs.join(' | ')}`)
+  })
+
+  test('one slow wave of copies earlier on the connection widens nothing: a controller back to the app’s preset is still a change, and a knob turn waiting is refused', async () => {
+    {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 11 })
+      const at11 = pcSentAt(t, 11)
+      await advance(t.clock, at11 + 1100 - t.clock.now())
+      await sixteenWhole(t, 11)
+      await advance(t.clock, 2000)
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 250 - t.clock.now())
+      await sixteenWhole(t, 12)
+      await advance(t.clock, at + 700 - t.clock.now())
+      t.events.splice(0)
+      controllerTo(t, 5)
+      await advance(t.clock, at + 1300 - t.clock.now())
+      controllerTo(t, 12)
+      await advance(t.clock, 400)
+      assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, `the controller back to 12 was taken for the app’s own: ${t.logs.join(' | ')}`)
+    }
+    {
+      const { settings } = await fm3Settings()
+      const t = await onTheLine('fm3', { edit: () => true, settings, methods: { preset: 'pc', learned: { scene: 'published' } } })
+      await t.get('/preset')
+      await drive(t.clock, editRead(t, 58))
+      await t.post('/preset/select', { number: 11 })
+      const at11 = pcSentAt(t, 11)
+      await advance(t.clock, at11 + 1100 - t.clock.now())
+      await sixteenWhole(t, 11, 1)
+      await advance(t.clock, 2000)
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 250 - t.clock.now())
+      await sixteenWhole(t, 12, 1)
+      await advance(t.clock, at + 400 - t.clock.now())
+      controllerTo(t, 5)
+      await advance(t.clock, 100)
+      await t.get('/preset/blocks')
+      await drive(t.clock, editRead(t, 58))
+      await advance(t.clock, Math.max(0, at + 1000 - t.clock.now()))
+      const first = editRead(t, 66)
+      await flush()
+      const knob = t.wire.request('/preset/blocks/58/params/7', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.4, continuous: true }) }).then(() => 'sent', (e) => e)
+      await flush()
+      controllerTo(t, 12)
+      const [, turned] = await drive(t.clock, Promise.all([first, knob]))
+      assert.equal(turned?.status, 409, 'a knob turn waiting went into the preset a controller took the unit back to')
+    }
   })
 
   test('copies of one Program Change are one change only within one bank: the same number after another bank select is another preset', async () => {
