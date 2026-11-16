@@ -124,7 +124,8 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
       jsx: 'transform',
       jsxFactory: '__h',
       jsxFragment: '__F',
-      banner: { js: `import { createElement as __h, Fragment as __F } from ${JSON.stringify(standins)};` },
+      /* By its name beside the bundle, never by its path: a Windows path ("C:\\…") is no address Node will import from. */
+      banner: { js: `import { createElement as __h, Fragment as __F } from './standins.mjs';` },
       logLevel: 'silent',
       plugins: [
         {
@@ -136,7 +137,7 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
               if (a.path === '../lib/volume') return { path: repo('mobile/src/lib/volume.js') }
               if (a.importer === repo('mobile/src/lib/volume.js')) return { path: repo(`mobile/src/lib/${a.path.replace(/^\.\//, '')}`) }
               if (a.importer.startsWith(repo('mobile/src/lib/'))) return undefined
-              return { path: standins, external: true }
+              return { path: './standins.mjs', external: true }
             })
           }
         }

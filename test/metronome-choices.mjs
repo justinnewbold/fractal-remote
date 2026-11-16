@@ -80,7 +80,8 @@ async function bench() {
       jsx: 'transform',
       jsxFactory: '__h',
       jsxFragment: '__F',
-      banner: { js: `import { createElement as __h, Fragment as __F } from ${JSON.stringify(standins)};` },
+      /* By its name beside the bundle, never by its path: a Windows path ("C:\\…") is no address Node will import from. */
+      banner: { js: `import { createElement as __h, Fragment as __F } from './standins.mjs';` },
       logLevel: 'silent',
       plugins: [
         {
@@ -90,7 +91,7 @@ async function bench() {
               if (a.kind === 'entry-point') return undefined
               if (REAL.includes(a.path)) return { path: `${lib}${a.path.replace('../lib/', '')}.js` }
               if (a.importer.startsWith(lib)) return { path: `${lib}${a.path.replace(/^\.\//, '').replace(/\.js$/, '')}.js` }
-              return { path: standins, external: true }
+              return { path: './standins.mjs', external: true }
             })
           }
         }
