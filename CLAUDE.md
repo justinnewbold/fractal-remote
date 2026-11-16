@@ -1814,12 +1814,14 @@ the list and nothing else (bleWire `gridOrder`): column by column, top row
 first, the computer's walk. No row or column is handed on, so no other
 screen sees anything new. It is believed only where its blocks are
 exactly the status read's (NOT_BLOCKS left out of both: a III lists 200
-and 201 in every status answer) and no preset changed between the two
-reads; it is not asked within `ORDER_QUIET_MS` of a preset change (a rig
-that sends Program Changes back), nor before the unit has said which
-preset it is on. No answer, a refusal, one it cannot read or other
-blocks: the usual order and a line saying why; two reads in a row with
-nothing usable and it is not asked again that connection. A scene change
+and 201 in every status answer), no preset changed between the two reads,
+and the unit, asked after the grid's answer, says it is still on that
+preset; within `ORDER_QUIET_MS` of a preset change it waits out the rest
+of that time first (a rig that sends Program Changes back), and it is not
+asked before the unit has said which preset it is on. No answer, a
+refusal, one it cannot read or other blocks: the usual order and a line
+saying why; two reads in a row with nothing usable and it is not asked
+again that connection. A scene change
 or a preset seen again asks nothing; a chain changed from the phone is
 read again. Never an AM4 (its slots come in order) or a VP4. The way out
 lets that one frame through, byte for byte, only while the order is open
@@ -1840,6 +1842,28 @@ reading off the screen). Not known either: a block moved on the unit's
 own front panel with the same blocks in the preset keeps the old order
 until the next connection. It opens to everyone when his log shows it
 agreeing, with its line in What's new then.
+
+*What an independent read found before it went out, all fixed, each with
+a test seen to fail without its fix (16 November 2026).* A block moved
+from the phone and not saved stayed where Play drew it after the unit had
+dropped the move (another preset and back, the same one chosen again, the
+footswitch away and back): now the next preset change lets go of what was
+kept, and the stored layout is read again. A footswitch step while the
+grid was being read went unnoticed, so one preset could be drawn in the
+next one's order: the unit is now asked which preset it is on after the
+grid answers (one small read more, once a preset), and a step it finds is
+news, so Play reads the new preset. An answer that came after its read had
+given up could be taken by the next preset's read: for two seconds after a
+read comes back with nothing the grid is not asked (the usual order that
+once, Play not kept waiting). A read straight after a preset change gave
+up, and the rig's own preset read comes just before Play's, so a preset
+could stay in the usual order for good: it now waits out the rest of the
+0.4 s and asks. A grid that never agrees with the status read is given up
+on after two in a row, as the rule always said. And the log says "the
+connection went while the grid read … was out" where it used to say the
+read was not sent. THE LESSON AGAIN: a footswitch says nothing, so a read
+kept for a preset asks the unit where it is at the end, as the chain's
+read does.
 
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**

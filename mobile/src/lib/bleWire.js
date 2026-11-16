@@ -275,11 +275,14 @@ export const WAIT = {
 /*
  * THE GRID IS NOT ASKED FOR PLAY'S ORDER WHILE A PRESET IS STILL ARRIVING:
  * within this long of the last preset change this wire counted (a select,
- * a Program Change heard, a preset the unit said it is on). Play's read of
- * the blocks comes well after it (OWN_SETTLE_MS from a select of its own,
- * PRESET_SETTLE_MS from news of one), and a rig that sends Program Changes
- * back sends its burst within a tenth of a second; a read asked inside it
- * is drawn in the usual order and the next one asks.
+ * a Program Change heard, a preset the unit said it is on). A rig that
+ * sends Program Changes back sends its burst within a tenth of a second. A
+ * read asked inside it WAITS OUT THE REST of this time and then asks, and
+ * is drawn in the usual order only if another preset change came while it
+ * waited. It used to give up at once, and the rig's own settled preset read
+ * (which the wire counts) comes straight before Play's read of the blocks,
+ * so that preset stayed in the usual order with nothing asking again (an
+ * independent read, before it went out).
  */
 export const ORDER_QUIET_MS = 400
 /* Reads for Play's order that brought back nothing it could use, in a row, before it is not asked again on this connection. */
@@ -845,9 +848,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   let presetMoves = 0
   let presetAt = -Infinity
+  /*
+   * A block moved from the phone since the last preset change (chainChanged):
+   * the orders kept from then on are of a layout the unit drops when it loads
+   * a preset (another one, or the same one chosen again), so the next preset
+   * change lets go of every order kept, and the stored layout is read again.
+   */
+  let orderEdited = false
   function presetMoved() {
     presetMoves += 1
     presetAt = time.now()
+    if (orderEdited) {
+      orderKept.clear()
+      orderEdited = false
+    }
   }
   let reread = 0
   let editTimer = null
@@ -2245,17 +2259,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    *
    * BELIEVED ONLY WHERE IT AGREES. Its blocks have to be exactly the ones
    * the status read listed (the ids that are no block, NOT_BLOCKS, left out
-   * of both; a shunt, a bare wire, is no block of the grid's), and no
-   * preset change may have come between the status read and its answer. Anything else is the usual
-   * order, with a line in the log saying why: no answer, a refusal, an
-   * answer this app cannot read, other blocks, a preset change. A preset
-   * still arriving is not asked at all (ORDER_QUIET_MS).
+   * of both; a shunt, a bare wire, is no block of the grid's), no preset
+   * change may have come between the status read and its answer, and the
+   * unit, asked after its answer, has to say it is still on the preset the
+   * grid was read for (a footswitch step says nothing of itself). Anything
+   * else is the usual order, with a line in the log saying why: no answer, a
+   * refusal, an answer this app cannot read, other blocks, a preset change,
+   * a unit on another preset or not saying. A preset still arriving waits
+   * out the rest of ORDER_QUIET_MS first; a read that came back with nothing
+   * keeps the grid from being asked again for LATE_MS (`gridLateUntil`).
    *
    * REMEMBERED for the connection by preset and block list (`orderKept`), a
    * disagreement too, so a preset seen again asks nothing, and a scene
-   * change never asks (Play reads only the status then). After
-   * ORDER_MISSES_MOST reads in a row brought back nothing it could use, it
-   * is not asked again on this connection.
+   * change never asks (Play reads only the status then). A block moved from
+   * the phone has its preset read again, and what that read keeps is let go
+   * of at the next preset change, when the unit drops the move
+   * (`orderEdited`). After ORDER_MISSES_MOST reads in a row brought back
+   * nothing it could use (other blocks than the status read's among them),
+   * it is not asked again on this connection.
    *
    * NOT PROVEN ON A UNIT: no FM3, FM9 or Axe-Fx III has answered this read
    * down its MIDI jack through an adapter (the answers on record came over
@@ -2268,6 +2289,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let orderGaveUp = false
   let orderNoPresetSaid = false
   let orderAnswerSaid = false
+  /*
+   * Until when an order read that came back with nothing may still be
+   * answered (LATE_MS). Its answer would match the next order read's
+   * question byte for byte, and a grid read is never held for a late answer
+   * (heldFor leaves function 0x01 alone), so the next preset's read took the
+   * last one's grid for its own (an independent read, before it went out).
+   * Inside it the grid is not asked, and not waited for either: Play's tiles
+   * wait on this read.
+   */
+  let gridLateUntil = -Infinity
   let orderLane = Promise.resolve()
   const inOrderLane = (run) => {
     const next = orderLane.then(run, run)
@@ -2291,8 +2322,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return [...shown].sort((a, b) => of(a) - of(b))
   }
   function orderMissed(why) {
-    orderMisses += 1
     say(`${why}: kept the usual order`)
+    orderMiss()
+  }
+  /* One more read in a row with nothing it could use: no answer, a refusal, one this app cannot read, or other blocks than the status read's. Only an order believed starts the count again. */
+  function orderMiss() {
+    orderMisses += 1
     if (orderMisses >= ORDER_MISSES_MOST && !orderGaveUp) {
       orderGaveUp = true
       say(`the grid is not asked for the block order again on this connection: ${ORDER_MISSES_MOST} reads in a row brought back nothing it could use`)
@@ -2310,7 +2345,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return null
     }
     const ids = orderIds(list.map((b) => b.effectId))
-    const key = `${last.preset}|${ids.join(',')}`
+    /* The preset the grid is read for: the unit is asked after its answer, and has to be on it still. */
+    const keyPreset = last.preset
+    const key = `${keyPreset}|${ids.join(',')}`
     if (orderKept.has(key) && presetMoves === at) return orderKept.get(key)
     return inOrderLane(async () => {
       if (presetMoves !== at) {
@@ -2319,19 +2356,35 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       if (orderKept.has(key)) return orderKept.get(key)
       if (orderGaveUp) return null
-      if (time.now() - presetAt < ORDER_QUIET_MS) {
-        say('the grid is not asked for the block order while a preset is still arriving: the usual order this time')
+      /* A preset still arriving (ORDER_QUIET_MS): the rest of the quiet time waited out, then asked, unless another preset change came meanwhile. */
+      const stillFor = ORDER_QUIET_MS - (time.now() - presetAt)
+      if (stillFor > 0) {
+        await pause(stillFor)
+        if (presetMoves !== at) {
+          say('the grid is not asked for the block order while a preset is still arriving: the usual order this time')
+          return null
+        }
+      }
+      if (time.now() < gridLateUntil) {
+        say('an earlier grid read for the block order may still be answered, so the grid is not asked now: the usual order this time')
         return null
       }
       const out = buildGridRead(model)
       let got = null
+      /* Whether the read left the phone: a connection that goes while it is out is not "not sent". */
+      let went = false
       try {
         got = await orderHand.during([out], () =>
-          ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order')
+          ask(out, (f) => (f[5] === FN.PARAM && f[6] === GRID_SUB.READ && f.length > out.length ? { frame: f } : undefined), WAIT.gridOrder, 'where the blocks are, for their order', {
+            sent: () => {
+              went = true
+            }
+          })
         )
-      } catch {
-        /* Not sent: refused at the way out (the order closed to this account before its turn came), or the adapter gone. Nothing the unit did, so no miss. */
-        say('the grid read for the block order was not sent: kept the usual order')
+      } catch (err) {
+        /* Refused at the way out (the order closed to this account before its turn came), the adapter gone, or the connection with it. Nothing the unit did, so no miss. */
+        if (went && closed && !err?.refused) say('the connection went while the grid read for the block order was out, before its answer: kept the usual order')
+        else say('the grid read for the block order was not sent: kept the usual order')
         return null
       }
       if (rejected(got)) {
@@ -2339,6 +2392,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return null
       }
       if (!got || !got.frame) {
+        gridLateUntil = time.now() + LATE_MS
         orderMissed('the grid read for the block order came back with nothing')
         return null
       }
@@ -2356,19 +2410,50 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         orderMissed('the grid’s answer for the block order is not one this app can read')
         return null
       }
-      orderMisses = 0
+      /*
+       * WHICH PRESET THE UNIT IS ON, asked before anything is compared or
+       * kept. A gen-3 unit stepped by its own footswitch says nothing, so a
+       * step while Play's read was out went unnoticed: the next preset's
+       * grid was kept as this one's order, or this one kept as not matching
+       * (an independent read, before it went out). The chain's own read ends
+       * the same way (gen3StillHere). Moved, or no clear answer: nothing
+       * kept, no miss, and a move is news, so Play reads the new preset.
+       */
+      let here = null
+      try {
+        here = await presetNow()
+      } catch {
+        here = null
+      }
+      const said = here !== null && here !== SKIPPED && !rejected(here) && Number.isInteger(here?.number)
+      if (!said) {
+        say('the unit did not say which preset it is on after the grid read for the block order: kept the usual order')
+        return null
+      }
+      notePreset(here, true)
+      if (here.number !== keyPreset) {
+        say(`the unit is not on the preset the grid was read for: kept the usual order (read for preset ${keyPreset}, the unit is on ${here.number})`)
+        return null
+      }
+      if (presetMoves !== at) {
+        say('the preset changed while the grid was read for the block order: kept the usual order')
+        return null
+      }
       /* Its blocks, in the order it walks them, which is the computer's: column by column, top row first. A shunt (a bare wire) is no block. */
       const cells = live.cells.filter((c) => c.effectId !== undefined)
       const onGrid = orderIds(cells.map((c) => c.effectId))
       if (onGrid.join(',') !== ids.join(',')) {
         const gridOnly = onGrid.filter((id) => !ids.includes(id))
         const statusOnly = ids.filter((id) => !onGrid.includes(id))
-        say(`the grid’s blocks don’t match the status read: kept the usual order (preset ${last.preset}; only on the grid: ${gridOnly.join(', ') || 'none'}; only in the status read: ${statusOnly.join(', ') || 'none'})`)
+        say(`the grid’s blocks don’t match the status read: kept the usual order (preset ${keyPreset}; only on the grid: ${gridOnly.join(', ') || 'none'}; only in the status read: ${statusOnly.join(', ') || 'none'})`)
         keepOrder(key, null)
+        /* A grid that disagrees is a read with nothing usable: a unit always misread is given up on after ORDER_MISSES_MOST, like one that says nothing. */
+        orderMiss()
         return null
       }
+      orderMisses = 0
       const order = cells.map((c) => c.effectId)
-      say(`block order from the unit’s grid, preset ${last.preset}: ${cells.map((c) => `${blockNamed(c.effectId)} r${c.row + 1}c${c.col + 1}`).join(', ')}`)
+      say(`block order from the unit’s grid, preset ${keyPreset}: ${cells.map((c) => `${blockNamed(c.effectId)} r${c.row + 1}c${c.col + 1}`).join(', ')}`)
       keepOrder(key, order)
       return order
     })
@@ -3613,8 +3698,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   function chainChanged() {
     gridKept = null
     statusKept = null
-    /* A block moved on the grid keeps its preset's block list: Play's order is read again. */
+    /* A block moved on the grid keeps its preset's block list: Play's order is read again, and what it reads is let go of at the next preset change (presetMoved). */
     orderKept.clear()
+    orderEdited = true
     forgetEdits()
     if (am4) structure = null
     emit({ type: 'changed', scope: 'grid' })
