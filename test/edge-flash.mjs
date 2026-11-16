@@ -274,6 +274,8 @@ export function run(test) {
     )
     /* The line under it is the pop-up's own for the state: what picking it gives (the light, which the pick switches on), or, lit with the flash switched off since, that nothing keeps time. Never "lights on every beat" under a flash that is off. */
     assert.match(settings, /\{soundLine\(\{ quiet: true, edge: edgeChoice\.quiet \? edgeChoice\.on : true, unit: unitCan\.can, demo, noun: deviceNoun\(\) \}\)\}/, 'the line under No sound is not the rule’s for the state the device is in')
+    /* And the hint lower down does not say "so the phone keeps time", or how to switch the unit's click off a second time, under a No sound that has just said the device is silent and what to do about the unit. */
+    assert.match(settings, /unitCan\.can \? ' The unit’s own click is the steadiest one to play to\.' : edgeChoice\.quiet \? '' : ` \$\{unitCan\.why\}`/, 'Settings says the device keeps time under a lit No sound')
     /* And under each place, the rule's: not "with a flash" with the flash switched off. */
     assert.match(settings, /\{placeNote\(p, \{ offered: edgeChoice\.offered, edge: edgeChoice\.on, noun: deviceNoun\(\) \}\)\}/)
     assert.doesNotMatch(settings, /\{p\.note\}/)

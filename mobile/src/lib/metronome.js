@@ -108,6 +108,8 @@ async function switchUnit(slug, on) {
   const said = await setUnitMetronome(slug, on)
   if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
   if (said?.ok === false || said?.simulated) return said
+  /* The unit has taken a switch, whoever asked (a press, or its arriving): what it refused before is put right, or overtaken, and is not asked again. */
+  if (untold !== null && untold.slug === slug) untold = null
   const tell = (value) =>
     logDebug(
       'metronome',
@@ -146,8 +148,15 @@ async function switchUnit(slug, on) {
  * with the unit still doing what it had been told to stop. Found with the
  * sound picked Off (16 November 2026): Off lit, the unit clicking, and a
  * second press that sent nothing. So what was refused is remembered, for
- * that unit, and a press that asks the same of it is written again though
- * the setting no longer changes.
+ * that unit, and the same pick pressed again (Off again, the same place
+ * again) is written again though the setting no longer changes.
+ *
+ * ONLY a pick, a press that names the place. The switch, and the watch's
+ * tap, ask nothing of the unit when its half does not change, and must not
+ * write it: somebody may have turned the unit's click on or off by hand
+ * since, and a press of "Tap on the watch" is no reason to turn it back.
+ * And forgotten as soon as the unit takes a switch from anywhere
+ * (switchUnit), its arriving included.
  */
 let untold = null
 
@@ -167,7 +176,7 @@ async function change(patch, slug, here = {}) {
   announce()
   AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
   const after = clicks(setting, can).unit
-  const again = can && untold !== null && untold.slug === slug && untold.on === after
+  const again = can && untold !== null && untold.slug === slug && untold.on === after && !!patch && 'where' in patch
   if (before === after && !again) return { ok: true }
   untold = null
   try {

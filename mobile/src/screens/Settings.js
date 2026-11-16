@@ -1900,8 +1900,9 @@ export default function Settings({
             ))}
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
             <Note tone="hint">
-              {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}. ${
-                unitCan.can ? 'The unit’s own click is the steadiest one to play to.' : unitCan.why
+              {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}.${
+                /* Under No sound the line there has said what is left and what to do about the unit's own click: not "so the phone keeps time" under a phone that is silent. */
+                unitCan.can ? ' The unit’s own click is the steadiest one to play to.' : edgeChoice.quiet ? '' : ` ${unitCan.why}`
               }${
                 unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
                   ? ` Until the unit says its click is on, the ${deviceNoun()} keeps time as well.`

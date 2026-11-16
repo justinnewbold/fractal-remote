@@ -2402,7 +2402,8 @@ export function run(test) {
      */
     assert.match(settings, /const clickHere = \{ bluetooth: bluetooth && !demo, demo \} const unitCan = unitClick\(rigSlug, clickHere\)/)
     assert.match(settings, /placesFor\(unitCan\.can\)\.map/, 'Unit and Both are offered where the unit cannot click')
-    assert.match(settings, /unitCan\.can \? 'The unit’s own click is the steadiest one to play to\.' : unitCan\.why/)
+    /* (Left out only under a lit No sound, for the account offered it, where the line there has already said it: test/edge-flash.mjs.) */
+    assert.match(settings, /unitCan\.can \? ' The unit’s own click is the steadiest one to play to\.' : edgeChoice\.quiet \? '' : ` \$\{unitCan\.why\}`/)
     assert.match(flat('mobile/App.js'), /useUnitMetronome\(rigSlug, unitHere && !demo, \{ bluetooth \}\)/, 'a refused click is still sent on every Bluetooth arrival')
     /* And a tuner with no readings blames no computer when there is none. */
     const tuner = flat('mobile/src/components/Tuner.js')

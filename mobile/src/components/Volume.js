@@ -183,11 +183,19 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * when the screen was drawn.
    */
   const [reading, setReading] = useState(false)
-  /* Another preset's Output block is another level: not shown as this one's
-     while this one is read. */
+  /*
+   * Another preset's Output block is another level: not shown as this one's
+   * while this one is read. And a press still waiting to be confirmed was a
+   * press on the block that has gone: its wait is dropped with it, or it
+   * fired later and "confirmed" the new block's own level on it, lighting
+   * Save for a change nobody made.
+   */
   useEffect(() => {
     setParamState(null)
     show(null)
+    clearTimeout(settle.current.timer)
+    settle.current.timer = null
+    settle.current.again = false
   }, [eid])
   useEffect(() => {
     if (!open || !Number.isInteger(eid)) return undefined
@@ -199,9 +207,19 @@ export default function Volume({ blocks, open, onClose, onError }) {
         if (stop) return
         const found = outputLevelParam(res?.named)
         setParamState(found)
-        /* A press still settling from before a quick close and open is newer
-           than this answer, which was asked before it landed. */
-        if (!settle.current.timer && !settle.current.landing) show(found ? found.value : null)
+        /*
+         * A press or a drag still landing ON THIS BLOCK from before a quick
+         * close and open is newer than this answer, which was asked before
+         * it landed. One that was landing on the block before this one is
+         * not: held back for it, the new block's level was never shown, the
+         * slider read "—" until the next open, and the next press of + went
+         * to the bottom of the range, the sound all but gone ("the next
+         * press drops the volume", found by the review, 16 November 2026:
+         * a press, then a footswitch to another unit's preset inside the
+         * same second).
+         */
+        const landing = (settle.current.timer !== null || settle.current.landing) && settle.current.eid === eid
+        if (!landing) show(found ? found.value : null)
       } catch (err) {
         if (!stop) onError?.(err.message)
       } finally {
@@ -228,7 +246,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
       },
       onPanResponderMove: (_, gesture) => {
         const { param: p, width: w } = live.current
-        if (!p || !w) return
+        /* Never from a level that is not known: nothing counted from nothing is a level to send. */
+        if (!p || !w || typeof from.current !== 'number') return
         const span = p.max - p.min
         const next = clamp(from.current + (gesture.dx / w) * span, p.min, p.max)
         const rounded = Math.round(next * 100) / 100
@@ -238,11 +257,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
       },
       onPanResponderRelease: () => {
         setDragging(false)
-        land()
+        landDrag()
       },
       onPanResponderTerminate: () => {
         setDragging(false)
-        land()
+        landDrag()
       }
     })
   ).current
@@ -278,6 +297,8 @@ export default function Volume({ blocks, open, onClose, onError }) {
     try {
       const failed = await writer.current.settled()
       if (failed) say?.(failed.message)
+      /* The block went while the writes were still going out (another unit's preset): this level was the old block's, and is not confirmed on the new one. */
+      if (live.current.eid !== block) return
       const res = await setParamConfirmed(block, p.id, v, p)
       /* The level is a parameter like any other, so the Save button should
          know about it — see rig.noteEdited. */
@@ -307,13 +328,20 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * drag; the careful read-back waits until the presses stop, and runs one
    * at a time. See NUDGE_SETTLE_MS for the evening that taught this.
    */
-  const settle = useRef({ timer: null, landing: false, again: false })
+  /*
+   * `eid` is the block the press or the drag that is landing was made on, so
+   * a read of ANOTHER block is never held back for it (the open's read,
+   * above).
+   */
+  const settle = useRef({ timer: null, landing: false, again: false, eid: null })
   useEffect(() => () => clearTimeout(settle.current.timer), [])
   const settleNow = async () => {
     if (settle.current.landing) {
       settle.current.again = true
       return
     }
+    /* A drag let go while presses were still waiting lands for them too: one landing, not theirs after it. */
+    clearTimeout(settle.current.timer)
     settle.current.timer = null
     settle.current.landing = true
     try {
@@ -326,6 +354,17 @@ export default function Volume({ blocks, open, onClose, onError }) {
       }
     }
   }
+  /*
+   * The end of a drag lands the way a burst of presses does, and is marked
+   * as landing while it does: a quick close and open during it used to show
+   * the level the unit held when the open asked, under the one the thumb
+   * had just left, and the landing then said nothing, because it only
+   * speaks for the level on screen.
+   */
+  const landDrag = () => {
+    settle.current.eid = live.current.eid
+    settleNow()
+  }
   const nudge = (direction) => {
     const { param: p, eid: block, present, onError: say } = live.current
     if (!p) return
@@ -333,10 +372,13 @@ export default function Volume({ blocks, open, onClose, onError }) {
       noOutput(present, say)
       return
     }
+    /* Never from a level that is not known: the rule steps an unknown level from the bottom of its range, which is the sound all but gone. */
+    if (typeof level.current !== 'number') return
     const next = nudged(level.current, p, volumeNudge(p) * direction)
     show(next)
     writer.current.send(next)
     clearTimeout(settle.current.timer)
+    settle.current.eid = block
     settle.current.timer = setTimeout(settleNow, NUDGE_SETTLE_MS)
   }
 

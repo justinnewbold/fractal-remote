@@ -78,12 +78,24 @@ export const paneRim = () => '#fff', ANY_WAY_UP = [], clearSides = () => ({ padd
 export const at = () => '#000'
 /* Note, Press and the metronome's switch: drawn as their names. */
 export default 'Drawn'
-/* The unit: one Output level, read once per open, and everything sent to it written down in order. */
-export const unit = { level: 0, holds: null }
+/*
+ * The unit: an Output level per block, answered as it stands when it is
+ * asked, and everything sent to it written down in order. A write is
+ * written down as it goes out and takes when it lands, \`unit.slow\`
+ * milliseconds later (none, unless a test says the wire is slow).
+ */
+export const unit = { level: 0, levels: {}, holds: null, slow: 0 }
+const landed = () => (unit.slow ? new Promise((done) => setTimeout(done, unit.slow)) : null)
 export const idOf = (b) => b?.effectId
-export const blockParams = async (eid) => { H.log.push(['read', eid]); return { named: [{ id: 0, name: 'Level', unit: 'dB', min: -80, max: 20, value: unit.level }] } }
-export const setParam = async (block, id, v) => { H.log.push(['write', block, v]) }
-export const setParamConfirmed = async (block, id, v) => { H.log.push(['confirmed', block, v]); return unit.holds === null ? { ok: true, actual: v } : { ok: false, actual: unit.holds } }
+export const blockParams = async (eid) => { H.log.push(['read', eid]); return { named: [{ id: 0, name: 'Level', unit: 'dB', min: -80, max: 20, value: eid in unit.levels ? unit.levels[eid] : unit.level }] } }
+export const setParam = async (block, id, v) => { H.log.push(['write', block, v]); await landed(); unit.level = v }
+export const setParamConfirmed = async (block, id, v) => {
+  H.log.push(['confirmed', block, v])
+  await landed()
+  if (unit.holds !== null) return { ok: false, actual: unit.holds }
+  unit.level = v
+  return { ok: true, actual: v }
+}
 export const noteEdited = () => { H.log.push(['edited']) }
 export const tick = () => {}
 export const logDebug = (...said) => { H.log.push(['log', ...said]) }
@@ -333,6 +345,112 @@ export function run(test) {
     const src = read('mobile/src/components/Volume.js')
     assert.match(src, /const AROUND_METRONOME = 4 \* space\.xl \+ 4 \* space\.lg \+ VOLUME_ROW \+ 2 \* TAP \+ CLOSE_LINE\n/)
     assert.match(src, /style=\{\{ flexGrow: 0, maxHeight: metronomeRoom\(height0, insets\) \}\}/)
+  })
+
+  test('volume: a press still settling when the Output block changes is dropped with its block, and the new block’s level is shown and stepped from', async () => {
+    /*
+     * A press of +, then inside the same second a footswitch to a preset
+     * whose Output is another block, holding +5. The read of the new block
+     * used to be held back for the press still waiting (a press on the OLD
+     * block), so its level was never shown: the slider read "—", and the
+     * next + stepped from the bottom of the range and wrote −79 dB.
+     */
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.unit.levels[47] = 5
+    const other = [{ slug: 'output', name: 'Output 1', effectId: 47 }]
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: other, open: true })
+    await b.draw({ blocks: other, open: true })
+    await b.wait(20)
+    await b.draw({ blocks: other, open: true })
+    assert.equal(b.slider()?.props.accessibilityValue.now, 5, 'the new block’s level is not shown: a press on the block before it is still being waited for')
+    await b.wait(420)
+    await b.draw({ blocks: other, open: true })
+    assert.deepEqual(b.sent(), [['write', 46, 1]], 'the press on the old block was landed on the new one, or lit Save for a change nobody made')
+    assert.deepEqual(b.errors, [])
+    /* And the next press steps from what the new block holds. */
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: other, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent().slice(1), [['write', 47, 6], ['confirmed', 47, 6], ['edited']], 'the next press did not step from the new block’s level')
+  })
+
+  test('volume: a drag still going out when the Output block changes is not confirmed on the block that has gone', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    b.unit.levels[47] = 5
+    const other = [{ slug: 'output', name: 'Output 1', effectId: 47 }]
+    /* A slow wire: the drag's write is still on its way when the other unit's preset arrives. */
+    b.unit.slow = 60
+    b.H.log.length = 0
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    slider.props.onPanResponderRelease()
+    await b.draw({ blocks: other, open: true })
+    await b.draw({ blocks: other, open: true })
+    await b.wait(250)
+    await b.draw({ blocks: other, open: true })
+    assert.deepEqual(b.sent(), [['write', 46, 10]], 'the old block’s level was confirmed after its block had gone')
+    assert.deepEqual(b.errors, [])
+    assert.equal(b.slider()?.props.accessibilityValue.now, 5, 'the new block’s level is not shown')
+  })
+
+  test('volume: a level the unit did not give is never stepped or dragged from: nothing is sent from the bottom of the range', async () => {
+    const b = await bench()
+    b.unit.level = undefined
+    await b.open(OUTPUT)
+    b.H.log.length = 0
+    assert.ok(b.slider(), 'this check needs the slider drawn with no level known')
+    b.button('Volume up').props.onPress()
+    b.button('Volume down').props.onPress()
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    slider.props.onPanResponderRelease()
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [], 'a level was sent with none known to count from')
+    assert.deepEqual(b.errors, [])
+  })
+
+  test('volume: a quick close and open while a drag is still landing keeps the level the thumb left, not the one the unit held when the open asked', async () => {
+    const b = await bench()
+    await b.open(OUTPUT)
+    /* A slow wire: each write takes 30 ms to land. +10 is going out and +15 waits behind it when the thumb comes off. */
+    b.unit.slow = 30
+    b.H.log.length = 0
+    const slider = b.slider()
+    slider.props.onPanResponderGrant()
+    slider.props.onPanResponderMove({}, { dx: 30 })
+    slider.props.onPanResponderMove({}, { dx: 45 })
+    slider.props.onPanResponderRelease()
+    await b.draw({ blocks: OUTPUT, open: false })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(150)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(b.errors, [])
+    assert.deepEqual(b.sent(), [['write', 46, 10], ['write', 46, 15], ['confirmed', 46, 15], ['edited']])
+    assert.equal(b.unit.level, 15)
+    assert.equal(b.slider().props.accessibilityValue.now, 15, 'the slider shows the level the unit held when the open asked, under the one it now has')
+    /* And a press steps from it. */
+    b.unit.slow = 0
+    b.button('Volume up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent().slice(4).filter((l) => l[0] === 'confirmed'), [['confirmed', 46, 16]])
+
+    /* A drag let go while presses still wait lands once for both, on where the thumb came off. */
+    b.H.log.length = 0
+    b.button('Volume up').props.onPress()
+    const again = b.slider()
+    again.props.onPanResponderGrant()
+    again.props.onPanResponderMove({}, { dx: -30 })
+    again.props.onPanResponderRelease()
+    await b.wait(450)
+    assert.deepEqual(b.sent().filter((l) => l[0] === 'confirmed'), [['confirmed', 46, 7]], 'the presses’ own landing came after the drag’s, a second time')
   })
 
   test('volume: after another unit’s chain is read, a drag lands on that unit’s Output block, not the one the pop-up first saw', async () => {

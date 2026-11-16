@@ -2982,17 +2982,28 @@ beat and the device makes no sound and no tap, and opens no audio.
     place there everywhere, so it REPLACES a saved Unit, also over
     Bluetooth or on an AM4; and any place picked lets go of Off, whoever
     picks it and from whichever page (`setMetronome` does it for a
-    `where`; the picker goes past it through `change`). So the unit is
-    never left clicking under a lit Off, and nothing else has to ask
-    whether it is quiet: the unit's half is the shared rule's alone.
+    `where`; the picker goes past it through `change`). So the setting
+    never asks the unit to click under a lit Off, and nothing else has to
+    ask whether it is quiet: the unit's half is the shared rule's alone.
+    (What the unit DOES is another matter where it refused, or cannot be
+    switched: see the two points below.)
   - Both pages go through `setMetronomeSound` (lib/metronome.js), so they
     cannot disagree. Off is read only for an account offered the choice
     (`useEdgeFlash().quiet`): a device handed to another account clicks.
-  - **A unit that did not take its switch is asked again** at the next
-    press of the same thing (`untold`, lib/metronome.js, for every
-    account). The setting is kept before the unit is written, so a second
-    press changed nothing and used to send nothing: Off lit, the unit
-    clicking, and "the unit didn't take it" gone.
+  - **A unit that did not take its switch is asked again** when the same
+    pick is pressed again: Off again, the same place again (`untold`,
+    lib/metronome.js, for every account). The setting is kept before the
+    unit is written, so a second press changed nothing and used to send
+    nothing: Off lit, the unit clicking, and "the unit didn't take it"
+    gone. ONLY a pick, a press that names the place: the switch and "Tap
+    on the watch" ask nothing of the unit while its half does not change,
+    and writing it from them would undo a click somebody had since
+    switched at the unit by hand (the first version of this did exactly
+    that, and the second review caught it). And it is forgotten as soon
+    as the unit takes a switch from anywhere, its arriving included.
+    A unit that refused Off and is not pressed again keeps clicking under
+    a lit Off, with the words gone once the page is left: the retry is
+    the player's to press.
   - **Where the unit's own click is out of the app's hands** (over
     Bluetooth, on an AM4, a unit with no switch) Off silences the device
     and nothing else, so the line says "No sound from this phone" and how
@@ -3002,7 +3013,9 @@ beat and the device makes no sound and no tap, and opens no audio.
     the light is called apart from the unit's click wherever the unit
     clicks with the edge lit, under Both as under Unit; the device is not
     said to click "with a flash" with the flash switched off; and with no
-    sound and no flash it says nothing keeps time.
+    sound and no flash it says nothing keeps time. Settings' hint lower
+    down leaves out why the unit is not offered while No sound is lit:
+    "so the phone keeps time" is not so under a phone that is silent.
   - The pop-up has no scrolling round it (the slider is why), so the
     metronome's part alone scrolls, in what the window leaves
     (`metronomeRoom`, components/Volume): Done can always be reached. On
@@ -3530,6 +3543,27 @@ review, in the React Native renderer's own code, the same day). The level
 has its own ref now (`level`, set only by `show`), and the bench has
 `render` (draw, effects left waiting) and `flush` beside `draw`, because a
 bench that runs every effect at once cannot see this at all.
+
+Two more were in the pop-up before any of this, found on the lines the fix
+touched (the second review, the same day), and both are closed:
+
+- A press of − or + waits 350 ms to be confirmed, and the read of the level
+  at each open is held back while one waits, so a quick close and open does
+  not show an older level over the press. It was held back for ANY press:
+  a press, then a preset whose Output is another block inside that second,
+  and the new block's level was never shown. The slider read "—", and the
+  next + stepped from the bottom of the range: −79 dB, the sound all but
+  gone. The wait says which block it is for now (`settle.current.eid`), a
+  block that goes takes its waiting press with it, and no press or drag is
+  ever counted from a level that is not known.
+- A drag's landing was not marked as landing at all, so a quick close and
+  open while it was still going out showed the level the unit held when
+  the open asked, and the landing then said nothing (it only speaks for
+  the level on screen). A drag lands through the same door as a burst of
+  presses now (`landDrag`).
+
+Neither has been seen on a phone; both were run on the bench, which has a
+slow wire for the second (`unit.slow`).
 
 **Never write "this phone" into a sentence the app shows.**
 

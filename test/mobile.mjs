@@ -142,11 +142,13 @@ async function clickOnTheBench(os = 'ios') {
       export const writes = []
       export let switchAt = null
       export const __answer = (v) => { switchAt = v }
-      /* A unit that takes what it is told, unless a test says it refuses (globalThis.__clickRefuse: true for an answer of no, 'throw' for a link that is down). Every ask is written down, a refused one as refused. */
+      /* A unit that takes what it is told, unless a test says it refuses (globalThis.__clickRefuse: true for an answer of no, 'throw' for a link that is down, 'no switch' for a unit or a link with no click to switch, said by throwing, 'no switch said' for the same said as an answer). Every ask is written down, a refused one as refused. */
       export const setUnitMetronome = async (slug, on) => {
         const refuse = globalThis.__clickRefuse
         writes.push(slug + ' ' + (on ? 'on' : 'off') + (refuse ? ' refused' : ''))
         if (refuse === 'throw') throw new Error('the link is down')
+        if (refuse === 'no switch') throw Object.assign(new Error('no click to switch'), { unsupported: true })
+        if (refuse === 'no switch said') return { ok: false, unsupported: true }
         return refuse ? { ok: false } : { ok: true }
       }
       export let reads = 0
@@ -158,7 +160,7 @@ async function clickOnTheBench(os = 'ios') {
     'demo.js': 'export const isDemo = () => false\n',
     'feedback.js': 'export let ticks = 0\nexport const tick = () => { ticks++ }\n',
     'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
-    'unsupported.js': 'export const isUnsupported = () => false\n',
+    'unsupported.js': 'export const isUnsupported = (err) => err?.unsupported === true\n',
     /* A clock the test turns, so "asked again a second later" costs nothing to run. */
     'clock.js': `
       let t = 0
@@ -2137,7 +2139,8 @@ export function run(test) {
      * came back as "your computer didn't answer".
      */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
-    assert.match(vol, /writer\.current\.send\(next\) clearTimeout\(settle\.current\.timer\) settle\.current\.timer = setTimeout\(settleNow, NUDGE_SETTLE_MS\)/, 'a press still checks itself on its own')
+    /* And says which block it was a press on, so the read of another block is never held back for it (test/volume-drag.mjs runs a press, then a preset whose Output is another block). */
+    assert.match(vol, /writer\.current\.send\(next\) clearTimeout\(settle\.current\.timer\) settle\.current\.eid = block settle\.current\.timer = setTimeout\(settleNow, NUDGE_SETTLE_MS\)/, 'a press still checks itself on its own')
     assert.match(vol, /if \(settle\.current\.landing\) \{ settle\.current\.again = true return \}/, 'two checks can run at once')
     assert.match(vol, /if \(level\.current !== v\) return if \(!res\.ok\)/, 'a check against a value nobody wants any more can still say didn’t take')
     assert.ok(!/const nudge = async/.test(vol), 'a press waits on its own read-back')
@@ -6544,7 +6547,7 @@ export function run(test) {
     }
   })
 
-  test('a unit that did not take its metronome switch is asked again at the next press of the same thing, and only then', async () => {
+  test('a unit that did not take its metronome switch is asked again when the same pick is pressed again, and by nothing else', async () => {
     /*
      * The setting is kept before the unit is written. A unit that refused
      * was left clicking, and the second press of Off (the words say "then
@@ -6570,11 +6573,24 @@ export function run(test) {
       /* Pressed again, as the words say: asked again, though the setting is as the first press left it. */
       assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: false }, 'a second press of Off said ok with the unit never told')
       assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off refused', 'fm3 off refused'])
-      /* Another unit is not written what this one refused. */
-      assert.deepEqual(await click.setMetronome({ watch: true }, 'fm9'), { ok: true })
-      assert.equal(unitEnd.writes.length, 3, 'another unit was written what this one refused')
-      /* Taken at last, and after that a press of the same thing is nothing to write. */
       globalThis.__clickRefuse = false
+      /*
+       * ONLY the pick. The switch and the watch’s tap ask nothing of the
+       * unit while its half does not change: somebody may have turned the
+       * unit’s click back on by hand since, and "Tap on the watch" is no
+       * reason to turn it off again.
+       */
+      assert.deepEqual(await click.setMetronome({ watch: true }, 'fm3'), { ok: true })
+      assert.deepEqual(await click.setMetronome({ on: false }, 'fm3'), { ok: true })
+      assert.deepEqual(await click.setMetronome({ on: true }, 'fm3'), { ok: true })
+      assert.equal(unitEnd.writes.length, 3, 'a press that names no place wrote the unit what it had refused')
+      /* Another unit is not written what this one refused, by the same pick. */
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm9'), { ok: true })
+      assert.equal(unitEnd.writes.length, 3, 'another unit was written what this one refused')
+      /* Nor is this one over a link its click cannot be switched on (Bluetooth turned on since). */
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm3', { bluetooth: true }), { ok: true })
+      assert.equal(unitEnd.writes.length, 3, 'a unit was asked again over a link its click cannot be switched on')
+      /* Off again, and taken at last; after that a press of the same thing is nothing to write. */
       assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: true })
       await settle()
       assert.deepEqual(unitEnd.writes.slice(3), ['fm3 off'], 'the unit was not told to stop once it would listen')
@@ -6591,7 +6607,7 @@ export function run(test) {
       await clock.advance(0)
       await settle()
       assert.deepEqual(unitEnd.writes.slice(4), ['fm3 on refused', 'fm3 on'], 'a place the unit never heard of was not sent again')
-      /* And what was refused is forgotten once the unit has been asked again and taken it: a later change that asks nothing of the unit writes it nothing. */
+      /* And what was refused is forgotten once the unit has been asked again and taken it: the same pick after that writes nothing. */
       globalThis.__clickRefuse = true
       assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: false })
       globalThis.__clickRefuse = false
@@ -6601,9 +6617,52 @@ export function run(test) {
       await click.setMetronomeSound('phone', 'fm3')
       await settle()
       assert.deepEqual(unitEnd.writes.slice(6), ['fm3 off refused', 'fm3 on', 'fm3 off'])
-      await click.setMetronome({ watch: false }, 'fm3')
-      await click.setMetronome({ watch: true }, 'fm3')
+      await click.setMetronomeSound('phone', 'fm3')
       assert.equal(unitEnd.writes.length, 9, 'a refusal long since put right is still being sent again')
+
+      /*
+       * Forgotten, too, once the unit takes a switch from anywhere: Unit is
+       * picked with the link down, then the unit arrives and is told (its
+       * arriving does that), and the same pick pressed again has nothing
+       * left to send. It used to send it again, to a unit somebody might
+       * have switched off by hand since.
+       */
+      globalThis.__clickRefuse = 'throw'
+      assert.equal((await click.setMetronomeSound('unit', 'fm3')).ok, false)
+      globalThis.__clickRefuse = false
+      click.useUnitMetronome('fm3', true)
+      globalThis.__clickEffect()
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(unitEnd.writes.slice(9), ['fm3 on refused', 'fm3 on'], 'the unit arriving was not told to click')
+      assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: true })
+      assert.equal(unitEnd.writes.length, 11, 'a refusal the unit’s arriving had already put right was sent again')
+
+      /* A unit, or a link, with no click to switch is not one that failed to take it: nothing is remembered, said either way. */
+      await click.setMetronomeSound('phone', 'fm3')
+      await settle()
+      for (const how of ['no switch', 'no switch said']) {
+        globalThis.__clickRefuse = how
+        assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: false, unsupported: true }, how)
+        globalThis.__clickRefuse = false
+        const n = unitEnd.writes.length
+        assert.deepEqual(await click.setMetronomeSound('unit', 'fm3'), { ok: true })
+        assert.equal(unitEnd.writes.length, n, `${how}: a unit with no click to switch was asked again`)
+        await click.setMetronomeSound('phone', 'fm3')
+        await settle()
+      }
+      /* And a refusal is not kept past the asking again: refused, then asked again and told there is no click to switch, and the same pick after that sends nothing. */
+      await click.setMetronomeSound('unit', 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickRefuse = true
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: false })
+      globalThis.__clickRefuse = 'no switch said'
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: false, unsupported: true })
+      globalThis.__clickRefuse = false
+      const asked = unitEnd.writes.length
+      assert.deepEqual(await click.setMetronomeSound('none', 'fm3'), { ok: true })
+      assert.equal(unitEnd.writes.length, asked, 'a refusal is still being asked again after the unit said it has no click to switch')
     } finally {
       globalThis.__clickAdmin = false
       delete globalThis.__clickRefuse
@@ -21131,7 +21190,7 @@ export function run(test) {
     assert.match(vol, /<Note>Reading the level…<\/Note>/, 'the sheet says the unit has no level while it is still being read')
     /* Every open: a press worked out from last time's level, or an answer landing after one, puts the wrong level on the unit. */
     assert.match(vol, /\{Number\.isInteger\(eid\) && reading \? \(/, 'the controls work on a re-open before the level has been read')
-    assert.match(vol, /if \(!settle\.current\.timer && !settle\.current\.landing\) show\(found \? found\.value : null\)/, 'a level read before a press lands over it')
+    assert.match(vol, /const landing = \(settle\.current\.timer !== null \|\| settle\.current\.landing\) && settle\.current\.eid === eid if \(!landing\) show\(found \? found\.value : null\)/, 'a level read before a press lands over it')
   })
 
   test('the phone never turns the computer’s meters or telemetry on or off', () => {
