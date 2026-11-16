@@ -15,6 +15,6 @@ export { KNOB, READ_ALL, TYPED, buildKnob, buildReadAll, buildTyped, readAllColl
 
 const fm9 = gen3Edit({ model: MODELS.fm9, blocks: FM9_BLOCKS, families: FM9_FAMILIES, rosters: FM9_ROSTERS, pages: FM9_PAGES })
 
-export const { editBlock, modelsOf, layoutFor, blockParamsOf, knobFrame, modelFrame, editAllowed } = fm9
+export const { editBlock, modelsOf, layoutFor, sliceFor, blockParamsOf, knobFrame, modelFrame, editAllowed } = fm9
 /** Whether an FM9 may be sent this frame because it is one of Edit's (gen3-edit editAllowed): a name for it, or null. */
 export const fm9EditAllowed = editAllowed

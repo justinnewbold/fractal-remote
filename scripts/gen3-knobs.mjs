@@ -145,7 +145,9 @@ function profiles({ fm3, fm9, axe3 }) {
         const explicit = fm3.FM3_ROSTERS[slug.toLowerCase()]
         return explicit?.length ? explicit : fm3Roster(slug)
       },
-      enumLabelsFor: (fam, pid) => fm3.FM3_ENUM_OVERRIDES[fam]?.[String(pid)]
+      enumLabelsFor: (fam, pid) => fm3.FM3_ENUM_OVERRIDES[fam]?.[String(pid)],
+      /* The settings the unit keeps as a whole number (forgefx-midi devices/gen3/factory.ts ROUNDTRIP_DISCRETE_BY_MODEL): the FM3's is joined from its siblings'. */
+      whole: fm3.FM3_FAMILY_JOIN_DISCRETE
     },
     fm9: {
       name: 'FM9',
@@ -157,7 +159,8 @@ function profiles({ fm3, fm9, axe3 }) {
       layouts: fm9.FM9_LAYOUTS,
       familyByEid: fm9.FM9_FAMILY_BY_EFFECT_ID,
       rosterFor: fm9Roster,
-      enumLabelsFor: (fam, pid) => fm9.FM9_ENUM_OVERRIDES[fam]?.[String(pid)]
+      enumLabelsFor: (fam, pid) => fm9.FM9_ENUM_OVERRIDES[fam]?.[String(pid)],
+      whole: fm9.FM9_ROUNDTRIP_DISCRETE
     },
     axefx3: {
       name: 'Axe-Fx III',
@@ -189,7 +192,8 @@ function profiles({ fm3, fm9, axe3 }) {
         if (!ov) return undefined
         const labels = recToLabels(ov)
         return labels.length ? labels : undefined
-      }
+      },
+      whole: axe3.III_ROUNDTRIP_DISCRETE
     }
   }
 }
@@ -315,6 +319,28 @@ function write({ unit, P, axe3, gen3, pinned }) {
       /* The first def at this number gives the unit, as #display finds it. */
       const unitCode = defs.find((x) => x.paramId === p.paramId)?.unit
       const unitShown = range.unit ?? ((unitCode && UNIT_LABEL[unitCode]) || null)
+      /*
+       * A WHOLE NUMBER, NOT A PLACE (16 November 2026). The codec lists the
+       * settings each unit keeps as a whole number (Bit Reduce, Number of
+       * Taps, a cab's Type) and writes them as that number, typed (sub
+       * 09 00), up to the most its list says (forgefx-midi devices/gen3
+       * catalog.ts `roundtripDiscrete`, makeOrdinalEncode). ForgeFX's driver
+       * does not read that list, so it shows one as a place along its travel:
+       * Bit Reduce at 10 read as 0.004 on his FM3. Such a row carries a 1 in
+       * a seventh place, its range cut to what the list allows, and is read
+       * and written as the number itself (lib/gen3-edit.js). Its number is
+       * the value shown, so a range with a scale other than 1 would mean a
+       * whole number that is not what the unit shows: that stops the script.
+       */
+      const most = P.whole?.[p.name]
+      if (usable && most !== undefined) {
+        if (range.scale !== undefined && range.scale !== 1) throw new Error(`${P.name} ${family} ${p.name} is kept as a whole number but shown at a scale of ${range.scale}: decide how before writing it`)
+        const lo = Math.max(0, Math.ceil(range.displayMin))
+        const hi = Math.min(Math.floor(range.displayMax), most)
+        if (!(lo < hi)) throw new Error(`${P.name} ${family} ${p.name} is kept as a whole number with nothing between ${lo} and ${hi}`)
+        knobs.push([p.paramId, labelOf(p), lo, hi, 0, unitShown, 1])
+        continue
+      }
       /* One whose range cannot be drawn is shown 0 to 10 by #display: the row says so by carrying no range. */
       knobs.push(usable ? [p.paramId, labelOf(p), range.displayMin, range.displayMax, log ? 1 : 0, unitShown] : [p.paramId, labelOf(p)])
     }
@@ -382,8 +408,9 @@ function write({ unit, P, axe3, gen3, pinned }) {
   lines.push('')
   lines.push('/*')
   lines.push(' * Each family: its per-channel stride, its model setting, its knobs')
-  lines.push(' * ([id, label, min, max, log, unit], or [id, label] where the range cannot')
-  lines.push(' * be drawn), its switches ([id, label, min, max, option labels]) and the')
+  lines.push(' * ([id, label, min, max, log, unit], with a 1 after them for a setting the')
+  lines.push(' * unit keeps as a whole number, or [id, label] where the range cannot be')
+  lines.push(' * drawn), its switches ([id, label, min, max, option labels]) and the')
   lines.push(' * settings its pages are chosen by.')
   lines.push(' */')
   lines.push(`export const ${prefix}_FAMILIES = {`)

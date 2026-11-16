@@ -236,6 +236,15 @@ export const WAIT = {
   /* The same for an FM3's block (fm3-edit.js): an amp is about 1,700 bytes, half a second at 31,250 baud. */
   gen3ReadAllGap: 2500,
   gen3ReadAll: 10000,
+  /*
+   * AND THE FIRST BYTE OF EDIT'S READ OF A BLOCK, within this (16 November
+   * 2026). A healthy read is done in 0.3 to 0.7 s on his units, its first
+   * byte back long before that; one that has not begun in a second is one
+   * the unit is not going to answer, and waiting the 2.5 s the gap gets held
+   * the line from everything else, while a Play tap gives up in 1.5 s. Once
+   * anything comes, the gap above is the wait again.
+   */
+  gen3ReadAllFirst: 1000,
   /* An Axe-Fx III's captures (lib/nam-install): one slot's head (334 bytes back, a ninth of a second down an adapter), and one message of an upload (650 bytes out and the unit's answer). */
   namSlot: 2500,
   namChunk: 4000,
@@ -1158,11 +1167,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       lastSent.copies.push(0)
     }
     if (job.priority === PRI.write || job.priority === PRI.editWrite) say(`sent ${job.opts.what || 'a write'}: ${messages.map(toHex).join(' | ')}`)
+    /* The wait for the first byte back: `firstMs` where the question says (Edit's whole-block read), else the wait every byte after it gets. */
+    const firstWait = job.opts.firstMs ?? job.opts.ms ?? 0
     job.expire = () => {
       if (current !== job) return
       if (job.opts.match || job.opts.collect) {
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
-        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms${cameBack(job)}`)
+        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.came.bytes ? job.opts.ms : firstWait} ms${cameBack(job)}`)
       }
       /* Given up on part-way through: the unit may still be sending the rest of it. */
       if (job.opts.collect && job.back) {
@@ -1171,7 +1182,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
       end(job, null)
     }
-    job.timer = time.setTimeout(job.expire, job.opts.ms ?? 0)
+    job.timer = time.setTimeout(job.expire, firstWait)
   }
 
   /*
@@ -2206,7 +2217,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const c = channelIndex(channel)
     if (c === null) throw badInput(`${channel} is not A, B, C or D.`)
     forgetEdits(eid)
+    /* And the list Edit keeps a moment (gen3PlacedHere), which says the channel each block was on: the next read of this block is cut at the new one, not the one it was on a moment ago. */
+    statusKept = null
     await changeChannel(eid, c)
+    statusKept = null
     /* No announcement: the app's channel write expects none. */
     return { ok: true }
   }
@@ -3454,6 +3468,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const st = await gen3PlacedHere(e)
     const got = await ask(g3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the settings of the ${b.name}`, {
       cap: WAIT.gen3ReadAll,
+      /* A read that has not begun in a second is given up, and the line goes to what is waiting (WAIT.gen3ReadAllFirst). */
+      firstMs: WAIT.gen3ReadAllFirst,
       collect: g3Edit.readAllCollector(model, e),
       priority: 'editRead'
     })
@@ -3462,7 +3478,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (got.damaged) throw failure(`The ${b.name}’s settings came back damaged. Try again.`, 502)
     if (moves === at) editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
     const out = ed.blockParamsOf(e, got, { channel: st.channel })
-    say(`read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}`)
+    /* And where the channel was cut from: the unit's count, the values that came, how many a channel and where this one starts (gen3-edit sliceOf). A read sliced in the wrong place is a knob that "didn't take" on every channel but A, and the log could not say so. */
+    const cut = ed.sliceFor(e, got, { channel: st.channel })
+    say(
+      `read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}` +
+        `; the unit said ${got.count} values and sent ${got.values.length}, ${cut.stride} a channel, ${cut.channels} channel${cut.channels === 1 ? '' : 's'}, this one from value ${cut.base}`
+    )
     return out
   }
 
@@ -3474,10 +3495,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!ed.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = ed.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
-    /* The second way of sending a knob, asked of a block that is only sent the first (gen3-edit ONE WAY ONLY: the III's NAM): nothing goes, and it is answered as not done rather than refused, so the screen's own check reads the unit and says what it holds. */
+    /* The typed way asked of a knob, which a gen-3 knob is never sent (gen3-edit ONE WAY ONLY): nothing goes, and it is answered as not sent rather than refused, so the checked write (lib/device setParamConfirmed) goes no further with it and says what its own check read. */
     if (made.unsent) {
       say(`${made.unsent}: nothing sent`)
-      return { ok: false }
+      return { ok: false, unsent: true }
     }
     await gen3PlacedHere(e)
     movedSince(at, made.what)

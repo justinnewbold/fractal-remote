@@ -340,6 +340,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
          not a miss. */
       if (level.current !== v) return
       if (!res.ok) {
+        /* The unit answered neither read of the check: not a miss, and not said as one (lib/device setParamConfirmed `unverified`). */
+        if (res.unverified) {
+          say?.('Couldn’t check that the volume took: the unit didn’t answer. It may have.')
+          return
+        }
         /* Say what the unit is holding, and show it: a slider left pointing
            at a number the unit refused is a slider lying about the volume. */
         const holding = typeof res.actual === 'number' ? res.actual : null
