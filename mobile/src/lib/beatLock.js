@@ -19,8 +19,8 @@
  * Nothing is sent to the unit for any of it, and a unit that sends no beat
  * changes nothing: the device keeps its own beat as it always has, and the
  * words go on saying the two can be apart (lib/edgeFlash EDGE_WORDS.apart).
- * Only while a beat has been heard in the last twenty seconds do they say
- * the two are in step (EDGE_WORDS.inStep).
+ * Only while a beat has been heard in the last twenty seconds, and is known
+ * to within inStepMs, do they say the two are in step (EDGE_WORDS.inStep).
  *
  * HIS ACCOUNT ONLY until he says: lib/features.js BEAT_LOCK_FOR_EVERYONE
  * (`beatLockOn`), as every new thing is. NOT SEEN ON A UNIT YET: that his
@@ -38,8 +38,12 @@ export const BEAT_LOCK = Object.freeze({
   quick: 4,
   quickGapMs: 300,
   everyMs: 6000,
-  /* Added to each side of every window: the computer hearing the beat, and two clocks read to a millisecond. */
-  slackMs: 4,
+  /*
+   * Added to each side of every window from the computer: the computer
+   * hearing the beat (a USB read and a busy moment on a Raspberry Pi), and
+   * two clocks read to a millisecond.
+   */
+  slackMs: 10,
   /* Over Bluetooth or the cable a beat is heard about this long after it fell, give or take this much. */
   wireLateMs: 12,
   wireDoubtMs: 14,
@@ -47,26 +51,36 @@ export const BEAT_LOCK = Object.freeze({
   wireEveryMs: 2000,
   /* The doubt a window gains for each second it is kept: two clocks, a hundred parts in a million apart. */
   driftPerSec: 0.1,
-  /* Two windows that miss each other by less than this are one beat that drifted, not a beat that moved. */
-  nearMs: 30,
   /* No window is believed closer than this, however many agree. */
   floorMs: 3,
-  /* A move smaller than this is not made: nobody hears it, and every move is a beat a little long or short. */
+  /* A move smaller than this is not made: nobody hears it. */
   ignoreMs: 8,
-  /* A window wider than this much of a beat, each side, says nothing about where in the beat. */
-  widestOfBeat: 0.35,
+  /*
+   * A window wider than this much of a beat, each side, says too little
+   * about where in the beat: two of them could agree on two places at once.
+   */
+  widestOfBeat: 0.25,
   /* How many beats apart the unit's messages may come (a unit that sends one a bar), and how close to that they must be. */
   beatsApart: 8,
   gapWithin: 0.03,
   gapWithinMs: 12,
+  /*
+   * "In step" is said only where the unit's beat is known to within this,
+   * and the device's beat is that near it. Through a computer on the other
+   * side of the internet the answer is rarely that sure: the beat is still
+   * moved to where it most likely is, and the words do not claim it.
+   */
+  inStepMs: 20,
   /* How long after the last window the device's beat still counts as on the unit's. */
   heldMs: 20000,
   /* A computer app with no such answer is not asked again for this long. */
   notAskedMs: 10 * 60 * 1000,
-  /* Never two clicks closer than this much of a beat, whatever the move. */
-  apartOfBeat: 0.5,
-  /* A beat a move has just put this far behind, and not clicked yet, is clicked now rather than dropped. */
-  lateMs: 30
+  /*
+   * A move is made this much of a beat at a time, at most, one beat after
+   * another: never a beat dropped, doubled or jumped, only a few a little
+   * long or short until it is there.
+   */
+  slewOfBeat: 0.1
 })
 
 /** `ms` into the half beat either side of nought: (−beat/2, beat/2]. */
@@ -131,29 +145,34 @@ export function windowFromWire(at) {
  * kept gains a little doubt for every second, for two clocks that are not
  * quite one speed.
  *
- * Where they do not overlap, by a little (nearMs), it is that drift and
- * the answer is the gap between them. By more, the unit's beat has moved
- * (a tempo tapped at the unit, its tempo set) and what was held says
- * nothing: the newest window alone, and `moved` says so.
+ * The beat comes round again, so two windows can overlap in two places a
+ * beat apart. Where they do (two wide ones), it cannot be said which, and
+ * the narrower of the two stands alone. Where they do not overlap at all,
+ * one of them is wrong (a beat the computer heard late) or the unit's beat
+ * has moved (a tempo tapped at the unit): `moved` says so, with the newest
+ * window alone, and whoever follows waits for a second window to agree
+ * before believing either (lib/unitBeat).
  */
 export function joined(held, next, beat) {
   if (!next) return held || null
   if (!held || !(beat > 0)) return { ...next, moved: false }
   const doubt = held.half + (BEAT_LOCK.driftPerSec * Math.max(0, next.at - held.at)) / 1000
-  /* Where the newest sits against the held one, in the half beat either side of it. */
+  /* Where the newest sits against the held one, in the half beat either side of it, and a beat round the other way. */
   const d = wrap(next.mid - held.mid, beat)
-  const lo = Math.max(-doubt, d - next.half)
-  const hi = Math.min(doubt, d + next.half)
+  const overlaps = [d, d > 0 ? d - beat : d + beat]
+    .map((at) => ({ at, lo: Math.max(-doubt, at - next.half), hi: Math.min(doubt, at + next.half) }))
+    .filter((o) => o.lo <= o.hi)
+  if (!overlaps.length) return { ...next, moved: true }
+  if (overlaps.length > 1) return next.half <= doubt ? { ...next, moved: false } : { mid: held.mid, half: doubt, at: next.at, moved: false }
+  const [o] = overlaps
   /*
    * The answer is said as a beat beside the NEWEST window, not the first
    * one ever held: `beat` is this device's idea of the unit's, and counting
    * a tenth of a percent of difference across ten minutes of beats would
    * be the whole doubt there is.
    */
-  const near = next.mid - d
-  if (lo <= hi) return { mid: near + (lo + hi) / 2, half: Math.max(BEAT_LOCK.floorMs, (hi - lo) / 2), at: next.at, moved: false }
-  if (lo - hi <= BEAT_LOCK.nearMs) return { mid: near + (lo + hi) / 2, half: Math.max(BEAT_LOCK.floorMs, (lo - hi) / 2), at: next.at, moved: false }
-  return { ...next, moved: true }
+  const near = next.mid - o.at
+  return { mid: near + (o.lo + o.hi) / 2, half: Math.max(BEAT_LOCK.floorMs, (o.hi - o.lo) / 2), at: next.at, moved: false }
 }
 
 /**
@@ -170,33 +189,24 @@ export function moveFor(startedAt, window, beat, lead = 0) {
 }
 
 /**
- * When the next click comes after a move: `due` as the beat's own count has
- * it, or the beat after when that would be a second click too soon after
- * the last (`clicked`, null for none yet).
+ * The part of a move made on this beat: all of what is left, or a share of
+ * a beat (slewOfBeat) where more is left than that.
  */
-export function notTooSoon(due, clicked, beat) {
-  if (!Number.isFinite(due) || !(beat > 0) || !Number.isFinite(clicked)) return due
-  return due - clicked < beat * BEAT_LOCK.apartOfBeat ? due + beat : due
+export function slewPart(left, beat) {
+  if (!Number.isFinite(left) || !(beat > 0)) return 0
+  const most = beat * BEAT_LOCK.slewOfBeat
+  return Math.max(-most, Math.min(most, left))
 }
 
+/** Whether a belief about the unit's beat is sure enough to say the two are in step, with `left` of a move still to make. */
+export const inStepWith = (window, left = 0) => Boolean(window) && window.half <= BEAT_LOCK.inStepMs && Math.abs(left) <= BEAT_LOCK.inStepMs
+
 /**
- * The same, and a beat is not DROPPED by a move either.
- *
- * `next` is the beat the count says comes next after a move (shared
- * nextBeat, at `now`). A move earlier can put the beat that was about to be
- * clicked a little BEHIND now, and the count then calls it gone and books
- * the one after: nearly two beats between two clicks. So where the beat
- * before `next` is only just gone (lateMs) and has not been clicked (it is
- * at least half a beat after the last click), it is clicked now. Never
- * before anything has clicked at all: the first beat waits for one that is
- * squarely on the unit's.
+ * Whether what came back from GET /tempo/beat is its answer at all. A
+ * computer app from before it existed answers with its web page (it sends
+ * the page for any address it does not know), never an error.
  */
-export function dueAfterMove(next, now, clicked, beat) {
-  if (!Number.isFinite(next) || !(beat > 0) || !Number.isFinite(now) || !Number.isFinite(clicked)) return next
-  const gone = next - beat
-  if (now - gone <= BEAT_LOCK.lateMs && gone - clicked >= beat * BEAT_LOCK.apartOfBeat) return Math.max(now, gone)
-  return notTooSoon(next, clicked, beat)
-}
+export const isBeatAnswer = (answer) => Boolean(answer) && typeof answer === 'object' && answer.ok === true && typeof answer.count === 'number'
 
 /** What the log says of an answer that gave no window. */
 export const whyWords = (why) =>

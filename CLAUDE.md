@@ -2950,9 +2950,11 @@ beat and the device makes no sound and no tap, and opens no audio.
 - **The device's beat on the unit's own beat: built 16 November 2026, HIS
   ACCOUNT ONLY** (`BEAT_LOCK_FOR_EVERYONE` in mobile/src/lib/features.js,
   false). A gen-3 unit with Send Realtime Sysex on (Setup → MIDI/Remote)
-  sends one short message on its tempo's beat. Where the unit clicks and
-  the device lights or clicks beside it, the device now listens for that
-  beat and moves its own onto it:
+  sends one short message on its tempo's beat. Where the player has the
+  unit's click picked (Unit or Both: over Bluetooth the app cannot switch
+  the unit's click, and it may be clicking all the same, switched on at the
+  unit) on an FM3, FM9 or Axe-Fx III, the device listens for that beat and
+  moves its own onto it:
 
   - **Through the computer** the computer app notes the moment each beat
     arrives and answers GET /tempo/beat with how long ago the last one was
@@ -2962,21 +2964,48 @@ beat and the device makes no sound and no tap, and opens no audio.
     the road, and as narrow as the round trip was quick. Every window is
     joined with the ones before (mobile/src/lib/beatLock.js `joined`), so
     the belief narrows. A few questions quickly, then one every six
-    seconds; a computer app from before the answer existed says so once
-    and is not asked again for ten minutes.
+    seconds. A computer app from before the answer existed answers with
+    its WEB PAGE, not an error (its not-found handler sends the page for
+    any address it does not know): that, a 404 or a 501 is said once
+    ("Update the computer app") and asked again in ten minutes.
+  - **THROUGH THE COMPUTER IT IS RARELY SURE ENOUGH TO SAY "IN STEP".** The
+    relay is the internet, and a window is half the round trip wide each
+    side (plus 10 ms for the computer hearing the beat): two clocks cannot
+    be told apart better than that, whatever is done. The beat is still
+    moved to the window's middle, which is where it most likely is (out of
+    step only by how lopsided the road is); the words go on saying "can be
+    apart" unless it is known to within 20 ms (`inStepMs`). Over Bluetooth
+    or the cable it is (about 14 ms).
   - **Over Bluetooth or the USB cable** the beat reaches the device itself:
     bleWire hands it on (`{ type: 'beat', at }`), the store passes it to
     lib/beatBus, and lib/unitBeat weighs one every two seconds. Never for
     400 ms after a tap the device sent (the same message comes back as its
-    answer), and never from an AM4 or a VP4.
+    answer), and never from an AM4 or a VP4. (The first cut gated the
+    follower on the app being able to switch the unit's click, which over
+    Bluetooth it never is, so this road was never reached.)
+  - **NO ONE WINDOW IS BELIEVED ALONE** (lib/unitBeat `take`). The first is
+    believed when a second agrees with it; one that disagrees with what is
+    believed is kept aside, asked about again at once, and believed only
+    when another agrees with it (the unit's beat moved: a tempo tapped at
+    the unit) or forgotten when another agrees with what was believed (a
+    beat the computer heard late). Two windows that miss by any amount are
+    a disagreement: the drift of two clocks is in a kept window's doubt
+    already. Two wide windows can overlap in two places a beat apart; then
+    the narrower stands alone (`joined`; the first cut narrowed onto the
+    wrong one, half a beat off, under "In step"). No window wider than a
+    quarter of a beat each side is used (`widestOfBeat`).
   - **The move** (lib/metronome `usePhoneClick`): what the device's beats
     are counted from shifts by the least that puts the click HEARD (its
     lead after the beat, shared `flashLead`), or in silence the light, on
-    the unit's beat. Never two clicks within half a beat, and a move under
-    8 ms is not made. While a beat has been heard in the last twenty
-    seconds the words say "In step with the unit's beat" in place of the
-    "can be apart" sentence (lib/edgeFlash `apartOrInStep`), and go back by
-    themselves.
+    the unit's beat. Before the first click, at once; after, A LITTLE EACH
+    BEAT, a tenth of a beat at most (`slewOfBeat`, lib/beatLock `slewPart`),
+    so no beat is ever dropped, doubled or jumped: a few beats a little long
+    or short. (The first cut moved the count at once, and a small move just
+    before a click dropped that click.) A move under 8 ms is not made.
+    "In step with the unit's beat" is said in place of the "can be apart"
+    sentence (lib/edgeFlash `apartOrInStep`) only while a window has come
+    in the last twenty seconds, it is known to within 20 ms and no more
+    than 20 ms of the move is left (`inStepWith`); and goes back by itself.
   - **Nothing is sent to the unit for any of it.** A unit that sends no
     beat changes nothing, and the log says why once ("the unit has sent no
     beat (Send Realtime Sysex may be off on it: Setup → MIDI/Remote)").

@@ -79,7 +79,6 @@ async function follower() {
     const lock = await import(pathToFileURL(join(dir, 'beatLock.js')).href)
     const log = await import(pathToFileURL(join(dir, 'debugLog.js')).href)
     log.said.length = 0
-    mod.__askAgain()
 
     let t = 100000
     let seq = 0
@@ -153,7 +152,7 @@ export function run(test) {
     assert.match(features, /export const BEAT_LOCK_FOR_EVERYONE = false/, 'the switch shipped on: it is his account’s until he has seen it line up')
     /* And the one place it is asked: beside a unit that is clicking, never in the demo. */
     const click = flat(read('mobile/src/lib/metronome.js'))
-    assert.match(click, /const follow = beatLockOn\(\{ admin: useBluetoothAdmin\(\), everyone: BEAT_LOCK_FOR_EVERYONE \}\) && clicks\(s, can, heardOn\)\.unit && !isDemo\(\)/)
+    assert.match(click, /const follow = beatLockOn\(\{ admin: useBluetoothAdmin\(\), everyone: BEAT_LOCK_FOR_EVERYONE \}\) && clicks\(s\)\.unit && Boolean\(unitMetronome\(slug\)\) && !isDemo\(\)/)
     assert.match(click, /const unfollow = follow \? followUnitBeat\(\{/, 'the unit’s beat is followed whoever is signed in')
   })
 
@@ -190,8 +189,8 @@ export function run(test) {
     for (let i = 0; i < 400; i++) {
       const phase = 1000 + random() * beat
       const asked = 50000 + random() * 5000
-      const there = random() * 120
-      const back = random() * 120
+      const there = random() * 110
+      const back = random() * 110
       const made = asked + there
       const age = (made - phase) % beat
       const got = windowFromAnswer({ ok: true, count: 9, age, gap: beat }, asked, made + back, beat)
@@ -214,7 +213,7 @@ export function run(test) {
     assert.equal(why({ ok: true, count: 9, age: 3200, gap: 2000 }), 'stale', 'a bar’s first beat that is a bar and a half old')
     assert.equal(windowFromAnswer({ ok: true, count: 9, age: 2900, gap: 2000 }, 1000, 1020, 500).window.mid, 1010 - 2900, 'a beat every bar is still a beat to stand on')
     assert.equal(why({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1400), 'slow', 'a round trip of most of a beat')
-    assert.ok(windowFromAnswer({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1000 + 2 * (500 * BEAT_LOCK.widestOfBeat - BEAT_LOCK.slackMs), 500).window, 'the widest window that still says something is refused')
+    assert.ok(windowFromAnswer({ ok: true, count: 9, age: 40, gap: 500 }, 1000, 1000 + 2 * (500 * BEAT_LOCK.widestOfBeat - BEAT_LOCK.slackMs), 500).window, 'the widest window that still says something is kept')
     assert.equal(why(null), 'bad')
     assert.equal(why({ ok: false, age: 40, gap: 500 }), 'bad')
     assert.equal(why({ ok: true, age: -1, gap: 500 }), 'bad')
@@ -261,14 +260,35 @@ export function run(test) {
     assert.ok(Math.abs(two.mid - (1000 + 12 * beat + (10 + doubt) / 2)) < 1e-6, `the overlap’s middle is at ${two.mid}`)
     assert.ok(Math.abs(two.half - (doubt - 10) / 2) < 1e-6)
 
-    /* Two that miss by a little: the same beat, drifted. The answer is between them, and nothing "moved". */
-    const near = joined({ mid: 1000, half: 5, at: 1100 }, { mid: 1000 + 12 * beat + 30, half: 5, at: 7100 }, beat)
-    assert.equal(near.moved, false, 'a drift of twenty milliseconds was taken for the beat moving')
-    assert.ok(near.mid > 1000 + 12 * beat + 5 && near.mid < 1000 + 12 * beat + 25, `between the two: ${near.mid}`)
+    /*
+     * Two that miss, by however little: a window kept gains the drift of two
+     * clocks already, so one of them is wrong (a beat heard late) or the
+     * unit's beat moved. The newest alone, and `moved` says so: whoever
+     * follows waits for a second window to say which (lib/unitBeat).
+     */
+    const near = { mid: 1000 + 12 * beat + 30, half: 5, at: 7100 }
+    assert.deepEqual(joined({ mid: 1000, half: 5, at: 1100 }, near, beat), { ...near, moved: true }, 'two windows that miss were taken for one beat')
 
     /* Two that miss by a lot: the unit's beat moved, and only the newest says where it is. */
     const next = { mid: 1000 + 12 * beat + 200, half: 10, at: 7100 }
     assert.deepEqual(joined({ mid: 1000, half: 10, at: 1100 }, next, beat), { ...next, moved: true })
+
+    /*
+     * Two wide windows can overlap in TWO places a beat apart. The unit's
+     * beat at 1000: one window 150 after it, one 150 before, each 172 wide
+     * each side. Only one overlap holds the beat, and which cannot be said:
+     * the narrower window stands alone, and nothing is narrowed onto the
+     * wrong one (it was, half a beat off, under "In step").
+     */
+    const wideA = { mid: 1150, half: 172, at: 1000 }
+    const wideB = { mid: 850 + 12 * beat, half: 172, at: 1000 }
+    const two2 = joined(wideA, wideB, beat)
+    assert.equal(two2.moved, false)
+    assert.ok(Math.abs(wrap(two2.mid - 1000, beat)) <= two2.half + 1e-6, `two wide windows were narrowed onto the wrong overlap: ${wrap(two2.mid - 1000, beat).toFixed(1)} ms off, believed to ${two2.half.toFixed(1)}`)
+    assert.equal(two2.mid, wideB.mid, 'the narrower (here the newest) window does not stand alone')
+    const wider = joined({ mid: 1150, half: 100, at: 1000 }, { mid: 850 + 12 * beat, half: 240, at: 1000 }, beat)
+    assert.equal(wider.mid, 1150, 'the narrower window, the one held, does not stand')
+    assert.equal(wider.half, 100)
 
     /* Two that barely overlap: the belief is never closer than the floor, however thin the overlap. */
     const thin = joined({ mid: 1000, half: 20, at: 7100 }, { mid: 1000 + 12 * beat + 39.5, half: 20, at: 7100 }, beat)
@@ -282,7 +302,7 @@ export function run(test) {
   })
 
   test('beat lock: the move puts the click heard, or in silence the light, on the unit’s beat, by the least there is', async () => {
-    const { moveFor, notTooSoon, dueAfterMove, BEAT_LOCK, wrap } = await rules()
+    const { moveFor, slewPart, inStepWith, isBeatAnswer, BEAT_LOCK, wrap } = await rules()
     const beat = 500
     const random = seeded(3)
     for (let i = 0; i < 300; i++) {
@@ -303,30 +323,44 @@ export function run(test) {
     assert.equal(moveFor(1000, null, beat, 0), 0)
     assert.equal(moveFor(1000, { mid: 1060, half: 3, at: 0 }, 0, 0), 0)
 
-    /* Never a second click within half a beat of the last. */
-    assert.equal(notTooSoon(1200, 1000, 500), 1700, 'a click 200 ms after the last')
-    assert.equal(notTooSoon(1250, 1000, 500), 1250, 'half a beat on is soon enough')
-    assert.equal(notTooSoon(1600, 1000, 500), 1600)
-    assert.equal(notTooSoon(1200, null, 500), 1200, 'nothing clicked yet: nothing to be too soon after')
-
     /*
-     * Nor is a beat dropped by a move. The last click was at 1000 and the
-     * next was due at 1500; at 1498 a move twelve earlier puts that beat at
-     * 1488, ten behind now, and the count calls the next one 1988.
+     * A move is made a little each beat: never more than a tenth of a beat
+     * at a time, so a beat is never dropped, doubled or jumped. "A small
+     * earlier correction that lands just before a click drops a whole
+     * click" was the first cut's, which moved the count at once.
      */
-    assert.equal(dueAfterMove(1988, 1498, 1000, 500), 1498, 'a beat a move put ten milliseconds behind was dropped: nearly two beats between two clicks')
-    assert.equal(dueAfterMove(1988 + BEAT_LOCK.lateMs - 10, 1498 + BEAT_LOCK.lateMs - 10 + 10, 1000, 500), 1498 + BEAT_LOCK.lateMs, 'thirty behind is still clicked')
-    /* Too far behind to pass for that beat: the one after, as the count has it. */
-    assert.equal(dueAfterMove(1988, 1488 + BEAT_LOCK.lateMs + 1, 1000, 500), 1988, 'a click forty milliseconds late was made for a beat')
-    /* The beat just gone WAS the last click: nothing was dropped, and nothing is clicked again. */
-    assert.equal(dueAfterMove(2000, 1505, 1500, 500), 2000, 'the beat just clicked was clicked again')
-    /* A beat within the count's own ten milliseconds ahead is this beat: clicked on it, not before it. */
-    assert.equal(dueAfterMove(2005, 1500, 1000, 500), 1505, 'a beat five milliseconds ahead was clicked early or dropped')
-    /* A move later that leaves the next beat too soon after the last click: the one after (notTooSoon). */
-    assert.equal(dueAfterMove(1700, 1520, 1500, 500), 2200)
-    /* Before anything has clicked, the first beat is one squarely on the unit's. */
-    assert.equal(dueAfterMove(1988, 1498, null, 500), 1988, 'the first click of all was made late for a beat already gone')
-    assert.equal(dueAfterMove(NaN, 1498, 1000, 500), NaN)
+    assert.equal(BEAT_LOCK.slewOfBeat, 0.1)
+    assert.equal(slewPart(30, 500), 30, 'a move smaller than the share is made at once')
+    assert.equal(slewPart(-30, 500), -30)
+    assert.equal(slewPart(240, 500), 50, 'more than a tenth of a beat in one go')
+    assert.equal(slewPart(-240, 500), -50)
+    assert.equal(slewPart(0, 500), 0)
+    assert.equal(slewPart(NaN, 500), 0)
+    assert.equal(slewPart(40, 0), 0)
+    let left = 240
+    const parts = []
+    while (left) {
+      const p = slewPart(left, 500)
+      parts.push(p)
+      left -= p
+    }
+    assert.deepEqual(parts, [50, 50, 50, 50, 40], 'a quarter of a beat is not made in five steps')
+
+    /* "In step" only where the unit's beat is known closely and the device's is that near it. */
+    assert.equal(BEAT_LOCK.inStepMs, 20)
+    assert.equal(inStepWith({ mid: 0, half: 20, at: 0 }), true)
+    assert.equal(inStepWith({ mid: 0, half: 20.5, at: 0 }), false, 'a belief wider than twenty milliseconds was said to be in step')
+    assert.equal(inStepWith({ mid: 0, half: 154, at: 0 }), false, 'a window a third of a beat wide was said to be in step')
+    assert.equal(inStepWith({ mid: 0, half: 10, at: 0 }, 50), false, 'in step with fifty milliseconds still to move')
+    assert.equal(inStepWith({ mid: 0, half: 10, at: 0 }, -20), true)
+    assert.equal(inStepWith(null), false)
+
+    /* What a computer app from before the answer sends back is not an answer: its web page, for any address it does not know. */
+    assert.equal(isBeatAnswer({ ok: true, count: 0, age: null, gap: null }), true)
+    assert.equal(isBeatAnswer('<!doctype html><html><head><title>Fractal Remote</title></head></html>'), false)
+    assert.equal(isBeatAnswer(null), false)
+    assert.equal(isBeatAnswer({ ok: true }), false, 'an object with no count')
+    assert.equal(isBeatAnswer({ ok: false, count: 3 }), false)
   })
 
   test('following through the computer: a few quick questions, then one every few seconds, and each window holds the beat', async () => {
@@ -344,7 +378,8 @@ export function run(test) {
       assert.ok(later.length >= 4 && later.length <= 5, `asked ${later.length} times in the next thirty seconds`)
       for (let i = 1; i < later.length; i++) assert.ok(later[i] - later[i - 1] >= b.lock.BEAT_LOCK.everyMs, 'asked more often than every few seconds')
 
-      assert.equal(f.windows.length, b.asks.length, 'an answer with a beat in it was not handed on')
+      /* The first answer waits for the second to agree with it; every one after is handed on. */
+      assert.equal(f.windows.length, b.asks.length - 1, 'an answer with a beat in it was not handed on, or the first was believed alone')
       for (const w of f.windows) assert.ok(Math.abs(b.off(w)) <= w.half + 1e-6, `the unit’s beat is ${b.off(w).toFixed(1)} ms from a belief ${w.half.toFixed(1)} ms wide`)
       assert.ok(f.windows[f.windows.length - 1].half < f.windows[0].half, 'more answers did not narrow the belief')
       assert.ok(Math.abs(b.off(f.windows[f.windows.length - 1])) < 25, 'a lopsided road left the belief far from the beat')
@@ -397,7 +432,7 @@ export function run(test) {
     }
   })
 
-  test('following through the computer: a computer app with no such answer is asked once, and not again for ten minutes', async () => {
+  test('following through the computer: a computer app with no such answer says so once, and is asked again in ten minutes, however it says it', async () => {
     const b = await follower()
     try {
       const old = async () => {
@@ -410,35 +445,97 @@ export function run(test) {
       assert.equal(f.windows.length, 0)
       assert.equal(b.said.length, 1)
       assert.match(b.said[0], /this computer app does not say when the beat falls yet\. Update the computer app/)
-      assert.equal(b.clock.pending(), 0, 'a question is still booked')
+      /* Not dropped for good: asked again ten minutes on, in case the computer app has updated itself (the follower ran on, deaf, before). */
+      assert.equal(b.clock.pending(), 1, 'the follower gave up on the computer for good')
+      await b.clock.advance(b.lock.BEAT_LOCK.notAskedMs - 30000 - 1)
+      assert.equal(b.asks.length, 1, 'asked again inside ten minutes')
+      await b.clock.advance(1)
+      assert.equal(b.asks.length, 2, 'not asked again after ten minutes')
+      assert.equal(b.said.length, 1, 'said again')
       f.stop()
+      assert.equal(b.clock.pending(), 0)
 
-      /* The click stopped and started again, a minute on: still not asked. */
-      const again = b.follow(500, { ask: old })
-      await b.clock.advance(60000)
-      assert.equal(b.asks.length, 1, 'a new beat asked the old computer again inside ten minutes')
-      again.stop()
-
-      /* Ten minutes on (the computer app may have updated itself): asked afresh. */
-      await b.clock.advance(b.lock.BEAT_LOCK.notAskedMs)
-      const later = b.follow(500, { ask: b.computer(10, 10) })
-      await b.clock.advance(1000)
-      assert.ok(b.asks.length > 1, 'never asked again')
-      assert.ok(later.windows.length >= 1, 'an updated computer app’s answer was not used')
-      later.stop()
-
-      /* A unit with no such thing (501) is the same as a computer with no such answer. */
-      b.mod.__askAgain()
+      /*
+       * The way a computer app from before the answer REALLY answers: its web
+       * page, 200, for any address it does not know (ForgeFX's not-found
+       * handler, with the page served). Never an error, so the back-off never
+       * began and it was asked every six seconds.
+       */
       b.asks.length = 0
-      const none = b.follow(500, {
+      b.said.length = 0
+      let updated = false
+      const fresh = b.computer(10, 10)
+      const page = b.follow(500, {
         ask: async () => {
+          if (updated) return fresh()
           b.asks.push(b.clock.now())
-          throw Object.assign(new Error('unsupported'), { status: 501 })
+          return { answer: '<!doctype html><html><head><title>Fractal Remote</title></head><body></body></html>', asked: b.clock.now(), answered: b.clock.now() + 30 }
         }
       })
-      await b.clock.advance(30000)
-      assert.equal(b.asks.length, 1)
-      none.stop()
+      await b.clock.advance(60000)
+      assert.equal(b.asks.length, 1, `a computer app answering with its page was asked ${b.asks.length} times in a minute`)
+      assert.equal(b.said.filter((l) => /Update the computer app/.test(l)).length, 1, `said: ${b.said.join(' | ')}`)
+      assert.equal(page.windows.length, 0)
+      /* It updates itself: the next question, ten minutes on, is answered and taken up. */
+      updated = true
+      await b.clock.advance(b.lock.BEAT_LOCK.notAskedMs + 1000)
+      assert.ok(page.windows.length >= 1, 'an updated computer app’s answer was not used')
+      page.stop()
+
+      /* A unit with no such thing (501), and an answer with no count, are the same. */
+      for (const odd of [async () => Promise.reject(Object.assign(new Error('unsupported'), { status: 501 })), async () => ({ answer: { ok: true }, asked: b.clock.now(), answered: b.clock.now() })]) {
+        b.asks.length = 0
+        const none = b.follow(500, {
+          ask: async () => {
+            b.asks.push(b.clock.now())
+            return odd()
+          }
+        })
+        await b.clock.advance(30000)
+        assert.equal(b.asks.length, 1)
+        none.stop()
+      }
+    } finally {
+      b.done()
+    }
+  })
+
+  test('following: one answer that is wrong never moves the beat, and two that agree the unit’s beat moved, do', async () => {
+    const b = await follower()
+    try {
+      /* The computer answers at once; `late` is how late it heard the unit's last beat (a busy moment on a Raspberry Pi). */
+      let late = 0
+      const ask = async () => {
+        const now = b.clock.now()
+        b.asks.push(now)
+        const since = now - b.unit.phase - late
+        return { answer: { ok: true, count: 9, age: ((since % 500) + 500) % 500, gap: 500 }, asked: now, answered: now }
+      }
+      const f = b.follow(500, { ask })
+      await b.clock.advance(1000)
+      /* The first answer alone is not believed: the second agreeing with it is. */
+      assert.equal(f.windows[0].heardAt, b.asks[1], 'the first answer was believed alone')
+      const settled = f.windows.length
+
+      /* One beat heard 60 ms late: kept aside, asked again at once, and forgotten when the next agrees with what was believed. */
+      late = 60
+      await b.clock.advance(b.asks[3] + b.lock.BEAT_LOCK.everyMs - b.clock.now())
+      late = 0
+      const odd = b.asks[b.asks.length - 1]
+      await b.clock.advance(b.lock.BEAT_LOCK.quickGapMs)
+      assert.equal(b.asks[b.asks.length - 1] - odd, b.lock.BEAT_LOCK.quickGapMs, 'a window waiting to be agreed with was not asked about again at once')
+      for (const w of f.windows) assert.ok(Math.abs(b.off(w)) <= w.half + 1e-6, `one late answer moved the belief ${b.off(w).toFixed(1)} ms off the beat`)
+      assert.ok(!f.windows.some((w) => w.moved), 'one late answer was taken for the beat moving')
+      assert.equal(f.windows.length, settled + 1, 'the late answer was handed on, or the one after it was not')
+
+      /* The unit's beat really moves (a tempo tapped at the unit): two answers say so, and it is followed. */
+      b.unit.phase += 200
+      await b.clock.advance(b.lock.BEAT_LOCK.everyMs + b.lock.BEAT_LOCK.quickGapMs + 10)
+      const last = f.windows[f.windows.length - 1]
+      assert.equal(last.moved, true, 'the beat moving was not followed')
+      assert.ok(Math.abs(b.off(last)) <= last.half + 1e-6, 'followed to the wrong place')
+      assert.equal(b.said.filter((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)).length, 1)
+      f.stop()
     } finally {
       b.done()
     }
@@ -493,11 +590,13 @@ export function run(test) {
       await hear(t0)
       assert.equal(f.windows.length, 0, 'one beat alone is no tempo')
       await hear(t0 + 500)
-      assert.equal(f.windows.length, 1, 'two beats in time are not used')
-      assert.equal(f.windows[0].mid, t0 + 500 - wireLateMs)
+      assert.equal(f.windows.length, 0, 'the first window was believed alone')
+      await hear(t0 + 1000)
+      assert.equal(f.windows.length, 1, 'two windows that agree are not used')
+      assert.equal(f.windows[0].mid, t0 + 1000 - wireLateMs)
       assert.equal(f.windows[0].half, wireDoubtMs)
       /* Not every beat: one every couple of seconds. */
-      for (let i = 2; i <= 12; i++) await hear(t0 + i * 500)
+      for (let i = 3; i <= 12; i++) await hear(t0 + i * 500)
       const times = f.windows.map((w) => w.heardAt)
       for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] >= wireEveryMs, 'a beat was weighed inside two seconds of the last')
       assert.ok(f.windows.length >= 3 && f.windows.length <= 4, `weighed ${f.windows.length} of thirteen beats`)
