@@ -601,7 +601,7 @@ export function runPreviewAndGet(test) {
     /* What each does. Both put the capture in the unit's first empty slot (the one send); Preview alone then points NAM 1 at it, Get leaves what is playing alone. */
     assert.match(card, /const sendToUnit = async \(m, again = null, way = null, play = true, back = false\) => \{/)
     assert.match(card, /if \(!play\) return setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id\)/)
-    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\)/)
+    assert.match(card, /const \{ slot, went \} = await captureToSlot\(\{ id: m\.id, name: rec\.name, again, find, send,/)
     /* On the Developer page that block is NAM 1: nothing handed in, or a block that is no NAM. */
     assert.match(card, /const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\]/)
     /*
@@ -617,7 +617,7 @@ export function runPreviewAndGet(test) {
     assert.equal((kept.match(/const placed = new Map\(\)/g) || []).length, 1)
     assert.ok(kept.indexOf('const placed = new Map()') < kept.indexOf('export'), 'what is on the unit is not kept at the top of its file')
     assert.ok(!/new Map\(\)/.test(card.slice(card.indexOf('export default function Tone3000Test('))), 'the page keeps a list of its own')
-    assert.match(card, /import \{ forgetNotKept, isPlaced, notKept, notKeptIn, place, placedNow, settled, unplace, watchPlaced \} from '\.\.\/lib\/capturePlaced'/)
+    assert.match(card, /import \{ isPlaced, place, placedNow, settled, unplace, watchPlaced \} from '\.\.\/lib\/capturePlaced'/)
     assert.match(card, /const \[onUnit, setOnUnit\] = useState\(placedNow\)/)
     assert.deepEqual(kept.match(/placed\.(set|delete|clear)\(/g), ['placed.set(', 'placed.delete('])
     assert.ok(!/\bplaced\./.test(card), 'the page reaches into the list itself')
@@ -642,7 +642,7 @@ export function runPreviewAndGet(test) {
     /* A send that stopped part-way belongs to the view: forgotten with the tone, the list and the sign-in, and when that capture is sent again. */
     assert.equal((card.match(/setChecked\(\{\}\) setStopped\(\{\}\)/g) || []).length, 4)
     assert.equal((card.match(/setChecked\(\{\}\)/g) || []).length, 4)
-    assert.match(card, /setStopped\(\(was\) => Object\.fromEntries\(Object\.entries\(was\)\.filter\(\(\[key\]\) => key !== String\(m\.id\)\)\)\) let slot = again/)
+    assert.match(card, /setStopped\(\(was\) => Object\.fromEntries\(Object\.entries\(was\)\.filter\(\(\[key\]\) => key !== String\(m\.id\)\)\)\) let said = '' const find = async \(\) => \{/)
     /* The steps say what the two do, and that a preview stays in a slot: on this unit there is no hearing a capture without keeping it, and no sentence says there is. */
     const steps = words.STEPS.join(' ')
     assert.match(steps, /Preview puts it on the Axe-Fx III and plays it in NAM 1, so you hear it through your own rig\. Get puts it on the unit and leaves what you are playing alone\./)

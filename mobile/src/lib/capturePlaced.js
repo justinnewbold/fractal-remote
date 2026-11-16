@@ -33,6 +33,15 @@
  * is there: a capture the unit filed late is found there and said as kept,
  * and one it did not keep goes into the same empty slot.
  *
+ * A REMEMBERED SLOT IS THE LAST SEND'S INTO IT, and nobody else's (a second
+ * independent read, the same day). Another capture the app puts there
+ * (`place`, or taken and not kept there too, `notKept`) ends what an earlier
+ * one remembered of it: sent back to that slot it would be refused for the
+ * other capture, and where the two are filed under one name (a pack's
+ * captures often are, cut to 31 characters) the refusal reads as its own,
+ * "kept after all", with the other one playing. lib/captureSend
+ * `captureToSlot` is what reads and writes it, a tap at a time.
+ *
  * PURE: no React, no wire. The page keeps what this answers and draws it.
  */
 const placed = new Map()
@@ -60,18 +69,26 @@ const tell = () => {
 export function place(id, slot, sure) {
   placed.set(String(id), { slot, sure })
   unkept.delete(String(id))
+  forgetSlot(slot)
   tell()
 }
 
-/** The unit took this capture into `slot` and then read the slot <EMPTY>: the next send of it goes there again. */
+/* That slot is another capture's now: nothing taken and not kept there earlier is looked for in it. */
+const forgetSlot = (slot) => {
+  for (const [other, at] of [...unkept]) if (at === slot) unkept.delete(other)
+}
+
+/** The unit took this capture into `slot` and then read the slot <EMPTY>: the next send of it goes there again, and no other capture's does. */
 export function notKept(id, slot) {
-  if (Number.isInteger(slot)) unkept.set(String(id), slot)
+  if (!Number.isInteger(slot)) return
+  forgetSlot(slot)
+  unkept.set(String(id), slot)
 }
 
 /** The slot this capture was last taken into and not kept, or null. */
 export const notKeptIn = (id) => (unkept.has(String(id)) ? unkept.get(String(id)) : null)
 
-/** Forget it: the send into it ended some other way (refused, stopped, kept). */
+/** Forget it: the send into it ended some other way (kept, refused for another capture, stopped part-way). */
 export function forgetNotKept(id) {
   unkept.delete(String(id))
 }

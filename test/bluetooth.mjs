@@ -12152,10 +12152,10 @@ export function run(test) {
     /* The same with its comments taken out, for what is read across more than one line of it. */
     const bare = src('mobile/src/components/Tone3000Test.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     /* The send and its second try are lib/captureSend's (run whole in the test below); the card hands it the sender and draws the lines. */
-    assert.match(bare, /const went = await sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, sentBefore: before !== null && again === null, order: captureOrder\(Number\.isInteger\(way\) \? way : keptWay\), install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, onProgress:/)
+    assert.match(bare, /return sendCapture\(\{ text: texts\.current\[m\.id\], named, slot, replace: again !== null, sentBefore, order: captureOrder\(Number\.isInteger\(way\) \? way : keptWay\), install: \(to, words, how\) => namInstallHere\(to, words, \{ replace: how\.replace, onProgress:/)
     /* The way the unit last kept one by is remembered while the app runs, and only a way the unit NAMED the capture after. */
     assert.match(bare, /let keptWay = null/)
-    assert.match(bare, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\) if \(went\.got\.name && Number\.isInteger\(went\.way\)\) keptWay = went\.way \}/)
+    assert.match(bare, /if \(went\.ok && went\.got\.name && went\.got\.name !== NAM_EMPTY && Number\.isInteger\(went\.way\)\) keptWay = went\.way/)
     assert.equal((bare.match(/keptWay = /g) || []).length, 2)
     assert.equal(nam.NAM_NAME_PLACES, 31)
     assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: tries > 1 \? `The Axe-Fx III took the capture \$\{tries\} different ways and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered each time\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
@@ -12569,39 +12569,176 @@ export function run(test) {
     /*
      * AND A FILE WITH NO HASH, which has one way (an independent read, 16
      * November 2026): a unit that files it late is never asked again in that
-     * send, and the card says "not kept". The card remembers the slot
-     * (lib/capturePlaced notKept) and sends the same capture there on the
-     * next tap, not over what is there: the slot holds it, so it was kept
-     * after all, nothing is sent, and no second copy goes into the next slot.
+     * send, and the card says "not kept". The next tap went looking for an
+     * empty slot, passed this one, which held it by then, and put a second
+     * copy in the next. So the slot is remembered (lib/capturePlaced
+     * notKept), and A TAP IS RUN WHOLE HERE: lib/captureSend captureToSlot,
+     * the page's own steps (which slot, the send, what is remembered), over a
+     * unit whose empty slot is searched for as the wire searches, with each
+     * capture known by TONE3000's id as the page knows it.
      */
-    const { notKept, notKeptIn, forgetNotKept, place: placeIt } = await import('../mobile/src/lib/capturePlaced.js')
-    const slowBare = await bench()
-    slowBare.u.lateSlot = 3
-    slowBare.u.lateLooks = 2
-    const bare1 = await slowBare.send('Short One')
-    assert.deepEqual([bare1.got.name, bare1.tries, bare1.late], ['<EMPTY>', 1, false], 'the first send of a file with no hash was asked again')
-    notKept('cap-late', 3)
-    const bare2 = await slowBare.send('Short One', { with: { slot: notKeptIn('cap-late'), sentBefore: true } })
-    assert.deepEqual([bare2.ok, bare2.got.name, bare2.tries, bare2.late, bare2.way], [true, 'Short One', 0, true, null], 'a capture the unit filed late was not found in its slot')
-    assert.deepEqual(uploads(slowBare), [3], 'a second copy was sent to a unit that had kept the first')
-    assert.ok(slowBare.logs.some((l) => /^KEPT after all: the slot holds it, from the send before this one, which the unit filed after the slot had twice read <EMPTY>\. Nothing was sent$/.test(l)), slowBare.logs.join(' | '))
+    const { captureToSlot, heldElse, slotSpent } = await import('../mobile/src/lib/captureSend.js')
+    const { notKept, notKeptIn, forgetNotKept, place: placeIt, placedNow } = await import('../mobile/src/lib/capturePlaced.js')
+    const tap = (b, id, name, more = {}) =>
+      captureToSlot({
+        id,
+        name,
+        again: more.again ?? null,
+        find: () => b.asks('/nam/empty').then((r) => r.slot),
+        send: (slot, sentBefore) =>
+          sendCapture({
+            text: b.text(name, more.from ?? 5, more.hash === true),
+            named: { name: 'TONE3000’s name for it', fallback: 'Capture 7' },
+            slot,
+            replace: Number.isInteger(more.again),
+            sentBefore,
+            install: (to, words, how) => b.asks(`/nam/slots/${to}`, { method: 'POST', body: { words, replace: how.replace } }),
+            log: (l) => b.logs.push(l)
+          }),
+        log: (l) => b.logs.push(`tap: ${l}`)
+      })
+    const headBytes = (name) => nam.namRecord(A2(name)).words.slice(0, 68).flatMap((w) => [w & 0xff, (w >>> 8) & 0xff, (w >>> 16) & 0xff, w >>> 24])
+
+    /* Filed late: the next tap goes to that slot, where a search would pass it, and finds it there. Nothing more is sent. */
+    const filedLate = await bench()
+    filedLate.u.lateSlot = 3
+    filedLate.u.lateLooks = 2
+    const lateFirst = await tap(filedLate, 'late-a', 'Short One')
+    assert.deepEqual([lateFirst.slot, lateFirst.went.got.name, lateFirst.went.tries, notKeptIn('late-a')], [3, '<EMPTY>', 1, 3], 'the first send of a file with no hash was asked again, or its slot not remembered')
+    assert.equal((await filedLate.asks('/nam/empty')).slot, 4, 'the unit has not filed it by now')
+    const lateNext = await tap(filedLate, 'late-a', 'Short One')
+    assert.deepEqual([lateNext.slot, lateNext.went.ok, lateNext.went.got.name, lateNext.went.tries, lateNext.went.late], [3, true, 'Short One', 0, true], 'a capture the unit filed late was not found in its slot')
+    assert.deepEqual(uploads(filedLate), [3], 'a second copy was sent to a unit that had kept the first')
+    assert.deepEqual([notKeptIn('late-a'), placedNow()['late-a']], [null, { slot: 3, sure: true }])
+    assert.ok(filedLate.logs.includes('tap: sent to slot 004 again, where it was taken and not kept last time'), filedLate.logs.join(' | '))
+    assert.ok(filedLate.logs.some((l) => /^KEPT after all: the slot holds it, from the send before this one, which the unit filed after the slot had twice read <EMPTY>\. Nothing was sent$/.test(l)), filedLate.logs.join(' | '))
     /* Not told the slot is its own, the same refusal is a refusal: a slot that holds the name from somewhere else is not claimed. */
-    await assert.rejects(slowBare.send('Short One'), (e) => e.status === 409)
-    /* What the card keeps: a slot per capture, gone once it is placed or forgotten, and nothing that is not a slot. */
-    assert.equal(notKeptIn('cap-late'), 3)
-    placeIt('cap-late', 3, true)
-    assert.equal(notKeptIn('cap-late'), null, 'a capture on the unit is still sent to its old slot')
-    notKept('cap-y', 4)
-    forgetNotKept('cap-y')
-    assert.equal(notKeptIn('cap-y'), null)
-    notKept('cap-z', 'slot 5')
-    assert.equal(notKeptIn('cap-z'), null)
-    /* And the card asks it: that slot first, the send told so, remembered on not kept, forgotten on anything else. */
+    await assert.rejects(filedLate.send('Short One'), (e) => e.status === 409)
+
+    /* Not kept, and then ANOTHER capture filed under the same name (a pack's often are) goes into that slot: the first is not claimed as "kept after all" there, and goes to an empty slot of its own. */
+    const twins = await bench()
+    twins.u.keepsNothing = true
+    const twinA = await tap(twins, 'twin-a', 'Same Name', { from: 5 })
+    assert.deepEqual([twinA.slot, twinA.went.got.name, notKeptIn('twin-a')], [3, '<EMPTY>', 3])
+    twins.u.keepsNothing = false
+    const twinB = await tap(twins, 'twin-b', 'Same Name', { from: 9 })
+    assert.deepEqual([twinB.slot, twinB.went.got.name, placedNow()['twin-b']], [3, 'Same Name', { slot: 3, sure: true }])
+    assert.equal(notKeptIn('twin-a'), null, 'a slot another capture went into is still remembered for the one before it')
+    const twinAgain = await tap(twins, 'twin-a', 'Same Name', { from: 5 })
+    assert.deepEqual([twinAgain.slot, twinAgain.went.late, twinAgain.went.tries, twinAgain.went.got.name], [4, false, 1, 'Same Name'], 'a capture was said to be on the unit in a slot another holds')
+    assert.deepEqual(uploads(twins), [3, 3, 4])
+
+    /* Not kept, and the slot then filled where the app never hears of it (on the unit, or Axe-Edit): refused there, so an empty one is looked for in the same tap. The player never picked that slot. */
+    const outside = await bench()
+    outside.u.keepsNothing = true
+    await tap(outside, 'out-a', 'Short One')
+    outside.u.keepsNothing = false
+    outside.u.held.set(3, headBytes('Their Own'))
+    const moved = await tap(outside, 'out-a', 'Short One')
+    assert.deepEqual([moved.slot, moved.went.got.name, moved.went.late, notKeptIn('out-a'), placedNow()['out-a']], [4, 'Short One', false, null, { slot: 4, sure: true }])
+    assert.deepEqual(uploads(outside), [3, 4])
+    assert.ok(outside.logs.includes('tap: slot 004 holds another capture now (Capture slot 004 already holds “Their Own”. Nothing was sent.); looking for an empty slot'), outside.logs.join(' | '))
+
+    /* A send that wrote nothing (the slot never answered) keeps the slot: the unit filed it late meanwhile, and the tap after finds it there. */
+    const quietBack = await bench()
+    quietBack.u.lateSlot = 3
+    quietBack.u.lateLooks = 2
+    await tap(quietBack, 'quiet-a', 'Short One')
+    quietBack.u.quietSlot = 3
+    quietBack.u.quietSlotTimes = 3
+    const lost = await tap(quietBack, 'quiet-a', 'Short One').then(() => null, (e) => e)
+    assert.deepEqual([lost?.status, /Nothing was sent\.$/.test(lost?.message || ''), lost?.partial], [504, true, undefined], lost?.message)
+    assert.equal(notKeptIn('quiet-a'), 3, 'a send that wrote nothing forgot the slot')
+    quietBack.t.clock.set(quietBack.t.clock.now() + 10000)
+    const foundLate = await tap(quietBack, 'quiet-a', 'Short One')
+    assert.deepEqual([foundLate.slot, foundLate.went.late, foundLate.went.tries], [3, true, 0])
+    assert.deepEqual(uploads(quietBack), [3], 'a second copy was sent after a send that wrote nothing')
+
+    /* A send that stopped part-way into it forgets the slot: the offer to send it again over what is there is the page's way back, and it goes there. */
+    const partWay = await bench()
+    partWay.u.keepsNothing = true
+    await tap(partWay, 'cut-a', 'Short One')
+    partWay.u.keepsNothing = false
+    partWay.u.silentAt = 5
+    const stopped = await tap(partWay, 'cut-a', 'Short One').then(() => null, (e) => e)
+    assert.deepEqual([stopped?.partial, stopped?.slot], [true, 3], stopped?.message)
+    assert.equal(notKeptIn('cut-a'), null, 'a slot a send stopped part-way into is still remembered')
+    partWay.u.silentAt = null
+    const over = await tap(partWay, 'cut-a', 'Short One', { again: 3 })
+    assert.deepEqual([over.slot, over.went.got.name, uploads(partWay)], [3, 'Short One', [3, 3, 3]])
+
+    /* What a failure is: refused for something else, or for this capture, over the wire and in the computer's words; stopped part-way; or nothing written. */
+    const no = (status, message, more = {}) => Object.assign(new Error(message), { status, ...more })
+    const failures = [
+      [no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' }), true, true],
+      [no(409, 'Capture slot 004 already holds “Mine”. Nothing was sent.', { holds: 'Mine  ' }), false, true],
+      [no(409, 'capture slot 004 already holds "Other"; nothing was sent'), true, true],
+      [no(409, 'capture slot 004 already holds "Mine"; nothing was sent'), false, true],
+      [no(409, 'A capture is being sent to the unit. Try again when it has finished.'), false, false],
+      [no(504, 'The Axe-Fx III didn’t say what is in capture slot 004, asked 3 times. Nothing was sent.', { slot: 3, asked: 3 }), false, false],
+      [no(502, 'The Axe-Fx III refused the start of the transfer (busy). Nothing was sent.'), false, false],
+      [no(503, 'The connection was lost. That was after 0 of 130 messages. Nothing was kept.', { partial: false, slot: 3 }), false, false],
+      [no(504, 'The Axe-Fx III stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now: send it again to the same slot.', { partial: true, slot: 3 }), false, true],
+      [no(504, 'the unit stopped answering after 40 of 130 messages. Slot 004 may hold part of a capture now.'), false, true],
+      [no(504, 'Holds “Other”', { holds: 'Other' }), false, false],
+      [no(503, 'The connection was lost.', { partial: true, slot: 3 }), false, true]
+    ]
+    assert.deepEqual(failures.map(([err]) => [heldElse(err, 'Mine'), slotSpent(err)]), failures.map(([, a, b]) => [a, b]))
+
+    /* The tap's own steps, with a page that answers as told: the remembered slot first and told so, then an empty one, not told; a half-sent slot never told; a send that sent no capture forgets it. */
+    {
+      const calls = []
+      notKept('steps-a', 3)
+      const got = await captureToSlot({
+        id: 'steps-a',
+        name: 'Mine',
+        find: async () => (calls.push('find'), 9),
+        send: async (slot, told) => {
+          calls.push([slot, told])
+          if (slot === 3) throw no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' })
+          return { ok: true, got: { slot, name: 'Mine' }, tries: 1, way: 0, late: false }
+        }
+      })
+      assert.deepEqual([calls, got.slot, notKeptIn('steps-a')], [[[3, true], 'find', [9, false]], 9, null])
+      calls.length = 0
+      notKept('steps-b', 3)
+      await captureToSlot({ id: 'steps-b', name: 'Mine', again: 5, find: async () => (calls.push('find'), 9), send: async (slot, told) => (calls.push([slot, told]), { ok: true, got: { slot, name: '<EMPTY>' }, tries: 1, way: 0 }) })
+      assert.deepEqual([calls, notKeptIn('steps-b')], [[[5, false]], 5])
+      notKept('steps-c', 3)
+      await captureToSlot({ id: 'steps-c', name: 'Mine', find: async () => 9, send: async () => ({ ok: false, why: 'That is not a capture.' }) })
+      assert.equal(notKeptIn('steps-c'), null)
+      /* The remembered slot holds another capture, and no empty one is left: it is forgotten all the same, and the next tap does not go back to it. */
+      notKept('steps-e', 3)
+      const full = await captureToSlot({ id: 'steps-e', name: 'Mine', find: async () => null, send: async () => Promise.reject(no(409, 'Capture slot 004 already holds “Other”. Nothing was sent.', { holds: 'Other' })) })
+      assert.deepEqual([full, notKeptIn('steps-e')], [{ slot: null, went: null }, null])
+      /* No empty slot (or the page gone): nothing sent, nothing placed. */
+      calls.length = 0
+      const none = await captureToSlot({ id: 'steps-d', name: 'Mine', find: async () => null, send: async (slot) => calls.push(slot) })
+      assert.deepEqual([none, calls], [{ slot: null, went: null }, []])
+    }
+
+    /* What is remembered: one slot a capture, the last send's into it; gone once that capture or another is placed there, or it is forgotten; and nothing that is not a slot. */
+    notKept('m-1', 6)
+    notKept('m-2', 6)
+    assert.deepEqual([notKeptIn('m-1'), notKeptIn('m-2')], [null, 6], 'two captures remember one slot')
+    notKept('m-3', 7)
+    placeIt('m-4', 8, false)
+    assert.equal(notKeptIn('m-3'), 7, 'a capture placed in another slot took this one’s')
+    placeIt('m-5', 6, true)
+    assert.equal(notKeptIn('m-2'), null, 'a slot another capture is placed in is still remembered')
+    placeIt('m-3', 9, true)
+    assert.equal(notKeptIn('m-3'), null, 'a capture on the unit is still sent to its old slot')
+    notKept('m-6', 4)
+    forgetNotKept('m-6')
+    assert.equal(notKeptIn('m-6'), null)
+    notKept('m-7', 'slot 5')
+    assert.equal(notKeptIn('m-7'), null)
+    /* And the page goes through captureToSlot, its own send told which slot is remembered: it keeps nothing of it itself. */
     const cardFlat = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
-    assert.match(cardFlat, /const before = again === null \? notKeptIn\(m\.id\) : null if \(slot === null && before !== null\) \{ slot = before/)
-    assert.match(cardFlat, /sentBefore: before !== null && again === null,/)
-    assert.match(cardFlat, /if \(went\.ok && went\.got\.name === NAM_EMPTY\) notKept\(m\.id, slot\) else forgetNotKept\(m\.id\)/)
-    assert.match(cardFlat, /\} catch \(err\) \{ \/\*[^*]*\*\/ forgetNotKept\(m\.id\)/)
+    assert.match(cardFlat, /const send = \(slot, sentBefore\) => \{/)
+    /* A search that ends after the page has gone says nothing and sends nothing. */
+    assert.match(cardFlat, /\} \}\) if \(!alive\.current\) return null if \(found\.slot === null\) \{/)
+    assert.ok(!/notKept|forgetNotKept|notKeptIn/.test(cardFlat), 'the page keeps what is remembered of a slot itself')
 
     /* Refused because the slot holds ANOTHER capture (filled from somewhere else meanwhile): that is a refusal, and it is thrown as one, with the way that was going. */
     const taken = await bench()
