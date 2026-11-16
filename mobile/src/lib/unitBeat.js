@@ -63,10 +63,19 @@ export function followUnitBeat({ beat, onWindow }, o = {}) {
 
   const take = (window, how) => {
     if (!window) return
+    /*
+     * A belief, or a window aside, this old is forgotten: its doubt has grown
+     * with every second of two clocks, and one late answer would fall inside
+     * it and be believed alone (an independent read found it after a few
+     * minutes with no beat). Two windows have to agree again, as at the start.
+     */
+    if (held && window.at - held.at > BEAT_LOCK.heldMs) held = null
+    if (aside && window.at - aside.at > BEAT_LOCK.heldMs) aside = null
     const was = held
     const agreed = held ? joined(held, window, beat) : null
     if (agreed && !agreed.moved) {
-      held = agreed
+      /* A window that agrees with what was believed, without moving it, long enough after it was formed: now it is sure (lib/beatLock inStepWith). */
+      held = { ...agreed, since: was.since, sure: was.sure === true || window.at - was.since >= BEAT_LOCK.sureAfterMs }
       aside = null
     } else {
       /* Nothing believed yet, or the newest disagrees with it: believed only once a second window agrees. */
@@ -75,11 +84,11 @@ export function followUnitBeat({ beat, onWindow }, o = {}) {
         aside = window
         return
       }
-      held = { ...pair, moved: Boolean(was) }
+      held = { ...pair, moved: Boolean(was), sure: false, since: window.at }
       aside = null
     }
-    if (!was || said !== 'heard') sayOnce('heard', `the unit’s beat is heard ${how}: this device’s beat goes onto it`)
-    else if (held.moved) say('the unit’s beat moved: this device’s beat follows it')
+    if (!was || (said !== 'heard' && said !== 'moved')) sayOnce('heard', `the unit’s beat is heard ${how}: this device’s beat goes onto it`)
+    else if (held.moved) sayOnce('moved', 'the unit’s beat moved: this device’s beat follows it')
     onWindow(held)
   }
 

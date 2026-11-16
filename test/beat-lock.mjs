@@ -351,11 +351,13 @@ export function run(test) {
 
     /* "In step" only where the unit's beat is known closely and the device's is that near it. */
     assert.equal(BEAT_LOCK.inStepMs, 20)
-    assert.equal(inStepWith({ mid: 0, half: 20, at: 0 }), true)
-    assert.equal(inStepWith({ mid: 0, half: 20.5, at: 0 }), false, 'a belief wider than twenty milliseconds was said to be in step')
-    assert.equal(inStepWith({ mid: 0, half: 154, at: 0 }), false, 'a window a third of a beat wide was said to be in step')
-    assert.equal(inStepWith({ mid: 0, half: 10, at: 0 }, 50), false, 'in step with fifty milliseconds still to move')
-    assert.equal(inStepWith({ mid: 0, half: 10, at: 0 }, -20), true)
+    assert.equal(inStepWith({ mid: 0, half: 20, at: 0, sure: true }), true)
+    assert.equal(inStepWith({ mid: 0, half: 20.5, at: 0, sure: true }), false, 'a belief wider than twenty milliseconds was said to be in step')
+    assert.equal(inStepWith({ mid: 0, half: 154, at: 0, sure: true }), false, 'a window a third of a beat wide was said to be in step')
+    assert.equal(inStepWith({ mid: 0, half: 10, at: 0, sure: true }, 50), false, 'in step with fifty milliseconds still to move')
+    assert.equal(inStepWith({ mid: 0, half: 10, at: 0, sure: true }, -20), true)
+    assert.equal(inStepWith({ mid: 0, half: 3, at: 0, sure: false }), false, 'in step on two windows that only agree with each other (a tempo a little off, followed round)')
+    assert.equal(inStepWith({ mid: 0, half: 3, at: 0 }), false)
     assert.equal(inStepWith(null), false)
 
     /* What a computer app from before the answer sends back is not an answer: its web page, for any address it does not know. */
@@ -512,6 +514,7 @@ export function run(test) {
         const now = b.clock.now()
         b.asks.push(now)
         const since = now - b.unit.phase - late
+        if (!b.unit.beating) return { answer: { ok: true, count: 9, age: null, gap: null }, asked: now, answered: now }
         return { answer: { ok: true, count: 9, age: ((since % 500) + 500) % 500, gap: 500 }, asked: now, answered: now }
       }
       const f = b.follow(500, { ask })
@@ -542,6 +545,25 @@ export function run(test) {
       assert.equal(last.moved, true, 'the beat moving was not followed')
       assert.ok(Math.abs(b.off(last)) <= last.half + 1e-6, 'followed to the wrong place')
       assert.equal(b.said.filter((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)).length, 1)
+
+      /*
+       * A long silence, then one late answer: the old belief has grown wide
+       * with two clocks' doubt, and the late answer would fall inside it and
+       * be believed alone. It is forgotten instead, and two have to agree again.
+       */
+      const settledNow = f.windows.length
+      b.unit.beating = false
+      await b.clock.advance(5 * 60 * 1000)
+      assert.equal(f.windows.length, settledNow)
+      b.unit.beating = true
+      late = 40
+      const asked = b.asks.length
+      while (b.asks.length === asked) await b.clock.advance(100)
+      assert.equal(f.windows.length, settledNow, 'one late answer after five minutes of silence was believed alone')
+      late = 0
+      await b.clock.advance(b.lock.BEAT_LOCK.everyMs * 3)
+      for (const w of f.windows.slice(settledNow)) assert.ok(Math.abs(b.off(w)) <= w.half + 1e-6, `a belief ${b.off(w).toFixed(1)} ms off the beat after the silence`)
+      assert.ok(f.windows.length > settledNow, 'the beat was not taken up again after the silence')
 
       /* Answers that never agree with anything: asked quickly a few times, then at the usual pace, never every few hundred milliseconds for ever. */
       let n = 0

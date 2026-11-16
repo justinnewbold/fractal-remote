@@ -71,6 +71,12 @@ export const BEAT_LOCK = Object.freeze({
    * moved to where it most likely is, and the words do not claim it.
    */
   inStepMs: 20,
+  /*
+   * And only once a window this long after the belief was formed has agreed
+   * with it: two answers a few hundred milliseconds apart cannot show a
+   * device keeping a tempo a little off the unit's; two seconds can.
+   */
+  sureAfterMs: 2000,
   /* How long after the last window the device's beat still counts as on the unit's. */
   heldMs: 20000,
   /* A computer app with no such answer is not asked again for this long. */
@@ -198,8 +204,16 @@ export function slewPart(left, beat) {
   return Math.max(-most, Math.min(most, left))
 }
 
-/** Whether a belief about the unit's beat is sure enough to say the two are in step, with `left` of a move still to make. */
-export const inStepWith = (window, left = 0) => Boolean(window) && window.half <= BEAT_LOCK.inStepMs && Math.abs(left) <= BEAT_LOCK.inStepMs
+/**
+ * Whether a belief about the unit's beat is sure enough to say the two are
+ * in step, with `left` of a move still to make. Only a belief a window has
+ * agreed with WITHOUT moving it (`sure`, lib/unitBeat): two windows that only
+ * agree with each other are just as likely a device keeping a tempo a little
+ * off the unit's, followed round every few seconds, and the light then
+ * drifts tens of milliseconds between windows (an independent read found it
+ * said "In step" 110 ms off at 122 against 120).
+ */
+export const inStepWith = (window, left = 0) => Boolean(window) && window.sure === true && window.half <= BEAT_LOCK.inStepMs && Math.abs(left) <= BEAT_LOCK.inStepMs
 
 /**
  * Whether what came back from GET /tempo/beat is its answer at all. A

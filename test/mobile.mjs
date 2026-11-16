@@ -6448,8 +6448,9 @@ export function run(test) {
    */
   const beatComputer = (clock, unit) => async () => {
     const now = clock.now()
-    const since = (((now - unit.phase) % 500) + 500) % 500
-    return { answer: unit.beating ? { ok: true, count: 9, age: since, gap: 500 } : { ok: true, count: 0, age: null, gap: null }, asked: now, answered: now }
+    const period = unit.period ?? 500
+    const since = (((now - unit.phase) % period) + period) % period
+    return { answer: unit.beating ? { ok: true, count: 9, age: since, gap: period } : { ok: true, count: 0, age: null, gap: null }, asked: now, answered: now }
   }
   /* How far a moment is from the unit's beat, in the half beat either side. */
   const offBeat = (t, unit, lead = 0) => {
@@ -6510,11 +6511,14 @@ export function run(test) {
       const on = onFrom(flashes, unit)
       assert.ok(on >= 1 && on <= 5, `the light took ${on} beats to go onto the unit’s beat (${flashes.map((t) => offBeat(t, unit)).join(', ')})`)
       evenly(flashes, 'lights')
-      assert.equal(click.useInStep(), true, 'on the unit’s beat and not said to be')
+      /* Said only once an answer two seconds or more after the first two has agreed with them: the one six seconds in. */
+      assert.equal(click.useInStep(), false, 'in step before an answer seconds later agreed')
       assert.ok(log.said.some((l) => /this device’s beat goes 137 ms later, onto the unit’s \(known to within 10 ms\), a little each beat/.test(l)), `the log does not say the move: ${log.said.join(' | ')}`)
       /* Asked a few times quickly, then every few seconds: never once a beat. */
       assert.equal(unitEnd.beatAsks.length, 4, `asked ${unitEnd.beatAsks.length} times in five seconds`)
       assert.equal(audio.made.length, 0, 'lining a silent light up opened the sound')
+      await clock.advance(2000)
+      assert.equal(click.useInStep(), true, 'on the unit’s beat and not said to be')
 
       /* The unit's beat moves (its tempo tapped at the unit): two answers say so, and the light follows it a little each beat. */
       unit.phase += 200
@@ -6537,9 +6541,17 @@ export function run(test) {
       const since = flashes.slice(count)
       for (let i = 1; i < since.length; i++) assert.equal(since[i] - since[i - 1], 500, 'the light jumped with nothing heard')
 
-      /* Back, and in step again; then stopped: nothing more is asked, and it is not in step. */
+      /*
+       * Back. After that long a silence the old belief is forgotten, so two
+       * answers have to agree again and a third has to agree with them before
+       * it is said to be in step: not on the first answer back. Then stopped:
+       * nothing more is asked, and it is not in step.
+       */
       unit.beating = true
-      await clock.advance(7000)
+      const back = unitEnd.beatAsks.length
+      while (unitEnd.beatAsks.length === back) await clock.advance(100)
+      assert.equal(click.useInStep(), false, 'in step on the first answer after a long silence')
+      await clock.advance(13000)
       assert.equal(click.useInStep(), true)
       const asked = unitEnd.beatAsks.length
       stop()
@@ -6572,7 +6584,7 @@ export function run(test) {
         const flashes = []
         assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
         const stop = globalThis.__clickEffect()
-        await clock.advance(6000)
+        await clock.advance(7500)
         const plays = audio.calls.filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
         assert.ok(plays.length >= 10, `only ${plays.length} clicks in six seconds`)
         /* Within a few beats, every click is started `lead` ahead of the unit's beat, so it is HEARD on it; none dropped or doubled getting there. */
@@ -6673,6 +6685,75 @@ export function run(test) {
     }
   })
 
+  test('with the device a little off the unit’s tempo, the light is pulled back every few seconds and is never said to be in step', async () => {
+    /*
+     * Through the computer the device can keep 120 while the unit was tapped
+     * to 122 at its own footswitch. Two answers then agree with each other
+     * every six seconds and the light drifts a tenth of a second between
+     * them: "In step" was said 110 ms off (an independent read). Only a
+     * belief a later answer agrees with, without moving it, is "in step".
+     */
+    for (const period of [491.8, 504.2]) {
+      const { dir, click, unitEnd, log, clock, settle } = await clickOnTheBench('ios')
+      try {
+        unitEnd.__answer(1)
+        await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+        await clock.advance(0)
+        await settle()
+        globalThis.__clickAdmin = true
+        globalThis.__clickBeatRoad = 'computer'
+        const unit = { phase: clock.now() + 211, beating: true, period }
+        globalThis.__clickBeatAsk = beatComputer(clock, unit)
+        assert.equal(click.usePhoneClick(120, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        let said = 0
+        for (let i = 0; i < 80; i++) {
+          await clock.advance(500)
+          if (click.useInStep()) said++
+        }
+        assert.equal(said, 0, `said to be in step ${said} times in forty seconds with the unit at ${(60000 / period).toFixed(1)} and the device at 120`)
+        const moved = log.said.filter((l) => /the unit’s beat moved: this device’s beat follows it/.test(l)).length
+        assert.ok(moved <= 1, `the log said the beat moved ${moved} times`)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('at a slow tempo, "in step" lasts twenty seconds from the unit’s last beat heard, not from when the light caught up with it', async () => {
+    const { dir, click, unitEnd, clock, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      /* 30 BPM: a two-second beat, and the light a second off the unit's, so it takes five beats to get there. */
+      const from = clock.now()
+      const unit = { phase: from + 1010, beating: true, period: 2000 }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      assert.equal(click.usePhoneClick(30, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      /* The answer six seconds in agrees with the first ones: the belief is sure, and the light is still on its way. */
+      while (unitEnd.beatAsks.length < 5) await clock.advance(100)
+      const lastHeard = unitEnd.beatAsks[4]
+      assert.equal(click.useInStep(), false, 'in step with the light still on its way')
+      /* The unit stops sending its beat. */
+      unit.beating = false
+      await clock.advance(lastHeard + 14000 - clock.now())
+      assert.equal(click.useInStep(), true, 'not in step once the light got there')
+      await clock.advance(lastHeard + 20100 - clock.now())
+      assert.equal(click.useInStep(), false, 'still said to be in step twenty seconds after the unit’s last beat was heard')
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('where the unit’s beat is known before the sound is ready, nothing clicks or lights until it is, and the very first click is on the unit’s beat', async () => {
     for (const lands of [423, 440]) {
     const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
@@ -6698,9 +6779,9 @@ export function run(test) {
       assert.deepEqual(plays(), [], 'a click before the sound was ready')
       assert.deepEqual(flashes, [], 'a light before the beat began')
       assert.equal(click.useInStep(), false, 'in step with no beat being kept yet')
-      await clock.advance(4000)
+      await clock.advance(7000)
       const started = plays()
-      assert.ok(started.length >= 7, `only ${started.length} clicks in four seconds`)
+      assert.ok(started.length >= 13, `only ${started.length} clicks in seven seconds`)
       /* Every one, the first too: started 40 ms ahead of the unit's beat, heard on it. */
       for (const t of started) assert.ok(Math.abs(offBeat(t, unit, 40)) <= 1, `a click started at ${t} is heard ${offBeat(t, unit, 40)} ms off the unit’s beat`)
       for (let i = 1; i < started.length; i++) assert.equal(started[i] - started[i - 1], 500, 'a beat was dropped or doubled at the start')

@@ -11335,7 +11335,12 @@ test('an update ready just after a windowless start installs then, and never on 
     assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 3 * 60 * 1000 + 1, platform: 'linux', arch, env: appImage }).install, false, 'a Pi restarts itself mid-set')
     assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', arch, env: {} }).install, false, 'a Pi’s .deb update is started where nobody can type its password')
     assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform: 'linux', arch }), autostart.UPDATE_RETRY_MS, 'a Pi with its window open does not look again when its wifi was late')
+    /* Never once a phone has used it this run: somebody is playing through it. */
+    const playing = autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 100000, platform: 'linux', arch, env: appImage, phoneSeen: true })
+    assert.equal(playing.install, false, 'a Pi restarts itself with a phone playing through it')
+    assert.match(playing.why, /phone/)
   }
+  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 100000, platform: 'linux', env: appImage, phoneSeen: true }).install, false, 'a windowless Pi restarts itself with a phone playing through it')
   for (const [platform, arch] of [['linux', 'x64'], ['darwin', 'arm64'], ['win32', 'arm64'], ['linux', '']]) {
     assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform, arch, env: appImage }).install, false, `a ${platform} ${arch} computer with somebody at it restarts itself`)
     assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform, arch }), null)
@@ -12044,6 +12049,22 @@ test('Restart to update leaves the new copy the right note, and a box set up for
   assert.deepEqual(pedalboard.exits, [{ relaunch: { execPath: appImage, args: ['--hidden'] } }, 'exit 0'], 'a pedalboard whose install did not take is left with nothing running')
   backstop(desk).fn()
   assert.deepEqual(desk.exits, ['exit 0'], 'an ordinary computer restarts itself after an install that did not take')
+
+  /*
+   * A Pi opened WITH its window, whose own install at power-on did not take
+   * (16 November 2026, an independent read): it comes back by itself, as one
+   * set up for nobody, window and all. Before, it quit and the pedalboard had
+   * no remote until it was unplugged.
+   */
+  const piWindow = loadDesktopMain({ argv: [], env: { APPIMAGE: appImage } })
+  piWindow.run('boot = __given', autostart)
+  piWindow.run('update = { kind: "ready", version: "1.87.17" }; updates = { install: __given, check: async () => {} }', () => {})
+  piWindow.run('openWindow()')
+  piWindow.run('installedUnattended = true')
+  assert.deepEqual(await piWindow.run('installNow()'), { ok: true })
+  assert.equal(piWindow.process.env.FRACTAL_REMOTE_AFTER_UPDATE, 'window-unattended', 'a Pi that put its own update in comes back as a box somebody is at')
+  backstop(piWindow).fn()
+  assert.deepEqual(piWindow.exits, [{ relaunch: { execPath: appImage, args: [] } }, 'exit 0'], 'a Pi with its window, whose own install did not take, is left with nothing running')
 })
 
 test('opening the app again before there is anything to show is remembered, not dropped', () => {
@@ -12463,7 +12484,8 @@ test('an update ready just after a windowless start installs through the same pa
   assert.ok(note !== -1 && note < install.indexOf('updates.install()'), 'the new copy is not told it is the update’s, or how to come back')
   // Decided before the teardown, which hides the window and would make nobody look to be there.
   assert.ok(install.indexOf('const comeBack = boot.comeBackAs({') < install.indexOf('await stopServing()'), 'how to come back is decided after the window has been hidden')
-  assert.match(install, /if \(startHidden\) app\.relaunch\(\{ execPath: process\.env\.APPIMAGE \|\| process\.execPath/, 'a windowless install that did not take leaves the pedalboard with nothing running')
+  assert.match(install, /if \(startHidden \|\| installedUnattended\) app\.relaunch\(\{ execPath: process\.env\.APPIMAGE \|\| process\.execPath/, 'a windowless install that did not take leaves the pedalboard with nothing running')
+  assert.match(unattended, /phoneSeen: phoneSeenAt !== null/, 'a Pi restarts itself with a phone playing through it')
   // A look that failed just after power-on is taken again; see updateRetryDelay.
   assert.match(main, /if \(state\.kind === 'trouble' && outcome !== 'stuck'\) retryUpdateCheck\(\)/, 'a look for updates that failed at power-on is not taken again until twelve hours later')
   assert.match(main, /if \(cameOn\) networkIsUp\(\)/, 'the network arriving after the retries is never used to look again')
@@ -12581,7 +12603,8 @@ test('every computer looks for updates by itself: six hours on, sooner while it 
     assert.equal((src.match(/updates\??\.check\(/g) || []).length, 3, 'a look for updates is taken somewhere other than the first look, the loop and lookNow, and leaves the next look where it was')
     assert.match(src, /answerOwnPage\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
     assert.match(src.slice(src.indexOf('function retryUpdateCheck()'), src.indexOf('function networkIsUp()')), /lookNow\(\)/)
-    assert.match(src.slice(src.indexOf('function networkIsUp()')), /^\s*if \(startHidden && update\?\.kind === 'trouble' && updates\) lookNow\(\)$/m)
+    /* A Pi opened with its window is a box set up for nobody here too (16 November 2026), as in unattendedInstall and updateRetryDelay. */
+    assert.match(src.slice(src.indexOf('function networkIsUp()')), /^\s*if \(\(startHidden \|\| boot\?\.pedalboardBox\?\.\(\{ platform: process\.platform, arch: process\.arch \}\)\) && update\?\.kind === 'trouble' && updates\) lookNow\(\)$/m)
   }
   // Nothing during the quit.
   const made = main.timers.length

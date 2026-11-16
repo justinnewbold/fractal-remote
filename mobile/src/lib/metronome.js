@@ -382,9 +382,12 @@ export function useEdgeFlash() {
 let inStep = false
 let inStepTimer = null
 const stepWatchers = new Set()
-function noteInStep(on) {
+function noteInStep(on, until = null) {
   clearTimeout(inStepTimer)
-  inStepTimer = on ? setTimeout(() => noteInStep(false), BEAT_LOCK.heldMs) : null
+  /* Held until `until` (the unit's beat last heard, plus heldMs), never restarted by the device's own beat catching up. */
+  const left = on ? (Number.isFinite(until) ? until - Date.now() : BEAT_LOCK.heldMs) : 0
+  if (on && left <= 0) on = false
+  inStepTimer = on ? setTimeout(() => noteInStep(false), left) : null
   if (inStep === on) return
   inStep = on
   for (const fn of stepWatchers) fn()
@@ -664,7 +667,7 @@ export function usePhoneClick(bpm, onBeat) {
         startedAt += part
         due += part
         left -= part
-        if (!left) noteInStep(inStepWith(unitAt))
+        if (!left) noteInStep(inStepWith(unitAt), unitAt.at + BEAT_LOCK.heldMs)
       }
       timer = setTimeout(step, Math.max(0, due - Date.now()))
     }
@@ -691,7 +694,7 @@ export function usePhoneClick(bpm, onBeat) {
         const now = Date.now()
         timer = setTimeout(step, Math.max(0, startedAt + Math.ceil((now - startedAt) / beat) * beat - now))
       } else left = by
-      noteInStep(inStepWith(unitAt, left))
+      noteInStep(inStepWith(unitAt, left), unitAt.at + BEAT_LOCK.heldMs)
       if (by) logDebug('metronome', `this device’s beat goes ${Math.abs(Math.round(by))} ms ${by > 0 ? 'later' : 'earlier'}, onto the unit’s (known to within ${Math.round(unitAt.half)} ms)${clicked === null ? '' : ', a little each beat'}`)
     }
     const unfollow = follow

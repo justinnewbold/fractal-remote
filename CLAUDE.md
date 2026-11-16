@@ -3004,8 +3004,18 @@ beat and the device makes no sound and no tap, and opens no audio.
     before a click dropped that click.) A move under 8 ms is not made.
     "In step with the unit's beat" is said in place of the "can be apart"
     sentence (lib/edgeFlash `apartOrInStep`) only while a window has come
-    in the last twenty seconds, it is known to within 20 ms and no more
-    than 20 ms of the move is left (`inStepWith`); and goes back by itself.
+    in the last twenty seconds (timed from that window, not from when the
+    light caught up), it is known to within 20 ms, no more than 20 ms of
+    the move is left, and the belief is SURE: a window at least two seconds
+    after it was formed has agreed with it without moving it
+    (`sureAfterMs`, `inStepWith`). Two answers that only agree with each
+    other are what a device keeping a tempo a little off the unit's looks
+    like (the unit tapped to 122 at its footswitch, the phone still on 120
+    through the computer): the light is pulled back every six seconds and
+    drifts up to a tenth of a second between, and the words never say in
+    step (an independent read caught the first cut saying it). A belief or
+    a window aside older than twenty seconds is forgotten, so a single late
+    answer after a long silence is never believed alone.
   - **Nothing is sent to the unit for any of it.** A unit that sends no
     beat changes nothing, and the log says why once ("the unit has sent no
     beat (Send Realtime Sysex may be off on it: Setup → MIDI/Remote)").
@@ -3496,9 +3506,13 @@ That used to be only for a start with NO window, and his Pi opens the app
 with its window (the guide's way), so it waited for a quit that never
 came. Since 1.90.86 an ARM board on Linux (`pedalboardBox`: a Pi) is
 treated as nobody there whether or not its window is open. Still only the
-AppImage (the .deb asks for a password), and still a download from an
-earlier run: the first power-on after a release downloads it, the next one
-puts it in. A Pi on a version older than 1.90.86 is still the old rule
+AppImage (the .deb asks for a password), never once a phone has used the
+box since it started (`phoneSeen`: a download that lands a minute or two
+in would otherwise restart it mid-song), and a box that started its own
+install comes back by itself if the install does not take, with its window
+if one was showing (`installedUnattended` in installNow). An independent
+read found all three missing from the first cut. Usually the first
+power-on after a release downloads it and the next one puts it in. A Pi on a version older than 1.90.86 is still the old rule
 until it is quit once from its menu (Quit puts the waiting update in).
 
 **The red "Update the computer app" line means the phone needs it.**
