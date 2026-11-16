@@ -3398,6 +3398,60 @@ export function run(test) {
     assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }], 'preset 12 from a controller was taken for the app’s own 140')
   })
 
+  test('AFTER A REAL CHANGE THE APP’S LAST PROGRAM CHANGE IS NOT ITS OWN: a controller back to it is a change, and a knob turn waiting is refused', async () => {
+    /* No echo: the app sends 12, a controller takes the unit to 5, then back to 12, all within a second and a half of the send. */
+    {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 400 - t.clock.now())
+      t.events.splice(0)
+      controllerTo(t, 5)
+      await advance(t.clock, at + 1000 - t.clock.now())
+      controllerTo(t, 12)
+      await advance(t.clock, 400)
+      assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, `the controller back to 12 was taken for the app’s own: ${t.logs.join(' | ')}`)
+    }
+    /* Every copy on all sixteen channels, banks with them: the same. */
+    {
+      const t = await onTheLine('fm9', { methods: { preset: 'pc' } })
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 250 - t.clock.now())
+      await sixteenWhole(t, 12)
+      await advance(t.clock, at + 700 - t.clock.now())
+      t.events.splice(0)
+      controllerTo(t, 5)
+      await advance(t.clock, at + 1300 - t.clock.now())
+      controllerTo(t, 12)
+      await advance(t.clock, 400)
+      assert.equal(t.events.filter((e) => e.type === 'changed').length, 2, `the controller back to 12 was taken for the app’s own: ${t.logs.join(' | ')}`)
+      assert.equal(t.logs.filter((l) => PC_OWN.test(l)).length, 1, 'the controller’s 12 was logged as the app’s own coming back')
+    }
+    /* An FM3 in Edit: a knob turn waiting when the controller takes the unit back to 12 goes nowhere. */
+    {
+      const { settings } = await fm3Settings()
+      const t = await onTheLine('fm3', { edit: () => true, settings, methods: { preset: 'pc', learned: { scene: 'published' } } })
+      await t.get('/preset')
+      await drive(t.clock, editRead(t, 58))
+      await t.post('/preset/select', { number: 12 })
+      const at = pcSentAt(t, 12)
+      await advance(t.clock, at + 400 - t.clock.now())
+      controllerTo(t, 5)
+      await advance(t.clock, 100)
+      await t.get('/preset/blocks')
+      await drive(t.clock, editRead(t, 58))
+      await advance(t.clock, Math.max(0, at + 1000 - t.clock.now()))
+      const first = editRead(t, 66)
+      await flush()
+      const knob = t.wire.request('/preset/blocks/58/params/7', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.4, continuous: true }) }).then(() => 'sent', (e) => e)
+      await flush()
+      controllerTo(t, 12)
+      const [, turned] = await drive(t.clock, Promise.all([first, knob]))
+      assert.equal(turned?.status, 409, 'a knob turn waiting went into the preset a controller took the unit back to')
+    }
+  })
+
   test('copies of one Program Change are one change only within one bank: the same number after another bank select is another preset', async () => {
     /* A controller: preset 5, then preset 133 (bank 1, Program Change 5) 150 ms later. */
     {

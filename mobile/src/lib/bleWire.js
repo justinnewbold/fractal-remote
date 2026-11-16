@@ -983,15 +983,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * The app's own Program Change that one on `channel` is a copy of, or
    * null: the oldest send not heard back yet that fits (an earlier one only
    * within OWN_OLDER_PC_MS of going), else the newest, which the unit is on,
-   * so another copy of it changes nothing.
+   * so another copy of it changes nothing. Not a send the unit has been
+   * heard to move off since (`passed`, a Program Change taken as news): the
+   * unit is not on it, so the same preset again is a change (a controller
+   * back to it was swallowed, and a knob turn waiting in Edit went into
+   * that preset: an independent read, 16 November 2026). A passed send
+   * keeps only OWN_OLDER_PC_MS, for copies of it still on their way.
    */
   function ownPcFor(low, channel, now) {
     const bank = bankOn(channel, now)
     const mine = ownLately(now)
     const newest = mine[mine.length - 1]
     const fits = (e) => e.low === low && (bank === null || bank === e.bank)
-    for (const e of mine) if (!e.heard && (e === newest || now - e.at <= OWN_OLDER_PC_MS) && fits(e)) return e
-    return newest && fits(newest) ? newest : null
+    for (const e of mine) if (!e.heard && ((e === newest && !e.passed) || now - e.at <= OWN_OLDER_PC_MS) && fits(e)) return e
+    return newest && !newest.passed && fits(newest) ? newest : null
   }
   /* Its copies have come: the sends before it are over (copies come back in order), and it is not taken for a later change but as the unit's own preset. */
   function ownPcHeard(e) {
@@ -1808,6 +1813,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (kind >= 0x80 && kind < 0xf0) heardAgain()
     if (kind === 0xc0) {
       say(`the unit sent Program Change ${msg[1]} on channel ${channel}: its preset changed`)
+      /* The unit has moved off every send of the app's: none is where it is now (ownPcFor). */
+      for (const e of ownPcs) e.passed = true
       sceneCache = null
       structure = null
       editPlaced = null
