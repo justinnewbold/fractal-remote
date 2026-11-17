@@ -16,6 +16,7 @@
 #   listing  what Play's listing says, next to store/google-play/, and what would change
 #   images   the screenshots, the icon and the feature graphic, read only
 #   vitals   crashes and freezes in the last 28 days, read only
+#   screenshots  the phone pictures in store/google-play/screenshots/, added after the ones Play has
 #
 # Leave "Write it" unticked to see what Play says now and what would change.
 # Tick it to change it. The log is public (the repository is), and nothing in
@@ -27,12 +28,13 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: What to do (listing is the words, images the pictures, vitals the crashes and freezes)
+        description: What to do (listing is the words, images the pictures, vitals the crashes and freezes, screenshots adds the phone pictures in store/google-play/screenshots)
         type: choice
         options:
           - listing
           - images
           - vitals
+          - screenshots
         default: listing
       apply:
         description: Write it (unticked only shows what is there and what would change)

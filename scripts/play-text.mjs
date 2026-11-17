@@ -41,7 +41,7 @@
  *
  * Node's own fetch and crypto, and nothing from npm: the job installs nothing.
  */
-import { createPrivateKey, sign } from 'node:crypto'
+import { createHash, createPrivateKey, sign } from 'node:crypto'
 import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -63,7 +63,7 @@ export const SCOPES = {
 }
 export const PUBLISHER = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE}`
 export const REPORTING = `https://playdeveloperreporting.googleapis.com/v1beta1/apps/${PACKAGE}`
-export const MODES = ['listing', 'images', 'vitals']
+export const MODES = ['listing', 'images', 'vitals', 'screenshots']
 
 /** Play's three boxes, the words they are called in a sentence, and the file each is kept in. */
 export const FIELDS = [
@@ -268,7 +268,7 @@ export const same = (a, b) => norm(a) === norm(b)
 export function readRepo(dir = REPO_DIR) {
   if (!existsSync(dir)) throw new Error('store/google-play/ is not in the repo')
   const out = {}
-  for (const entry of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+  for (const entry of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== 'screenshots')) {
     const lang = entry.name
     if (!/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(lang)) throw new Error(`store/google-play/${lang} is not a language Play knows (en-US, say)`)
     const listing = { language: lang, unchecked: existsSync(join(dir, lang, UNCHECKED)) }
@@ -478,10 +478,11 @@ export async function run({
   mask = () => {},
   now = Date.now()
 } = {}) {
-  if (!MODES.includes(mode)) throw new Error(`there is no mode "${mode}": it is listing, images or vitals`)
+  if (!MODES.includes(mode)) throw new Error(`there is no mode "${mode}": it is listing, images, vitals or screenshots`)
   const seconds = Math.floor(now / 1000)
   try {
     if (mode === 'listing') return await listing({ apply, hold, rawKey, fetch, log, repoDir, summary, mask, seconds })
+    if (mode === 'screenshots') return await screenshots({ apply, hold, rawKey, fetch, log, repoDir, mask, seconds })
     if (apply || hold) log(`"Write it" does nothing in ${mode}: it only reads. Nothing was written.\n`)
     if (mode === 'images') return await images({ rawKey, fetch, log, mask, seconds })
     return await vitals({ rawKey, fetch, log, mask, seconds, now })
@@ -676,6 +677,102 @@ async function images({ rawKey, fetch, log, mask, seconds }) {
     log('Nothing was changed: the draft opened in Play Console to read this was thrown away.')
   })
   return { wrote: [] }
+}
+
+/*
+ * PHONE SCREENSHOTS ADDED TO THE LISTING, ON HIS WORD. "Same with Google, if
+ * you can. You might need to crop them so it doesn't look like Apple"
+ * (Justin, 17 November 2026, of four pictures from his iPhone). They are kept
+ * cropped in store/google-play/screenshots/<version>/phone/ (no iPhone clock
+ * row, no home bar) and added AFTER the ones already there, in the files'
+ * name order, to the listing's main language. Never in place of one, never
+ * one Play already has (by its sha256), and never past Play's eight.
+ */
+export const SHOTS_MOST = 8
+
+export function pngSides(buf) {
+  if (buf.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('not a PNG')
+  return [buf.readUInt32BE(16), buf.readUInt32BE(20)]
+}
+
+/** Every phone picture in the repo's folder, checked against Play's rules before anything is sent. */
+export function phoneShots(repoDir = REPO_DIR) {
+  const root = `${repoDir}screenshots/`
+  if (!existsSync(root)) return []
+  const out = []
+  for (const version of readdirSync(root).sort()) {
+    const dir = `${root}${version}/phone`
+    if (!existsSync(dir)) continue
+    for (const name of readdirSync(dir).filter((n) => n.endsWith('.png')).sort()) {
+      const data = readFileSync(`${dir}/${name}`)
+      const [w, h] = pngSides(data)
+      const [short, long] = [Math.min(w, h), Math.max(w, h)]
+      if (short < 320 || long > 3840 || long > 2 * short) throw new Error(`${version}/phone/${name} is ${w}x${h}: Play takes sides from 320 to 3840, the long one no more than twice the short`)
+      if (data.length > 8 * 1024 * 1024) throw new Error(`${version}/phone/${name} is over Play's 8 MB`)
+      out.push({ name: `${version}/phone/${name}`, data, size: `${w}x${h}`, sha256: createHash('sha256').update(data).digest('hex') })
+    }
+  }
+  return out
+}
+
+async function screenshots({ apply, hold, rawKey, fetch, log, repoDir, mask, seconds }) {
+  const mine = phoneShots(repoDir)
+  if (!mine.length) throw new Error('there are no pictures under store/google-play/screenshots/')
+  const key = serviceAccount(rawKey, mask)
+  const token = await accessToken({ key, scope: SCOPES.publisher, fetch, now: seconds, mask })
+  const call = client({ base: PUBLISHER, token, fetch })
+  const added = await inEdit(call, log, async (id, state) => {
+    const { defaultLanguage: lang } = await call('GET', `/edits/${id}/details`)
+    const where = `/edits/${id}/listings/${encodeURIComponent(lang)}/phoneScreenshots`
+    const { images: there = [] } = await call('GET', where)
+    const have = new Set(there.map((p) => p.sha256))
+    const todo = mine.filter((m) => !have.has(m.sha256))
+    log(`Google Play, ${PACKAGE}, ${lang}: ${there.length} phone ${there.length === 1 ? 'screenshot' : 'screenshots'} now; ${todo.length} to add (${mine.length - todo.length} already there), making ${there.length + todo.length}.`)
+    for (const m of todo) log(`  + ${m.name} (${m.size})`)
+    if (there.length + todo.length > SHOTS_MOST) throw new Error(`that would be ${there.length + todo.length} phone screenshots; Play takes ${SHOTS_MOST}. Nothing was added.`)
+    if (!todo.length) return []
+    if (!apply) {
+      log('\nNothing was sent: the draft opened in Play Console to read this was thrown away. Run with "Write it" ticked to add them.')
+      return []
+    }
+    for (const m of todo) {
+      const res = await fetch(`${PUBLISHER.replace('/androidpublisher/v3/', '/upload/androidpublisher/v3/')}${where}?uploadType=media`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/png' },
+        body: m.data
+      })
+      const text = await res.text()
+      if (!res.ok) throw new PlayError({ api: 'the Google Play Android Developer API', method: 'POST', path: `${where} (upload)`, status: res.status, text: text.slice(0, 800) })
+      const back = JSON.parse(text).image
+      if (back?.sha256 && back.sha256 !== m.sha256) throw new Error(`${m.name}: Play holds a different picture from the one sent`)
+    }
+    state.sending = true
+    try {
+      await call('POST', `/edits/${id}:commit`, {
+        query: { changesInReviewBehavior: 'ERROR_IF_IN_REVIEW', ...(hold ? { changesNotSentForReview: 'true' } : {}) }
+      })
+    } catch (err) {
+      if (err instanceof PlayError && err.status >= 400 && err.status < 500) state.sending = false
+      throw err
+    }
+    state.committed = true
+    return todo
+  })
+  if (!added.length) return { wrote: [] }
+  log(
+    hold
+      ? '\nAdded, and left in Play Console under Changes not yet sent for review.'
+      : "\nAdded, and sent to Google's review. They show once Google passes them, usually within a day."
+  )
+  await inEdit(call, log, async (id) => {
+    const { defaultLanguage: lang } = await call('GET', `/edits/${id}/details`)
+    const { images: there = [] } = await call('GET', `/edits/${id}/listings/${encodeURIComponent(lang)}/phoneScreenshots`)
+    const have = new Set(there.map((p) => p.sha256))
+    const lost = added.filter((m) => !have.has(m.sha256))
+    if (lost.length) throw new Error(`sent, and Play does not show ${lost.map((m) => m.name).join(', ')}`)
+    log(`  — and they read back: ${there.length} phone screenshots.`)
+  })
+  return { wrote: added.map((m) => m.name) }
 }
 
 const pct = (v, scale) => `${(v * scale).toFixed(2)}%`

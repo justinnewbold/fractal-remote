@@ -3112,7 +3112,19 @@ export function run(test) {
     const wf = read('.github/workflows/store-text.yml')
     assert.match(wf, /if: \$\{\{ inputs\.show && inputs\.release == '' \}\}[\s\S]{0,300}run: node scripts\/store-read\.mjs/, 'Show the texts does not run the reader')
     assert.match(wf, /if: \$\{\{ !inputs\.show && inputs\.release == '' \}\}[\s\S]{0,300}run: node scripts\/store-text\.mjs/, 'Show the texts can still write the promotional text')
-    assert.match(wf, /if: \$\{\{ inputs\.release != '' \}\}[\s\S]{0,400}run: node scripts\/store-release\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/, 'a new version’s texts are written without Write it')
+    assert.match(wf, /if: \$\{\{ inputs\.release != '' && !inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-release\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/, 'a new version’s texts are written without Write it')
+  })
+
+  test('App Store screenshots are added after the ones there, in Apple’s sizes, and nothing is taken away or sent for review', async () => {
+    const { shotsFor, DEVICES, MOST } = await import('../scripts/store-shots.mjs')
+    const mine = shotsFor('2.0.0')
+    assert.equal(mine.length, 4)
+    for (const s of mine) assert.ok(s.device === 'iphone' && s.type === 'APP_IPHONE_67' && DEVICES.iphone.sizes.includes(s.size), `${s.name} is not an iPhone picture in Apple's size`)
+    assert.equal(MOST, 10)
+    const code = read('scripts/store-shots.mjs')
+    assert.doesNotMatch(code, /method: 'DELETE'|appStoreVersionSubmissions|reviewSubmissions/, 'the job can take a picture away, or send a version for review')
+    assert.match(code, /if \(total > MOST\) throw/, 'a set can be filled past Apple’s ten')
+    assert.match(read('.github/workflows/store-text.yml'), /if: \$\{\{ inputs\.release != '' && inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-shots\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/)
   })
 
   test('a new App Store version’s texts: the review notes are changed in place, never printed, and nothing presses Add for Review', async () => {
