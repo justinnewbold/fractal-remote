@@ -149,7 +149,7 @@ export function run(test) {
     assert.equal(r.beatLockOn({ admin: false, everyone: true }), true, 'the switch does not open it')
     assert.equal(r.beatLockOn({ admin: 'yes', everyone: 1 }), false, 'something that is not true opened it')
     const features = flat(read('mobile/src/lib/features.js'))
-    assert.match(features, /export const BEAT_LOCK_FOR_EVERYONE = false/, 'the switch shipped on: it is his account’s until he has seen it line up')
+    assert.match(features, /export const BEAT_LOCK_FOR_EVERYONE = true(?!\w)/, 'the beat lock is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     /* And the one place it is asked: beside a unit that is clicking, never in the demo. */
     const click = flat(read('mobile/src/lib/metronome.js'))
     assert.match(click, /const follow = beatLockOn\(\{ admin: useBluetoothAdmin\(\), everyone: BEAT_LOCK_FOR_EVERYONE \}\) && clicks\(s\)\.unit && Boolean\(unitMetronome\(slug\)\) && !isDemo\(\)/)

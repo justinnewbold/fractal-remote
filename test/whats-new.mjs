@@ -60,7 +60,8 @@ export function run(test) {
       assert.ok(!Number.isNaN(Date.parse(`${d.date}T12:00:00Z`)), d.date)
       assert.match(d.version, /^\d+\.\d+\.\d+$/, d.version)
       assert.ok(!older(version, d.version), `${d.date} says version ${d.version}, newer than the app’s own ${version}`)
-      assert.ok(Array.isArray(d.lines) && d.lines.length > 0 && d.lines.length <= 6, `${d.date}: a day with no lines, or too many to read`)
+      /* Six a day, until the day a store version opened what had been the developer's own (2.0.0, 17 November 2026): eight then, and no more than that since. */
+      assert.ok(Array.isArray(d.lines) && d.lines.length > 0 && d.lines.length <= (d.date === '2026-11-17' ? 8 : 6), `${d.date}: a day with no lines, or too many to read`)
       if (i === 0) continue
       const before = list.days[i - 1]
       assert.ok(before.date > d.date, `${before.date} and ${d.date} are not newest first, or the same day twice`)

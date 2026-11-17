@@ -23,9 +23,10 @@
  *              sideways.
  *
  * AND ONLY FOR AN ACCOUNT THE SIDEWAYS LAYOUT IS OPEN TO (App.js
- * `sidewaysAllowed`: his, until features PHONE_SIDEWAYS_FOR_EVERYONE). For
- * every other account a phone is upright on every page, Play among them, so
- * the app in their hands is exactly the app it was.
+ * `sidewaysAllowed`: his, and every account since features
+ * PHONE_SIDEWAYS_FOR_EVERYONE opened, 17 November 2026, store version
+ * 2.0.0). With that switch off, every other account's phone is upright on
+ * every page, Play among them.
  *
  * AND ONLY ON A PHONE LONG ENOUGH TO SPLIT (`fitsSideways`). A phone whose
  * screen would be under SIDEWAYS_AT across on its side (an iPhone SE, a 13

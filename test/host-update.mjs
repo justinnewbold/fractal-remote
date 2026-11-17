@@ -259,6 +259,23 @@ export function run(test) {
     assert.equal(w.line, 'Version 1.92.3 is ready. It goes in by itself once it has been out for a day and nobody has used pedalboard for half an hour.')
     assert.match(read('src/lib/desktop.js'), /it goes in by itself once it has been out for a day and nobody has used this computer for half an hour\./, 'the computer’s window words its wait differently now: say what it says')
     assert.equal(w.button, true, 'a Pi with its update ready offers no Update now')
+    // His own computer (signed in to his account, as the device is) skips the day's wait (desktop OWNER_ACCOUNTS, ownerBox): its line leaves the day out, and only its.
+    const his = h.computerUpdateWords({ name, version: '1.92.0', os: PI_OS, update: c.updateNote(ready, { selfUpdating: true }), owner: true })
+    assert.equal(his.line, 'Version 1.92.3 is ready. It goes in by itself once nobody has used pedalboard for half an hour.', 'his own computer is told of a day’s wait it does not make')
+    assert.equal(his.button, true)
+    for (const owner of [false, undefined, 'yes', 1]) assert.equal(h.computerUpdateWords({ name, version: '1.92.0', os: PI_OS, update: c.updateNote(ready, { selfUpdating: true }), owner }).line, w.line, `a customer’s computer (owner ${String(owner)}) is told it skips the day`)
+    // The give-up line, both ways.
+    const gaveUp = (owner) => h.computerUpdateWords({ name, version: '1.92.0', os: PI_OS, update: c.updateNote(ready, { selfUpdating: true }), result: { state: 'gave-up', version: '1.92.0' }, owner }).line
+    assert.equal(gaveUp(true), "pedalboard didn't update. It stays on version 1.92.0. The new version goes in by itself once nobody has used pedalboard for half an hour.")
+    assert.match(gaveUp(false), /once it has been out for a day and nobody has used pedalboard for half an hour\.$/)
+    // Which unit's line says the same as the card, for whoever reads it.
+    assert.equal(h.hostCardLine({ name, version: '1.92.0', os: PI_OS, update: c.updateNote(ready, { selfUpdating: true }) }, { driven: true, owner: true }), `v1.92.0 · ${his.line}`)
+    // Whose computer it is comes from the device's own sign-in, on both of the computer's lines.
+    const card = flat(code(read('mobile/src/components/HostUpdate.js')))
+    assert.match(card, /const words = computerUpdateWords\(\{ name, version: s\.hostVersion, os: s\.hostOs, update: s\.hostUpdate, owner, \.\.\.runSays\(run, s\) \}\)/)
+    assert.match(card, /const line = hostCardLine\(fact, \{ driven, twice: sameNameTwice\(remoteHosts\(\), name\), owner \}\)/)
+    assert.equal((card.match(/const owner = useOwnComputer\(\)/g) || []).length, 2)
+    assert.match(flat(code(read('mobile/src/lib/hostUpdateHere.js'))), /export const useOwnComputer = \(\) => useBluetoothAdmin\(\) === true/)
     // A Mac (or a PC, or a Pi the computer says does not take its own): quit and open.
     w = words(ready, {}, { os: 'macOS 15.3' })
     assert.equal(w.line, 'Version 1.92.3 is ready. It goes in the next time the computer app is quit and opened again.')
@@ -390,7 +407,7 @@ export function run(test) {
     }
     // A run that ended reading another computer says nothing at all: the computer's own note is said.
     assert.equal(end({ state: 'left' }).line, h.computerUpdateWords({ name: 'pedalboard', version: '1.92.0', os: PI_OS, update: { kind: 'ready', version: '1.92.3', goesIn: 'idle', canNow: true } }).line)
-    assert.equal(end({ state: 'gave-up', version: '1.92.0' }).line, "pedalboard didn't update. It stays on version 1.92.0. It tries again by itself once nobody has used it for half an hour.")
+    assert.equal(end({ state: 'gave-up', version: '1.92.0' }).line, "pedalboard didn't update. It stays on version 1.92.0. The new version goes in by itself once it has been out for a day and nobody has used pedalboard for half an hour.", 'a customer’s computer is told it tries again with no word of the day it waits first')
     assert.equal(end({ state: 'no-take', version: '1.92.0' }).line, "pedalboard didn't update. It stays on version 1.92.0.", 'an install that did not take is said to be tried again by itself, which the computer never does')
     assert.equal(end({ state: 'not-sent', why: 'busy' }).line, 'Something is still being sent to pedalboard. Try again in a moment.')
     assert.equal(end(null, { sending: 'asking' }).line, 'Asking pedalboard to update…')
@@ -682,9 +699,9 @@ export function run(test) {
 
   /* --------------------------------------------- his account, and nobody else */
 
-  test('host update: the switch is pinned off, and every other account sees and sends exactly what it did', async () => {
+  test('host update: the switch is pinned on since 2.0.0, and off, every other account sees and sends exactly what it did', async () => {
     const h = await phone()
-    assert.match(read('mobile/src/lib/features.js'), /^export const COMPUTER_UPDATE_FOR_EVERYONE = false$/m, 'his account first')
+    assert.match(read('mobile/src/lib/features.js'), /^export const COMPUTER_UPDATE_FOR_EVERYONE = true$/m, 'the computer’s update on Phone & computer is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     assert.equal(h.computerUpdateOn({ admin: true, everyone: false }), true)
     assert.equal(h.computerUpdateOn({ admin: false, everyone: false }), false)
     assert.equal(h.computerUpdateOn({ admin: false, everyone: true }), true)
@@ -701,7 +718,7 @@ export function run(test) {
     // What is drawn: nothing at all for an account the switch is off for.
     const comp = flat(code(read('mobile/src/components/HostUpdate.js')))
     assert.match(comp, /const on = useComputerUpdate\(\)[^]*?if \(!on \|\| demo \|\| throughAdapter \|\| s\.link !== 'connected' \|\| !s\.macName\) return null/)
-    assert.match(comp, /export function HostCardLine\(\{ name, driven = false \}\) \{ const on = useComputerUpdate\(\) const s = [^]*?if \(!on \|\| !name\) return null/)
+    assert.match(comp, /export function HostCardLine\(\{ name, driven = false \}\) \{ const on = useComputerUpdate\(\) const owner = useOwnComputer\(\) const s = [^]*?if \(!on \|\| !name\) return null/)
     // And the screens hand it nothing else to draw: the cards are as they were, with the line beside them.
     const settings = flat(code(read('mobile/src/screens/Settings.js')))
     assert.match(settings, /<HostUpdate demo=\{demo\} throughAdapter=\{throughAdapter\} onOpenUpdating=\{\(\) => setPage\('updating'\)\} \/>/)
@@ -803,7 +820,7 @@ export function run(test) {
 
     // The component draws the run through runSays, and the "not asked" note only while stillSo says it is about this computer.
     const comp = flat(code(read('mobile/src/components/HostUpdate.js')))
-    assert.match(comp, /const words = computerUpdateWords\(\{ name, version: s\.hostVersion, os: s\.hostOs, update: s\.hostUpdate, \.\.\.runSays\(run, s\) \}\)/)
+    assert.match(comp, /const words = computerUpdateWords\(\{ name, version: s\.hostVersion, os: s\.hostOs, update: s\.hostUpdate, owner, \.\.\.runSays\(run, s\) \}\)/)
     assert.match(comp, /const said = notAsked && stillSo\(notAsked\.at, s\) \? notAsked\.text : null/)
     assert.match(comp, /setNotAsked\(\{ text: notAskedWords\(why, name\), at: factsAt\(linkState\(\)\) \}\)/)
     assert.match(comp, /const offer = words\.button && !twice && !run\.phase/, 'Update now offered while another is out')

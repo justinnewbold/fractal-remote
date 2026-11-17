@@ -204,10 +204,10 @@ async function clickOnTheBench(os = 'ios') {
     `,
     'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
     'device-word.js': read('mobile/src/lib/device-word.js'),
-    /* The flash as a choice: its rules as they are, and its switch off, as it is for every account but his. */
+    /* The flash as a choice: its rules as they are, and its switch off (on for everyone since 2.0.0; off is how the closed path is held). */
     'edgeFlash.js': read('mobile/src/lib/edgeFlash.js'),
     'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\nexport const BEAT_LOCK_FOR_EVERYONE = false\nexport const METRONOME_LINE_UP_FOR_EVERYONE = false\n',
-    /* Lining up the light and the click (lib/lineUp): its rules as they are, its switch off, as it is for every account but his. */
+    /* Lining up the light and the click (lib/lineUp): its rules as they are, its switch off (on for everyone since 2.0.0; off is how the closed path is held). */
     'lineUp.js': read('mobile/src/lib/lineUp.js'),
     /* The device's beat on the unit's (lib/beatLock): the rules, the hand-off and the follower as they are, on the bench's clock. */
     'beatLock.js': read('mobile/src/lib/beatLock.js'),
@@ -2828,11 +2828,11 @@ export function run(test) {
    * 2026). The wire's half runs in test/bluetooth.mjs, the volume pop-up's
    * in test/volume-drag.mjs; here, the switch and Edit's Output block.
    */
-  test('the Output block’s levels are his account’s alone, by one switch, asked through lib/bluetooth, and handed to the wire beside Edit’s own door', async () => {
+  test('the Output block’s levels are one switch, open to every account since 2.0.0, asked through lib/bluetooth, and handed to the wire beside Edit’s own door', async () => {
     const strip = (f) => read(f).replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
-    assert.match(read('mobile/src/lib/features.js'), /^export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = false$/m, 'the levels are open to every account before he has moved one on a unit')
+    assert.match(read('mobile/src/lib/features.js'), /^export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = true$/m, 'the levels are closed to customers on 2.0.0, whose review notes describe them ("Enable all new features for all users", 17 November 2026)')
     const features = await import('../mobile/src/lib/features.js')
-    assert.equal(features.OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, false)
+    assert.equal(features.OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, true)
     const ble = strip('mobile/src/lib/bluetooth.js')
     assert.match(ble, /export const outputAndSceneLevels = \(\) => allUnits === true \|\| OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/)
     assert.match(ble, /export const useOutputAndSceneLevels = \(\) => useBluetoothAdmin\(\) \|\| OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/)
@@ -3339,10 +3339,10 @@ export function run(test) {
     const plain = markNewBlocks([{ slug: 'amp', name: 'Amp 1', effectId: 58 }])
     assert.equal(nameOwnBlocks(plain, 'axefxiii', true), plain)
 
-    /* Open to his account alone until the switch says everybody, asked at every read, and set in one place. */
+    /* Open to every account since the switch said so (2.0.0, 17 November 2026; his alone before), asked at every read, and set in one place. */
     const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
     assert.match(here, /setChainNamer\(\(blocks\) => nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel\(bluetoothAdmin\(\) === true\)\)\)/)
-    assert.match(read('mobile/src/lib/features.js'), /export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false\n/, 'the phone’s own names through a computer are open to everybody before he said so')
+    assert.match(read('mobile/src/lib/features.js'), /export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = true\n/, 'the phone’s own names through a computer are closed to customers on 2.0.0 (open since 17 November 2026)')
     assert.equal((read('mobile/App.js').match(/^import '\.\/src\/lib\/ownBlocksHere'$/gm) || []).length, 1)
     assert.equal(read('mobile/src/lib/ownBlocks.js').match(/^import .*$/gm).join('\n'), "import { catalogFor } from './gen3Catalog.js'")
     /* On a computer app from before it could answer them, the block's read has no knobs, and Edit says what to do, once the read is back. */
@@ -3541,9 +3541,9 @@ export function run(test) {
     const edit = flatCode('mobile/src/screens/Edit.js')
     assert.match(edit, /const list = ownPaletteHere\(await blockCatalog\(\)\) if \(!stop\) setPalette\(list\)/)
     assert.equal((edit.match(/blockCatalog\(\)/g) || []).length, 1, 'the list is read somewhere that leaves the unit’s own blocks out')
-    /* Still his account alone: nobody has placed one on a unit yet. */
+    /* Open to every account since 2.0.0 (17 November 2026: "Enable all new features for all users that were on my account"). */
     const features = await import('../mobile/src/lib/features.js')
-    assert.equal(features.OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, false)
+    assert.equal(features.OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, true)
   })
 
   test('the preset report never says every block is off over a new block that is on', async () => {
@@ -4022,7 +4022,7 @@ export function run(test) {
        scenes out of settings onto the edit screen". */
     const settings = read('mobile/src/components/RenamePreset.js')
     const stage = read('mobile/src/screens/Stage.js')
-    /* Not over Bluetooth, where renaming is not built (Edit's BLE_NO_CHAIN says so). */
+    /* Not over Bluetooth, where renaming is not built (Edit's noChainLine says so). */
     /* From More, or the preset's name, since 10 November 2026 (test/edit-more.mjs): renameHere is the old rule, and a VP4 is left out by it too. */
     assert.match(read('mobile/src/screens/Edit.js'), /const renameHere = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the Edit screen has no way to rename the preset')
     assert.match(read('mobile/src/screens/Edit.js'), /\{toolShown && tool === 'rename' \? <RenameDoor onClose=\{\(\) => setTool\(null\)\} \/> : null\}/, 'the Edit screen has no way to rename the preset')
@@ -19221,12 +19221,12 @@ export function run(test) {
      */
     const posingApp = read('mobile/App.js').replace(/\s+/g, ' ')
     const wall = posingApp.slice(posingApp.indexOf("auth === 'paywall' ? ( <Paywall"), posingApp.indexOf(') : askShare ? ('))
-    assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
+    assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) forgetTone3000\(\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
     assert.match(wall, /onDeleted=\{ purchase\.posing \? undefined :/)
-    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*allowBluetooth\(null, \{ signedOut: true \}\) forgetTone3000\(\) \} setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
     assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) [^}]*bluetoothBack\.current = bluetoothAtForm\.current bluetoothAtForm\.current = false askedBluetooth\.current = false setAuth\('in'\) \}/)
     /* Bluetooth as it was (the review of 3 November 2026): remembered where toSignIn writes it off, and turned on again once the account is in. */
-    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*bluetoothAtForm\.current = bluetooth allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/)
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*bluetoothAtForm\.current = bluetooth allowBluetooth\(null, \{ signedOut: true \}\) forgetTone3000\(\) \} setAuth\('out'\) \}/)
     assert.match(posingApp, /const open = allowBluetooth\(id\) [^}]*const back = bluetoothBack\.current bluetoothBack\.current = false if \(open && back\) setBluetooth\(true\)/)
     /* And what Bluetooth was is forgotten when the form is left any other way (the review of 3 November 2026). */
     assert.match(posingApp, /useEffect\(\(\) => \{ if \(auth !== 'out'\) bluetoothAtForm\.current = false \}, \[auth\]\)/)

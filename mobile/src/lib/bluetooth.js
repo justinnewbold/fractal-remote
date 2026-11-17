@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2548,23 +2548,23 @@ export function openWire() {
     remember: (m) => rememberMethods(unit, m),
     /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire), and null takes it off when the one picked answers after all (heardFromIt). */
     onForeign: (name) => noteBluetooth({ answeredAs: name || null }),
-    /* Play's and Edit's blocks in the unit's own order, from its grid (bleWire gridOrder): his account's, until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE; asked at every request and every send. Not behind Edit's door: it is Play's order. */
+    /* Play's and Edit's blocks in the unit's own order, from its grid (bleWire gridOrder): every account's since lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every send. Not behind Edit's door: it is Play's order. */
     blockOrder: () => blockOrderFromGrid(),
-    /* The Input and Output blocks in the chain answer, and their reads and writes (lib/sceneLevel): his account's, until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, below). */
+    /* The Input and Output blocks in the chain answer, and their reads and writes (lib/sceneLevel): every account's since lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every send. Edit's own door still has to be open (`edit`, below). */
     io: () => outputAndSceneLevels(),
     /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
     reader: () => allUnits === true,
-    /* An Axe-Fx III's captures listed, sent and picked from this device (lib/nam-install), his account's alone, asked at every request. */
-    captures: () => allUnits === true,
+    /* An Axe-Fx III's captures listed, sent and picked from this device (lib/nam-install): every account the capture picker or TONE3000 is open to (capturesOverBluetooth), asked at every request. */
+    captures: () => capturesOverBluetooth(),
     /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for every account since lib/features OWN_KNOBS_FOR_EVERYONE (1.91.2; ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     namKnobs: () => ownKnobsLevel(allUnits === true),
-    /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
+    /* Save from the phone (lib/bleSave): every account's since lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request. Edit's own door still has to be open (`edit`, above). */
     save: () => saveOverBluetooth(),
-    /* The chain read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain): his account's, until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    /* The chain read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain): every account's since lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     chain: () => chainOverBluetooth(),
-    /* Edit's knobs follow the unit (lib/liveKnobs): his account's, until lib/features LIVE_KNOBS_FOR_EVERYONE; asked at every request and every report the unit sends. Edit's own door still has to be open (`edit`, above). */
+    /* Edit's knobs follow the unit (lib/liveKnobs): every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every report the unit sends. Edit's own door still has to be open (`edit`, above). */
     live: () => liveKnobsOverBluetooth()
   })
   const mine = wire
@@ -2628,9 +2628,21 @@ export async function runCheck(step) {
 export const ownKnobsLevel = (admin) => (admin === true || OWN_KNOBS_FOR_EVERYONE ? true : NAM_KNOBS_FOR_EVERYONE ? 'nam' : false)
 
 /**
+ * Whether an Axe-Fx III's captures may be listed, picked and sent from this
+ * device over Bluetooth or its USB cable (lib/nam-install, bleWire
+ * `captureOn`, which also wants the unit to be an Axe-Fx III, so never a
+ * VP4): his, by the sign-in kept on the device, or every account once the
+ * capture picker (lib/features NAM_PICKER_FOR_EVERYONE) or TONE3000 from a
+ * held NAM block (TONE3000_QUICK_FOR_EVERYONE) is open, since both stand on
+ * these tools. Both opened to everyone with store version 2.0.0 (17 November
+ * 2026). The Block reader is not this: it stays his (`reader`, above).
+ */
+export const capturesOverBluetooth = () => allUnits === true || NAM_PICKER_FOR_EVERYONE || TONE3000_QUICK_FOR_EVERYONE
+
+/**
  * Whether this account saves from the app over Bluetooth or a USB cable
- * (lib/bleSave): his, by the sign-in kept on the device, until lib/features
- * SAVE_OVER_BLUETOOTH_FOR_EVERYONE. For the wire, which also wants Edit open
+ * (lib/bleSave): every account's since lib/features
+ * SAVE_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before). For the wire, which also wants Edit open
  * on the unit, and for the Bluetooth page's words.
  */
 export const saveOverBluetooth = () => allUnits === true || SAVE_OVER_BLUETOOTH_FOR_EVERYONE
@@ -2647,8 +2659,8 @@ export const chainOverBluetooth = () => allUnits === true || CHAIN_OVER_BLUETOOT
 /**
  * Whether this account's blocks are put in the unit's own order on Play and
  * in Edit over Bluetooth or a USB cable, from the grid's live read (bleWire
- * gridOrder): his, by the sign-in kept on the device, until lib/features
- * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE. For the wire alone: no screen asks.
+ * gridOrder): every account's since lib/features
+ * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before). For the wire alone: no screen asks.
  */
 export const blockOrderFromGrid = () => allUnits === true || BLOCK_ORDER_FROM_GRID_FOR_EVERYONE
 
@@ -2657,9 +2669,8 @@ export const blockOrderFromGrid = () => allUnits === true || BLOCK_ORDER_FROM_GR
  * every connection, the volume moving Output 1 and a row for the scene the
  * unit is on, and the eight scene levels in Edit's Output block; over
  * Bluetooth or a USB cable, also the Input and Output blocks handed on by
- * the wire, so Edit draws IN and OUT and the volume button is there. His,
- * by the sign-in kept on the device, until lib/features
- * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE. The wire also wants Edit open.
+ * the wire, so Edit draws IN and OUT and the volume button is there. Every account's since lib/features
+ * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before). The wire also wants Edit open.
  */
 export const outputAndSceneLevels = () => allUnits === true || OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE
 

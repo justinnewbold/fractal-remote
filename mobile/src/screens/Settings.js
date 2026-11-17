@@ -84,6 +84,8 @@ import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import BlockReader from '../components/BlockReader'
 import Tone3000Test from '../components/Tone3000Test'
+import { useTone3000SignedIn } from '../lib/useTone3000SignedIn'
+import { T3K_KEEP, T3K_ROW_TITLE, T3K_SIGN_OUT, T3K_SIGN_OUT_ASK, T3K_SIGN_OUT_FAILED, t3kRowLine, t3kSignOutBody } from '../lib/tone3000Words'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -344,8 +346,10 @@ export default function Settings({
    * every screen to this now.
    */
   const [page, setPage] = useState(startPage)
-  /* Starter chains (lib/quickBuild): his account until features QUICK_BUILD_FOR_EVERYONE, the row and the page alike. */
+  /* Starter chains (lib/quickBuild): every account's since features QUICK_BUILD_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before), the row and the page alike. */
   const startersOpen = useQuickBuild()
+  /* A TONE3000 sign-in kept on this device, for its row in My rig: asked each time the front list comes up. */
+  const t3kHere = useTone3000SignedIn(page === null)
   const starterChains = useStarterChains()
 
   /* An account the service has vouched for is the top bar's photo's (lib/accountPhoto; nothing to do when App has said so already). */
@@ -846,6 +850,32 @@ export default function Settings({
             ) : null}
             {/* The chains Quick build offers on an empty preset, kept for this unit (components/StarterChains). */}
             {startersOpen ? <SetupRow title={STARTERS_TITLE} status={startersStatus(starterChains)} onPress={() => setPage('starters')} /> : null}
+            {/*
+              SIGNED IN TO TONE3000, AND THE WAY OUT (17 November 2026, for
+              the store version that opens TONE3000 to everybody: Apple's
+              5.1.1(v) asks that a sign-in to another service can be ended in
+              the app). Drawn only while a TONE3000 sign-in is kept on this
+              device, whoever's account this is: it names whose, where
+              TONE3000 has said, and a tap asks once and signs out (the pass,
+              and what TONE3000's page in the app remembers: lib/tone3000Here
+              signOutHere). The app's own Sign out does the same.
+            */}
+            {t3kHere.signedIn ? (
+              <SetupRow
+                title={T3K_ROW_TITLE}
+                status={t3kRowLine(t3kHere.name)}
+                onPress={() =>
+                  Alert.alert(T3K_SIGN_OUT_ASK, t3kSignOutBody(t3kHere.name), [
+                    { text: T3K_KEEP, style: 'cancel' },
+                    {
+                      text: T3K_SIGN_OUT,
+                      style: 'destructive',
+                      onPress: () => t3kHere.signOut().catch(() => Alert.alert(T3K_ROW_TITLE, T3K_SIGN_OUT_FAILED))
+                    }
+                  ])
+                }
+              />
+            ) : null}
           </Group>
 
           <Group title="Help" hint={HELP_HINT}>

@@ -43,14 +43,14 @@ async function rules() {
 }
 
 export function run(test) {
-  test('edge flash: the choice is his account only until its switch, and the switch is off', async () => {
+  test('edge flash: the choice is his account only until its switch, and the switch is on since 2.0.0', async () => {
     const r = await rules()
     assert.equal(r.edgeChoiceOn({ admin: true, everyone: false }), true)
     assert.equal(r.edgeChoiceOn({ admin: false, everyone: false }), false)
     assert.equal(r.edgeChoiceOn({ admin: false, everyone: true }), true)
     assert.equal(r.edgeChoiceOn(), false)
     assert.equal(r.edgeChoiceOn({ admin: 'yes' }), false, 'only a plain yes opens it')
-    assert.match(read('mobile/src/lib/features.js'), /^export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false$/m, 'the choice is open to every account before he has said so')
+    assert.match(read('mobile/src/lib/features.js'), /^export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = true$/m, 'the choice is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     const metronome = flat(read('mobile/src/lib/metronome.js'))
     assert.match(metronome, /const offered = edgeChoiceOn\(\{ admin: useBluetoothAdmin\(\), everyone: METRONOME_FLASH_CHOICE_FOR_EVERYONE \}\)/)
     /* It has always flashed: on until somebody switches it off, and anything unreadable is on. */

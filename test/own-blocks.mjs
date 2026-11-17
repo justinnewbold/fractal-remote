@@ -126,13 +126,17 @@ export function run(test) {
     assert.equal(deviceSlug('FM9'), 'fm9')
   })
 
-  test('his account first: the switch is off, and nobody else’s Play, signed out or the demo’s, changes', async () => {
+  test('open to everybody since 2.0.0 (17 November 2026); closed, his account alone and nobody else’s Play, signed out or the demo’s, changes', async () => {
     const { OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE, ownBlocksOpenTo } = await own()
     const { ADMINS } = await import('../shared/admin.mjs')
-    assert.equal(OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE, false)
+    assert.equal(OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE, true)
+    /* As it stands: every account, signed out and the demo too. */
     assert.equal(ownBlocksOpenTo(ADMINS[0]), true)
-    for (const other of ['11111111-2222-3333-4444-555555555555', '', null, undefined]) assert.equal(ownBlocksOpenTo(other), false, String(other))
-    /* The switch thrown opens it to everybody, and only `true` is thrown. */
+    for (const other of ['11111111-2222-3333-4444-555555555555', '', null, undefined]) assert.equal(ownBlocksOpenTo(other), true, String(other))
+    /* Closed again: his account alone. */
+    assert.equal(ownBlocksOpenTo(ADMINS[0], false), true)
+    for (const other of ['11111111-2222-3333-4444-555555555555', '', null, undefined]) assert.equal(ownBlocksOpenTo(other, false), false, String(other))
+    /* Only `true` opens it. */
     assert.equal(ownBlocksOpenTo(null, true), true)
     assert.equal(ownBlocksOpenTo(null, 'true'), false)
   })

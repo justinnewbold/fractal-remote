@@ -296,8 +296,10 @@ const ios = Platform.OS === 'ios'
  * noticed. Editing first, said for the unit picked (lib/editWords
  * editingLine, by the switch Play's Edit asks, lib/bluetooth
  * editOverBluetooth): closed, "No editing or saving over Bluetooth.", what
- * every customer copy shows until a store version opens editing on the
- * unit; open, what Edit does there and that nothing saves.
+ * a copy shows where a store version has not opened editing on the unit;
+ * open, what still needs the computer (since 2.0.0, for every account, Save
+ * and Quick build are among what Edit does, and the line says only the
+ * chain editor, modifiers, renaming and copying a channel).
  */
 const DIFFERENT = [
   'Slower to load the preset list.',
@@ -1428,7 +1430,7 @@ export function BluetoothLimits() {
   const vp4 = b.unit === 'vp4'
   /* Edit over Bluetooth on the unit picked, for this account on this copy: never on a VP4, which is not one whose Edit is built. */
   const editOpen = editOverBluetooth(b.unit)
-  /* And whether this account saves from the app there (lib/bleSave): his until a store version opens it. */
+  /* And whether this account saves from the app there (lib/bleSave): every account since 2.0.0 (lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE), which opens with the chain and Quick build, so the saving form of the lines says Quick build. */
   const saves = editOpen && saveOverBluetooth()
   /* And whether the volume button is there, for the list's last line (lib/bluetooth volumeOverBluetooth: his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). */
   const volume = volumeOverBluetooth(b.unit)

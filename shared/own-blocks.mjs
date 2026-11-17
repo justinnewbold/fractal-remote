@@ -77,13 +77,18 @@ export function ownBlock(unitSlug, effectId) {
 }
 
 /**
- * THE SWITCH. False: Justin's account only, as the phone's own naming
- * through the computer still is (mobile/src/lib/features.js
- * OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE), until he has switched one
- * through his Raspberry Pi. True opens it to everybody. Every other account,
- * signed out, and the demo get exactly the Play they had.
+ * THE SWITCH. True since 17 November 2026, with the phone's own naming
+ * through the computer (mobile/src/lib/features.js
+ * OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE): "Enable all new features for
+ * all users that were on my account" (Justin, 2.0.0 release day). True
+ * reaches every viewer of the browser and the computer's window, signed
+ * out and the demo included (`ownBlocksOpenTo(link.account?.id)`). It is
+ * inside the computer app, so it reaches a computer with the computer
+ * release that follows its merge, not before. False is Justin's account
+ * only: every other account, signed out, and the demo get the Play they had
+ * before.
  */
-export const OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE = false
+export const OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE = true
 
 /** Whether the account signed in on this page is shown them: `id` is the same read the Developer rows use (link.account?.id). */
 export const ownBlocksOpenTo = (id, everyone = OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE) => everyone === true || isAdmin(id)

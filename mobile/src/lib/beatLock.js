@@ -22,8 +22,9 @@
  * Only while a beat has been heard in the last twenty seconds, and is known
  * to within inStepMs, do they say the two are in step (EDGE_WORDS.inStep).
  *
- * HIS ACCOUNT ONLY until he says: lib/features.js BEAT_LOCK_FOR_EVERYONE
- * (`beatLockOn`), as every new thing is. NOT SEEN ON A UNIT YET: that his
+ * His account first, as every new thing is: lib/features.js
+ * BEAT_LOCK_FOR_EVERYONE (`beatLockOn`), open to everyone since 17 November
+ * 2026 (store version 2.0.0). NOT SEEN ON A UNIT YET: that his
  * unit sends its beat down the USB port at all, on every beat or only on a
  * bar's first, and how near its own click. The log says (lib/unitBeat).
  *

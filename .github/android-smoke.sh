@@ -23,7 +23,11 @@
 # October 2026), so it could never show the check was looking.
 #
 # The way the screen is held (docs/pending/tablet-turns.patch). The phone is
-# held sideways the whole time, and the app must be drawn upright on it. First
+# held sideways the whole time, and the app must be drawn upright on it, all
+# but Play: since 2.0.0 (features PHONE_SIDEWAYS_FOR_EVERYONE, 17 November
+# 2026, and phone-turns in the build) Play on a phone wide enough turns with
+# it for every account, the demo's included, so the phone's look at Play
+# must be drawn sideways, and the startup card upright. First
 # Settings, which turns freely, is opened and must be drawn sideways, or an
 # upright app proves nothing. And before every look the hold is read back
 # (auto-rotate off, the lock where turn() put it), so a hold something let go
@@ -390,6 +394,8 @@ shot card
 # Each look at which way up the app is, said in the summary and judged.
 look() {
   local name="$1"
+  # How the phone must draw this look: upright, or sideways for Play (above).
+  local phone_want="${2:-upright}"
   # On the phone the hold is NOT read back: an app that asks to be upright
   # moves the phone's rotation lock itself (run 40237542736: "lock 1" before
   # the launch, Settings drawn 2400x1080, then "lock 0" with the app up), so
@@ -399,12 +405,18 @@ look() {
   [ "$where" = phone ] || held_as_asked "$name"
   shot "$name"
   if [ "$where" = phone ]; then
-    if [ "$h" -gt "$w" ]; then
-      summary "- $name: drawn upright, ${w}x${h}"
-    else
-      echo "::error::The app was drawn sideways on the phone (${w}x${h} in $name.png): a phone must stay upright."
+    local drawn=sideways
+    [ "$h" -gt "$w" ] && drawn=upright
+    if [ "$drawn" = "$phone_want" ]; then
+      summary "- $name: drawn $drawn, ${w}x${h}"
+    elif [ "$phone_want" = upright ]; then
+      echo "::error::The app was drawn sideways on the phone (${w}x${h} in $name.png): this screen must stay upright on a phone."
       summary "- $name: drawn SIDEWAYS, ${w}x${h}"
       failed+=("$name: the app turned sideways on a phone")
+    else
+      echo "::error::Play was drawn upright on the phone held sideways (${w}x${h} in $name.png): since 2.0.0 Play turns on a phone wide enough, for every account."
+      summary "- $name: drawn UPRIGHT, ${w}x${h}"
+      failed+=("$name: Play did not turn on a phone held sideways")
     fi
     return
   fi
@@ -434,7 +446,17 @@ walked=yes
 walk || walked=no
 summary "- into the demo's Play: $walked"
 [ "$walked" = yes ] || failed+=("could not get into the demo")
-look play
+if [ "$where" = phone ]; then
+  # Held sideways again before Play is looked at. The startup card's upright
+  # request moved the phone's lock to 0 (run 40237542736, in look() above),
+  # and Play on Android asks for the phone's own choice
+  # (SCREEN_ORIENTATION_USER, lib/turnScreen ANDROID_USER), which with
+  # auto-rotate off is that lock: left at 0, Play would stay upright however
+  # well it turns. So the lock goes back to 1 here, as a player turning the
+  # phone would put it.
+  turn 1
+fi
+look play sideways
 
 if [ "$where" = tablet ]; then
   # Turned upright while Play is up, and back: the turn a tablet on a music stand takes.

@@ -11,6 +11,8 @@ import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
 import { useSolidChrome } from './src/lib/useSolidChrome'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, keptAccount, signOut } from './src/lib/relay'
+/* A sign-out somebody asked for ends the TONE3000 sign-in kept on the device too (lib/tone3000Here). */
+import { forgetTone3000 } from './src/lib/tone3000Here'
 import { showPhotoFor } from './src/lib/accountPhoto'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
 import { useNoComputer } from './src/lib/useNoComputer'
@@ -557,6 +559,14 @@ export default function App() {
    * session; backing out leaves it exactly as it was, and the demo button on
    * that screen is the way back in.
    *
+   * Except two things of the device's, which a sign-in as somebody else must
+   * not inherit: Bluetooth is written off (and put back by Back to your own
+   * rig, backToRig), and the TONE3000 sign-in kept on the device ENDS here
+   * (lib/tone3000Here, 17 November 2026), and is not put back: backing out of
+   * the form means signing in to TONE3000 again. A device that never showed
+   * TONE3000's page and holds no TONE3000 pass loses nothing by it
+   * (lib/tone3000Keep signOutKeeper).
+   *
    * The demo ends here, though: somebody heading for an account is heading for
    * a real rig, and the simulated unit would otherwise still be answering.
    */
@@ -574,6 +584,7 @@ export default function App() {
       /* Kept, so Back to your own rig can put it back as it was (backToRig): the off written here is for a sign-in as somebody else. */
       bluetoothAtForm.current = bluetooth
       allowBluetooth(null, { signedOut: true })
+      forgetTone3000()
     }
     setAuth('out')
   }
@@ -1953,6 +1964,7 @@ export default function App() {
                 signOut().catch(() => {})
                 unlinkAccount().catch(() => {})
                 allowBluetooth(null, { signedOut: true })
+                forgetTone3000()
               }
               setAuth('in')
             }}
@@ -1961,6 +1973,7 @@ export default function App() {
                 signOut().catch(() => {})
                 unlinkAccount().catch(() => {})
                 allowBluetooth(null, { signedOut: true })
+                forgetTone3000()
               }
               setAuth('out')
             }}
@@ -1976,6 +1989,7 @@ export default function App() {
                     signOut().catch(() => {})
                     unlinkAccount().catch(() => {})
                     allowBluetooth(null, { signedOut: true })
+                    forgetTone3000()
                     setAuth('out')
                   }
             }
@@ -2262,6 +2276,7 @@ export default function App() {
                      for. */
                   unlinkAccount().catch(() => {})
                   allowBluetooth(null, { signedOut: true })
+                  forgetTone3000()
                   setScreen('stage')
                   setAuth('out')
                 }}

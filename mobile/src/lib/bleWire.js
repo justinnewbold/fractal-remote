@@ -708,12 +708,12 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  * @param {() => boolean} [o.edit]  whether Edit is open over Bluetooth to this account on this unit (ble-rule editOffered), asked at each request
  * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
- * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; his account's alone: lib/bluetooth), asked at every request
+ * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; lib/bluetooth capturesOverBluetooth: his account, or NAM_PICKER_FOR_EVERYONE or TONE3000_QUICK_FOR_EVERYONE, both open since 17 November 2026), asked at every request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
- * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
- * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; his account until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every send
- * @param {() => boolean} [o.io]  whether the Input and Output blocks are handed on in the chain answer and may be read and written by Edit (lib/sceneLevel; his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE), asked at every request and every send
- * @param {() => boolean} [o.live]  whether Edit's knobs follow the unit for this account (lib/liveKnobs; his account until lib/features LIVE_KNOBS_FOR_EVERYONE), asked at every request and at every report the unit sends
+ * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; every account's since lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every send
+ * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; every account's since lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every send
+ * @param {() => boolean} [o.io]  whether the Input and Output blocks are handed on in the chain answer and may be read and written by Edit (lib/sceneLevel; every account's since lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every send
+ * @param {() => boolean} [o.live]  whether Edit's knobs follow the unit for this account (lib/liveKnobs; every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and at every report the unit sends
  */
 export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
@@ -755,8 +755,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const g3 = () => ownEditOf(g3Edit, namOn())
   /*
    * SAVING FROM THE PHONE (lib/bleSave), where Edit is open: open to this
-   * account or not (`save`, lib/bluetooth: his account until lib/features
-   * SAVE_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request, as Edit is.
+   * account or not (`save`, lib/bluetooth: every account's since lib/features
+   * SAVE_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request, as Edit is.
    * `savingSlot` is the one preset a save is being sent over, for exactly as
    * long as it is being sent: the way out passes a save to that slot only.
    */
@@ -765,8 +765,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /*
    * THE CHAIN, READ AS A GRID AND CHANGED FROM HERE (lib/gen3-grid on an
    * FM3, FM9 or Axe-Fx III; lib/am4-chain on an AM4): open to this account
-   * or not (`chain`, lib/bluetooth: his account until lib/features
-   * CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), where Edit is open, asked at every
+   * or not (`chain`, lib/bluetooth: every account's since lib/features
+   * CHAIN_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), where Edit is open, asked at every
    * request and every send. `chainHand` holds the frames of the one grid
    * job in hand, for exactly as long as it is being done (lib/gen3-grid
    * gridHand): the way out passes a frame of the grid's shapes only if it
@@ -776,8 +776,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const chainHand = gridHand()
   /*
    * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (gridOrder): open to this account
-   * or not (`blockOrder`, lib/bluetooth: his account until lib/features
-   * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every
+   * or not (`blockOrder`, lib/bluetooth: every account's since lib/features
+   * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every
    * send. Only an FM3, FM9 or Axe-Fx III ever asks it: an AM4's blocks are
    * its own read (am4Blocks), its four slots in their order already, and a
    * VP4 has a wire of its own. Not behind Edit's door: it is Play's order.
@@ -800,8 +800,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * EDIT'S KNOBS FOLLOW THE UNIT (lib/liveKnobs), where Edit is open, on an
    * FM3, FM9 or Axe-Fx III only (never an AM4: a block read every few
    * seconds was heard as glitches on one through the computer): open to
-   * this account or not (`live`, lib/bluetooth: his account until
-   * lib/features LIVE_KNOBS_FOR_EVERYONE), asked at every request and every
+   * this account or not (`live`, lib/bluetooth: every account's since
+   * lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every
    * report. Closed, a read asked to be fresh or to wait for a quiet line is
    * read as every read of Edit's is, and the unit's own report is written in
    * the log and nothing more.
@@ -812,8 +812,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /*
    * THE INPUT AND OUTPUT BLOCKS (lib/sceneLevel), on an FM3, FM9 or Axe-Fx
    * III, where Edit is open: open to this account or not (`io`,
-   * lib/bluetooth: his account until lib/features
-   * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE), asked at every request and every
+   * lib/bluetooth: every account's since lib/features
+   * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every
    * send. Open, the chain answer hands them on (gen3Blocks), so Edit draws
    * IN and OUT and the top bar's speaker finds Output 1, and Edit's reads
    * and writes of them go as any block's. Closed, the answer leaves them
@@ -2374,7 +2374,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * words ("The FM9 has a 14x6 grid for effects blocks versus 12x4 on the
      * FM3"), and as the computer app gives it (6 rows of 14). Only Edit's
      * chain editor reads it, and that stays off over Bluetooth (Edit's
-     * BLE_NO_CHAIN), so this is for the day it is not.
+     * lib/editWords noChainLine), so this is for the day it is not.
      */
     const grid = unit === 'fm3' ? { rows: 4, cols: 12 } : { rows: 6, cols: 14 }
     return { ...common, slotModel: 'grid', grid, sceneCount: 8, presets: { count: 512, addressing: 'numeric', canScanNames: false } }
@@ -2488,8 +2488,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /*
-   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (orderOn: his account, until
-   * lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE).
+   * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (orderOn: every account's since
+   * lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)).
    *
    * "The order of the Effects doesn't correspond to the real order of the
    * FM9" (a customer, an FM9 through a WIDI Master). The status read above
@@ -5477,7 +5477,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (part.length === 2) return editRoute(gen3ReaderList)
       if (part.length === 3 && isNum(part[2])) return editRoute(() => gen3Describe(Number(part[2])))
     }
-    /* An Axe-Fx III's captures (lib/nam-install), only when the request says it is theirs and they are open to this account (captureOn): his alone. */
+    /* An Axe-Fx III's captures (lib/nam-install), only when the request says it is theirs and they are open to this account (captureOn: lib/bluetooth capturesOverBluetooth). */
     if (opts?.capturing === true && captureOn() && part[0] === 'nam') {
       if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(() => namEmptySlot(opts.onProgress))
       if (method === 'GET' && part.length === 4 && part[1] === 'heads' && isNum(part[2]) && isNum(part[3])) return editRoute(() => namHeads(Number(part[2]), Number(part[3])))

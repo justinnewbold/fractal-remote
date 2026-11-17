@@ -23,13 +23,16 @@
  *   - THE ONE-TIME WORD. With the secure random numbers, from those.
  *     Without them, as before (lib/tone3000 `randomBytes`).
  *
- * Still drawn on the Developer pages only, his account's.
+ * Signing out on purpose is `signOutHere` (lib/tone3000Keep
+ * `signOutKeeper`): the TONE3000 row in Settings and every way the app's
+ * own sign-in is ended on purpose. Whose sign-in is kept here is
+ * `tone3000Who`, for that row.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Linking } from 'react-native'
 import { logDebug } from './debugLog'
-import { randomBytes, tone3000 } from './tone3000'
-import { movingStore, sureRandom } from './tone3000Keep'
+import { randomBytes, T3K_TOKENS_KEY, tone3000 } from './tone3000'
+import { movingStore, signOutKeeper, sureRandom } from './tone3000Keep'
 import { Crypto, SecureStore, WebView } from './tone3000Parts'
 
 const said = (line) => logDebug('tone3000', line)
@@ -80,13 +83,84 @@ const open = (url) => {
   return Linking.openURL(url)
 }
 
+/* Where the pass is kept: the secure storage where this copy has it. */
+const kept = movingStore({ secure, plain, log: said })
+
 /** One client for the life of the app. */
 export const t3k = tone3000({
   fetch: (...args) => globalThis.fetch(...args),
-  store: movingStore({ secure, plain, log: said }),
+  store: kept,
   open,
   random: sureRandom(Crypto ? (bytes) => Crypto.getRandomValues(bytes) : null, randomBytes, said)
 })
+
+/* Signing out on purpose, and whether TONE3000's page inside the app opens as a private one. */
+const leaving = signOutKeeper({ client: t3k, plain, log: said })
+
+/** Whether TONE3000's page inside the app opens as a private one: from the first sign-out on this device. */
+export const pagePrivate = () => leaving.pagePrivate()
+
+/** TONE3000's page is opening on this device: a sign-out from now on has its remembered sign-in to forget. */
+export const pageShown = () => leaving.pageShown()
+
+/* Whose TONE3000 sign-in is kept, as TONE3000 named it, and which sign-in that was (its renewing word): asked once for each sign-in while the app runs. */
+let whoName = null
+let whoFor = null
+
+/**
+ * Sign out of TONE3000 on this device, on purpose: the pass goes, and the
+ * page inside the app opens private from now on. Throws where the device
+ * would not let go of the pass.
+ */
+export async function signOutHere() {
+  whoName = null
+  whoFor = null
+  await leaving.signOut()
+  said('signed out of TONE3000 on this device')
+}
+
+/**
+ * The same, at every way the app's own sign-in is ended on purpose (App.js:
+ * Sign out, Delete account, the purchase page's Try the Demo, Back and
+ * Delete account, and the way to the sign-in form), so the next person on
+ * the device is not signed in to the last one's TONE3000. Never throws: a
+ * pass that will not let go is written to the log, and the TONE3000 row in
+ * Settings still offers the sign-out.
+ */
+export function forgetTone3000() {
+  return signOutHere().catch((err) => said(`TONE3000’s sign-in was not removed at the app’s sign-out: ${err?.message || err}`))
+}
+
+/**
+ * Whether a TONE3000 sign-in is kept on this device, and whose: `{ signedIn,
+ * name }`, the name TONE3000's own (`@name`) where it could be asked, else
+ * null. Asks TONE3000 only when a sign-in is kept and its name is not known
+ * yet; a sign-in TONE3000 no longer takes is gone by the time this answers.
+ */
+export async function tone3000Who() {
+  let pass = null
+  try {
+    const raw = await kept.get(T3K_TOKENS_KEY)
+    pass = raw ? JSON.parse(raw) : null
+  } catch {
+    pass = null
+  }
+  if (!pass?.access) return { signedIn: false, name: null }
+  /* A sign-in made since the name was asked (signed out on the Developer page and in again, say) is asked about afresh. */
+  const which = pass.refresh || pass.access
+  if (whoFor !== which) {
+    whoName = null
+    try {
+      const me = await t3k.me()
+      whoName = typeof me?.username === 'string' && me.username ? me.username : null
+      whoFor = which
+    } catch (err) {
+      /* TONE3000 no longer takes it: lib/tone3000 has let it go by now, or kept it for another try. */
+      if (err?.status === 401) return { signedIn: await t3k.signedIn().catch(() => false), name: null }
+    }
+  }
+  return { signedIn: true, name: whoName }
+}
 
 /** A start whose page opens in the device's browser, whatever this copy has. `how` is `start`'s. */
 export async function startOutside(how) {

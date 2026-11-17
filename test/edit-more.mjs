@@ -73,7 +73,7 @@ export function run(test) {
       assert.match(more, new RegExp(`\\{${rule} \\? <Press label=\\{MORE_ROWS\\.${row}\\.label\\} sub=\\{MORE_ROWS\\.${row}\\.sub\\} onPress=\\{\\(\\) => openTool\\('${row}'\\)\\} \\/> : null\\}`), `More’s ${row} row is not behind ${rule}`)
     }
     assert.match(more, /\{onOpenGear \? \( <Press label=\{MORE_ROWS\.gear\.label\}/)
-    assert.match(more, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> : null\}/)
+    assert.match(more, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\)\)\}<\/Note> : null\}/)
     assert.match(more, /<Note tone="warn">\{BETA_NOTE\}<\/Note>/)
     /* None of the four is a button on the page any more, and the beta note is not a box at its foot. */
     const page = edit.slice(edit.indexOf('export default function Edit('), edit.indexOf('<Sheet open={moreOpen}'))

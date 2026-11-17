@@ -580,15 +580,15 @@ export function run(test) {
     assert.equal((wire.match(/withFrames\(/g) || []).length, 4, 'a grid job sends outside the hand: the live read, a block placed, a cable and an AM4’s slot each go through it once')
   })
 
-  test('the chain over Bluetooth is his account’s alone, by one switch, and the wire is told at every request', () => {
+  test('the chain over Bluetooth is one switch, open to every account since 2.0.0, and the wire is told at every request', () => {
     const flat = (p) => src(p).replace(/\s+/g, ' ')
-    assert.match(flat('mobile/src/lib/features.js'), /export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false/)
+    assert.match(flat('mobile/src/lib/features.js'), /export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = true/)
     const ble = flat('mobile/src/lib/bluetooth.js')
     assert.match(ble, /export const chainOverBluetooth = \(\) => allUnits === true \|\| CHAIN_OVER_BLUETOOTH_FOR_EVERYONE/)
     assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), \/\*[^*]*\*\/ live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /const chainOn = \(\) => editOn\(\) && typeof chain === 'function' && chain\(\) === true/)
-    /* Nothing a player reads says the chain can be changed over Bluetooth: What Bluetooth can't do is as it was. */
+    /* The page does not ask the chain's switch itself: its words follow saving (lib/editWords), which opens with the chain (test/bluetooth.mjs holds the two equal). */
     assert.ok(!/CHAIN_OVER_BLUETOOTH/.test(src('mobile/src/screens/Bluetooth.js')))
   })
 

@@ -7394,10 +7394,11 @@ export function run(test) {
      * (which Delete account in Settings goes through), the paywall's back,
      * Try the Demo and Delete account, and the way to the sign-in form.
      */
-    const SIGNED_OUT = 'allowBluetooth\\(null, \\{ signedOut: true \\}\\)'
+    /* And each ends the TONE3000 sign-in kept on the device, right after (test/tone3000-page.mjs). */
+    const SIGNED_OUT = 'allowBluetooth\\(null, \\{ signedOut: true \\}\\) forgetTone3000\\(\\)'
     /* Not while he only views as a new customer, whose sign-in the form keeps (3 November 2026, App.js backToRig). */
-    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) if \\(!purchase\\.posing\\) \\{ bluetoothAtForm\\.current = bluetooth ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
-    assert.match(app, new RegExp(`await stopLink\\(\\) await signOut\\(\\) unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setScreen\\('stage'\\) setAuth\\('out'\\)`), 'Sign out in Settings does not write Bluetooth’s off down')
+    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) if \\(!purchase\\.posing\\) \\{ bluetoothAtForm\\.current = bluetooth ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down, or does not end the TONE3000 sign-in')
+    assert.match(app, new RegExp(`await stopLink\\(\\) await signOut\\(\\) unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setScreen\\('stage'\\) setAuth\\('out'\\)`), 'Sign out in Settings does not write Bluetooth’s off down, or does not end the TONE3000 sign-in')
     const UNLINK = 'unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\)'
     assert.match(app, new RegExp(`setDemo\\(true\\) if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('in'\\) \\}\\} onBack=\\{\\(\\) => \\{ if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}\\} onDeleted=\\{ purchase\\.posing \\? undefined : \\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('out'\\) \\} \\}`), 'the paywall’s sign-outs do not write Bluetooth’s off down, or leave the store on the account just left')
     /* Delete account in Settings signs out through the same onSignOut. */
@@ -14544,6 +14545,45 @@ export function run(test) {
     for (const f of [sx.buildGetScene(0x10), sx.frame(0x10, 0x13, []), sx.buildSetBypass(0x10, 206, true)]) assert.equal(plain(f), 'sent')
   })
 
+  /*
+   * THE CAPTURES OPEN WITH THE PICKER AND TONE3000, THE READER DOES NOT (17
+   * November 2026, store version 2.0.0: "Enable all new features for all
+   * users that were on my account"). The capture picker and TONE3000 from a
+   * held NAM block both stand on the wire's capture tools, so their gate
+   * follows the two switches; the Block reader is a Developer page and stays
+   * his.
+   */
+  test('the wire’s captures follow the capture picker’s and TONE3000’s switches, and opening them never opens the block reader', async () => {
+    const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
+    const gate = ble.match(/export const capturesOverBluetooth = \(\) => ([^\n]+?) export /)
+    assert.ok(gate, 'the captures have no gate of their own in lib/bluetooth')
+    assert.equal(gate[1].trim(), 'allUnits === true || NAM_PICKER_FOR_EVERYONE || TONE3000_QUICK_FOR_EVERYONE')
+    /* The rule itself, run: his account, or either switch; nobody else. */
+    const rule = new Function('allUnits', 'NAM_PICKER_FOR_EVERYONE', 'TONE3000_QUICK_FOR_EVERYONE', `return ${gate[1]}`)
+    assert.equal(rule(true, false, false), true, 'his account lost the captures')
+    assert.equal(rule(false, false, false), false, 'the captures are open to everybody with both switches off')
+    assert.equal(rule(null, true, false), true, 'the capture picker is open and its list and pick are refused')
+    assert.equal(rule(null, false, true), true, 'TONE3000 is open and its send is refused')
+    /* Handed to the wire as `captures`; the reader is still his alone, beside it. */
+    assert.match(ble, /reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\),/)
+    assert.match(ble, /import \{ [^}]*\bNAM_PICKER_FOR_EVERYONE, [^}]*\bTONE3000_QUICK_FOR_EVERYONE \} from '\.\/features'/)
+    const features = await import('../mobile/src/lib/features.js')
+    assert.equal(rule(false, features.NAM_PICKER_FOR_EVERYONE, features.TONE3000_QUICK_FOR_EVERYONE), true, 'with 2.0.0 the captures are open to every account')
+    /* On the wire: captures open and the reader closed, the reader's routes answer nothing and ask the unit nothing. */
+    const { t, asks } = await capturesLine({ reader: () => false })
+    const list = await asks('/nam/heads/0/8')
+    assert.ok(Array.isArray(list?.heads ?? list), 'the captures did not answer with the reader closed')
+    t.sent.length = 0
+    t.unit.state.described.length = 0
+    await assert.rejects(reading(t, '/reader/blocks/206'), (e) => e.unsupported === true)
+    await assert.rejects(reading(t, '/reader/blocks'), (e) => e.unsupported === true)
+    assert.deepEqual(t.unit.state.described, [], 'the reader asked the unit something because the captures are open')
+    /* And the Developer pages, the reader's and TONE3000's own card, are still his account's on Settings. */
+    const settings = src('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.match(settings, /\{page === 'testing' && isAdmin\(account\?\.id\) \? \(/)
+    assert.match(settings, /\{page === 'tone3000' && isAdmin\(account\?\.id\) \? \(/)
+  })
+
   test('on an Axe-Fx III, NAM 1 and 2 and the IR Player are on Play by name, with a colour, a picture and three letters; the FM3 and FM9 have none of them', async () => {
     const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
     const iii = catalogFor('axefx3')
@@ -15813,8 +15853,8 @@ export function run(test) {
     assert.match(src('mobile/src/lib/bleVp4.js'), /supportsSave: false,/)
   })
 
-  test('saving over Bluetooth is his account’s alone: one switch, the Save button’s own path, a change that counts as unsaved, and no note where the app saves', async () => {
-    assert.match(src('mobile/src/lib/features.js'), /^export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'saving over Bluetooth is open to every account before he has saved from his phone, and before a store version says so')
+  test('saving over Bluetooth is one switch, open to every account since 2.0.0: the Save button’s own path, a change that counts as unsaved, and no note where the app saves', async () => {
+    assert.match(src('mobile/src/lib/features.js'), /^export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = true$/m, 'saving over Bluetooth is closed to customers on 2.0.0, whose review notes describe it (open since 17 November 2026)')
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(ble, /export const saveOverBluetooth = \(\) => allUnits === true \|\| SAVE_OVER_BLUETOOTH_FOR_EVERYONE/)
     assert.equal((ble.match(/SAVE_OVER_BLUETOOTH_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
@@ -15871,8 +15911,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -16589,7 +16629,8 @@ export function run(test) {
     assert.match(edit, /const onCable = useCableNow\(\)/)
     const { CABLE_EDIT_NOTE } = await import('../mobile/src/lib/cableWords.js')
     assert.ok(/USB cable/.test(CABLE_EDIT_NOTE) && !/Bluetooth/.test(CABLE_EDIT_NOTE), 'Edit’s note on a USB cable says Bluetooth')
-    assert.ok(/can’t save them over the USB cable yet/.test(CABLE_EDIT_NOTE) && /save it on the unit itself/.test(CABLE_EDIT_NOTE), 'Edit does not say a change made on a USB cable is lost unless it is saved on the unit')
+    assert.ok(/can’t save them over the USB cable:/.test(CABLE_EDIT_NOTE) && /save it on the unit itself/.test(CABLE_EDIT_NOTE), 'Edit does not say a change made on a USB cable is lost unless it is saved on the unit')
+    assert.ok(!/\byet\b|coming|soon|for now/i.test(CABLE_EDIT_NOTE), `Edit's note on a USB cable promises saving: ${CABLE_EDIT_NOTE}`)
     assert.match(edit, /const \[bleNoteUp, setBleNoteUp\] = useState\(false\)/, 'the note flashes up before storage has said it was put away')
     assert.match(edit, /bleEditNoteSeen\(\)\.then\(\(seen\) => \{ if \(alive && !seen\) setBleNoteUp\(true\) \}\)/)
     const coach = flat('mobile/src/lib/coach.js')
@@ -16598,7 +16639,9 @@ export function run(test) {
     assert.match(edit, /overBle=\{viaBle\}/)
     const words = code('mobile/src/screens/Edit.js')
     const note = /export const BLE_NOTE =\s*'([^']+)'/.exec(src('mobile/src/screens/Edit.js'))?.[1]
-    assert.ok(note && /can’t save them over Bluetooth yet/.test(note) && /save it on the unit itself/.test(note), 'Edit does not say a change made over Bluetooth is lost unless it is saved on the unit')
+    assert.ok(note && /can’t save them over Bluetooth:/.test(note) && /save it on the unit itself/.test(note), 'Edit does not say a change made over Bluetooth is lost unless it is saved on the unit')
+    assert.ok(!/\byet\b|coming|soon|for now/i.test(note), `Edit's note over Bluetooth promises saving: ${note}`)
+    assert.match(src('mobile/src/lib/gen3-edit.js'), /refused: 'A cab is picked with the computer\.'/, 'a gen-3 cab pick is refused with a promise')
     assert.ok(!/this phone/i.test(words), 'Edit names the device as a phone')
     /* Edit's own requests say so; Play's boost read does not, so over Bluetooth it stays refused. */
     const dev = flat('mobile/src/lib/device.js')
@@ -16705,14 +16748,38 @@ export function run(test) {
     assert.equal(ew.editingLine(true), 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.')
     assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models and effects on and off.')
     assert.ok(!ew.limitsLine(true).includes(ew.editingLine(true)), 'the page says the same sentence twice')
-    /* Saving is the app's only where the wire says so (lib/bleSave, his account until a store version): the page may not promise it anywhere else. */
+    /* Saving is the app's only where the wire says so (lib/bleSave, SAVE_OVER_BLUETOOTH_FOR_EVERYONE): the page may not promise it anywhere else. */
     assert.match(src('mobile/src/lib/bleWire.js'), /supportsSave: saveOn\(\)/)
     assert.match(ew.editingLine(true), /^No saving over Bluetooth/)
     assert.match(ew.editingLine(true, false), /^No saving over Bluetooth/)
-    /* And where it does: Save joins what Edit does, and the list's first line says nothing of saving. The rest of each line is word for word the same. */
-    assert.equal(ew.editingLine(true, true), 'Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.')
-    assert.equal(ew.limitsLine(true, true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models, effects on and off, and Save.')
-    assert.equal(ew.editingLine(true), `No saving over Bluetooth: save on the unit itself. ${ew.editingLine(true, true)}`)
+    /*
+     * And where it does (every account since 2.0.0, 17 November 2026): Save and Quick build join what Edit does, and the list's first
+     * line says nothing of saving, and only the chain EDITOR (one block in a chain that has blocks) needs the computer. Saving, the
+     * chain over Bluetooth and Quick build open together, so that reading is true wherever it is shown: the three switches are held equal.
+     */
+    assert.equal(ew.editingLine(true, true), 'Moving, adding or removing a block in a chain that has blocks, modifiers, renaming and copying a channel need the computer.')
+    assert.equal(ew.limitsLine(true, true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models, effects on and off, Save, and Quick build on an empty preset.')
+    const features = await import('../mobile/src/lib/features.js')
+    assert.equal(features.SAVE_OVER_BLUETOOTH_FOR_EVERYONE, features.CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, 'the page says Quick build where the app saves, and the chain over Bluetooth is not open with saving')
+    assert.equal(features.SAVE_OVER_BLUETOOTH_FOR_EVERYONE, features.QUICK_BUILD_FOR_EVERYONE, 'the page says Quick build where the app saves, and Quick build is not open with saving')
+    const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
+    assert.match(ble, /export const saveOverBluetooth = \(\) => allUnits === true \|\| SAVE_OVER_BLUETOOTH_FOR_EVERYONE/)
+    assert.match(ble, /export const chainOverBluetooth = \(\) => allUnits === true \|\| CHAIN_OVER_BLUETOOTH_FOR_EVERYONE/)
+    /*
+     * Edit's own line in More says the same: Quick build on an empty preset, the chain editor on the computer, and nothing promised.
+     * It names Quick build only where Quick build is offered on that connection (quickBuildHere), never by a fixed sentence.
+     */
+    assert.equal(ew.noChainLine(true), 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, modifiers and renaming need the computer.')
+    assert.equal(ew.noChainLine(false), 'Moving, adding and removing blocks, modifiers and renaming need the computer.')
+    for (const v of [undefined, null, 1, 'yes']) assert.equal(ew.noChainLine(v), ew.NO_CHAIN_LINE, 'Quick build named where it is not offered')
+    const more = code('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
+    assert.match(more, /viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\)\)\}<\/Note> : null\}/, 'Edit → More names Quick build whether it is offered or not')
+    assert.match(more, /const quickOn = useQuickBuild\(\)/)
+    assert.ok(!/BLE_NO_CHAIN/.test(more), 'a fixed sentence for More is back')
+    for (const line of [ew.EDITING_LINE_SAVES, ew.LIMITS_SAVES, ew.NO_CHAIN_LINE, ew.NO_CHAIN_LINE_QUICK]) {
+      assert.ok(!/\byet\b|coming|soon|for now|\bbeta\b|this phone/i.test(line), `a promise or a forbidden word: ${line}`)
+      assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(line), `a unit named: ${line}`)
+    }
     for (const v of [undefined, null, 0, 'yes', 1]) assert.equal(ew.editingLine(true, v), ew.EDITING_LINE, 'anything but a yes saves')
     /* Closed is closed whatever saving says. */
     assert.equal(ew.editingLine(false, true), ew.NO_EDITING_LINE)
@@ -25138,8 +25205,8 @@ export function run(test) {
     assert.ok(!u.logs.includes(GAVE_UP), u.logs.join(' | '))
   })
 
-  test('the order from the grid is his account’s alone, by one switch, handed to the wire beside the others', async () => {
-    assert.match(src('mobile/src/lib/features.js'), /^export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false$/m, 'Play’s order from the grid is open to every account before his own log has shown it agreeing')
+  test('the order from the grid is one switch, open to every account since 2.0.0, handed to the wire beside the others', async () => {
+    assert.match(src('mobile/src/lib/features.js'), /^export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = true$/m, 'Play’s order from the grid is closed to customers on 2.0.0 (open since 17 November 2026)')
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(ble, /export const blockOrderFromGrid = \(\) => allUnits === true \|\| BLOCK_ORDER_FROM_GRID_FOR_EVERYONE/)
     assert.match(ble, /onForeign: \(name\) => noteBluetooth\(\{ answeredAs: name \|\| null \}\), blockOrder: \(\) => blockOrderFromGrid\(\), io: \(\) => outputAndSceneLevels\(\), edit: /)
@@ -25147,9 +25214,10 @@ export function run(test) {
     const { ADMINS } = await import('../shared/admin.mjs')
     const bench = await bluetoothOnABench()
     try {
-      assert.equal(bench.ble.blockOrderFromGrid(), false, 'open before anybody is known')
+      /* Open to everybody since 2.0.0: before anybody is known, a customer, and his account alike. */
+      assert.equal(bench.ble.blockOrderFromGrid(), true, 'closed before anybody is known')
       bench.ble.allowBluetooth('0b6c7a51-8f1e-4c2a-9d3b-5e7f9a1c2d4e')
-      assert.equal(bench.ble.blockOrderFromGrid(), false, 'open to a customer')
+      assert.equal(bench.ble.blockOrderFromGrid(), true, 'closed to a customer')
       bench.ble.allowBluetooth(ADMINS[0])
       assert.equal(bench.ble.blockOrderFromGrid(), true, 'closed to his account')
     } finally {

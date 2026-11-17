@@ -3087,6 +3087,22 @@ export function run(test) {
     for (const plain of ['Delete account: Settings, the account card, Delete account, "Delete my account" (video 3).', 'The demo account in App Review Information has the full version.']) {
       assert.equal(redact(plain), plain, `an ordinary line is hidden: "${plain}"`)
     }
+    /*
+     * And every link. The notes end with the links to the private review
+     * videos, which are never made public, and three runs printed them (9 and
+     * 10 November 2026) because a link is not a login. However it is written,
+     * and whoever's it is; the words round it stay.
+     */
+    const videos = '1. FM3 hardware: https://drive.google.com/file/d/1AbC_dEf-123/view?usp=sharing\n2. Presets: http://example.com/v/2.\n3. See www.example.org/watch?v=3 (private)'
+    const hidden = redact(videos)
+    assert.doesNotMatch(hidden, /drive\.google|example\.(com|org)|1AbC_dEf|usp=sharing|watch\?v/, 'a link in the review notes reaches the public log')
+    assert.equal(hidden, '1. FM3 hardware: [a link]\n2. Presets: [a link]\n3. See [a link] (private)')
+    /* And one typed with no https:// or www. in front, which the first cut let through. */
+    for (const bare of ['Video: drive.google.com/file/d/1AbC/view', 'youtu.be/abc123 (private)', 'loom.com/share/abcd']) {
+      assert.doesNotMatch(redact(bare), /google|youtu|loom|1AbC|abc123|abcd/, `a link with no https:// reaches the public log: "${bare}"`)
+    }
+    assert.equal(redact('Use version 1.89.3/2.0.1, see mobile/src/lib/bleVp4.js'), 'Use version 1.89.3/2.0.1, see mobile/src/lib/bleVp4.js')
+    assert.match(code, /as App Store Connect holds them: \$\{Buffer\.byteLength\(notes\)\} bytes/, 'the notes’ real size is no longer printed beside what is shown of them')
     /* The review details are asked for the notes alone, so the review account and its password never reach the job at all. */
     const { REVIEW_FIELDS } = await import('../scripts/store-read.mjs')
     assert.equal(REVIEW_FIELDS, 'fields[appStoreReviewDetails]=notes')
@@ -4653,8 +4669,10 @@ export function run(test) {
     const { createHash } = await import('node:crypto')
     const head = '## 1.90.0: Editing over Bluetooth for customers'
     const from = store.indexOf(head)
-    const to = store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)')
+    /* Its section ends where the next store version's begins (2.0.0, since 17 November 2026). */
+    const to = store.indexOf('## 2.0.0: What had been the developer’s own, for customers'.replace('’', "'"))
     assert.ok(from > store.indexOf('## 1.89.0: Bluetooth (beta) for customers') && to > from, 'the 1.90.0 section is missing, or out of place')
+    assert.ok(to < store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)'), 'the 2.0.0 section is not before the kept 1.87.1 texts')
     const section = store.slice(from, to)
     const flat = (s) => s.replace(/\s+/g, ' ')
     const block = (heading) => fenced(section, heading).trim()
@@ -5019,6 +5037,98 @@ export function run(test) {
     }
     /* And if a store says no, the What's new line that reached every copy by update comes out with the website's words. */
     assert.match(flat(section.slice(section.indexOf('### If Apple or Google says no to Edit'))), /the 9 November line in shared\/whats-new\.json, which says Edit opens from 1\.90\.0, comes out/)
+  })
+
+  test('the 2.0.0 texts fit every store box, name no VP4 to Apple, and promise only what the switches opened', async () => {
+    /*
+     * 2.0.0 is the store version that opens what had been the developer's
+     * own (17 November 2026: "Enable all new features for all users that
+     * were on my account. Except for the scroll wheel for presets"). No
+     * build: the pair of 16 November, with the features opened by update on
+     * 2.0.0 copies only. These are DRAFTS for pasting, so they are held to
+     * the rules and not to a hash; the day they go to Apple they become the
+     * record, as 1.90.0's did.
+     */
+    const store = read('docs/app-store.md')
+    const { fenced } = await import('../scripts/store-text.mjs')
+    const from = store.indexOf("## 2.0.0: What had been the developer's own, for customers")
+    const to = store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)')
+    assert.ok(from > store.indexOf('## 1.90.0: Editing over Bluetooth for customers') && to > from, 'the 2.0.0 section is missing, or out of place')
+    const section = store.slice(from, to)
+    const block = (heading) => fenced(section, heading).trim()
+    const notes = block('### Notes for App Review, 2.0.0')
+    const whatsNew = block("### What's New in This Version, 2.0.0")
+    const description = block('### Description, 2.0.0 (App Store): one paragraph, his to change')
+    const play = block('### Google Play release notes, 2.0.0')
+    const access = block('### Google Play App access, 2.0.0: what to change')
+    for (const [name, text] of [['notes', notes], ['What’s New', whatsNew], ['Description paragraph', description], ['Play notes', play], ['App access', access]]) assert.ok(text.length > 100, `the 2.0.0 ${name} are missing`)
+
+    /* Apple's boxes. The notes are measured with four links of the shape the real ones have, in the brackets' place. */
+    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=drive_link'
+    const sent = notes.replace(/\[[^\]\n]*video link\]/g, drive)
+    assert.equal((notes.match(/\[[^\]\n]*video link\]/g) || []).length, 4, 'the notes do not carry the four videos as the house’s brackets')
+    assert.doesNotMatch(notes, /https?:\/\//, 'a real link is in the notes: the repository is public and the review videos never are')
+    assert.ok(Buffer.byteLength(sent) <= 4000, `the 2.0.0 notes are ${Buffer.byteLength(sent)} bytes with their links; Apple takes 4000`)
+    assert.ok(Buffer.byteLength(sent) <= 3000, `the 2.0.0 notes are ${Buffer.byteLength(sent)} bytes with their links: "We really don't need that much"`)
+    assert.ok([...whatsNew].length <= 4000 && [...whatsNew].length <= 1300, `What's New for 2.0.0 is ${[...whatsNew].length} characters`)
+    assert.ok([...play].length <= 500, `the Play release notes are ${[...play].length} characters; Play takes 500`)
+
+    /* "Leave out all the stuff on the VP4" (9 November 2026): nothing that goes to Apple names it. Google's App access may. */
+    for (const [name, text] of [['notes', notes], ['What’s New', whatsNew], ['Description paragraph', description]]) {
+      assert.doesNotMatch(text, /VP4/i, `the 2.0.0 ${name} name the VP4, which Apple's texts leave out`)
+    }
+    /* The house rules, in every text a store or a player reads. */
+    for (const [name, text] of [['notes', notes], ['What’s New', whatsNew], ['Description paragraph', description], ['Play notes', play], ['App access', access]]) {
+      assert.doesNotMatch(text, /\bbeta\b/i, `the 2.0.0 ${name} call something a beta`)
+      assert.doesNotMatch(text, /\btried\b|\buntried\b|\btested\b(?! on:)/i, `the 2.0.0 ${name} say what has been tried`)
+      assert.doesNotMatch(text, /\bofficial|certified|endorsed|\bsoon\b|coming/i, `the 2.0.0 ${name}: official, or a promise`)
+      assert.doesNotMatch(text, /this phone/i, `the 2.0.0 ${name}: “this phone”`)
+      /* Never the review login itself: App Store Connect and Play Console have their own boxes for it. */
+      assert.doesNotMatch(text, /[\w.+-]+@[\w-]+\.[\w.-]+|password\s*[:=]/i, `the 2.0.0 ${name} carry a login`)
+    }
+    /* Apple's 2.3.10: no other platform in what an iPhone's listing says; and Play's notes name no Apple device. */
+    for (const text of [whatsNew, description]) assert.doesNotMatch(text, /android|google play/i)
+    assert.doesNotMatch(play, /iphone|ipad|apple watch|\bios\b|app store/i, 'the Play release notes name an Apple device')
+
+    /* What the notes have to say (the guideline pass, above them in the section). */
+    assert.match(notes, /New in 2\.0\.0:/)
+    assert.match(notes, /close the app fully and open it again/, 'the notes do not say the build runs its own copy on its first launch')
+    assert.match(notes, /TONE3000 \(tone3000\.com, a third-party library of NAM captures, shown with its permission\), Axe-Fx III only/, 'the notes do not say what TONE3000 is and where it shows')
+    assert.match(notes, /Sign-in is TONE3000's own page, with a free TONE3000 account\. Once signed in, Settings, My rig, TONE3000 signs out of it, and so does the app's own Sign out\./, 'the notes do not say how TONE3000 is signed in to and out of')
+    assert.match(notes, /The demo has no NAM block\./, 'the notes let a reviewer look for TONE3000 in the demo')
+    assert.match(notes, /Services: [^\n]*TONE3000 \(captures, only when opened\)\. Bluetooth and USB use no server\./, 'the services line leaves TONE3000 out')
+    assert.match(notes, /Developer pages and the Axiom switch in Settings show only on the developer's own account, checked by the server\./)
+    assert.match(notes, /no background mode/, 'the watch’s check-in is not said to use no background mode')
+    assert.match(notes, /Delete account: Settings, the account card, Delete account, "Delete my account"/)
+
+    /* AND ONLY WHAT IS OPEN: each thing the texts promise has its switch on, so a text can never run ahead of the app. */
+    const features = await import('../mobile/src/lib/features.js')
+    const promised = [
+      [/on its side/, 'PHONE_SIDEWAYS_FOR_EVERYONE'],
+      [/\bSave\b/, 'SAVE_OVER_BLUETOOTH_FOR_EVERYONE'],
+      [/Quick build/, 'QUICK_BUILD_FOR_EVERYONE'],
+      [/Quick build/, 'CHAIN_OVER_BLUETOOTH_FOR_EVERYONE'],
+      [/unit's own order/, 'BLOCK_ORDER_FROM_GRID_FOR_EVERYONE'],
+      [/follow the unit/, 'LIVE_KNOBS_FOR_EVERYONE'],
+      [/scene('s)? levels?/, 'OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE'],
+      [/list settings/, 'EDIT_SETTINGS_FOR_EVERYONE'],
+      [/TONE3000/, 'TONE3000_QUICK_FOR_EVERYONE'],
+      [/Metronome/, 'METRONOME_FLASH_CHOICE_FOR_EVERYONE'],
+      [/lin(e|ing) it up/, 'METRONOME_LINE_UP_FOR_EVERYONE'],
+      [/quick edit/, 'WATCH_QUICK_EDIT_FOR_EVERYONE'],
+    ]
+    for (const [says, name] of promised) {
+      assert.match(notes, says, `the notes no longer say what ${name} opens`)
+      assert.equal(features[name], true, `the 2.0.0 notes promise what ${name} keeps to the developer's account`)
+    }
+    assert.match(whatsNew, /pick the NAM block's capture in Edit/)
+    assert.equal(features.NAM_PICKER_FOR_EVERYONE, true, 'What’s New promises the capture picker, and it is the developer’s only')
+    /* The sign-out the notes name is on Settings, for every account: its row and its question, by their own words. */
+    const words = await import('../mobile/src/lib/tone3000Words.js')
+    assert.equal(words.T3K_SIGN_OUT_ASK, 'Sign out of TONE3000?', 'the notes say Sign out of TONE3000 is in Settings, and the app asks something else')
+    const settingsPage = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.match(settingsPage, /Alert\.alert\(T3K_SIGN_OUT_ASK, t3kSignOutBody\(t3kHere\.name\)/, 'the notes say Sign out of TONE3000 is in Settings, and Settings has none')
+    assert.match(settingsPage, /\{t3kHere\.signedIn \? \(/, 'the TONE3000 row is not drawn by whether a TONE3000 sign-in is kept')
   })
 
   test('the licences of what we ship travel with it', () => {

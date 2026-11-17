@@ -416,13 +416,14 @@ export function run(test) {
     assert.equal(T3K_CATALOG_PAGE, false)
     assert.deepEqual(
       [TRENDING_ONLY, NEWEST_ONLY, SEARCH_NOT_OPEN],
-      ['TONE3000 hasn’t opened its search to this app yet, so this is its own short trending list.', 'TONE3000 hasn’t opened its search to this app yet, so these are from its newest tones.', 'TONE3000 hasn’t opened its search to this app yet. With the search box empty, Trending and Newest show its own short lists.']
+      ['Search isn’t available in the app, so this is TONE3000’s own short trending list.', 'Search isn’t available in the app, so these are from TONE3000’s newest tones.', 'Search isn’t available in the app. With the search box empty, Trending and Newest show TONE3000’s own short lists.']
     )
     assert.match(flat(code(read('mobile/src/lib/tone3000Browse.js'))), /const ELSEWHERE = T3K_CATALOG_PAGE \? ' Browse TONE3000, below, has every capture the NAM block can play\.' : ''/)
     for (const said of [TRENDING_ONLY, NEWEST_ONLY, SEARCH_NOT_OPEN]) {
-      assert.match(said, /^TONE3000 hasn’t opened its search to this app yet/)
+      assert.match(said, /^Search isn’t available in the app/)
       assert.ok(!/Browse TONE3000/.test(said), said)
-      assert.ok(!/\b(soon|coming|beta|not yet tried|everything|ten|10)\b/i.test(said), said)
+      /* Every account reads these since 2.0.0: nothing promised of TONE3000 ("yet"), nothing about this app's key or its developer. */
+      assert.ok(!/\b(soon|coming|beta|not yet tried|everything|ten|10|yet|key|developer)\b/i.test(said), said)
     }
     assert.match(TRENDING_ONLY, /trending/)
     assert.match(NEWEST_ONLY, /newest/)

@@ -45,18 +45,26 @@
 export const BENCH = true
 
 /**
- * THE DEVICE'S BEAT ON THE UNIT'S BEAT (lib/beatLock, lib/unitBeat), his
- * account only.
+ * THE DEVICE'S BEAT ON THE UNIT'S BEAT (lib/beatLock, lib/unitBeat), for
+ * everyone.
  *
  * "The metronome is not matching up properly into the sound coming out of
  * speakers. There's a delay." (Justin, 16 November 2026.) With the unit
  * clicking and the device lighting or clicking beside it, the device now
  * listens for the unit's own beat and moves its own onto it. Whether his
  * unit sends that beat down its USB port has not been seen: with none
- * heard, nothing changes and the log says why. `false` is his account
- * only, as every new thing is; `true` when he has seen it line up.
+ * heard, nothing changes and the log says why. It was his account only
+ * until he had seen it line up.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Not seen
+ * lining up on a unit yet: with no beat heard it changes nothing. Off
+ * again, it is his account only.
  */
-export const BEAT_LOCK_FOR_EVERYONE = false
+export const BEAT_LOCK_FOR_EVERYONE = true
 
 /**
  * TWO SIDES ON A BIG SCREEN (lib/twoSides, components/Sides), for everyone.
@@ -89,14 +97,21 @@ export const HOLD_KNOBS_FOR_EVERYONE = true
  * A PHONE HELD ON ITS SIDE SPLITS IN TWO (lib/twoSides phoneSidewaysOn,
  * lib/sidewaysPlay), for everyone the two sides are open to.
  *
- * OFF: his account only. "This is the landscape view on iPhone ... let's
- * split the screen in half kind of like the iPhone duo" (Justin, 10
- * November 2026), built from pictures he approved the same day and not yet
- * seen on a phone. Every other account's Play on a phone on its side is
- * what it was. This is the one line that opens it, with its line in What's
- * new in the same pull request.
+ * "This is the landscape view on iPhone ... let's split the screen in half
+ * kind of like the iPhone duo" (Justin, 10 November 2026), built from
+ * pictures he approved the same day, his account only until it was seen on
+ * his iPhone 17 Pro Max on the 2.0.0 test build (17 November 2026, Play
+ * alone). A phone turns only from the copy whose native side lets it
+ * (phone-turns, in 2.0.0); the smallest phones stay upright by the rule.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * it is his account only.
  */
-export const PHONE_SIDEWAYS_FOR_EVERYONE = false
+export const PHONE_SIDEWAYS_FOR_EVERYONE = true
 
 /**
  * THE HOLD POP-UP CARRIES THE BLOCK'S KNOBS, OVER ITS CHANNELS (lib/holdPop,
@@ -200,12 +215,18 @@ export const ADD_TO_SETLIST_FOR_EVERYONE = true
  * lights in silence while the unit clicks. "On the phone have an option for
  * the screen to flash somewhere like the outside edge of the screen"
  * (Justin, 12 November 2026). Built on his account first, as every new
- * thing is. Off, the switch is drawn for his account only, and for every
- * other account the edge flashes with the device's own click and never
- * without it, as it always has. It opens to everyone when he says so, with
- * its What's new line in that pull request.
+ * thing is, with the sound choice (Off, the device, the unit, both) behind
+ * the same line.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * the switch is drawn for his account only, and for every other account the
+ * edge flashes with the device's own click and never without it.
  */
-export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false
+export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = true
 
 /**
  * LINING UP THE LIGHT AND THE CLICK (lib/lineUp): on Settings → Metronome,
@@ -213,12 +234,18 @@ export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false
  * Earlier or Later, and Tap along, which sets both from taps on the unit's
  * click. "Will you make sure everything's in sync properly somehow or have a
  * way for a user to calibrate" (Justin, 16 November 2026). Built on his
- * account first, as every new thing is. Off, it is drawn for his account
- * only, and for every other account the nudges are neither drawn nor
- * applied, whatever the device has kept. It opens to everyone when he says
- * so, with its What's new line in that pull request.
+ * account first, as every new thing is. It needs BEAT_LOCK_FOR_EVERYONE
+ * open with it (test/line-up.mjs).
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * it is drawn for his account only, and for every other account the nudges
+ * are neither drawn nor applied, whatever the device has kept.
  */
-export const METRONOME_LINE_UP_FOR_EVERYONE = false
+export const METRONOME_LINE_UP_FOR_EVERYONE = true
 
 /**
  * QUICK EDIT ON THE APPLE WATCH (lib/watchQuick, lib/watchQuickEdit): a
@@ -229,16 +256,21 @@ export const METRONOME_LINE_UP_FOR_EVERYONE = false
  * we set up quick edits on that as well? And change the name to hold to
  * quick edit?" Then, of three pictures: "For the watch, mock up B."
  * (Justin, 12 November 2026.) Built on his account first, as every new
- * thing is, and it cannot show anywhere until an iPhone build carries the
- * watch's half (docs/pending/watch-page-order.patch): the phone says
- * nothing of it to a watch that has not said it knows how. Where it opens
- * it still needs the hold pop-up's own knobs (lib/holdPop popKnobsOn: Edit's
- * door, never a VP4), so this line opens no editing anywhere Edit is
- * closed. Off, it is his account only, and every other account's watch
- * opens a held pedal's channels alone, as it always has. It opens to
- * everyone when he says so, with its What's new line in that pull request.
+ * thing is. The watch's half is in the 2.0.0 iPhone build (watch-page-order):
+ * the phone says nothing of it to a watch that has not said it knows how.
+ * Where it opens it still needs the hold pop-up's own knobs (lib/holdPop
+ * popKnobsOn: Edit's door, never a VP4), so this line opens no editing
+ * anywhere Edit is closed.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * it is his account only, and every other account's watch opens a held
+ * pedal's channels alone.
  */
-export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
+export const WATCH_QUICK_EDIT_FOR_EVERYONE = true
 
 /**
  * THE NAM BLOCK'S KNOBS IN EDIT, on an Axe-Fx III over Bluetooth or its USB
@@ -288,8 +320,8 @@ export const NAM_KNOBS_FOR_EVERYONE = true
  * every account whose Edit is open on an Axe-Fx III is read through the whole
  * list (axefx3-edit `withNam`). Only the knobs: the blocks' list settings
  * (EDIT_SETTINGS_FOR_EVERYONE) and their names through the computer
- * (OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE) are switches of their own, still
- * his. On, it also carries the NAM block for everybody, whatever
+ * (OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE) are switches of their own, both
+ * open to everyone since 2.0.0. On, it also carries the NAM block for everybody, whatever
  * NAM_KNOBS_FOR_EVERYONE says. Off, the five are his account's alone again,
  * and every other account goes back to what NAM_KNOBS_FOR_EVERYONE gives.
  */
@@ -306,13 +338,16 @@ export const OWN_KNOBS_FOR_EVERYONE = true
  * on with no name, so Play left them out. The phone names them from the
  * list it uses over Bluetooth, and Play draws and switches them through the
  * computer's own on/off and channel routes, which take any block's id.
- * Built on his account first, as every new thing is: nobody has switched
- * one of these through a computer yet, and his Raspberry Pi is the first
- * check. Off, it is his account only (lib/ownBlocksHere), and for every
- * other account each stays the New block it was. It opens to everyone when
- * he says so, with its What's new line in that pull request.
+ * Built on his account first, as every new thing is. Through his Raspberry
+ * Pi the chain editor put NAM 1 and NAM 2 into a preset and found them
+ * there, and NAM 1 was switched off from Play (15 November 2026); the other
+ * five blocks have not been switched through a computer. OPEN TO EVERYONE
+ * SINCE 2.0.0 (17 November 2026): "Enable all new features for all users
+ * that were on my account" (Justin, release day). Off again, it is his
+ * account only (lib/ownBlocksHere), and every other account's block is the
+ * New block it was.
  */
-export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false
+export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = true
 
 /**
  * A BLOCK'S LIST SETTINGS IN EDIT, under its knobs (lib/editSettings,
@@ -328,12 +363,13 @@ export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false
  * setEnum); never a Cab's.
  *
  * His account first, as every new thing is: no switch of any block has been
- * tapped from the app on a unit. Off, it is his account only
+ * tapped from the app on a unit. OPEN TO EVERYONE SINCE 2.0.0 (17 November
+ * 2026): "Enable all new features for all users that were on my account"
+ * (Justin, release day). Off again, it is his account only
  * (lib/useEditSettings), and every other account's Edit is the knobs it
- * always was. It opens to everyone when he says so, with its What's new
- * line in that pull request.
+ * always was.
  */
-export const EDIT_SETTINGS_FOR_EVERYONE = false
+export const EDIT_SETTINGS_FOR_EVERYONE = true
 
 /**
  * WHICH CAPTURE A NAM BLOCK PLAYS, CHOSEN IN EDIT (lib/captureList,
@@ -349,15 +385,21 @@ export const EDIT_SETTINGS_FOR_EVERYONE = false
  * slot it asked for (14 November 2026). An Axe-Fx III only, over Bluetooth,
  * its USB cable, or through a computer app that has the list.
  *
- * His account first, as every new thing is. NO LIST HAS BEEN READ FROM THE
- * APP, and no pick made from Edit: his first is the first check. Off, it is
- * his account only (lib/useCapturePicker), and everybody else's NAM block
- * says what it said. It opens to everyone when he says so, with its What's
- * new line in that pull request. The capture tools on the device's own wire
- * answer his account alone as well (lib/bluetooth `captures`), so opening
- * this opens those, for reads and the pick, in the same pull request.
+ * His account first, as every new thing is. The capture tools on the
+ * device's own wire follow this line and TONE3000_QUICK_FOR_EVERYONE
+ * (lib/bluetooth capturesOverBluetooth: his account, or either switch), so
+ * opening this opened them; the Block reader stays his.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * with TONE3000_QUICK_FOR_EVERYONE off too, it and the wire's capture tools
+ * are his account only, and everybody else's NAM block says the capture is
+ * chosen on the unit.
  */
-export const NAM_PICKER_FOR_EVERYONE = false
+export const NAM_PICKER_FOR_EVERYONE = true
 
 /**
  * TONE3000 FROM A HELD NAM BLOCK (lib/tone3000Quick, components/
@@ -372,15 +414,28 @@ export const NAM_PICKER_FOR_EVERYONE = false
  * pop-up; Preview plays a capture in that block, and Get puts it on the
  * unit, plays it in that block and gives the pop-up back to its knobs.
  *
- * His account first, as every new thing is: sending a capture answers his
- * account alone on the device's own wire as well (lib/bluetooth
- * `captures`), and NO CAPTURE SENT FROM THE APP HAS BEEN KEPT BY HIS UNIT
- * YET. Off, it is his account only (lib/useTone3000Quick) and everybody
- * else's pop-up is the one it was. Opening it to customers is a store
- * version (new for them, and TONE3000 has to sign the screen off), never
- * this switch alone.
+ * His account first, as every new thing is. His Axe-Fx III kept two
+ * captures of two sent from the app through the Raspberry Pi on computer app
+ * 1.90.90 (17 November 2026), each on the first try; a whole send over
+ * Bluetooth since the last fixes has not been seen. Every Preview and Get
+ * fills a slot on the unit. The sender on the device's own wire follows
+ * this line and NAM_PICKER_FOR_EVERYONE (lib/bluetooth
+ * capturesOverBluetooth). The Developer page's TONE3000 card stays his.
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it, with the
+ * sign-in inside the app (tone3000-in-app). It is a plain switch: it is NOT
+ * keyed to a store version the way Edit over Bluetooth is
+ * (`EDIT_FROM_STORE` in lib/ble-rule, with a ledger pin), which the notes
+ * had asked for; the only lock is that the 1.90.0 copies take no update
+ * from that merge on. Nor has TONE3000 signed off these screens: the notes
+ * still list that as wanted (he has their approval to publish). Off again,
+ * it is his account only (lib/useTone3000Quick).
  */
-export const TONE3000_QUICK_FOR_EVERYONE = false
+export const TONE3000_QUICK_FOR_EVERYONE = true
 
 /**
  * SAVING FROM THE APP OVER BLUETOOTH OR THE UNIT'S USB CABLE (lib/bleSave,
@@ -395,20 +450,20 @@ export const TONE3000_QUICK_FOR_EVERYONE = false
  * III, only over the preset the unit says it is on. Never a VP4.
  *
  * His account first, and for a harder reason than most: A SAVE WRITES A
- * PRESET, and no save has gone from the phone to a unit yet. Off, it is his
- * account only (lib/bluetooth saveOverBluetooth): every other account's
- * Bluetooth says what it always said, shows no Save, and a save's frame is
- * refused at the way out.
+ * PRESET, and no save has gone from the phone to a unit yet.
  *
- * OPENING IT TO CUSTOMERS IS A STORE VERSION, not this switch alone: every
- * copy out was reviewed with notes, and a listing, that say there is no
- * saving over Bluetooth (CLAUDE.md, "It is switched on for customers only in
- * a new store version"), as Edit over Bluetooth itself was (lib/ble-rule.js
- * EDIT_FROM_STORE). So this says true only in the pull request of a build
- * pair whose texts say saving works over Bluetooth, keyed to that store
- * version, and only once he has saved from his phone and said so.
+ * OPEN TO EVERYONE SINCE 2.0.0 (17 November 2026): "Enable all new features
+ * for all users that were on my account" (Justin, release day, before any
+ * save from his phone). It opens by this switch and not by a store-version
+ * key because the release-day pull request that sets it moves main's
+ * fingerprint to the 2.0.0 build's: from that merge on no update reaches a
+ * 1.90.0 copy, reviewed with notes that say there is no saving over
+ * Bluetooth, and every copy that takes it is 2.0.0, reviewed with notes
+ * that describe it. Off again, it is his account only (lib/bluetooth
+ * saveOverBluetooth): Bluetooth shows no Save, and a save's frame is refused
+ * at the way out. Never a VP4.
  */
-export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * THE CHAIN, READ AS A GRID AND CHANGED OVER BLUETOOTH OR THE UNIT'S OWN USB
@@ -422,21 +477,22 @@ export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false
  * tests hold every frame to the pinned codec), and every frame of it is
  * held at the way out to the one job the wire has in hand.
  *
- * NOT ONE OF THESE MESSAGES HAS GONE TO A UNIT FROM A PHONE YET: no block
- * placed, no cable, and neither grid read over an adapter. So it is his
- * account only (lib/bluetooth chainOverBluetooth): every other account's
- * Bluetooth answers the four routes "not over Bluetooth" as it always did,
- * shows nothing new, and a frame of these shapes is refused at the way out.
+ * Seen on a unit once: one Quick build on his Axe-Fx III over a WIDI Master,
+ * on row 3 (16 November 2026). Not on another row, an FM3, an FM9 or an
+ * AM4, another adapter, or an Undo.
  *
- * OPENING IT TO CUSTOMERS IS A STORE VERSION, not this switch alone: every
- * copy out was reviewed with notes, and a listing, that say blocks are not
- * moved, added or removed over Bluetooth (CLAUDE.md, "It is switched on for
- * customers only in a new store version"), as Edit over Bluetooth itself
- * was (lib/ble-rule.js EDIT_FROM_STORE). So this says true only in the pull
- * request of a build pair whose texts say so, keyed to that store version,
- * and only once he has built a chain from his phone and said so.
+ * OPEN TO EVERYONE SINCE 2.0.0 (17 November 2026): "Enable all new features
+ * for all users that were on my account" (Justin, release day). By this
+ * switch, not a store-version key, because the release-day pull request
+ * that sets it moves main's fingerprint to the 2.0.0 build's, so no update
+ * from it on reaches a 1.90.0 copy, and every copy that takes it was
+ * reviewed with notes that describe it. What it opens is Quick build on an
+ * empty preset; the chain EDITOR (one block moved, added or removed) is
+ * still not over Bluetooth, and Edit says so (lib/editWords noChainLine). Off again, it
+ * is his account only (lib/bluetooth chainOverBluetooth), and a frame of
+ * these shapes is refused at the way out.
  */
-export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * PLAY'S AND EDIT'S BLOCKS IN THE UNIT'S OWN ORDER, OVER BLUETOOTH OR THE
@@ -466,12 +522,13 @@ export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
  * order, and the read's frame is refused at the way out.
  *
  * It moves, adds and removes nothing, and no screen says anything new: the
- * blocks are drawn where the unit has them, as through the computer. It
- * opens to everyone once his own log from a unit shows the order read
- * agreeing with the status read ("block order from the unit’s grid"), with
- * its line in What's new then.
+ * blocks are drawn where the unit has them, as through the computer. OPEN
+ * TO EVERYONE SINCE 2.0.0 (17 November 2026), before any log from a unit
+ * had shown the order read agreeing: "Enable all new features for all
+ * users that were on my account" (Justin, release day). A grid that does
+ * not agree with the status read still leaves the usual order.
  */
-export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false
+export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = true
 
 /**
  * THE INPUT AND OUTPUT BLOCKS IN EDIT OVER BLUETOOTH OR THE UNIT'S USB
@@ -498,12 +555,14 @@ export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false
  * blocks out of its chain answer, and a read or write of either is refused
  * before it goes and at the way out.
  *
- * Opening it to customers is his call once he has moved a scene level
- * himself over Bluetooth and through the computer: whether that is an
- * update or waits for a store version whose texts say so (the Bluetooth
- * page's own list says there is no volume button there).
+ * OPEN TO EVERYONE SINCE 2.0.0 (17 November 2026), before he had moved a
+ * scene level on a unit: "Enable all new features for all users that were
+ * on my account" (Justin, release day). Every copy that takes it is 2.0.0
+ * (the release-day pull request moves main's fingerprint), and the
+ * Bluetooth page drops the volume button from its list where it is there
+ * (lib/editWords notOverBluetoothLine).
  */
-export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = false
+export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = true
 
 /**
  * QUICK BUILD AND STARTER CHAINS (shared/starter-chains.mjs,
@@ -521,16 +580,19 @@ export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = false
  * four pictures: "The four screens are good. I need everything with the
  * chain builder to work over Bluetooth also" (Justin, 15 November 2026).
  *
- * His account first, as every new thing is: NOBODY HAS BUILT A CHAIN THIS
- * WAY ON A REAL UNIT YET, nor run its Undo. Off, it is his account only
- * (lib/useQuickBuild); every other account's empty preset says "This preset
- * is empty." as it always did, and Settings has no Starter chains row.
+ * His account first, as every new thing is. His Axe-Fx III has joined
+ * row 3 four times (once over a WIDI Master, three times through the Pi);
+ * no other row, no other unit, and no Undo has run on a unit. OPEN TO
+ * EVERYONE SINCE 2.0.0 (17 November 2026): "Enable all new features for
+ * all users that were on my account" (Justin, release day). Off again, it is
+ * his account only (lib/useQuickBuild); an empty preset says "This preset
+ * is empty." and Settings has no Starter chains row.
  * Where it is drawn is lib/quickBuild `quickBuildHere`: never a VP4, only
  * where the unit's capabilities say `gridEdit`, and only on this preset's
  * own chain. It asks nothing about the wire, so it works over Bluetooth on
  * the day the wire says `gridEdit` there.
  */
-export const QUICK_BUILD_FOR_EVERYONE = false
+export const QUICK_BUILD_FOR_EVERYONE = true
 
 /**
  * THE COMPUTER APP'S OWN UPDATE ON PHONE & COMPUTER (lib/hostUpdate,
@@ -544,14 +606,23 @@ export const QUICK_BUILD_FOR_EVERYONE = false
  * a Pi puts its update in by itself once nobody has used it for half an
  * hour, and acts on a phone's request written into its store.
  *
- * His account first: NOBODY HAS PRESSED UPDATE NOW ON A REAL PI YET, and how
+ * His account first. NOBODY HAS PRESSED UPDATE NOW ON A REAL PI YET, and how
  * long the restart takes, and whether the unit's sound carries on through
- * it, have not been seen. Off, it is his account only
- * (lib/hostUpdateHere useComputerUpdate); every other account sees the
- * computer's card as it was and nothing is written for it. When it opens to
- * everyone, its What's new line goes in then, with the time he measured.
+ * it, have not been seen, so no sentence says either (and its What's new
+ * line names no time). The ready line and the give-up line say the day's
+ * wait a customer's computer makes and his own do not (lib/hostUpdate
+ * `owner`).
+ *
+ * OPEN TO EVERYONE SINCE 17 NOVEMBER 2026, store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin, release day). The pull request that
+ * turned it on moved main to the 2.0.0 build's fingerprint, so it reaches
+ * only copies of 2.0.0, reviewed with notes that describe it. Off again,
+ * it is his account only (lib/hostUpdateHere useComputerUpdate); every
+ * other account sees the computer's card as it was and nothing is written
+ * for it.
  */
-export const COMPUTER_UPDATE_FOR_EVERYONE = false
+export const COMPUTER_UPDATE_FOR_EVERYONE = true
 
 /**
  * EDIT'S KNOBS FOLLOW THE UNIT (lib/liveKnobs, the rules; lib/liveKnobsHere,
@@ -573,7 +644,10 @@ export const COMPUTER_UPDATE_FOR_EVERYONE = false
  * the screens, lib/bluetooth liveKnobsOverBluetooth for the wire), and every
  * other account's Edit reads and sends exactly what it did. The unit's own
  * report is written in the log for every account, which is how a customer's
- * log says whether their unit sends one. It opens to everyone when he says
- * so, with its What's new line in that pull request.
+ * log says whether their unit sends one. OPEN TO EVERYONE SINCE 2.0.0 (17
+ * November 2026): "Enable all new features for all users that were on my
+ * account" (Justin, release day), with the one cost written down in
+ * CLAUDE.md left as it was (a clock read can hold a Play tap up to the
+ * read's own time).
  */
-export const LIVE_KNOBS_FOR_EVERYONE = false
+export const LIVE_KNOBS_FOR_EVERYONE = true

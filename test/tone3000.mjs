@@ -446,6 +446,16 @@ export function run(test) {
        * of its own.
        */
       if (p === 'mobile/src/screens/Stage.js') src = src.replace(/\b(Tone3000Door|Tone3000InPop|useTone3000Door)\b|'\.\.\/components\/Tone3000Quick'/g, '')
+      /*
+       * App's one word of TONE3000's (17 November 2026): every sign-out
+       * somebody asked for ends the TONE3000 sign-in kept on the device
+       * (test/tone3000-page.mjs holds where). Nothing else of it: no client,
+       * no card, no list.
+       */
+      if (p === 'mobile/App.js') {
+        assert.equal((src.match(/\bforgetTone3000\b/g) || []).length, 6, 'App.js names forgetTone3000 somewhere other than its import and the five sign-outs')
+        src = src.replace(/import \{ forgetTone3000 \} from '\.\/src\/lib\/tone3000Here'|\bforgetTone3000\(\)/g, '')
+      }
       assert.ok(!/tone3000|t3k/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), `${p} reaches TONE3000`)
     }
     /* Nothing of the unit's in the client or its bindings: no wire, no device, no Bluetooth. */
@@ -504,5 +514,12 @@ export function run(test) {
     for (const name of ['expo-web-browser', 'expo-auth-session']) {
       assert.equal(pkg.dependencies[name], undefined, `${name} is not how TONE3000’s page is shown`)
     }
+  })
+  test('tone3000: what the sign-in says when it fails is plain words for a player, never the developer’s “pass” or “token”', () => {
+    /* Open to every account since 17 November 2026 (TONE3000_QUICK_FOR_EVERYONE), so a customer can read these (an independent read). */
+    const src = read('mobile/src/lib/tone3000.js')
+    const said = [...src.matchAll(/(?:failure\(|why: err\?\.message \|\| )(['`])(.*?)\1/g)].map((m) => m[2])
+    assert.ok(said.length >= 8, 'the sentences were not found')
+    for (const t of said) assert.doesNotMatch(t, /\bpass\b|\btokens?\b|access_token/i, t)
   })
 }

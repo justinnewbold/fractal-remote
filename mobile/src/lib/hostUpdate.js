@@ -11,11 +11,20 @@
  * and words: no React, no wire, so the tests run every function whole and
  * hand the computer's own rule what these build.
  *
- * HIS ACCOUNT FIRST (features COMPUTER_UPDATE_FOR_EVERYONE, lib/hostUpdateHere
- * useComputerUpdate). Every other account sees nothing new and nothing new is
- * written for it. NOTHING HERE HAS RUN AGAINST A REAL PI YET: how long the
- * restart takes, and whether the unit keeps sounding through it, are not
- * known, so no sentence here says either.
+ * HIS ACCOUNT FIRST, EVERY ACCOUNT SINCE 2.0.0 (features
+ * COMPUTER_UPDATE_FOR_EVERYONE, lib/hostUpdateHere useComputerUpdate; on
+ * since 17 November 2026). NOTHING HERE HAS RUN AGAINST A REAL PI YET: how
+ * long the restart takes, and whether the unit keeps sounding through it,
+ * are not known, so no sentence here says either.
+ *
+ * WHOSE COMPUTER, FOR THE DAY'S WAIT (`owner`). A computer puts a new
+ * version in by itself only once it has been out for a day, except one
+ * signed in to his own account, which skips the day (desktop/lib/updates.mjs
+ * OWNER_ACCOUNTS, autostart's `ownerBox`). The computer a device drives is
+ * signed in to the device's own account (it acts only for that one), so the
+ * device's sign-in says which: `owner` is his (lib/admin isAdmin), and the
+ * ready line and the give-up line leave the day out for him and say it for
+ * everybody else.
  *
  * Phone-only: not in the computer app, so changing it makes no computer
  * release. NOT mobile/src/lib/computer-update.js, which is generated from
@@ -206,7 +215,9 @@ export function answerWords(result, { name, version } = {}) {
  * it ended (askUpdate's answer). Both say more than the computer's note, so
  * they come first.
  */
-export function computerUpdateWords({ name, version = null, os = null, update = null, sending = null, result = null } = {}) {
+export function computerUpdateWords({ name, version = null, os = null, update = null, sending = null, result = null, owner = false } = {}) {
+  /* When a ready version goes in by itself: a customer's computer waits for it to have been out a day, his own does not (`owner`, above). */
+  const goesIn = owner === true ? `once nobody has used ${name} for half an hour` : `once it has been out for a day and nobody has used ${name} for half an hour`
   const none = { line: null, button: false, link: null, tone: 'hint' }
   if (!name) return none
   if (result) {
@@ -217,7 +228,7 @@ export function computerUpdateWords({ name, version = null, os = null, update = 
     const offersNewer = newer?.kind === 'ready' && isOlder(result.version, newer.version) === true
     if (result.state === 'updated' && !offersNewer) return { ...none, line: `${name} is on ${v(result.version)}.`, tone: 'hint' }
     if (result.state === 'refused') return { ...none, line: answerWords(result.result, { name, version: result.asked }), tone: 'warn', button: again }
-    if (result.state === 'gave-up') return { ...none, line: `${name} didn't update. It stays on ${v(result.version)}. It tries again by itself once nobody has used it for half an hour.`, tone: 'warn', button: again }
+    if (result.state === 'gave-up') return { ...none, line: `${name} didn't update. It stays on ${v(result.version)}. The new version goes in by itself ${goesIn}.`, tone: 'warn', button: again }
     if (result.state === 'no-take') return { ...none, line: `${name} didn't update. It stays on ${v(result.version)}.`, tone: 'warn', button: again }
     if (result.state === 'not-sent') return { ...none, line: notAskedWords(result.why, name) || `${name} wasn't asked. Try again.`, tone: 'warn', button: again }
   }
@@ -249,8 +260,8 @@ export function computerUpdateWords({ name, version = null, os = null, update = 
     case 'misplaced':
       return { ...none, line: `Move Fractal Remote to Applications on ${name} to get updates.`, link: 'updating', tone: 'warn' }
     case 'ready':
-      /* The computer's own window's words (src/lib/desktop.js): a customer's computer also waits for the release to have been out a day. */
-      if (note.canNow) return { ...none, line: `${V(note.version)} is ready. It goes in by itself once it has been out for a day and nobody has used ${name} for half an hour.`, button: true }
+      /* A customer's computer: the computer's own window's words (src/lib/desktop.js), the day's wait in them. His own: the same, with no day (`owner`). */
+      if (note.canNow) return { ...none, line: `${V(note.version)} is ready. It goes in by itself ${goesIn}.`, button: true }
       if (note.goesIn === 'idle') return { ...none, line: `${V(note.version)} is ready, but it didn't go in last time. Put it in at ${name}: Restart to update on its own screen.`, tone: 'warn' }
       if (note.goesIn === 'password') return { ...none, line: `${V(note.version)} is ready. It needs the computer's password, so put it in at ${name}.` }
       return { ...none, line: `${V(note.version)} is ready. It goes in the next time the computer app is quit and opened again.` }
@@ -265,9 +276,9 @@ export function computerUpdateWords({ name, version = null, os = null, update = 
  * offer, how to get to it (a write reaches only the computer driven).
  * Null for a name two computers answer to (whose is whose cannot be said).
  */
-export function hostCardLine(fact, { driven = false, twice = false } = {}) {
+export function hostCardLine(fact, { driven = false, twice = false, owner = false } = {}) {
   if (!fact?.name || twice) return null
-  const said = computerUpdateWords({ name: fact.name, version: fact.version, os: fact.os, update: fact.update })
+  const said = computerUpdateWords({ name: fact.name, version: fact.version, os: fact.os, update: fact.update, owner })
   const head = fact.version ? `v${fact.version}` : null
   /* The older computer's line already starts with its version. */
   const parts = said.line && head && said.line.startsWith(`${head},`) ? [said.line] : [head, said.line]

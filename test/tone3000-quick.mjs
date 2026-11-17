@@ -50,7 +50,7 @@ export function run(test) {
 
   test('tone3000 quick: his account first, behind a switch of its own, and the pop-up everybody else gets is the one it was', async () => {
     const features = await import('../mobile/src/lib/features.js')
-    assert.equal(features.TONE3000_QUICK_FOR_EVERYONE, false)
+    assert.equal(features.TONE3000_QUICK_FOR_EVERYONE, true, 'TONE3000 from a held NAM block is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     const hook = flat(code(read('mobile/src/lib/useTone3000Quick.js')))
     /* His account by the sign-in kept on the device, as the capture picker's is: never a question asked of the server. */
     assert.match(hook, /import \{ useBluetoothAdmin \} from '\.\/bluetooth' import \{ TONE3000_QUICK_FOR_EVERYONE \} from '\.\/features' export const useTone3000Quick = \(\) => \{ const his = useBluetoothAdmin\(\) return TONE3000_QUICK_FOR_EVERYONE \|\| his \}/)

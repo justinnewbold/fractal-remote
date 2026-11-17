@@ -991,7 +991,7 @@ export function run(test) {
     assert.equal(q.quickBuildOn({}), false)
     assert.equal(q.quickBuildOn({ everyone: true }), true)
     assert.match(read('mobile/src/lib/quickBuild.js'), /caps\?\.gridEdit === true/)
-    assert.match(read('mobile/src/lib/features.js'), /^export const QUICK_BUILD_FOR_EVERYONE = false$/m, 'his account first')
+    assert.match(read('mobile/src/lib/features.js'), /^export const QUICK_BUILD_FOR_EVERYONE = true$/m, 'Quick build is closed to customers on 2.0.0 (open since 17 November 2026)')
     assert.match(read('mobile/src/lib/useQuickBuild.js'), /quickBuildOn\(\{ admin: useBluetoothAdmin\(\), everyone: QUICK_BUILD_FOR_EVERYONE \}\)/)
     const edit = code(read('mobile/src/screens/Edit.js'))
     assert.match(edit, /const quickBuildShown = quickBuildHere\(\{ on: quickOn, vp4: vp4Bench\(\), caps, elsewhere: chainNow\.elsewhere \}\)/)

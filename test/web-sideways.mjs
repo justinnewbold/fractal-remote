@@ -84,23 +84,25 @@ const NOT_ON_ITS_SIDE = [
 ]
 
 export function run(test) {
-  test('a phone’s browser on its side: the switch is off, and only his account is let in', async () => {
+  test('a phone’s browser on its side: the switch is on for everyone since 2.0.0, and off it lets only his account in', async () => {
     const r = await import('../src/lib/sidewaysPlay.js')
     const { ADMINS } = await import('../shared/admin.mjs')
-    assert.equal(r.PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE, false, 'the browser’s sideways Play is open to everyone; it opens when Justin says so, with its What’s new line')
-    assert.match(code(read('src/lib/sidewaysPlay.js')), /export const PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE = false\n/, 'the switch is not one plain line any more')
+    assert.equal(r.PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE, true, 'the browser’s sideways Play is closed again: it opened to everyone with 2.0.0 (17 November 2026)')
+    assert.match(code(read('src/lib/sidewaysPlay.js')), /export const PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE = true\n/, 'the switch is not one plain line any more')
     assert.equal(r.sidewaysOpenTo(ADMINS[0]), true, 'his own account is not let in')
+    assert.equal(r.sidewaysOpenTo(ADMINS[0], false), true, 'his own account is not let in with the switch off')
     for (const id of [null, undefined, '', 'not-an-account', '00000000-0000-0000-0000-000000000000']) {
-      assert.equal(r.sidewaysOpenTo(id), false, `closed to everyone, and ${JSON.stringify(id)} is let in`)
-      assert.equal(r.sidewaysOpenTo(id, true), true, 'the switch, once on, opens it to everyone')
+      assert.equal(r.sidewaysOpenTo(id, false), false, `the switch off, and ${JSON.stringify(id)} is let in`)
+      assert.equal(r.sidewaysOpenTo(id), true, `the switch on, and ${JSON.stringify(id)} is left out`)
     }
     /* All three have to say yes: the window, the phone, the account. */
     const yes = { lowWide: true, phone: true, accountId: ADMINS[0] }
     assert.equal(r.webSidewaysOn(yes), true)
     assert.equal(r.webSidewaysOn({ ...yes, lowWide: false }), false, 'his phone upright is split')
     assert.equal(r.webSidewaysOn({ ...yes, phone: false }), false, 'his laptop’s low window is split')
-    assert.equal(r.webSidewaysOn({ ...yes, accountId: null }), false, 'signed out, or the demo with nobody signed in, is split')
-    assert.equal(r.webSidewaysOn({ ...yes, accountId: 'somebody-else' }), false, 'another account is split')
+    assert.equal(r.webSidewaysOn({ ...yes, accountId: null, everyone: false }), false, 'the switch off: signed out, or the demo with nobody signed in, is split')
+    assert.equal(r.webSidewaysOn({ ...yes, accountId: 'somebody-else', everyone: false }), false, 'the switch off: another account is split')
+    assert.equal(r.webSidewaysOn({ ...yes, accountId: null }), true, 'signed out, or the demo, is not split now the switch is on')
     assert.equal(r.webSidewaysOn({ ...yes, accountId: 'somebody-else', everyone: true }), true)
     assert.equal(r.webSidewaysOn({ lowWide: true, phone: false, accountId: 'somebody-else', everyone: true }), false, 'the switch opens a laptop’s window')
   })

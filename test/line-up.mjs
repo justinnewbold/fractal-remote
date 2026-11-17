@@ -130,12 +130,12 @@ export function run(test) {
     assert.equal(r.lineUpWords(20), '20 ms later')
     assert.equal(r.lineUpWords(-30), '30 ms earlier')
     assert.equal(r.lineUpWords(0), 'Not moved')
-    /* His account until the switch; the switch is off. */
+    /* His account, or everyone with the switch; the switch is on since 2.0.0. */
     assert.equal(r.lineUpOpen({ admin: true }), true)
     assert.equal(r.lineUpOpen({ admin: false, everyone: false }), false)
     assert.equal(r.lineUpOpen({ everyone: true }), true)
     assert.equal(r.lineUpOpen({ admin: 'yes' }), false)
-    assert.match(read('mobile/src/lib/features.js'), /^export const METRONOME_LINE_UP_FOR_EVERYONE = false$/m, 'the line-up is open to every account before he has said so')
+    assert.match(read('mobile/src/lib/features.js'), /^export const METRONOME_LINE_UP_FOR_EVERYONE = true$/m, 'the line-up is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     /* Opened to everyone, the beat lock has to be too: without it nobody else's beat is ever held on the unit's, and Tap along is offered to nobody. */
     {
       const features = read('mobile/src/lib/features.js')

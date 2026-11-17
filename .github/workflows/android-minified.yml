@@ -38,8 +38,9 @@
 #   4. What Play's edge-to-edge notice will list for this build, and
 #      Material Components gone when Expo's error screen is.
 #   5. The app on a phone emulator held sideways, the hold read back before
-#      every look: it stays upright, past the "An independent app" card and
-#      into the demo, a minute left running and the log read for the crashes
+#      every look: it stays upright on the "An independent app" card, and
+#      the demo's Play turns sideways with the phone (every account since
+#      2.0.0, PHONE_SIDEWAYS_FOR_EVERYONE), a minute left running and the log read for the crashes
 #      R8 causes and for any missing resource a library reports (a picture
 #      React Native cannot find is drawn as nothing without a word, so step 3
 #      is the one that counts for pictures). Then the check is tried on

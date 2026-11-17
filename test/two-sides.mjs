@@ -899,7 +899,7 @@ export function run(test) {
     }
   })
 
-  test('App, the top bar, the sides and Play draw a phone on its side for his account only, and each thing they change is a branch beside the one that was there', () => {
+  test('App, the top bar, the sides and Play draw a phone on its side behind its switch (every account since 2.0.0), and each thing they change is a branch beside the one that was there', () => {
     const app = code(read('mobile/App.js'))
     const stage = code(read('mobile/src/screens/Stage.js'))
     const sides = code(read('mobile/src/components/Sides.js'))
@@ -908,7 +908,7 @@ export function run(test) {
     const head = code(read('mobile/src/components/PlayHead.js'))
     const features = read('mobile/src/lib/features.js')
     /* His account until he has seen it on a phone; then everyone the two sides are open to. */
-    assert.match(features, /^export const PHONE_SIDEWAYS_FOR_EVERYONE = false$/m, 'a phone on its side splits in two for everyone; that needs his own look first, and its line in What’s new')
+    assert.match(features, /^export const PHONE_SIDEWAYS_FOR_EVERYONE = true$/m, 'a phone on its side is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     assert.match(app, /const sidewaysAllowed = sidesAdmin \|\| \(sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE\)\n/)
     /* Asked only where the big-screen rule said no, with its own memory; and `wide` is either. */
     assert.match(app, /const low = sidewaysAllowed && !big && phoneSidewaysOn\(frame \|\| \{\}, lowWas\.current\)\n\s*lowWas\.current = low\n\s*const wide = big \|\| low\n/)
