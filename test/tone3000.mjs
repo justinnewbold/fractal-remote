@@ -458,6 +458,9 @@ export function run(test) {
     /* What it reads of the computer, to say one is too old for a capture to be kept (lib/captureComputerHere), it reads off the link and the device's one yes-or-no: nothing sent, nothing asked of the unit. */
     const computerHere = read('mobile/src/lib/captureComputerHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
     assert.deepEqual(computerHere.match(/^import .*$/gm), ["import { capturesThroughComputer } from './device'", "import { linkState, subscribeLink } from './link'", "import { computerTooOld, oldAfterSend } from './captureComputer'"])
+    /* Where the unit is, for the tick on Play it in NAM 1 (lib/namPlayingHere), it reads off the rig's store and the link: nothing sent, nothing asked of the unit. */
+    const playingHere = read('mobile/src/lib/namPlayingHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.deepEqual(playingHere.match(/^import .*$/gm), ["import { getState, useRig } from './rig'", "import { linkState, subscribeLink } from './link'"])
     /* A capture's text is kept for as long as the card is up and no longer: never in storage. */
     assert.ok(!/AsyncStorage|setItem|writeAsString/.test(card), 'the card writes a capture down')
     assert.match(card, /texts\.current = \{\}/)

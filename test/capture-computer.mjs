@@ -38,7 +38,7 @@ const NOT_KEPT_TODAY = 'The Axe-Fx III took the capture 2 different ways and sti
  * down in H.log.
  */
 const STANDINS = `
-export const H = { slots: [], i: 0, effects: [], log: [], placed: {}, link: { link: 'connected', macName: 'raspberry pi 5', hostVersion: '1.90.63' }, through: true, linkFns: new Set(), installs: [], models: [{ id: 748130, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' }] }
+export const H = { slots: [], i: 0, effects: [], log: [], placed: {}, link: { link: 'connected', macName: 'raspberry pi 5', hostVersion: '1.90.63' }, through: true, linkFns: new Set(), installs: [], rig: { preset: { number: 386 }, sceneIndex: 0, bufferRev: 0 }, picks: [], models: [{ id: 748130, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' }] }
 export function useState(init) {
   const k = H.i++
   if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
@@ -86,8 +86,11 @@ export const claimSlot = () => {}, forgetNotKept = () => {}, notKept = () => {},
 export const capturesThroughComputer = () => H.through
 export const namEmptySlotHere = async () => { H.log.push(['empty']); return { slot: 40, heads: [] } }
 export const namInstallHere = async (slot, words) => { H.log.push(['install', slot]); return H.installs.length ? H.installs.shift() : { slot, name: '<EMPTY>', replaced: null, seconds: 0.5 } }
-export const namPickHere = async (block, slot) => { H.log.push(['pick', block, slot]); return { block, slot, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' } }
+/* What the unit answers a pick, in turn (\`H.picks\`: an answer, or an Error it throws), else the capture by name. */
+export const namPickHere = async (block, slot) => { H.log.push(['pick', block, slot]); const next = H.picks.shift(); if (next instanceof Error) throw next; return next || { block, slot, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' } }
 export const linkState = () => H.link
+/* Where the unit is (lib/rig), as a test sets it: \`H.rig\`. */
+export const useRig = (select) => select(H.rig), getState = () => H.rig
 export const subscribeLink = (fn) => { H.linkFns.add(fn); return () => H.linkFns.delete(fn) }
 export default 'Drawn'
 `
@@ -97,11 +100,13 @@ const REAL = {
   '../lib/captureComputer': 'mobile/src/lib/captureComputer.js',
   '../lib/captureComputerHere': 'mobile/src/lib/captureComputerHere.js',
   '../lib/captureLine': 'mobile/src/lib/captureLine.js',
+  '../lib/namPlaying': 'mobile/src/lib/namPlaying.js',
+  '../lib/namPlayingHere': 'mobile/src/lib/namPlayingHere.js',
   '../lib/captureSend': 'mobile/src/lib/captureSend.js',
   '../lib/tone3000Words': 'mobile/src/lib/tone3000Words.js',
   '../lib/device-word': 'mobile/src/lib/device-word.js'
 }
-const STAND_IN_FROM_LIB = new Set(['./nam-install.js', './capturePlaced.js', './device', './link'])
+const STAND_IN_FROM_LIB = new Set(['./nam-install.js', './capturePlaced.js', './device', './link', './rig'])
 
 /** The card on a bench. `source` is the file's text, so a check can run a copy with the fix taken out. */
 export async function bench(source = read('mobile/src/components/Tone3000Test.js')) {

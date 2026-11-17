@@ -137,14 +137,14 @@ export function run(test) {
     const point = card.slice(card.indexOf('const point = async (block, slot, id) => {'), card.indexOf('const useIn = async'))
     assert.deepEqual(point.match(/return [^ ]+/g), ['return line', 'return null'])
     assert.match(point, /if \(got\.name === NAM_EMPTY\) \{ played\(/)
-    assert.match(point, /\} else \{ const line = `\$\{which\} is playing “\$\{got\.name\}” now, through your own rig\. Save the preset to keep it there\.` played\(line, \{ playing: true \}\)/)
+    assert.match(point, /\} else \{ const line = pickedLine\(\{ n, name: got\.name, before \}\) played\(line, \{ playing: true \}\)/)
     const answered = point.indexOf('return line')
     assert.ok(answered > 0 && answered < point.indexOf('} catch (err) {'), 'only a pick the unit answered returns a line')
     /* A send that stopped part-way and is sent again is still the button it was: a Get from a held block still goes back. */
     assert.match(card, /\[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \}/)
     assert.match(card, /sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)/)
     /* A capture already on the unit, there: hear it in that block, or take it and go back. Not the other block's button, which is not what was held. */
-    assert.match(card, /\{there && where\.held \? \( <> <Press label=\{busy === `pick \$\{playIn\}` && mine \? 'Changing…' : `Play it in \$\{namBlockSaid\(where\.n\)\}`\} sub="In the preset the unit is on" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id\)\} \/> <Press label=\{USE_AND_BACK\} sub=\{useAndBackSub\(where\.n, where\.back\)\} tone="live" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id, true\)\} \/> <\/> \) : null\}/)
+    assert.match(card, /\{there && where\.held \? \( <> \{\(\(\) => \{ const b = namPlayButton\(\{ known: playing, now, block: playIn, n: where\.n, slot: at\.slot, changing: busy === `pick \$\{playIn\}` && mine \}\) return <Press label=\{b\.label\} sub=\{b\.sub\} height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id\)\} \/> \}\)\(\)\} <Press label=\{USE_AND_BACK\} sub=\{useAndBackSub\(where\.n, where\.back\)\} tone="live" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id, true\)\} \/> <\/> \) : null\}/)
     /* The Developer page is handed nothing, so it is what it was: NAM 1, Get leaves what is playing alone, and nothing goes back anywhere. */
     assert.match(flat(code(read('mobile/src/screens/Settings.js'))), /\{head\('TONE3000', 'back'\)\} <Tone3000Test \/>/)
   })

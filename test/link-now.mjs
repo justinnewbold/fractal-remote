@@ -511,6 +511,9 @@ const STACK_SERVICE = `
   const NO_UNIT = 'No Fractal device found on any serial or MIDI port.'
   function forgefx(c, p) {
     const path = p.path
+    /* \`c.answer(p)\`: what this computer says to a request instead, where it says anything (a test's own unit or store). */
+    const own = c.answer?.(p)
+    if (own !== undefined) return own
     if (path === '/store/config/host.name') return { data: { name: c.name, version: c.version || '1.87.48' } }
     if (path === '/healthz') return { ok: !!c.unit }
     if (path === '/device') return { model: c.unit || 'FM3', capabilities: c.unit === 'AM4' ? AM4_CAPS : FM3_CAPS }
@@ -2266,6 +2269,251 @@ export function run(test) {
    * app came back.
    */
   const FM3_MAC = { name: 'MacBook Pro SG 566', unit: 'FM3', version: '1.87.47', lag: (p) => (/^\/preset\/(blocks|grid)$/.test(p.path) ? 750 : 150) }
+
+  /*
+   * A PRESET WHOSE SCENES HAVE NO NAMES IS NOT ASKED FOR THEM AGAIN. His
+   * 17 November log (an Axe-Fx III through a Raspberry Pi) had five asks of
+   * the computer's store for every unnamed preset, each logged as "failed —
+   * not found": the computer files a preset's scene names only when one
+   * exists. The asks at the preset change stay; the three follow-ups at 4, 9
+   * and 18 seconds (rig.js followComputerNames) are for an AM4 whose names
+   * the computer files a few seconds after its own read, and are not made
+   * once the unit's own read has said every scene is blank. A 404 from the
+   * store is an answer, and is not logged as a failure; any other route's is.
+   */
+  const GEN3_CAPS = { scenes: 8, meters: { outputLevels: true } }
+  const STORE_MISS = { status: 404, body: JSON.stringify({ error: 'not found' }) }
+  /* A gen-3 unit through a Pi whose presets' scenes are all unnamed, and whose computer has filed no names for any of them. `extra(p)` answers first. */
+  const unnamedGen3 = (extra = () => undefined) => {
+    const pi = {
+      name: 'raspberry pi 5',
+      unit: 'FM3',
+      on: 479,
+      lag: () => 150,
+      answer(p) {
+        const own = extra(p)
+        if (own !== undefined) return own
+        const song = (n) => `SONG ${n}`
+        if (p.path === '/device') return { model: 'FM3', capabilities: GEN3_CAPS }
+        if (p.path === '/device/detect') return { connected: true, name: 'FM3', short: 'FM3', capabilities: GEN3_CAPS }
+        if (p.path === '/preset/select') {
+          pi.on = JSON.parse(p.body || '{}').number
+          return { ok: true }
+        }
+        if (p.path === '/preset') return { number: pi.on, name: song(pi.on) }
+        if (/^\/presets\/\d+$/.test(p.path)) return { number: Number(p.path.split('/')[2]), name: song(Number(p.path.split('/')[2])) }
+        if (p.path === '/preset/grid') return { name: song(pi.on), scenes: ['', '', '', '', '', '', '', ''], cells: [] }
+        if ((p.method || 'GET') === 'GET' && p.path.startsWith('/store/config/scene-names-')) return STORE_MISS
+        return undefined
+      }
+    }
+    return pi
+  }
+  const storeAsks = (c, number) => (c.heard || []).filter((h) => h.path === `/store/config/scene-names-fm3%3A${number}`)
+
+  test('phone: a preset whose scenes the unit has just read as blank is not asked for again by the follow-ups at 4, 9 and 18 seconds', async () => {
+    const s = await stackOnABench()
+    const pi = unnamedGen3()
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    assert.equal(s.link.linkState().link, 'connected', `the bench never connected\n${s.lines().join('\n')}`)
+    const at = s.clock.now()
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.equal(s.rig.getState().preset?.number, 39)
+    /* Before: 0.6 s, 0.8 s, 5.25 s, 10.25 s and 19.25 s, five asks. The two at the preset change stay. */
+    const asks = storeAsks(pi, 39).map((h) => h.at - at)
+    assert.ok(asks.length >= 1 && asks.every((t) => t < 2000), `the store was asked for 39's scene names after the preset change itself: ${asks.join(', ')} ms`)
+    assert.equal(asks.length, 2, `asks: ${asks.join(', ')} ms`)
+    assert.deepEqual(s.rig.getState().sceneNames, [], 'blank scenes were given names')
+  })
+
+  test('phone: a store with no scene names for a preset is not logged as a failure, and every other failed request still is', async () => {
+    const s = await stackOnABench()
+    const other = { status: 404, body: JSON.stringify({ error: 'not found' }) }
+    const pi = unnamedGen3((p) => {
+      if (p.path === '/presets/5/summary') return other
+      if (p.path === '/store/config/scene-names-fm3%3A7') return (p.method || 'GET') === 'GET' ? { status: 503, body: JSON.stringify({ error: 'busy' }) } : STORE_MISS
+      /* A store that refuses this device, and the store's own list (a /store/ route, not a document under /store/config/), each a 403 or a 404. */
+      if (p.path === '/store/config/scene-names-fm3%3A8') return { status: 403, body: JSON.stringify({ error: 'not yours' }) }
+      if (p.path === '/store/config') return other
+      return undefined
+    })
+    /* And one the computer never answers in time: a failure with no status at all. */
+    pi.lag = (p) => (p.path === '/store/config/scene-names-fm3%3A9' ? 60000 : 150)
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.ok(storeAsks(pi, 39).length > 0, 'the store was never asked')
+    const failed = () => s.lines().filter((l) => /failed/.test(l))
+    assert.deepEqual(failed().filter((l) => l.includes('/store/config/')), [], 'a store with no such document was logged as a failure')
+    const tries = [
+      s.relay.remoteRequest('/presets/5/summary'),
+      s.relay.remoteRequest('/store/config/scene-names-fm3%3A7'),
+      s.relay.remoteRequest('/store/config/scene-names-fm3%3A7', { method: 'PUT', body: '{}' }),
+      s.relay.remoteRequest('/store/config/scene-names-fm3%3A8'),
+      s.relay.remoteRequest('/store/config/scene-names-fm3%3A9', { timeoutMs: 1000 }),
+      s.relay.remoteRequest('/store/config'),
+      s.relay.remoteRequest('/store/config/scene-names-fm3%3A7', { method: 'DELETE' })
+    ].map((p) => p.catch((e) => e))
+    await s.clock.advance(3000)
+    const errs = await Promise.all(tries)
+    for (const e of errs) assert.ok(e instanceof Error, 'a refused request answered')
+    assert.deepEqual(errs.map((e) => e.status ?? null), [404, 503, 404, 403, null, 404, 403], 'the bench did not give each request the failure it is here for')
+    const said = failed().join('\n')
+    assert.match(said, /\[wire\] GET \/presets\/5\/summary failed — not found/, 'a 404 on another route went unlogged')
+    assert.match(said, /\[wire\] GET \/store\/config\/scene-names-fm3%3A7 failed — busy/, 'a store that failed went unlogged')
+    assert.match(said, /\[wire\] PUT \/store\/config\/scene-names-fm3%3A7 failed — not found/, 'a write the store refused went unlogged')
+    assert.match(said, /\[wire\] GET \/store\/config\/scene-names-fm3%3A8 failed — not yours/, 'a store read refused with a 403 went unlogged')
+    assert.match(said, /\[wire\] GET \/store\/config\/scene-names-fm3%3A9 failed — Your computer didn’t answer\./, 'a store read that failed with no status went unlogged')
+    assert.match(said, /\[wire\] GET \/store\/config failed — not found/, 'a 404 on the store’s own list (not a document under /store/config/) went unlogged')
+    /* A DELETE of a store document never leaves the phone (shared/relay-rules hostAllows), and is logged as refused. */
+    assert.ok(s.lines().some((l) => l.startsWith('[wire] DELETE /store/config/scene-names-fm3%3A7 refused here')), s.lines().join('\n'))
+  })
+
+  test('phone: a blank read on one unit does not stop the follow for the same preset on the next unit', async () => {
+    const s = await stackOnABench()
+    const NAMES = ['VERSE', 'CHORUS', '', '', '', '', '', '']
+    let next = null
+    const pi = unnamedGen3((p) => {
+      if (!next) return undefined
+      /* The next unit: its computer's copy says nothing, and its store files the names five seconds on. */
+      if (p.path === '/preset/grid') return { status: 503, body: JSON.stringify({ error: 'busy' }) }
+      if (/^\/presets\/\d+\/scenes$/.test(p.path)) return { status: 503, body: JSON.stringify({ error: 'busy' }) }
+      if (p.path === '/store/config/scene-names-fm3%3A39' && (p.method || 'GET') === 'GET') return s.clock.now() >= next ? { data: NAMES } : STORE_MISS
+      return undefined
+    })
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.deepEqual(s.rig.getState().sceneNames, [])
+    /* Another unit on the same computer, on the same preset, read whole. */
+    s.rig.startClean({ unit: true })
+    next = s.clock.now() + 5000
+    s.rig.refreshAll()
+    await s.clock.advance(25000)
+    assert.deepEqual(s.rig.getState().sceneNames, NAMES, `the next unit's names never came\n${s.lines().join('\n')}`)
+  })
+
+  /*
+   * The blank mark is for one visit only: a preset read as unnamed, left, and
+   * loaded again later whose own read then does not answer (the scenes
+   * named meanwhile at the unit or in Axe-Edit, the computer filing them a
+   * few seconds on) gets its names by the follow, as before the mark.
+   */
+  test('phone: a preset read as unnamed, then left and loaded again with its own reads failing, gets its names by the follow', async () => {
+    const s = await stackOnABench()
+    const NAMES = ['INTRO', 'VERSE', '', '', '', '', '', '']
+    let filedAt = null
+    const pi = unnamedGen3((p) => {
+      /* 40 has a named scene, so its read leaves 39's mark where it is. */
+      if (p.path === '/preset/grid' && pi.on === 40) return { name: 'SONG 40', scenes: ['LEAD', '', '', '', '', '', '', ''], cells: [] }
+      if (filedAt === null) return undefined
+      /* The third visit: the computer's copy and the slot read fail, and its store files the names five seconds on. */
+      if (p.path === '/preset/grid') return { status: 503, body: JSON.stringify({ error: 'busy' }) }
+      if (/^\/presets\/\d+\/scenes$/.test(p.path)) return { status: 503, body: JSON.stringify({ error: 'busy' }) }
+      if (p.path === '/store/config/scene-names-fm3%3A39' && (p.method || 'GET') === 'GET') return s.clock.now() >= filedAt ? { data: NAMES } : STORE_MISS
+      return undefined
+    })
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.deepEqual(s.rig.getState().sceneNames, [], 'the bench did not read 39 as unnamed')
+    s.rig.loadPreset(40)
+    await s.clock.advance(25000)
+    assert.equal(s.rig.getState().preset?.number, 40)
+    assert.deepEqual(s.rig.getState().sceneNames, ['LEAD', '', '', '', '', '', '', ''], 'the bench did not read 40 as named')
+    filedAt = s.clock.now() + 5000
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.equal(s.rig.getState().preset?.number, 39)
+    assert.deepEqual(s.rig.getState().sceneNames, NAMES, `39's names never came on the visit after\n${s.lines().join('\n')}`)
+    assert.ok(s.lines().some((l) => /the computer had the scene names for 39 after \d+s/.test(l)), 'the names did not come by the follow')
+  })
+
+  /*
+   * THE TONE3000 PAGE'S "✓ Playing in NAM 1" GOES ON `bufferRev` (lib/namPlayingHere,
+   * test/nam-playing.mjs): the same preset loaded again throws an unsaved
+   * pick away with the number and the scene unchanged. So a pick itself
+   * must not move bufferRev, or every tick would go the moment it was
+   * earned. Run on the whole link: the pick through the computer, the
+   * computer's own news of it, and the settled reads after it.
+   */
+  test('phone: a NAM pick does not move bufferRev, and the same preset loaded again does', async () => {
+    const s = await stackOnABench()
+    const pi = unnamedGen3((p) => {
+      if (p.path === '/nam/blocks/206/slot') return { block: 206, slot: JSON.parse(p.body || '{}').slot, name: 'A CAPTURE' }
+      return undefined
+    })
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    const rev = s.rig.getState().bufferRev
+    const picked = s.device.namPickHere(206, 40)
+    await s.clock.advance(3000)
+    assert.deepEqual(await picked, { block: 206, slot: 40, name: 'A CAPTURE' })
+    /* And the computer's news of a grid change after it, which a pick can bring: still not a load. */
+    s.rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await s.clock.advance(25000)
+    assert.equal(s.rig.getState().preset?.number, 39)
+    assert.equal(s.rig.getState().bufferRev, rev, 'a NAM pick moved bufferRev, so the tick would go the moment it came')
+    /* The same preset loaded again (a Revert, the same preset picked again): bufferRev moves, the number and the scene do not. */
+    const scene = s.rig.getState().sceneIndex
+    s.rig.loadPreset(39)
+    await s.clock.advance(25000)
+    assert.equal(s.rig.getState().preset?.number, 39)
+    assert.equal(s.rig.getState().sceneIndex, scene)
+    assert.ok(s.rig.getState().bufferRev > rev, 'the same preset loaded again did not move bufferRev')
+  })
+
+  /*
+   * And the follow still runs where it is needed: an AM4 through a Pi whose
+   * own read of the scenes fails (the slot read a Pi 3 cuts short), whose
+   * names the computer files nine seconds later. No read answered, so
+   * nothing said the scenes are blank, and the names arrive by the follow.
+   */
+  test('phone: an AM4 whose own scene read failed still gets its names from the computer by the follow', async () => {
+    const s = await stackOnABench()
+    const KORN = ['FREAK ON A LEASH', 'BLIND', 'FALLING AWAY', 'GOT THE LIFE']
+    let filedAt = Infinity
+    const pi = {
+      name: 'raspberry pi 3',
+      unit: 'AM4',
+      on: 52,
+      lag: () => 150,
+      answer(p) {
+        if (p.path === '/preset/select') {
+          pi.on = JSON.parse(p.body || '{}').number
+          if (pi.on === 53) filedAt = s.clock.now() + 9000
+          return { ok: true }
+        }
+        if (p.path === '/preset') return { number: pi.on, name: `AM4 ${pi.on}` }
+        if (/^\/presets\/\d+$/.test(p.path)) return { number: Number(p.path.split('/')[2]), name: `AM4 ${p.path.split('/')[2]}` }
+        /* An older computer app's structure read, with no names in it. */
+        if (p.path === '/preset/grid') return { name: `AM4 ${pi.on}`, scenes: ['', '', '', ''], cells: [] }
+        if (/^\/presets\/\d+\/scenes$/.test(p.path)) return { status: 503, body: JSON.stringify({ error: 'The unit did not answer.' }) }
+        if (p.path === '/store/config/scene-names-am4%3A53' && (p.method || 'GET') === 'GET') return s.clock.now() >= filedAt ? { data: KORN } : STORE_MISS
+        return undefined
+      }
+    }
+    s.bench.computers = [pi]
+    s.link.startLink()
+    await s.clock.advance(5000)
+    assert.equal(s.rig.getState().deviceName, 'AM4', `the bench never connected\n${s.lines().join('\n')}`)
+    s.rig.loadPreset(53)
+    await s.clock.advance(25000)
+    assert.deepEqual(s.rig.getState().sceneNames, KORN, `the names never came\n${s.lines().join('\n')}`)
+    assert.ok(s.lines().some((l) => /the computer had the scene names for 53 after 9s/.test(l)), s.lines().join('\n'))
+  })
   const AM4_PI = { name: 'raspberry pi 3', unit: 'AM4', lag: (p) => (/^\/preset\/(blocks|grid)$/.test(p.path) ? 2500 : 320) }
   /* The socket lost under every channel on it, as Android cuts it when the app is put away: realtime-js says CHANNEL_ERROR. */
   const loseSocket = (s) => {

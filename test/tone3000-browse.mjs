@@ -637,7 +637,7 @@ export function runPreviewAndGet(test) {
     /* What a fetched file turned out to be is still said under a capture that cannot be sent, and under the one in hand. */
     assert.match(card, /\{checked\[m\.id\] && \(noUse \|\| mine\) \? \( <Text selectable style=\{\{[^}]*\}\}> \{checked\[m\.id\]\} <\/Text> \) : null\}/)
     /* Once on the unit, which NAM block plays it is one tap, whichever button put it there, and what the block says lands under THAT capture. */
-    assert.match(card, /\{there && !where\.held \? NAM_BLOCKS\.map\(\(nam, i\) => \( <Press key=\{nam\} label=\{busy === `pick \$\{nam\}` && mine \? 'Changing…' : `Play it in NAM \$\{i \+ 1\}`\} sub="In the preset the unit is on" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(nam, at\.slot, m\.id\)\} \/> \)\) : null\}/)
+    assert.match(card, /\{there && !where\.held \? NAM_BLOCKS\.map\(\(nam, i\) => \{ const b = namPlayButton\(\{ known: playing, now, block: nam, n: i \+ 1, slot: at\.slot, changing: busy === `pick \$\{nam\}` && mine \}\) return <Press key=\{nam\} label=\{b\.label\} sub=\{b\.sub\} height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(nam, at\.slot, m\.id\)\} \/> \}\) : null\}/)
     assert.match(card, /const useIn = async \(block, slot, id, back = false\) => \{ if \(busy\) return setSend\(\(was\) => \(was\?\.id === id \? \{ \.\.\.was, wait: '' \} : \{ id, slot, done: true, line: '' \}\)\) if \(goingNow\(\)\) \{ setSend\(\(was\) => \(was \? \{ \.\.\.was, wait: STILL_GOING \} : was\)\) return \}/)
     /* A send that stopped part-way belongs to the view: forgotten with the tone, the list and the sign-in, and when that capture is sent again. */
     assert.equal((card.match(/setChecked\(\{\}\) setStopped\(\{\}\)/g) || []).length, 4)

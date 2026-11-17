@@ -1466,6 +1466,20 @@ what the computer sends for the same edit, and a test holds it there.
     refuses in words.
   - *Next:* the browser's half of Quick build, and the chain EDITOR over
     Bluetooth.
+  - *A preset whose scenes have no names is not asked for them again,
+    since 17 November 2026, for every account.* His log that day (his AX3
+    through the Raspberry Pi) had five "GET /store/config/scene-names-…
+    failed — not found" lines for every unnamed preset: the computer files
+    a preset's scene names only when one exists. The two asks at the
+    preset change stay; the follow-ups at 4, 9 and 18 seconds (rig.js
+    `followComputerNames`, for an AM4 whose names the computer files a few
+    seconds after its own read) are not made once the unit's own read of
+    that preset has said every scene is blank (`unnamedAt`). Where no read
+    answered (a stale copy, an AM4's failed read, an older computer app)
+    the follow runs as before, and a test holds it. And a "not found" from
+    the computer's store is no longer logged as a failure (relay.js, as the
+    browser already did); every other failure still is. Nothing on screen
+    changes. Seen on the bench only: his next log is the check.
 - **Saving over Bluetooth is built, HIS ACCOUNT ONLY, since 1.90.52 (13
   November 2026).** He had thought it existed ("I think we can actually
   save on Bluetooth now", 12 November, and was told it did not), and then
@@ -2424,6 +2438,34 @@ the capture on the unit, which is the hard half.
     to slot 030" until a NAM block pointed at it names what is there. It
     is forgotten only when the unit names the slot <EMPTY> (and when the
     app is closed: the unit is not asked what it holds when a tone opens).
+  - *"✓ Playing in NAM 1" (17 November 2026, his account only, as the
+    whole page is).* A tap on Play it in NAM 1 when NAM 1 already played
+    that capture looked as if it did nothing. Now, where the unit itself
+    has said on this page that a block is on a capture's slot (by Preview,
+    Get and play, or Play it in), that block's button under it says "✓
+    Playing in NAM 1"; a tap still asks the unit, and the line then says
+    "Asked the unit again: NAM 1 is playing “…”. Save the preset to keep
+    it there." The tick goes the moment it cannot be vouched for: another
+    preset or scene, the same preset loaded again where the app hears of
+    it as a reload (the rig's `bufferRev`: the preset tapped again in the
+    app, or, through a computer, a Revert or a select from another
+    editor), the link down, a pick in that block that failed or named an
+    empty slot, another capture played in that block, the page left. The
+    tick is what the unit said after this page's own last pick, on this
+    visit, and a change made to the block at the unit or in another editor
+    is not seen until the preset or scene moves or the button is tapped.
+    LEFT, found by the second read: over Bluetooth, the same preset loaded
+    again AT THE UNIT (its own footswitch) reaches the phone as a Program
+    Change for the number it is already on, which the rig does not count
+    as a reload there (rig.js followPresetNews: `reloaded` only where the
+    computer keeps a copy), so the tick stays over a pick the unit has
+    thrown away, until a tap asks again. Counting that Program Change as a
+    reload would change what every Bluetooth player's Edit does when an
+    adapter sends the app's own preset change back, so it was not done for
+    a tick; it is the same question as whether Edit's knobs should be read
+    again there, and wants a log first. The rule and its words are
+    lib/namPlaying, run whole by test/nam-playing.mjs. Not seen on a unit
+    yet.
   - *Two readers and a skeptic each went through it before it went out.*
     What they found, each fixed with a test seen to fail without the fix
     (15): Back and the same tone again offered both buttons on a capture
@@ -4722,6 +4764,26 @@ real answer at large text is a head of two lines (title over buttons),
 which is his to see first. The author's own model of the head gave every
 button a fixed width, which is how it missed the cut label: MODEL A
 BUTTON WITH A MEASURED WORD IN IT.
+
+**The checks run the tests in two ways a run here does not.** Each failed
+a pull request on 17 November 2026, with nothing wrong in the app either
+time:
+
+- *A second time with every patch in docs/pending put in* (web.yml, "The
+  tests again, with every patch waiting for a build in", which sets
+  `PENDING_APPLIED=1`). A test that puts a waiting patch in for itself has
+  to allow for it being in already (test/line-up.mjs takes it back out
+  then), and a test that reads a file a patch changes has to hold both
+  ways. To run it that way before pushing: make a copy of the working
+  tree, apply each patch named in docs/pending/README.md the way that step
+  does, and run `PENDING_APPLIED=1 npm test`.
+- *On Windows* (desktop.yml's windows job runs the whole suite), where
+  node:path joins with backslashes. The stood-in disk the computer app's
+  tests use is keyed the Linux way, so a test that reads a file off it by
+  a '/'-joined path hands the app Linux path rules (test/pi-update.mjs
+  `LINUX_PATHS`). To see it here, hand the stood-in app
+  `require('node:path').win32` in test/run.mjs loadDesktopMain's `stand`
+  and run the file.
 
 **`test/structure.mjs` reads App.jsx as text, not as code.** It finds screens
 by searching for the literal conditional that opens them and takes the first
