@@ -179,8 +179,39 @@ export const SOUND_WORDS = Object.freeze({
   nothingHere: (noun) => `No sound from this ${noun} and no flash, so it keeps no time. Pick a sound, or switch the flash on`,
   unitOwn: 'The app can’t switch the unit’s own click from here: if the unit is clicking, switch its Metronome off on the unit',
   deviceNoFlash: (noun) => `Clicks out loud on this ${noun}, with no flash`,
-  noTempo: (noun) => `No tempo from the unit yet, so the ${noun} has nothing to flash to`
+  noTempo: (noun) => `No tempo from the unit yet, so the ${noun} has nothing to flash to`,
+  /* Settings → Metronome, under its switch while the metronome is off: a pick there is kept, and starts nothing (offLine has the pop-up's). */
+  offSettings: 'The metronome is off. A pick here doesn’t start it: tap the button above, or pick a sound in the volume pop-up'
 })
+
+/*
+ * THE LINE WHILE THE METRONOME IS OFF, for an account offered the sound and
+ * the flash (report 8be38966, 16 November 2026). The pop-up drew the row
+ * and the flash with the metronome off and a line under them that read as
+ * if it were running ("The unit clicks and the phone keeps time with it"),
+ * and the only sign it was off was the small button at the top: so it
+ * looked set up, and nothing flashed. Now, while it is off, the line says
+ * so first, and what starting it gives as things are set (`lit`, the sound
+ * lit in the row, soundLit; `edge`, the flash). And in the pop-up a pick in
+ * the row starts it (lib/metronome setMetronomeSound `start`), so it says
+ * that; where no row is drawn (the tempo box, a window too short for the
+ * row) it is the button above. No full stop: whoever shows it ends the
+ * sentence. Two lines at most in the tempo box: OFF_LINE_MOST characters.
+ */
+export const OFF_LINE_MOST = 88
+const willDo = (lit, edge, noun) => {
+  if (lit === SOUND_OFF) return edge === true ? 'the edge flashes, with no sound' : 'nothing keeps time: no sound, no flash'
+  const flashed = edge === true ? ', with a flash' : ''
+  if (lit === 'unit') return `the unit clicks${flashed}`
+  if (lit === 'phone') return `the ${noun} clicks${edge === true ? flashed : ', with no flash'}`
+  if (lit === 'both') return `the unit and the ${noun} click${flashed}`
+  return ''
+}
+export function offLine({ lit = null, edge = true, row = false, noun = 'phone' } = {}) {
+  const will = willDo(lit, edge, noun)
+  if (row === true) return `The metronome is off. Tap a sound to start it${will ? `. As set now, ${will}` : ''}`
+  return `The metronome is off. Tap above to start${will ? `: ${will}` : ' it'}`
+}
 
 /**
  * The line under the sound row and the flash: what the metronome does now,

@@ -207,7 +207,15 @@ export function run(test) {
     /* What says nothing, and why. */
     const why = (answer, asked = 1000, answered = 1020, b = 500) => windowFromAnswer(answer, asked, answered, b).why
     assert.equal(why({ ok: true, count: 0, age: null, gap: null }), 'none', 'no beat heard')
-    assert.equal(why({ ok: true, count: 1, age: 40, gap: null }), 'none', 'one beat is no tempo yet')
+    /*
+     * Beats heard, and the computer has only just forgotten where they fall
+     * (a tempo tapped from the app, a new connection): still finding, never
+     * "switch Send Realtime Sysex on", which is on (an independent read).
+     */
+    assert.equal(why({ ok: true, count: 1, age: 40, gap: null }), 'finding', 'one beat is no tempo yet, and Send Realtime Sysex is on')
+    assert.equal(why({ ok: true, count: 40, age: null, gap: null }), 'finding', 'a beat forgotten after a tempo tapped from the app was said to be none')
+    assert.equal(why({ ok: true, age: null, gap: null }), 'none', 'no count is no beat heard')
+    assert.equal(even.gap, 500, 'the window does not carry the computer’s own gap between the unit’s beats')
     assert.equal(why({ ok: true, count: 9, age: 40, gap: 480 }), 'tempo', 'beats at another tempo')
     assert.equal(why({ ok: true, count: 9, age: 900, gap: 500 }), 'stale', 'the beats stopped')
     assert.equal(why({ ok: true, count: 9, age: 3200, gap: 2000 }), 'stale', 'a bar’s first beat that is a bar and a half old')
@@ -305,7 +313,7 @@ export function run(test) {
   })
 
   test('beat lock: the move puts the click heard, or in silence the light, on the unit’s beat, by the least there is', async () => {
-    const { moveFor, slewPart, inStepWith, isBeatAnswer, BEAT_LOCK, wrap } = await rules()
+    const { moveFor, slewPart, inStepWith, heldOnWith, sameTempo, isBeatAnswer, BEAT_LOCK, wrap } = await rules()
     const beat = 500
     const random = seeded(3)
     for (let i = 0; i < 300; i++) {
@@ -359,6 +367,58 @@ export function run(test) {
     assert.equal(inStepWith({ mid: 0, half: 3, at: 0, sure: false }), false, 'in step on two windows that only agree with each other (a tempo a little off, followed round)')
     assert.equal(inStepWith({ mid: 0, half: 3, at: 0 }), false)
     assert.equal(inStepWith(null), false)
+    /*
+     * Held on the unit's beat (what Tap along goes by): sure, the move made,
+     * however wide the window, AND the unit's beats at this device's tempo by
+     * the computer's own gap. Changed on purpose (17 November 2026): a sure
+     * belief alone let a device at 121 against the unit's 120 hold on a
+     * window 60 ms wide, and a run there saved a nudge 50 to 110 ms wrong.
+     */
+    const at120 = { mid: 0, half: 60, at: 0, sure: true, gap: 500 }
+    assert.equal(heldOnWith(at120, 0, 500), true, 'a sure belief 60 ms wide each side, the move made, at the unit’s own tempo, is not held on the unit’s beat')
+    assert.equal(heldOnWith({ ...at120, half: 154 }, 20, 500), true)
+    assert.equal(heldOnWith({ ...at120, sure: false }, 0, 500), false, 'held on two windows that only agree with each other')
+    assert.equal(heldOnWith({ mid: 0, half: 3, at: 0, gap: 500 }, 0, 500), false)
+    assert.equal(heldOnWith(at120, 50, 500), false, 'held with fifty milliseconds of the move still to make')
+    assert.equal(heldOnWith(at120, -21, 500), false)
+    assert.equal(heldOnWith(null, 0, 500), false)
+    assert.equal(heldOnWith(at120, 0, 60000 / 121), false, 'held with this device at 121 against the unit’s 120')
+    assert.equal(heldOnWith(at120, 0, 60000 / 120.5), false, 'held with this device at 120.5 against the unit’s 120')
+    assert.equal(heldOnWith({ ...at120, half: 10 }, 0, 60000 / 121), false, 'held at another tempo on a narrow window')
+    assert.equal(heldOnWith({ ...at120, gap: undefined }, 0, 500), false, 'held on a window with no gap (one heard over the wire)')
+    assert.equal(heldOnWith({ ...at120, gap: null }, 0, 500), false)
+    assert.equal(heldOnWith(at120, 0), false, 'held with no tempo of this device’s to hold it to')
+    assert.equal(heldOnWith({ ...at120, gap: Math.round((60000 / 97.4) * 10) / 10 }, 0, 60000 / 97.4), true, 'not held at 97.4 on both, the gap to a tenth of a millisecond')
+    /* The tempo, by the computer's gap: a whole number of this device's beats (one, or a bar's) to within about two milliseconds, the gap being good to about one. */
+    assert.equal(BEAT_LOCK.sameTempoMs, 2)
+    assert.equal(sameTempo(500, 500), true)
+    assert.equal(sameTempo(2000, 500), true, 'a beat every bar is this tempo')
+    assert.equal(sameTempo(501.9, 500), true, 'a gap 1.9 ms off, inside what the computer’s gap is good to and its margin, is another tempo')
+    assert.equal(sameTempo(502.1, 500), false, 'a gap 2.1 ms off is this tempo')
+    assert.equal(sameTempo(500, 60000 / 120.5), false)
+    assert.equal(sameTempo(500, 60000 / 121), false)
+    assert.equal(sameTempo(2000, 60000 / 120.5), false, 'a bar at 120 against 120.5 (8.3 ms) is this tempo')
+    assert.equal(sameTempo(616, 60000 / 97.4), true)
+    assert.equal(sameTempo(null, 500), false)
+    assert.equal(sameTempo(500, 0), false)
+    assert.equal(sameTempo(500 * (BEAT_LOCK.beatsApart + 1), 500), false, 'more beats apart than a unit sends')
+    assert.equal(sameTempo(500 * BEAT_LOCK.beatsApart, 500), true, 'a beat every eight, the most a unit sends, is another tempo')
+    /*
+     * And by the BPM: from about 174 BPM up a whole BPM is less than 2 ms a
+     * beat (an independent read, 17 November 2026: 201 against 200 got Tap
+     * along and a run saved a nudge 50 to 80 ms wrong).
+     */
+    assert.equal(BEAT_LOCK.sameTempoBpm, 0.5)
+    for (const [unit, device] of [[200, 201], [200, 199], [175, 176], [250, 249], [180, 181]]) {
+      assert.equal(sameTempo(60000 / unit, 60000 / device), false, `a unit at ${unit} with this device at ${device} is this tempo`)
+      assert.equal(sameTempo((4 * 60000) / unit, 60000 / device), false, `a bar at ${unit} with this device at ${device} is this tempo`)
+    }
+    for (const bpm of [200, 250, 175, 60, 30]) assert.equal(sameTempo(60000 / bpm, 60000 / bpm), true, `${bpm} on both is another tempo`)
+    assert.equal(sameTempo(Math.round((60000 / 250) * 10) / 10 + 0.3, 60000 / 250), true, 'a gap 0.3 ms long at 250 on both is another tempo')
+    assert.equal(sameTempo((60000 / 250) * 4, 60000 / 250), true, 'a bar at 250 on both is another tempo')
+    /* The 2 ms rule is still needed where half a BPM is more than 2 ms a beat: 60.4 against 60 is 0.4 BPM and 6.6 ms. */
+    assert.equal(sameTempo(1000, 60000 / 60.4), false, 'a unit at 60 with this device at 60.4 is this tempo')
+    for (const half of [3, 20, 60, 154]) for (const left of [0, 15, -30]) for (const sure of [true, false]) if (inStepWith({ mid: 0, half, at: 0, sure }, left)) assert.equal(heldOnWith({ mid: 0, half, at: 0, sure, gap: 500 }, left, 500), true, 'in step at the unit’s own tempo and not held')
 
     /* What a computer app from before the answer sends back is not an answer: its web page, for any address it does not know. */
     assert.equal(isBeatAnswer({ ok: true, count: 0, age: null, gap: null }), true)

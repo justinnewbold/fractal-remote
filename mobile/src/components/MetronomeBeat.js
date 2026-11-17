@@ -4,7 +4,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { usePhoneClick } from '../lib/metronome'
-import { cornerRadius } from '../lib/screenCorners'
+import { beatFrame } from '../lib/screenCorners'
 import { color } from '../lib/theme'
 
 /**
@@ -30,11 +30,11 @@ export default function MetronomeBeat({ bpm }) {
     Animated.timing(glow, { toValue: 0, duration: 140, useNativeDriver: true }).start()
   }, [glow])
   const clicking = usePhoneClick(bpm, onBeat)
-  /* Rounded with the glass, or the corners of the frame are cut off behind it: see lib/screenCorners.
+  /* In from the edge and rounder than the glass, or the corners of the frame are cut off behind it: see lib/screenCorners beatFrame.
      'continuous' is the iPhone's own curve, which starts bending sooner than a circle; Android ignores it. */
   const { width, height } = useWindowDimensions()
-  const { top, bottom } = useSafeAreaInsets()
-  const round = cornerRadius({ os: Platform.OS, width, height, top, bottom, pad: Platform.isPad })
+  const { top, bottom, left, right } = useSafeAreaInsets()
+  const frame = beatFrame({ os: Platform.OS, width, height, top, bottom, left, right, pad: Platform.isPad })
 
   return (
     <>
@@ -49,7 +49,11 @@ export default function MetronomeBeat({ bpm }) {
       <Animated.View
         pointerEvents="none"
         accessible={false}
-        style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderCurve: 'continuous', borderColor: color.ok, opacity: glow, zIndex: BEAT_Z }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { top: frame.inset, right: frame.inset, bottom: frame.inset, left: frame.inset },
+          { borderWidth: frame.line, borderRadius: frame.radius, borderCurve: 'continuous', borderColor: color.ok, opacity: glow, zIndex: BEAT_Z }
+        ]}
       />
     </>
   )

@@ -3830,6 +3830,126 @@ beat and the device makes no sound and no tap, and opens no audio.
   and no flash round the screen: the edge flash is this app's own.
   Nothing in Axiom was changed.
 - **The watch's light** is native and waits in watch-page-order (above).
+- **Line up the light and click: built 16 and 17 November 2026, HIS
+  ACCOUNT ONLY** (`METRONOME_LINE_UP_FOR_EVERYONE` in
+  mobile/src/lib/features.js, false).
+
+  > "Will you make sure everything's in sync properly somehow or have a
+  > way for a user to calibrate" (16 November 2026)
+
+  Settings → Metronome has two nudges kept on the device, the light and
+  the device's own click (with the tap felt with it), each Earlier or
+  Later by 10 ms, up to 200 either way, and Reset (mobile/src/lib/lineUp.js
+  has the rules, components/LineUp.js draws them). Nothing is written to
+  the unit. A third, the watch's, is kept and drawn nowhere until a watch
+  build reads it.
+  - **Tap along is offered while the device's beat is HELD ON the unit's**
+    (`useBeatHeld()` in lib/metronome, `heldOnWith` in lib/beatLock: a
+    sure belief about the unit's beat and the move onto it made, however
+    wide the window, AND the unit's beat at the device's own tempo, let go
+    of twenty seconds after the unit's beat was last heard), as well as
+    Unit or Both picked where the app can switch
+    the unit's click, the metronome on and the device keeping its beat.
+    NOT "in step" (`inStepWith`, the beat known to within 20 ms), which
+    the first cut waited for: through a computer the window is half the
+    round trip plus 10 ms each side, so on a road slower than about 20 ms
+    there and back it is never in step (40 ms steady gives 30), and Tap
+    along was almost never offered, his Pi least of all (an independent
+    read, 17 November 2026). The device's beat is moved onto the window's
+    middle whenever the belief is sure, and stays there across a stop and
+    a start, off only by how lopsided the road is: what a line-up by ear
+    is for. Only the words "In step" still wait for 20 ms. THE SAME TEMPO
+    IS ASKED OF THE COMPUTER'S OWN GAP, since a sure belief on a wide
+    window does not prove it (an independent read, 17 November 2026: a
+    device at 121 against the unit's 120, a road 100 ms there and back,
+    drifts 4 ms a beat and still lands in the next window, so Tap along
+    was offered with the light 50 to 170 ms off and a run saved 50 to 110
+    ms where 30 was right). The beat answer carries `gap`, the computer's
+    median of its last few gaps between the unit's beats, to a tenth of a
+    millisecond and good to about one; the window keeps it, and held needs
+    two things of it (`sameTempo`): a whole number of the device's beats
+    (one, or up to a bar of eight) fits it within 2 ms
+    (`BEAT_LOCK.sameTempoMs`), AND the tempo it says is within half a BPM
+    of the device's (`BEAT_LOCK.sameTempoBpm`). The second came after a
+    third read (17 November 2026): from about 174 BPM up a whole BPM is
+    less than 2 ms a beat, so 201 against 200 got Tap along and a run
+    saved a nudge 50 to 80 ms wrong. Half, because both tempos are whole
+    BPM as the app reads them. Its cost, measured on the bench at the
+    unit's own tempo through a road 50 ms each way: with the computer's
+    gap off by about 0.3 ms, Tap along closes about once in ten minutes
+    at 200 BPM and about once a minute at 250 (about 16% of the time);
+    off by about 0.7 ms, about twice a minute at either, a third to a half
+    of the time. Closed, never a wrong nudge. 121, 120.5 and 119 against
+    120, and 201, 199, 176 and 249 against 200, 175 and 250 are closed;
+    120, 97.4, 200 and 250 on both open, and a unit that sends one beat a
+    bar too. Closed for that, the line is the tempo one, though a window
+    came, and it stays so while the newest answer's gap is another tempo,
+    a window set aside or not (lib/unitBeat take, lib/metronome align). A
+    window with no gap (heard over Bluetooth or the cable) is never held;
+    Tap along is closed there anyway. The beat lock itself, `sure`, the
+    move and "In step" are as they were.
+    What made a
+    nudge meaningless was NO belief: off the unit's beat the device's beat
+    starts wherever it happens to each time the metronome starts, so a
+    Tap along there measured one start's gap (saved 170 ms on his Pi's old
+    computer app, then +170, -193 and +140 on three restarts). A run sets
+    nothing unless every tap came while the beat was held, on one and the
+    same beat (`finishTapAlong`, 'moved':
+    "nothing was set. Tap along again."). Over Bluetooth it stays closed:
+    the app cannot switch the unit's click there and tells the player to
+    switch it off at the unit.
+  - **Where it is closed, the line says the cause that is so**
+    (`tapAlongClosedWords` in lib/lineUp, from what the beat follower last
+    learned, `useBeatWhy()`, lib/unitBeat `onWhy`): a computer app too old
+    to answer, "Update the computer app to tap along: this one doesn't say
+    where the unit's beat falls."; a unit sending no beat, "Switch Send
+    Realtime Sysex on at the unit to tap along: Setup → MIDI/Remote."; its
+    beats stopped; another tempo; "The connection to the computer is too
+    slow to place the unit's beat, so Tap along can't be used." (a round
+    trip over about 230 ms at 120 BPM); the computer not answering; the
+    device not following the unit's beat at all; and in the first seconds
+    "Still finding where the unit's beat falls, so Tap along waits." Only
+    the old computer app is told to update, only a unit sending no beat to
+    switch Send Realtime Sysex on: an answer whose count is nought, a unit
+    that has never sent one. An answer with a count and no age or gap yet
+    (the computer forgets the beat for a moment after a tempo tapped from
+    the app, and on a new connection) is 'finding', and says still
+    finding, never Send Realtime Sysex, which is on. But the computer keeps
+    its count, so a unit whose Send Realtime Sysex was switched off after
+    beats were heard answers that way for good: after ten seconds of such
+    answers with no age (`BEAT_LOCK.findingMs`; one beat a bar at 30 BPM
+    gives an age within eight) it is 'none' again and the Send Realtime
+    Sysex line shows. The hint says a nudge lines them up
+    while the device follows the unit's beat, and with no beat to follow
+    the light keeps the tempo, starts wherever it falls, and a nudge just
+    moves it that much. While his Pi runs a computer app older than
+    1.90.86 (no beat answer), Tap along is never offered there.
+  - **What the log says of the tempo, and what a fourth read left (17
+    November 2026).** When Tap along starts waiting for the tempo the log
+    says so once, with the numbers ("tap along waits: the computer
+    measures the unit's beats 300.6 ms apart, and 1 of this device's come
+    to 300.0 ms"), and once when they match again (lib/unitBeat take).
+    READ THOSE LINES FIRST if he says the tempo line shows at a tempo that
+    matches: they say how far the computer's gap wavers on his rig, which
+    nothing has measured. If it wavers too much for fast tempos, the cure
+    is a gap measured over a longer span on the computer, which is a
+    computer release. The fourth read found no fault in the code and one
+    gap in the tests: nothing held what starts the ten seconds over. They
+    do now (an answer with an age starts them over, and an answer with no
+    count never starts them). Left, by that read's own count not worth
+    code: a unit that sent one beat in eight at 36 BPM or slower would be
+    told to switch Send Realtime Sysex on for one ask after a tapped tempo
+    (no unit is known to send so few); exactly one beat heard after a
+    forget, and then silence, says "Still finding" for as long as it
+    lasts; and at 250 BPM a move of under 8 ms still to make when a new
+    answer comes is dropped (`BEAT_LOCK.ignoreMs`, the lock's own rule),
+    so a run there can save a nudge one step, 10 ms, off.
+  - **Not seen on a phone or a unit:** the page, the pad, the closed
+    lines, whether the beat is held through his Pi on 1.90.86 or newer,
+    and how a nudge sounds against the unit's click.
+  - It opens to everyone with the switch, with its own What's new line;
+    the beat lock it needs is `BEAT_LOCK_FOR_EVERYONE`, which has to open
+    first or with it, or Tap along is offered to nobody else.
 
 **All presets as a wheel, a choice beside the list: built 11 November
 2026, HIS ACCOUNT ONLY.**

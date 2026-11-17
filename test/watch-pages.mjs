@@ -468,7 +468,8 @@ export function run(test) {
     const bridge = code(read('mobile/src/lib/watchBridge.js'))
     const flat = bridge.replace(/\s+/g, ' ')
     assert.match(bridge, /import \{ getState, noTapTempo, tapTempo, [^}]*\} from '\.\/rig'/)
-    assert.match(bridge, /import \{ metronome, setWatchTap, useMetronome \} from '\.\/metronome'/)
+    /* The setting, the wrist's switch, and where the phone's beats fall (read only, for a watch that knows `beat`): nothing else of the metronome. */
+    assert.match(bridge, /import \{ metronome, onPhoneBeatMoved, phoneBeat, setWatchTap, useMetronome \} from '\.\/metronome'/)
     /* A TAP: Play's own function, with nothing passed to it, as it arrives or not at all. Never held for the link, and never tried again. */
     assert.match(flat, /if \(cmd\.do === 'tap'\) \{ if \(!watchTapInTime\(receivedAt\)\) \{ logDebug\('watch', 'tap not counted: it was held too long on its way'\) return \} if \(asleep\) probeNow\(\) tapTempo\(\) return \}/)
     assert.equal((bridge.match(/\btapTempo\(/g) || []).length, 1, 'Tap is pressed for the watch somewhere else as well')
@@ -719,7 +720,7 @@ export function run(test) {
     assert.match(kept, /export const tunerStaysToSend = \(\) => \(knows\.includes\('stay'\) \? stays : null\)/, 'the tuner’s switch is sent to a watch that has not said it knows how')
     const bridge = code(read('mobile/src/lib/watchBridge.js'))
     /* (Quick edit's two fields ride last, from lib/watchQuickEdit, which sends nothing to a watch that has not said `quick`: test/watch-quick.mjs.) */
-    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, tunerStays: tunerStaysToSend\(\), \.\.\.pagesToSend\(\), \.\.\.quickToSend\(from\.quickOffered\) \}\)/)
+    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, tunerStays: tunerStaysToSend\(\), \.\.\.pagesToSend\(\), \.\.\.quickToSend\(from\.quickOffered\), beat: watchKnowsBeat\(\) \? from\.beat : null \}\)/)
     /* The phone does nothing else with it: no request from the watch reads it, and nothing here turns a tuner on or off by it. */
     assert.equal((bridge.match(/tunerStaysToSend\(/g) || []).length, 2, 'the tuner’s switch is read somewhere besides the picture and the tips')
 
