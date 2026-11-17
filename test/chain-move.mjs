@@ -56,6 +56,9 @@
  * has lost its Output, or its Input, is never "joined again". From the
  * seventh: only an end the row HAD before the press counts, so a parallel
  * branch, or a row whose Output is on another row, is still joined again.
+ * From the eighth: a move's note tells Join the row that the row had both
+ * before the MOVE, so a move that failed part-way and did not bring the
+ * Output (or Input) back is never "joined again" either.
  *
  * THE SCREENS ARE NOT RUN. Their calls into the plan are pinned by
  * patterns on the calls, not whole; the preset hold is pinned whole at
@@ -1275,7 +1278,7 @@ export function run(test) {
     assert.equal(back, 'The blocks were put back, but row 3 isn’t joined at column 2, so there’s no sound past it.')
     assert.equal(said.issue, `The computer stopped answering. ${back}`)
     assert.equal(said.note.text, back, 'a put-back over a row left cut is not said under it')
-    assert.deepEqual(said.note.joins, res.plan.joins, 'a put-back over a row left cut has no Join the row')
+    assert.deepEqual(said.note.joins, res.plan.joins.map((j) => ({ ...j, had: true })), 'a put-back over a row left cut has no Join the row, or its joins do not say the row had its Input and Output')
     assert.equal(said.line, 'A move on row 3 failed and its blocks were put back')
 
     /* PUT BACK WHOLE, THEN NO READ AFTER: "tried to", never "were put back", and Join the row stays. */
@@ -1287,7 +1290,7 @@ export function run(test) {
     said = m.afterMoveSaid({ row: R, res })
     assert.equal(res.checked, false)
     assert.deepEqual(res.missingBack, [])
-    assert.deepEqual(said.note, { text: 'The app tried to put the blocks back, but couldn’t read row 3 back to check them.', joins: res.plan.joins })
+    assert.deepEqual(said.note, { text: 'The app tried to put the blocks back, but couldn’t read row 3 back to check them.', joins: res.plan.joins.map((j) => ({ ...j, had: true })) })
     assert.equal(said.line, 'A move on row 3 failed and the app tried to put its blocks back')
 
     /* A MOVE THAT WENT, WHOSE READ AFTER FAILED: said as not checked, with Join the row. */
@@ -1297,7 +1300,7 @@ export function run(test) {
     res = await m.moveBlocks({ row: R, moves: await hisDrag(d), wire: rec.wire, rows: 6, cols: 14 })
     assert.equal(res.threw, null)
     assert.equal(res.checked, false)
-    assert.deepEqual(m.afterMoveSaid({ row: R, res }), { issue: null, note: { text: m.uncheckedAfterMove(R), joins: res.plan.joins }, line: null })
+    assert.deepEqual(m.afterMoveSaid({ row: R, res }), { issue: null, note: { text: m.uncheckedAfterMove(R), joins: res.plan.joins.map((j) => ({ ...j, had: true })) }, line: null })
 
     /* JOIN THE ROW WHOSE READ AFTER FAILED: never "joined again". */
     let c = await hisUnit(mod, { cut: true })
@@ -1477,6 +1480,25 @@ export function run(test) {
       assert.deepEqual(res.still.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 0, R], [R, 2, R]], `${where}: this case needs a cut and the join into the empty cell missing`)
       said = m.afterMoveSaid({ row: R, res })
       assert.deepEqual(said.note, { text: 'The unit didn’t take Output 1 at column 4, so row 3 has no Output now, and no sound. Add it again, or move one back.', joins: [] }, `${where}: Join the row is offered on a row with no Output`)
+      /* THE INPUT REFUSED, and a join elsewhere answered but not taken: the same, for the Input (the eighth round: only the Output's half was held). */
+      const di = (await phoneMock()).createMockDevice('axefx3', { joinsAsOnUnit: true })
+      for (const b of di.presetBlocks()) di.placeBlock(b.row, b.col, 0)
+      ;[37, 46, 118, 206, 42].forEach((id, col) => di.placeBlock(R, col, id))
+      for (let col = 0; col < 4; col++) di.cable(R, col, R, true)
+      const reci = recorded(di)
+      const placei = reci.wire.placeBlock
+      const cablei = reci.wire.setCable
+      reci.wire.placeBlock = (r, c, x) => (x === 37 && c === 2 ? { ok: false } : placei(r, c, x))
+      reci.wire.setCable = (a, b, c, on) => (b === 0 ? { ok: true } : cablei(a, b, c, on))
+      const dragIn = [
+        { id: 46, name: 'Comp 1', from: 1, to: 0 },
+        { id: 118, name: 'Drive 1', from: 2, to: 1 },
+        { id: 37, name: 'Input 1', from: 0, to: 2 }
+      ]
+      res = await m.moveBlocks({ row: R, moves: dragIn, wire: reci.wire, rows: 6, cols: 14, blocks: di.presetBlocks() })
+      assert.deepEqual(res.still.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 0, R]], `${where}: this case needs a cut beside the refused Input`)
+      said = m.afterMoveSaid({ row: R, res })
+      assert.deepEqual(said.note, { text: 'The unit didn’t take Input 1 at column 3, so row 3 has no Input now, and no sound. Add it again, or move one back.', joins: [] }, `${where}: Join the row is offered on a row with no Input`)
       /* THE INPUT REFUSED on a unit that also drops the joins out of a cell it empties: the join out of its empty cell is missing, and is never offered either. */
       const u = dropsOut(rowOf([[37, 'Input 1'], [46, 'Comp 1'], [118, 'Drive 1'], [42, 'Output 1']]))
       const put = u.wire.placeBlock
@@ -1526,10 +1548,13 @@ export function run(test) {
       assert.equal(r.noEnd, 'Output', where)
       assert.deepEqual(w, NO_OUTPUT, `${where}: a row that lost its Output is called joined again`)
       /* ... AND THE INPUT GONE AFTER IT: every join asked for is still there on that read, and it is no Input all the same. */
-      ;({ r, w } = await press(m, unit([37, 46, 118, 42], [1]), [{ srcRow: R, srcCol: 1, destRow: R }], (u) => u.placeBlock(R, 0, 0)))
+      const twoInputs = unit([37, 46, 118, 42], [1])
+      /* Another row's Input (Input 2 on row 2) is not this row's: it is the Input that is said, not the Output. */
+      twoInputs.placeBlock(R - 1, 0, 38)
+      ;({ r, w } = await press(m, twoInputs, [{ srcRow: R, srcCol: 1, destRow: R }], (u) => u.placeBlock(R, 0, 0)))
       assert.equal(r.sent, 1, where)
       assert.deepEqual(r.still, [], `${where}: this case needs every join asked for there on the read after`)
-      assert.equal(r.noEnd, 'Input', where)
+      assert.equal(r.noEnd, 'Input', `${where}: another row’s Input is taken for this row’s`)
       assert.deepEqual(w, NO_INPUT, `${where}: a row that lost its Input is called joined again`)
       /* THE READ AFTER SAYS WHAT IS MISSING: an Output the read before did not have, there after the press, is joined again. */
       ;({ r, w } = await press(m, unit([37, 46, 118, 0], [1, 2]), [{ srcRow: R, srcCol: 1, destRow: R }], (u) => (u.placeBlock(R, 3, 42), u.cable(R, 2, R, true))))
@@ -1564,6 +1589,8 @@ export function run(test) {
       assert.deepEqual(res.still.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R + 1, 1, R + 1]], `${where}: this case needs the branch left cut between the swapped blocks`)
       assert.equal(said.note?.text, 'The blocks moved, but row 4 isn’t joined at column 3, so there’s no sound past it.', where)
       assert.ok(said.note.joins.length, `${where}: this case needs Join the row offered on the branch`)
+      assert.equal(res.hadEnds, false, `${where}: a branch row is said to have had an Input and Output of its own`)
+      assert.ok(said.note.joins.every((j) => j.had !== true), `${where}: a branch row’s joins say it had an Input and Output of its own`)
       ;({ r, w } = await press(m, branch, said.note.joins, () => {}, R + 1))
       assert.equal(r.sent, 1, `${where}: this case needs the one missing join sent`)
       assert.deepEqual(r.still, [], where)
@@ -1578,6 +1605,51 @@ export function run(test) {
       assert.deepEqual(r.still, [], where)
       assert.equal(r.noEnd, null, `${where}: a row whose Output is on another row is asked for one of its own`)
       assert.deepEqual(w, { ok: true, text: 'Row 3 is joined again.' }, `${where}: a row whose Output is on the next row is refused the green`)
+    }
+  })
+
+  test('chain move: a move that failed part-way and did not bring the Output, or the Input, back: Join the row from its note is never “joined again”', async () => {
+    const mod = await phoneMock()
+    const NO = (end) => ({ ok: false, text: `Row 3 has no ${end} now, and no sound. Add one, or move one back.`, joins: [] })
+    /*
+     * The eighth round (the seventh's review): the Output dragged one place
+     * left past Flanger 1 (or the Input one place right past Comp 1), the
+     * second place of the move throws, and so does putting that end back.
+     * The other block goes back over it, the row has no Output (or Input)
+     * anywhere, and the put-back's note still offers Join the row with the
+     * plan's joins, every one of which is there. The read before the PRESS
+     * already has no such end, so only what the move knew (the row had both)
+     * keeps the green off a row with no sound.
+     */
+    for (const [where, load] of BOTH) {
+      const m = await load()
+      for (const [end, id, moves] of [
+        ['Output', 42, [{ id: 42, name: 'Output 1', from: 5, to: 4 }, { id: 82, name: 'Flanger 1', from: 4, to: 5 }]],
+        ['Input', 37, [{ id: 37, name: 'Input 1', from: 0, to: 1 }, { id: 46, name: 'Comp 1', from: 1, to: 0 }]]
+      ]) {
+        const d = await hisUnit(mod)
+        const rec = recorded(d)
+        const place = rec.wire.placeBlock
+        let n = 0
+        rec.wire.placeBlock = (r, c, x) => {
+          n += 1
+          if (n === 2 || (n > 2 && x === id)) throw new Error('The link dropped.')
+          return place(r, c, x)
+        }
+        const res = await m.moveBlocks({ row: R, moves, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+        const said = m.afterMoveSaid({ row: R, res })
+        assert.equal(res.hadEnds, true, `${where}: his row is not said to have had its Input and Output before the move`)
+        assert.deepEqual(res.missingBack, [`${end} 1`], `${where}: this case needs the ${end} not put back`)
+        assert.ok(!d.grid().cells.some((c) => c.row === R && c.effectId === id), `${where}: this case needs row 3 left with no ${end}`)
+        assert.equal(said.note?.text, `The app tried to put the blocks back, but ${end} 1 isn’t back where it was in row 3.`, where)
+        assert.ok(said.note.joins.length > 0, `${where}: this case needs Join the row offered`)
+        assert.ok(said.note.joins.every((j) => j.had === true), `${where}: the note’s joins do not say the row had its Input and Output`)
+        const r = await m.joinRow({ row: R, joins: said.note.joins, wire: recorded(d).wire, blocks: d.presetBlocks(), rows: 6 })
+        assert.deepEqual(r.still, [], `${where}: this case needs every join asked for there on the read after`)
+        assert.deepEqual(r.cuts, [], `${where}: this case needs rowCuts to find nothing on the row`)
+        assert.equal(r.noEnd, end, where)
+        assert.deepEqual(m.joinedWords(r), NO(end), `${where}: a row a failed move left with no ${end} is called joined again`)
+      }
     }
   })
 

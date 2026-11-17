@@ -2180,15 +2180,23 @@ UNIT YET: his next drag's log is the first check.
   (its rows and the computer app's bytes as it was found, and its empty
   spaces ALWAYS counted), and "Row 3 is joined again." is said only of a
   row that reads whole with no empty space between its Input and Output,
-  and never of a row that has LOST its Input or its Output since the read
-  before the press: with one gone (rowCuts skips such a row, so it alone
-  finds nothing) the answer is "Row 3 has no Output now, and no sound. Add
-  one, or move one back." (or Input), not green, with no button. Only an
-  end the row HAD counts: a parallel branch, or a row whose Output is on
-  another row, never had both, and is "joined again" when its joins read
-  back (the sixth round asked every row for both, and refused the green on
-  a branch that played; the seventh put that right). Only the pressed row
-  is said; and never "sent" of joins nothing sent. A
+  and never of a row that HAD its Input and its Output and reads back
+  without one: with one gone (rowCuts skips such a row, so it alone finds
+  nothing) the answer is "Row 3 has no Output now, and no sound. Add one,
+  or move one back." (or Input), not green, with no button. "Had" is asked
+  twice: of the read just before the press, and of the MOVE that left the
+  note. A move says whether its row had both before anything was written
+  (moveBlocks' `hadEnds`), and every join its note hands to Join the row
+  carries that (`had: true`, afterMoveSaid); the screens pass the joins back
+  as they are, so neither screen changed. The read before the press alone
+  cannot tell: after a move that failed part-way and did not bring the
+  Output back, the Output is already gone on it. A parallel branch, or a
+  row whose Output is on another row, never had both, and is "joined again"
+  when its joins read back. (The sixth round asked every row for both, and
+  refused the green on a branch that played; the seventh asked only the
+  read before the press, and called a row a failed move had left with no
+  Output joined again; the eighth is this.) Only the pressed row is said;
+  and never "sent" of joins nothing sent. A
   press that sends nothing (every join already there, the unit on another
   preset or not saying, the read failing, a join into an empty cell) is no
   edit: the phone marks the chain written from joinRow's `starting`, called
@@ -2268,7 +2276,13 @@ UNIT YET: his next drag's log is the first check.
   back, the end check never set, not heeded, asking only for the Output,
   asking the read before the press, asking that read whether the row had
   both ends, taking any row with cells for one that had, and the button
-  back beside a refused Output) each failed them too. A change to a pinned
+  back beside a refused Output) each failed them too. In the eighth (the
+  same day) its 20, each in each copy (the note not marking its joins, or
+  marking every row's; Join the row not heeding the mark, or heeding it
+  alone; a move saying every row, or no row, had both ends, or asking the
+  read after the move; the seventh round's eight again; the button beside
+  a refused end heeding only the Output, or only the Input; another row's
+  Input taken for this row's) each failed them too. A change to a pinned
   piece is a change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can

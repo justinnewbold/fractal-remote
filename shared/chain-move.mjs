@@ -87,8 +87,9 @@
  * Bluetooth, where the chain editor is not. After it, the row is asked again
  * (rowCuts on the read joinRow makes, ALWAYS with empty spaces counted), and
  * only a row that reads whole, with no empty space between its Input and
- * Output, and that has not lost its Input or its Output since the read
- * before the press (`noEnd`), is called joined again.
+ * Output, is called joined again; never one that had its Input and its
+ * Output (before the move that left the note, or on the read before the
+ * press) and reads back without one (`noEnd`).
  *
  * SETTINGS ARE MEASURED, NEVER WRITTEN BACK, AND ON HIS ACCOUNT ONLY
  * (`measure`). Before and after a move each moved block is read once
@@ -360,8 +361,21 @@ export function putBackSaid({ row, res }) {
  * EVERYTHING A MOVE LEAVES SAID, for both screens: `issue` over the chain (or
  * null), `note` under the row ({ text, joins } with Join the row, or null),
  * and `line` for the browser's history.
+ *
+ * Every join a note hands to Join the row carries `had: true` where the row
+ * had its Input and its Output before the move (moveBlocks' `hadEnds`). The
+ * screens pass the joins back to joinRow as they are, so joinRow can tell a
+ * row the move left without one (a put-back that did not bring the Output
+ * back) from a row that never had both (a parallel branch): the read before
+ * the press cannot, since the end is already gone on it.
  */
 export function afterMoveSaid({ row, res }) {
+  const said = moveSaid({ row, res })
+  if (res?.hadEnds !== true || !said.note?.joins?.length) return said
+  return { ...said, note: { ...said.note, joins: said.note.joins.map((j) => ({ ...j, had: true })) } }
+}
+
+function moveSaid({ row, res }) {
   const joins = Array.isArray(res?.plan?.joins) ? res.plan.joins : null
   const r = rowLabel(row)
   if (res?.stopped === 'moved') return { issue: PRESET_MOVED_MID, note: null, line: `A move on row ${r} stopped: the unit went to another preset` }
@@ -397,8 +411,8 @@ export function afterMoveSaid({ row, res }) {
 
 /**
  * After "Join the row": joinRow's own answer. "Joined again" only where the
- * row was read after, that read has not lost an Input or Output the row had
- * before the press (`noEnd` null: rowCuts skips a row without both, so it
+ * row was read after, that read is not missing an Input or Output of a row
+ * that had both (`noEnd` null: rowCuts skips a row without both, so it
  * alone would find nothing), every join asked for is there, and the row
  * asked again (rowCuts on that read, `cuts`) reads whole. A row that never
  * had both on it (a parallel branch, a row whose Output is on another row)
@@ -412,7 +426,7 @@ export function joinedWords({ row, still, checked, readBefore = true, sent = 0, 
   if (stopped === 'unknown') return { ok: false, text: `${sent ? `The app stopped joining row ${r}` : 'No join was sent'}: the unit didn’t say which preset it’s on. Try again.` }
   if (failed && !sent) return { ok: false, text: `Nothing was sent: ${failed}` }
   if (!checked) return { ok: false, text: `The app sent the joins, but couldn’t read row ${r} back to check them.` }
-  /* A row that has lost its Input or its Output makes no sound, joined or not, and no join can mend it. */
+  /* A row that had its Input and its Output and reads back without one makes no sound, joined or not, and no join can mend it. */
   if (noEnd) return { ok: false, text: `R${noEndWords(row, noEnd).slice(1)}. Add one, or move one back.`, joins: [] }
   const cut = firstCut(still, row)
   if (cut) {
@@ -855,7 +869,9 @@ export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables
   /* The row asked on the move's last read as a cut row is asked: a cut the plan's own joins do not cover is said under it too. */
   const cutsAfter = res.checked && Array.isArray(res.after) ? rowCuts({ cells: res.after, blocks: blocks || [], rows, law, version, holes: true, only: [row] }) : []
   if (cutsAfter.length) log(`move: row ${rowLabel(row)} asked again`, cutsAfter[0].text)
-  return { ...res, notSent: false, plan, cutsAfter }
+  /* Whether the row had its Input and, after it, its Output on the read before the move: what Join the row is told through the note's joins (afterMoveSaid), so a row the move left without one is never called joined again. */
+  const hadEnds = Array.isArray(plan.before) && !!rowEnds(plan.before, row, slugsOf(blocks))
+  return { ...res, notSent: false, plan, cutsAfter, hadEnds }
 }
 
 /**
@@ -869,10 +885,12 @@ export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables
  * just before the first join is let go: never for a press that sends
  * nothing (the phone marks the preset changed there). Answers joinedWords' input: { row,
  * readBefore, sent, failed, stopped, skipped, still, checked, after, cuts,
- * noEnd } (`noEnd` the end the row had on the read before the press and the
- * read after has missing, or null: never of a row that had no Input and
- * Output of its own to begin with, which plays through another row's), and
- * logs the row before and after.
+ * noEnd } (`noEnd` the end the read after has missing, 'Input' or 'Output',
+ * on a row that had both: on the read before the press, or, where the joins
+ * are a move's own (`had` on them, afterMoveSaid), before that move. Null
+ * otherwise: never of a row that had no Input and Output of its own to
+ * begin with, which plays through another row's), and logs the row before
+ * and after.
  */
 export async function joinRow({ row, joins, wire, log = () => {}, names = null, blocks = null, rows = 4, law = false, version = null, onPreset = null, starting = () => {} }) {
   const list = (joins || []).filter((j) => j && Number.isInteger(j.srcRow) && Number.isInteger(j.srcCol) && Number.isInteger(j.destRow))
@@ -894,9 +912,10 @@ export async function joinRow({ row, joins, wire, log = () => {}, names = null, 
   log(`join the row: row ${rowLabel(row)} after: ${rowSaid(after, row, first, last, names)}`)
   const cuts = after ? rowCuts({ cells: after, blocks: blocks || [], rows, law, version, holes: true, only: [row] }) : null
   if (cuts?.length) log(`join the row: row ${rowLabel(row)} asked again`, cuts[0].text)
-  /* Only an end the row HAD: a branch row, or one whose Output is on another row, never had both, and is whole without them. */
+  /* Only an end the row HAD, on the read before the press or before the move whose note handed these joins (`had`): a branch row, or one whose Output is on another row, never had both, and is whole without them. */
   const slugs = slugsOf(blocks)
-  const noEnd = after && rowEnds(before, row, slugs) ? endMissing(after, row, slugs) : null
+  const had = list.some((j) => j.had === true) || !!rowEnds(before, row, slugs)
+  const noEnd = after && had ? endMissing(after, row, slugs) : null
   return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: after ? missingJoins(after, list) : list, checked: !!after, after, cuts, noEnd }
 }
 
