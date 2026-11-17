@@ -2852,7 +2852,7 @@ export function run(test) {
         const full = join(dir, entry)
         if (entry === 'node_modules' || entry.startsWith('.')) continue
         if (statSync(full).isDirectory()) walk(full)
-        else if (/\.(jsx?|mjs)$/.test(entry) && /OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/.test(readFileSync(full, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' '))) readers.push(full.split('/mobile/')[1] || full)
+        else if (/\.(jsx?|mjs)$/.test(entry) && /OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/.test(readFileSync(full, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' '))) readers.push(full.replaceAll('\\', '/').split('/mobile/')[1] || full)
       }
     }
     walk(fileURLToPath(new URL('../mobile/src', import.meta.url)))
