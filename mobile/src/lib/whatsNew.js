@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-17",
+    "day": "17 November 2026",
+    "version": "1.91.9",
+    "lines": [
+      {
+        "text": "In the chain editor on an FM3, FM9 or Axe-Fx III, dragging blocks along a row now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-16",
     "day": "16 November 2026",
     "version": "1.91.2",

@@ -13,6 +13,7 @@ import {
   cabState,
   clearCell,
   editBlocks,
+  gridCells,
   idOf,
   listIrBanks,
   modifierModel,
@@ -20,13 +21,14 @@ import {
   sameBlock,
   setEnum,
   setParam,
+  setCable,
   setParamConfirmed,
   setType
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { demoUnit, isDemo } from '../lib/demo'
 import { gridReadTakesLong, overBluetooth } from '../lib/bleSwitch'
-import { useCableNow } from '../lib/bluetooth'
+import { bluetoothAdmin, useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { editNoteUp } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
@@ -59,12 +61,14 @@ import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, l
 import { addedWords, addHint, addOutcome, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere, saidInRun } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
+import { CHAIN_CHANGED, JOIN_ROW, JOINING_ROW, afterMoveSaid, cablesLaid, joinRow, joinedWords, maybeCut, moveBlocks, oldCableBytes, rowCuts, rowNote } from '../lib/chain-move'
+import { linkState, linkVia } from '../lib/link'
 import { isSilencingParam } from '../lib/guardrails'
 import { blockLevel, levelFloor, levelToSend, levelTypes, LEVEL_HINT } from '../lib/blockLevel'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { withUnit } from '../lib/param-fixes'
 import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
-import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, orStop, refreshBlocks, useRig, writeBlockBypass, writeChannel } from '../lib/rig'
+import { beginChainWrite, chainChanged, endChainWrite, followPresetAfterChainWrite, getState, noteEdited, orStop, refreshBlocks, unitOnPreset, useRig, writeBlockBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
@@ -135,6 +139,7 @@ const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
 const ofChain = (s) => s.chain
 const ofPreset = (s) => s.preset
+const ofPresetNumber = (s) => s.preset?.number
 const ofUnsaved = (s) => s.unsaved
 
 /**
@@ -2156,12 +2161,90 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    */
   const [settling, setSettling] = useState(null)
   const heights = useRef({})
-  /* The last chain change, and the one tap that takes it back. */
-  const chainUndo = useChainUndo()
+  /* The last chain change, and the one tap that takes it back. Its put-back is a write to a row, so what was said under that row goes first. */
+  const chainUndo = useChainUndo({ onWrite: (row) => leaveRow(row, null) })
 
-  const { linear } = gridShape(caps)
+  const { linear, rows: gridRows, cols: gridCols } = gridShape(caps)
   const lanes = lanesShown(blocks, caps)
   const splitChain = isSplitChain(blocks, caps)
+
+  /*
+   * THE ROW'S JOINS (lib/chain-move, the browser's chain editor's too). Only
+   * on a unit whose joins are the app's to make: a gen-3 unit through the
+   * computer, or the demo's grid units; never an AM4, a VP4 or an Axe-Fx II.
+   * `oldBytes`: a computer app older than 1.90.82 (or one that does not say)
+   * sends some six-row joins to the wrong cell, so a move needing one is
+   * refused before anything is cleared.
+   */
+  const joinsHere = cablesLaid(caps)
+  const oldBytes = () => !isDemo() && linkVia() === 'computer' && oldCableBytes(linkState().hostVersion)
+  const moveWire = { gridCells, clearCell, placeBlock, setCable, readBlock: blockParams }
+  const chainLog = (what, detail) => logDebug('chain', what, detail)
+  /*
+   * EVERY WRITE OF A MOVE OR A JOIN IS HELD TO THE PRESET IT WAS BEGUN ON
+   * (lib/chain-move presetHold): the unit itself is asked before each one,
+   * as Quick build asks it (rig unitOnPreset says why nothing else can be
+   * gone by), so a footswitch mid-move never gets the old row's joins
+   * written into the preset it stepped to. Only where the joins are the
+   * app's, and only for a preset the screen can name.
+   */
+  const presetHeld = (n) =>
+    joinsHere && Number.isInteger(n) && n >= 0
+      ? async () => {
+          const here = getState().preset?.number
+          return Number.isInteger(here) && here >= 0 && here !== n ? 'moved' : unitOnPreset(n)
+        }
+      : null
+  /* The lane's own names for the blocks, for a grid read that calls one by number (a NAM block through the computer). */
+  const namesOf = (lane) => new Map((lane?.blocks || []).filter((b) => Number.isInteger(idOf(b))).map((b) => [idOf(b), b.name]))
+  /* A row that reads cut, found on opening the editor or on a read of the chain since (rowCuts): [{ row, col, joins, text }]. */
+  const [cutRows, setCutRows] = useState([])
+  /* What a move or a Join the row left under a row, by row: { text, joins, tone, n }, `n` the preset it was written on. Said where the move was made. */
+  const [leftUnder, setLeftUnder] = useState({})
+  const leaveRow = (row, said) => {
+    setLeftUnder((was) => {
+      const next = { ...was }
+      if (said) next[row] = said
+      else delete next[row]
+      return next
+    })
+    /* A write to the row outdates what the last read found there, until the read after it (the effect below reads again once the write is done). */
+    setCutRows((was) => (was.some((c) => c.row === row) ? was.filter((c) => c.row !== row) : was))
+  }
+  /* The row whose Join the row is being sent. */
+  const [joining, setJoining] = useState(null)
+  /* What was said under a row is about this preset's row: another preset's lanes start with nothing under them. */
+  const presetHere = useRig(ofPresetNumber)
+  useEffect(() => {
+    setLeftUnder({})
+  }, [presetHere])
+  const cutsSaid = useRef('')
+  /*
+   * A ROW ALREADY CUT (his preset 390, saved twice after the drag that cut
+   * it, and any customer's): looked for whenever the chain is read, from the
+   * chain read first (lib/chain-move maybeCut, no read of its own), and only
+   * then the grid, which has the bare wires the chain read leaves out.
+   */
+  useEffect(() => {
+    if (busy) return undefined
+    if (!joinsHere || !maybeCut(blocks)) {
+      setCutRows([])
+      return undefined
+    }
+    let stop = false
+    ;(async () => {
+      const cells = await gridCells().catch(() => null)
+      if (stop || !Array.isArray(cells)) return
+      const cuts = rowCuts({ cells, blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion })
+      const said = cuts.map((c) => `row ${rowLabel(c.row)} at column ${colLabel(c.col)} (${c.joins.length} to join${c.blocked.length ? `, ${c.blocked.length} the app can’t` : ''})`).join('; ')
+      if (said && said !== cutsSaid.current) logDebug('chain', 'a row reads cut', said)
+      cutsSaid.current = said
+      setCutRows(cuts)
+    })()
+    return () => {
+      stop = true
+    }
+  }, [blocks, busy, joinsHere])
 
   useEffect(() => {
     if (!open || palette !== null) return undefined
@@ -2221,6 +2304,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    */
   const placeOf = (eid) => (getState().allBlocks || []).find((b) => idOf(b) === eid) || null
 
+  /* A row a block was taken out of by a write elsewhere: the grid read, and the row said under it as it reads now, its empty spaces counted. */
+  const sayRowLeft = async (row, n) => {
+    const cells = await gridCells().catch(() => null)
+    if (!Array.isArray(cells)) return
+    const cut = rowCuts({ cells, blocks: getState().allBlocks || blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, holes: true, only: [row] })[0]
+    leaveRow(row, cut ? { text: cut.text, joins: cut.joins, n } : null)
+    if (cut) logDebug('chain', `row ${rowLabel(row)} after a block was moved out of it`, cut.text)
+  }
+
   const add = async (row, col, page = choice, from = null) => {
     if (page === null || page === undefined) return
     chainUndo.clear()
@@ -2233,6 +2325,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     /* Where this very block was before, if it was in the chain already (a search of the list offers those too): a unit has one of each, so that is a move. */
     const was = placeOf(Number(page))
     beginChainWrite()
+    /* The preset this write is made on: what it leaves said is about it. */
+    const n = getState().preset?.number
+    /* What was said under this row is about the row before this write (a green "joined again" over a block that comes in joined to nothing). And under the row the block may leave: that is written to as well. */
+    leaveRow(row, null)
+    if (was && was.row !== row) leaveRow(was.row, null)
     try {
       const r = await placeBlock(row, col, Number(page))
       logDebug('chain', `add block ${page} at ${where(row, col)}`, refusedAnswer(r) ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
@@ -2259,6 +2356,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         const gone = from && !holds(...from.split(':').map(Number))
         setTold({ at: gone ? `${row}:${col}` : under, tone: 'ok', text: got.kind === 'moved' ? movedWords(name, where(row, col), where(was.row, was.col)) : addedWords(name, where(row, col)) })
       }
+      /* MOVED, NOT ADDED: the block left an empty space in its old row, which nothing joins across. That row is read again, the space counted, and said under it (lib/chain-move rowCuts with holes), as the browser's tap-to-move says it. */
+      if (got.kind === 'moved' && joinsHere) await sayRowLeft(was.row, n)
     } catch (err) {
       endChainWrite()
       setIssue(err.message)
@@ -2295,9 +2394,20 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
    * occupies the first may be refused or may do something undefined. Every
    * moving block is cleared first, then every one is placed, so no target is
    * occupied when it is written to. The cost is a moment where they exist
-   * nowhere, so they go back if a placement THROWS. Not on `ok:false`: that
+   * nowhere, so they go back if a write THROWS. Not on `ok:false`: that
    * answer means nothing on this hardware, and undoing a move because of it
    * is the bug this panel was reported for.
+   *
+   * AND THE ROW'S JOINS ARE KEPT (lib/chain-move, the browser's plan too).
+   * "Editing the chain, moving compressor after the NAM block caused the
+   * sound to stop completely" (16 November 2026, his Axe-Fx III through the
+   * Pi): on a gen-3 unit a join lives in the cell it feeds, the drag cleared
+   * four cells and put four blocks back, sent no join, and checked only where
+   * the blocks had gone. So on a unit whose joins are the app's to make
+   * (`joinsHere`) the grid is read first and the move refused, before
+   * anything is cleared, where a join could not be made again; the row is
+   * logged straight after the move, the missing joins sent, and the row read
+   * again and checked. Still cut, it says so under the row, with Join the row.
    */
   /* Whether the unit sent a rejection frame for a write. Counted and said,
      never acted on: see doubtfulWrite for why that answer undoes nothing. */
@@ -2313,14 +2423,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       pos.to
     )
     if (!moves.length) return
-    chainUndo.clear()
     /* Where the finger left it, held on screen through the writes below. */
     setSettling({ row: lane.row, from: pos.from, to: pos.to })
     setBusy(true)
     setIssue(null)
     setTold(null)
-    beginChainWrite()
-    let last = null
+    leaveRow(lane.row, null)
+    /* The preset this move is made on: every write of it is held to it, and what it leaves said is about it. */
+    const n = getState().preset?.number
+    let writing = false
     /*
      * EVERY ANSWER IS WRITTEN DOWN. The server only calls a write refused
      * when the unit sends a rejection frame within a tenth of a second; a
@@ -2328,31 +2439,65 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
      * it. So each clear and each placement is logged with what the unit
      * said, and a "refused" anywhere in the six is said on screen too.
      */
-    const answers = []
-    const said = (r) => (refusedAnswer(r) ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
+    const steps = moves.map((m) => ({ id: idOf(m.block), name: m.block.name, from: m.from, to: m.to }))
     try {
-      for (const m of moves) {
-        const r = await clearCell(lane.row, m.from)
-        answers.push(r)
-        logDebug('chain', `clear ${m.block.name} from column ${m.from + 1}`, said(r))
-      }
-      try {
-        for (const m of moves) {
-          last = await placeBlock(lane.row, m.to, idOf(m.block))
-          answers.push(last)
-          logDebug('chain', `place ${m.block.name} at column ${m.to + 1}`, said(last))
+      /* The joins along the row are read before anything is written, and a move whose joins could not be made again sends nothing (lib/chain-move moveBlocks). */
+      const res = await moveBlocks({
+        row: lane.row,
+        moves: steps,
+        wire: moveWire,
+        rows: gridRows,
+        cols: gridCols,
+        cables: joinsHere,
+        law: oldBytes(),
+        version: linkState().hostVersion,
+        log: chainLog,
+        names: namesOf(lane),
+        /* Each moved block read before and after, for the log: his account only (two reads a block would slow every customer's drag). */
+        measure: bluetoothAdmin(),
+        onPreset: presetHeld(n),
+        /* The chain read, for the Inputs and Outputs when the row is asked again after the move. */
+        blocks,
+        starting: () => {
+          /* Undo goes only once something is about to be written: a move refused before it keeps the last change's Undo. */
+          chainUndo.clear()
+          beginChainWrite()
+          writing = true
         }
-      } catch (err) {
-        for (const m of moves) await placeBlock(lane.row, m.from, idOf(m.block)).catch(() => {})
-        throw err
+      })
+      if (res.notSent) {
+        /* Nothing was written: said under the row it was asked of, where the finger is. */
+        setSettling(null)
+        if (res.stopped) followPresetAfterChainWrite()
+        if (res.why) leaveRow(lane.row, { text: res.why, joins: [], n })
+        /* The chain on the unit is not the one on screen: it is read again, as the words say. */
+        if (res.why === CHAIN_CHANGED) await refreshBlocks({ quiet: true })
+        return
       }
-      await after(last)
+      /* What the move leaves said, over the chain and under its row (lib/chain-move afterMoveSaid, the browser's words too). */
+      const said = afterMoveSaid({ row: lane.row, res })
+      if (res.stopped === 'moved') {
+        /* The unit is on another preset: nothing more was sent, and nothing is read back as this one's; the screen follows the unit. */
+        endChainWrite({ refresh: false })
+        followPresetAfterChainWrite()
+        setSettling(null)
+        setIssue(said.issue)
+        return
+      }
+      await after(res.answers[res.answers.length - 1] ?? null)
       /* The unit has been asked again, so the lane is drawn from its answer
          rather than from where the finger left it. Dropped here rather than in
          the `finally` below: by this line the two agree, and holding it any
          longer would deal the move a second time on top of itself. */
       setSettling(null)
-      const refused = answers.filter(refusedAnswer).length
+      if (said.note) leaveRow(lane.row, { ...said.note, n })
+      if (res.threw) {
+        /* A write threw (or the unit stopped saying its preset): the blocks were put back where the unit would take them, and the words claim no more than the read after shows. */
+        setIssue(said.issue)
+        onError(res.threw.message)
+        return
+      }
+      const refused = res.refused
       /*
        * And checked, in numbers, against the unit's own answer. A move the
        * unit did not keep used to look exactly like one that was never made:
@@ -2368,10 +2513,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       const elsewhere = (m) => (colOf(m) === undefined ? placeOf(idOf(m.block)) : null)
       const found = (m) => {
         const put = elsewhere(m)
-        return put ? `unit has it at ${where(put.row, put.col)}` : `unit has it at ${colOf(m) ?? 'nowhere'}`
+        return put ? `unit has it at ${where(put.row, put.col)}` : `unit has it at ${colOf(m) === undefined ? 'nowhere' : `column ${colLabel(colOf(m))}`}`
       }
       for (const m of moves) {
-        logDebug('chain', `${m.block.name}: column ${m.from} → ${m.to}`, astray.includes(m) ? found(m) : 'landed')
+        /* Columns as the unit and this screen count them, from one (they were printed from nought: "column 1 → 4" for a move from column 2 to 5). */
+        logDebug('chain', `${m.block.name}: column ${colLabel(m.from)} → ${colLabel(m.to)}`, astray.includes(m) ? found(m) : 'landed')
       }
       if (astray.length) {
         setIssue(
@@ -2383,7 +2529,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
             })
             .join(', ')}. ${
             refused
-              ? `The unit answered “refused” to ${refused} of the ${answers.length} steps.`
+              ? `The unit answered “refused” to ${refused} of the ${res.answers.length} steps.`
               : `The unit answered every step without refusing it. Copy Logs from Setup — it has each answer.`
           }`
         )
@@ -2396,7 +2542,37 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
          for ever in an order the unit never took is worse than one that snaps
          back. The truth wins whenever this ends badly. */
       setSettling(null)
+      if (writing) endChainWrite()
+      setBusy(false)
+    }
+  }
+
+  /**
+   * "JOIN THE ROW": the joins a move left missing, or a row that reads cut
+   * (lib/chain-move rowCuts), sent where the grid does not show them, then
+   * the row read again and said under it.
+   */
+  const mendRow = async (cut) => {
+    if (!cut?.joins?.length) return
+    const n = getState().preset?.number
+    setBusy(true)
+    setJoining(cut.row)
+    setIssue(null)
+    try {
+      logDebug('chain', `Join the row tapped on row ${rowLabel(cut.row)}`, `${cut.joins.length} join${cut.joins.length === 1 ? '' : 's'}`)
+      /* And the row asked again after, the way it was found (rowCuts, its empty spaces always counted), so "joined again" is said only of a row that reads whole. */
+      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(lanes.find((l) => l.row === cut.row)), blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, onPreset: presetHeld(n), starting: () => beginChainWrite() })
+      endChainWrite({ refresh: false })
+      if (r.stopped) followPresetAfterChainWrite()
+      else await refreshBlocks({ quiet: true })
+      const w = joinedWords(r)
+      leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, n })
+    } catch (err) {
+      setIssue(err.message)
+      onError(err.message)
+    } finally {
       endChainWrite()
+      setJoining(null)
       setBusy(false)
     }
   }
@@ -2406,6 +2582,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     setBusy(true)
     setIssue(null)
     setTold(null)
+    leaveRow(row, null)
     /* What it would take to put it back, read while it is still there. */
     const putBack = await readPutBack(row, col, caps, blocks).catch(() => null)
     beginChainWrite()
@@ -2520,9 +2697,17 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         Drawing that silently is the problem. Two lanes with no comment reads
         either as one chain that happens to wrap, or as an editor that
         understands the routing and is showing it to you. Neither is true, and
-        the second is the one that gets a preset rebuilt. Moving blocks WITHIN a
-        row is safe and stays available — cells and cables are different writes,
-        and shuffling a row cannot disturb what joins it to another.
+        the second is the one that gets a preset rebuilt. (The joins ARE read
+        now: each cell's feeds come with the grid read, which Rows and splits
+        draws.)
+
+        AND MOVING BLOCKS WITHIN A ROW CAN CUT IT. This used to say a move
+        within a row was safe, since cells and joins are separate writes. On
+        a gen-3 unit a join lives in the cell it feeds, a move takes the
+        blocks out and puts them back, and on 16 November 2026 a drag on his
+        Axe-Fx III left the row silent. So a move reads the joins first and
+        puts back what it cut (`reorder`, lib/chain-move), and a row that
+        reads cut says so under it.
       */}
       {/*
         EVERY ROW AND EVERY JOIN. "We can only edit blocks in a single row,
@@ -2563,6 +2748,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
         return (
           <View key={lane.row} style={{ gap: space.sm }}>
             {linear ? null : <Label>{`Row ${rowLabel(lane.row)}`}</Label>}
+            {/* Where the row is cut, said under its name: after a move that left a join missing, or as read (lib/chain-move). */}
+            <RowCut said={rowNote(leftUnder[lane.row], cutRows.find((c) => c.row === lane.row), presetHere)} joining={joining === lane.row} busy={busy} onJoin={mendRow} row={lane.row} />
             {items.map((item, index) => {
               /* Where this item is drawn while a drag is on: the dragged one
                  follows the finger; the ones it has passed step out of its
@@ -2761,6 +2948,22 @@ function BlockCard({
       {/* What the last Add or Remove on this card did, under it, whether or not its buttons are still open. */}
       <Told note={note} onDismiss={onNoteDismiss} />
       {acting && adding ? adding : null}
+    </View>
+  )
+}
+
+/**
+ * A row that is cut, under its name: the words, and Join the row where the
+ * app can join it (lib/chain-move). A row joined again says so, in the
+ * quiet hint ink, with nothing to press.
+ */
+function RowCut({ said, row, joining, busy, onJoin }) {
+  if (!said?.text) return null
+  const canJoin = Array.isArray(said.joins) && said.joins.length > 0
+  return (
+    <View style={{ gap: space.sm }}>
+      <Note tone={said.tone === 'ok' ? 'hint' : 'warn'}>{said.text}</Note>
+      {canJoin ? <Press label={joining ? JOINING_ROW : JOIN_ROW} height={40} disabled={busy} onPress={() => onJoin({ ...said, row })} /> : null}
     </View>
   )
 }

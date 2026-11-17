@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-17",
+      "day": "17 November 2026",
+      "version": "1.91.9",
+      "lines": [
+        {
+          "text": "In the chain editor on an FM3, FM9 or Axe-Fx III, dragging blocks along a row now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-16",
       "day": "16 November 2026",
       "version": "1.91.2",
@@ -259,37 +270,6 @@
         },
         {
           "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-06",
-      "day": "6 November 2026",
-      "version": "1.89.55",
-      "lines": [
-        {
-          "text": "On a tablet or a foldable opened up, Play now uses the whole screen: your scenes on the left and your chain on the right, lined up row for row, with the preset across the top and Previous and Next at the two ends of the bottom row. Setlists is at the end of the preset bar.",
-          "only": null
-        },
-        {
-          "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked, and when a new version is ready, its card has What’s new, which takes you straight to the list of what changed. The Help make Fractal Remote better? card is now three short lines, with a link to exactly what’s sent.",
-          "only": null
-        },
-        {
-          "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on. And switching to a computer with no unit plugged in no longer makes the screen flicker back and forth.",
-          "only": null
-        },
-        {
-          "text": "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",
-          "only": null
-        },
-        {
-          "text": "Plug your unit in by USB cable while connected another way and the app notices: from a Bluetooth adapter it switches by itself, through the computer it asks first. Unplug the cable and, after a few seconds, it goes back the way it was connected before, and back to the cable when it’s plugged in again.",
-          "only": null
-        },
-        {
-          "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, with the Bluetooth symbol, and Stop is only offered for what’s really connected.",
           "only": null
         }
       ]
