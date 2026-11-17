@@ -202,6 +202,53 @@ the new one. So a test line, with nothing committed for the build:
   more updates (an independent read, before the 2.0.0 pair). Wanted all
   the same, it is another build: his yes, the new values written into
   next-store.json on purpose in that pull request, the build right after.
+- *Google's own test machines sent a report from the 2.0.0 Android build,
+  and it is NOT SETTLED* (report a345130c, 16 November 2026, 20:37 UTC: a
+  OnePlus 8 Pro on Android 11, its message nothing but the sign-in's
+  address, typed by a robot). When a build reaches a Play track, Google
+  runs it on machines of its own, signed in with the review login; six to
+  eight of them that evening, from Google's own network. On every one the
+  relay never joined: the connection to the server was made each time (the
+  server's log has every upgrade answered), and a fraction of a second
+  later the socket itself errored, for as long as the robot stayed. The log
+  said only "channel error: transport failure", the one sentence the
+  relay's library has for any error of the socket, so it could not say
+  why. WHAT IS KNOWN: the account was entitled; real Android phones joined
+  the relay on the 1.90.0 store build on 14, 15 and 16 November (What
+  works, and the server's log); nothing in the waiting patches touches the
+  network. WHAT IS NOT: whether it was Google's network or the 2.0.0
+  Android build, because no Android copy of 2.0.0 has been seen joining
+  from an ordinary network. Before release day, one Android phone on the
+  2.0.0 test build has to be seen connecting through a computer. Since
+  1.92.5 the log has a line of its own for it, for every account, one for
+  each connection that errors and then closes: "[relay] socket closed
+  after an error — 1006 (Connection reset)"
+  (mobile/src/lib/socketWatch.js). On a phone the system says why in the
+  CLOSE that follows the socket's error (React Native: an error with no
+  words, then a close, code 1006, whose reason is the system's sentence
+  where it has one), and the relay's library tells the channel about the
+  error only, so the reason is heard through the library's own socket log
+  (`realtime: { logger }` in lib/relay.js) and nowhere else. A first cut
+  read the channel's error for it, and an independent read showed no phone
+  puts it there; test/socket-watch.mjs drives the real library with the
+  events in a phone's order, and a second read checked that order against
+  React Native's own source for both phones. "1006 (no reason given)" IS
+  AN ANSWER, NOT THE LINE FAILING: Android hands up the failure's message
+  and nothing else, and a connection dropped with no close (OkHttp's end
+  of stream) has none, which is one possible shape of Google's report. The
+  kind of failure behind it would need a native change, so a build. The
+  reason is the system's own words put on one line (no control or
+  direction characters), cut at 200 characters with a mark, with the
+  device's own address left out where Android writes it; it can name the
+  server and its address and what a server or a network in between
+  answered, and nothing in it comes from the sign-in. A close with no
+  error before it is not this line's: the library hands it to the channel
+  where the channel has not errored already, and relay.js writes the
+  channel's code and reason during a join and when a joined channel drops
+  (not for the library's own rejoins in the seconds before the app's next
+  join), so the same close is not said twice. READ THAT LINE FIRST in any
+  report where the link stays on "joining". NOT SEEN ON A PHONE YET: the
+  first report with one is the check.
 
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with
@@ -5001,7 +5048,12 @@ time:
   a '/'-joined path hands the app Linux path rules (test/pi-update.mjs
   `LINUX_PATHS`). To see it here, hand the stood-in app
   `require('node:path').win32` in test/run.mjs loadDesktopMain's `stand`
-  and run the file.
+  and run the file. And a test that walks the real disk and names a file
+  by cutting its path at '/mobile/' gets the whole Windows path back, so
+  its list never matches (that failed a third pull request the same day,
+  test/mobile.mjs, the Output levels' switch): turn the backslashes first,
+  `full.replaceAll('\\', '/').split('/mobile/')[1]`, as test/glass.mjs and
+  the rest do.
 
 **`test/structure.mjs` reads App.jsx as text, not as code.** It finds screens
 by searching for the literal conditional that opens them and takes the first

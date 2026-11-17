@@ -240,6 +240,8 @@ async function relayOnABench(end, { picked = null, many = null, legacy = false, 
     'confirm-code.mjs': read('shared/confirm-code.mjs'),
     'account-name.mjs': read('shared/account-name.mjs'),
     'device-word.mjs': read('shared/device-word.mjs'),
+    /* What the log says of a relay socket that failed: the phone's own file, as it is. */
+    'socketWatch.mjs': read('mobile/src/lib/socketWatch.js'),
     'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
   }
   const swaps =
@@ -252,6 +254,7 @@ async function relayOnABench(end, { picked = null, many = null, legacy = false, 
           ["from './decode'", "from './nothing.mjs'"],
           ["from './retry'", "from './retry.mjs'"],
           ["from './notForever'", "from './nothing.mjs'"],
+          ["from './socketWatch'", "from './socketWatch.mjs'"],
           ["from './relay-rules'", "from './relay-rules.mjs'"],
           ["from './confirm-code'", "from './confirm-code.mjs'"],
           ["from './account-name'", "from './account-name.mjs'"],

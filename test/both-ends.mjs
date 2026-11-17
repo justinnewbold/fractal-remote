@@ -4014,6 +4014,7 @@ export function run(test) {
       'account-name.mjs': read('shared/account-name.mjs'),
       'relay-rules.mjs': read('shared/relay-rules.mjs'),
       'device-word.mjs': read('shared/device-word.mjs'),
+      'socketWatch.mjs': read('mobile/src/lib/socketWatch.js'),
       'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
     }
     const swaps =
@@ -4026,6 +4027,7 @@ export function run(test) {
             ["from './decode'", "from './nothing.mjs'"],
             ["from './retry'", "from './nothing.mjs'"],
             ["from './notForever'", "from './nothing.mjs'"],
+            ["from './socketWatch'", "from './socketWatch.mjs'"],
             ["from './relay-rules'", "from './relay-rules.mjs'"],
             ["from './confirm-code'", "from './confirm-code.mjs'"],
             ["from './account-name'", "from './account-name.mjs'"],

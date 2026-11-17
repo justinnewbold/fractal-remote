@@ -186,6 +186,7 @@ async function relayOnABench({ disk = {}, mode = 'offline' } = {}) {
     'confirm-code.mjs': read('shared/confirm-code.mjs'),
     'account-name.mjs': read('shared/account-name.mjs'),
     'device-word.mjs': read('shared/device-word.mjs'),
+    'socketWatch.mjs': read('mobile/src/lib/socketWatch.js'),
     'project.mjs': read('mobile/src/lib/project.js')
   }
   const swaps = [
@@ -196,6 +197,7 @@ async function relayOnABench({ disk = {}, mode = 'offline' } = {}) {
     ["from './decode'", "from './nothing.mjs'"],
     ["from './retry'", "from './nothing.mjs'"],
     ["from './notForever'", "from './net.mjs'"],
+    ["from './socketWatch'", "from './socketWatch.mjs'"],
     ["from './relay-rules'", "from './relay-rules.mjs'"],
     ["from './confirm-code'", "from './confirm-code.mjs'"],
     ["from './account-name'", "from './account-name.mjs'"],

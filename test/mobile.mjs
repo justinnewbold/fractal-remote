@@ -2518,7 +2518,7 @@ export function run(test) {
      */
     const relay = read('mobile/src/lib/relay.js').replace(/\s+/g, ' ')
     assert.match(relay, /export const HEARTBEAT_MS = 10000/)
-    assert.match(relay, /realtime: \{ heartbeatIntervalMs: HEARTBEAT_MS \}/, 'the relay socket keeps the twenty-five second heartbeat')
+    assert.match(relay, /realtime: \{ heartbeatIntervalMs: HEARTBEAT_MS, logger: socketWatch\(/, 'the relay socket keeps the twenty-five second heartbeat')
     assert.match(relay, /await c\.removeChannel\(chan\)\.catch\(\(\) => \{\}\) .*?await c\.realtime\?\.disconnect\?\.\(\)\.catch\?\.\(\(\) => \{\}\) throw err/, 'a failed join hands the next attempt the same dead socket')
     const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /logDebug\('link', `join failed after \$\{Math\.round\(\(Date\.now\(\) - began\) \/ 100\) \/ 10\}s`, err\?\.message \|\| String\(err\)\)/, 'a failed join leaves nothing in the log')
