@@ -14310,7 +14310,8 @@ export function run(test) {
     assert.match(link, /hostVersion: null/, 'the link state has nowhere to keep it')
     assert.match(
       link.replace(/\s+/g, ' '),
-      /set\(\{ macName: String\(name\), hostVersion: version \? String\(version\) : null, hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null \}\)/,
+      /* And, since the phone's half of the Pi's own updates, what the computer says about its update beside them (test/host-update.mjs). */
+      /set\(\{ macName: String\(name\), hostVersion: version \? String\(version\) : null, hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null, hostUpdate: data\?\.update && typeof data\.update === 'object' \? data\.update : null \}\)/,
       'the version the computer sends is still thrown away'
     )
 

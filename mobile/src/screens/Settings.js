@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
@@ -110,6 +110,7 @@ import phoneIcon from '../../assets/icons/phone.png'
 import sendIcon from '../../assets/icons/send.png'
 import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
+import HostUpdate, { HostCardLine } from '../components/HostUpdate'
 import { GlassCard } from '../components/Glass'
 import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
@@ -1542,6 +1543,9 @@ export default function Settings({
               onWarn={() => setPage('updating')}
             />
 
+            {/* The computer app's own update and Update now: his account only (components/HostUpdate draws nothing for anybody else). */}
+            <HostUpdate demo={demo} throughAdapter={throughAdapter} onOpenUpdating={() => setPage('updating')} />
+
             {/* What to do about a unit that is missing or silent, under the
                 card that says so. The usual reason besides the cable is
                 Fractal's own editor holding the unit — named, per unit where
@@ -1761,23 +1765,26 @@ export default function Settings({
                 others,
                 connected: link === 'connected' && !bluetooth
               }).map((card) => (
-                <UnitCard
-                  key={card.key}
-                  card={card}
-                  busy={switching === card.name}
-                  disabled={switching !== null}
-                  onPress={async () => {
-                    setSwitching(card.name)
-                    try {
-                      await chooseHost(card.name)
-                    } finally {
-                      setSwitching(null)
-                    }
-                    setChosen(remoteChosenHost())
-                    setUnits(remoteUnits())
-                    setMissing(remoteMissingPick())
-                  }}
-                />
+                <Fragment key={card.key}>
+                  <UnitCard
+                    card={card}
+                    busy={switching === card.name}
+                    disabled={switching !== null}
+                    onPress={async () => {
+                      setSwitching(card.name)
+                      try {
+                        await chooseHost(card.name)
+                      } finally {
+                        setSwitching(null)
+                      }
+                      setChosen(remoteChosenHost())
+                      setUnits(remoteUnits())
+                      setMissing(remoteMissingPick())
+                    }}
+                  />
+                  {/* Its version and how its update is going: his account only (components/HostUpdate HostCardLine). */}
+                  <HostCardLine name={card.name} driven={card.name === chosen} />
+                </Fragment>
               ))}
               {/* The pick that does not answer, grayed, with Forget. */}
               <MissingPick

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { View } from 'react-native'
 
 import { readOthersPlaying, unitCards } from '../lib/relay'
@@ -9,6 +9,7 @@ import { space } from '../lib/theme'
 import Sheet from './Sheet'
 import MissingPick from './MissingPick'
 import UnitCard, { BluetoothCard, NotUsingOne } from './UnitCard'
+import { HostCardLine } from './HostUpdate'
 import { BLUETOOTH_WAYS_SHORT } from '../lib/bluetooth-gear'
 
 const ofPreset = (s) => s.preset
@@ -67,21 +68,24 @@ export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen
     <Sheet open={open} onClose={onClose} title="Which unit" note="Tap one to switch">
       <View style={{ gap: space.md }}>
         {unitCards(hosts, units, chosen, asking, { here, others }).map((card) => (
-          <UnitCard
-            key={card.key}
-            card={card}
-            busy={busy === card.name}
-            disabled={busy !== null}
-            onPress={async () => {
-              setBusy(card.name)
-              try {
-                await chooseHost(card.name)
-              } finally {
-                setBusy(null)
-              }
-              onClose()
-            }}
-          />
+          <Fragment key={card.key}>
+            <UnitCard
+              card={card}
+              busy={busy === card.name}
+              disabled={busy !== null}
+              onPress={async () => {
+                setBusy(card.name)
+                try {
+                  await chooseHost(card.name)
+                } finally {
+                  setBusy(null)
+                }
+                onClose()
+              }}
+            />
+            {/* Its version and how its update is going: his account only (HostCardLine). */}
+            <HostCardLine name={card.name} driven={card.name === chosen} />
+          </Fragment>
         ))}
         {/* The other way, from the Live pill too (Justin, 26 October 2026): for whoever is offered the Bluetooth page. */}
         {onBluetooth ? <BluetoothCard label="Connect over Bluetooth" sub={BLUETOOTH_WAYS_SHORT} onPress={onBluetooth} /> : null}

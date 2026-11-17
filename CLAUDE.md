@@ -4658,11 +4658,91 @@ and `quietFor` in desktop/lib/autostart.mjs; `heldStanding`, `heldGoes` and
   for Restart to update, and tap it. Once an update is held the app does
   not fetch a newer one in the same run, so a Pi holding an older one
   installs that first and has to be done once more.
-- *Next, PR 2, the phone's half:* Settings → Phone & computer shows each
-  computer's version and, on a Pi with one ready, Update now (the request
-  is `host.update`, `updateAsk` in updates.mjs, already answered by
-  1.92.0, with `pulled` among its refusals), his account first. It writes
-  no What's new line until it opens to everybody.
+- *THE PHONE'S HALF: built 17 November 2026, HIS ACCOUNT ONLY.* Under the
+  computer's card on Settings → Phone & computer, a line says how the
+  computer app's own update is going, as the computer says it (the
+  `update` note in host.name, read with its name and version every couple
+  of minutes): "Up to date", "Downloading version …", "Version … is ready.
+  It goes in by itself once it has been out for a day and nobody has used
+  pedalboard for half an hour." (the computer's own window's words: a Pi
+  not on his account waits the day too), the quit and the password ones
+  for a Mac, a PC and the .deb, and an older computer app's "v…, an older
+  computer app." with How to update it (a Pi on 1.90.86 to 1.91.x is told
+  to switch it off and on instead, with How to update it too, since a Pi
+  on the .deb never puts it in at power-on and the phone cannot tell). On
+  a Pi with one ready, Update now: a confirm ("The remote stops while …
+  restarts, then comes back by itself. Don't save or send a capture until
+  it's back."), then "Asking … to update…", "Updating … The remote comes
+  back by itself.", and "… is on version …" or the computer's own no in
+  words. ("… is on version …" gives way to the computer's own line where
+  it is already saying a NEWER version is ready, so the next one is never
+  hidden: with Update now where it can go in from here, and its own
+  warning where it did not go in last time. A newer version still on its
+  way down does not replace it.) How a tap ended (and a "not asked" note under the button) is said
+  only while it still describes the computer it was written against: the
+  same computer driven, the same version, the same note (hostUpdate
+  `stillSo`, `runSays`). It goes for good when any of those moves, and on
+  a sign-out (the switch going off here). One Update now at a time, for
+  any computer: no button while one is out, and a second tap does nothing.
+  Which unit (Settings, and the sheet off the unit's name) gives
+  each computer's version and that line too, read only, and "Pick it to
+  update it." on one not driven. The rules and every word are one file,
+  mobile/src/lib/hostUpdate.js (pure, so test/host-update.mjs runs it
+  whole and hands the computer's own `updateNote` and `updateAsk` what it
+  builds); the wiring is lib/hostUpdateHere.js and the card
+  components/HostUpdate.js.
+  - *The switch* is `COMPUTER_UPDATE_FOR_EVERYONE` in features.js, false
+    (lib/hostUpdateHere `useComputerUpdate`, his kept sign-in). Every other
+    account sees the card as it was and nothing is written for it; its log
+    gets no new line either. It opens when he says so, with its What's new
+    line then and the restart time he measured.
+  - *The request* is what the computer as built reads, and nothing more:
+    `{ host, version, account, at }` in host.update, through the relay, to
+    the computer driven. Written at most twice a tap: once, and once more
+    at 30 seconds if neither has been answered and the update is still
+    offered (a computer that had only just started learns the first
+    without acting on it). Never while two computers answer to the driven
+    one's name (a write reaches both), never while this device has a write
+    to the computer out or finished in the last ten seconds (relay.js
+    `sendingHere`: a save, a capture, a chain change; the phone's own note
+    is not counted), and never for an account the switch is off for, asked
+    again at each write. The second write goes only between 30 and 60
+    seconds after the tap (`RETRY_UNTIL_MS`): a look the device held back
+    (the app in the background) never writes long after it, under a
+    request nobody is waiting on. The phone gives up after three minutes:
+    "… didn't update. It stays on version …".
+  - *Only the computer asked is read.* The relay reads whichever computer
+    is driven now (another picked, or the relay's own fallback while a Pi
+    restarts), so a read under another name is no read. A run whose last
+    read was another computer's ends 'left': the log says whether it
+    updated is not known, and no card says anything about either.
+  - *The log* ('update') says what the computer said about its update when
+    it changed, each request written, the answer, and the give-up.
+  - *Two limits, LEFT, neither fixed.* The ready line ("Version … is
+    ready. It goes in by itself once it has been out for a day and nobody
+    has used … for half an hour.") is the computer window's own sentence,
+    held to it by a test, and is true of a customer's computer. A computer
+    signed in to his own account skips the day's wait (desktop/lib/updates.mjs
+    `OWNER_ACCOUNTS`, autostart's `ownerBox`) and no screen says so, so
+    while only his account sees the line it names a wait his own Pis do not
+    make. The give-up line ("… didn't update. It stays on version …. It
+    tries again by itself once nobody has used it for half an hour.") leaves
+    the day out, the other way round. Look at both again before
+    `COMPUTER_UPDATE_FOR_EVERYONE` is turned on. And the second request
+    goes only between 30 and 60 seconds after the tap (`RETRY_AFTER_MS`,
+    `RETRY_UNTIL_MS`). A Pi that had only just started needs it (its first
+    look learns a request without acting on it), so two failed reads in a
+    row inside that half minute lose it: the card says the Pi did not
+    update, and a second tap works. An independent check judged it too
+    unlikely to change: it takes a Pi in the first minute of its app and
+    two reads lost back to back in the same half minute.
+  - *NOT SEEN ON A PI YET:* no Update now has been pressed on a real Pi.
+    Not known: how long from the tap to the remote answering again, that
+    the remote does come back by itself, and whether the unit's sound
+    carries on through the restart. No sentence says a time or the sound.
+    Nor whether a computer signed in to an account other than the phone's
+    answers at all (it ignores such a request, so the phone gives up after
+    three minutes with no reason given).
 
 **The red "Update the computer app" line means the phone needs it.**
 

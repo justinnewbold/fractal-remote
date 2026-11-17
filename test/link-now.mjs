@@ -431,6 +431,8 @@ async function linkOnABench() {
         if (path === '/telemetry/meters' && bench.refuseMeters) throw Object.assign(new Error('not allowed remotely'), { status: 403, remoteBlocked: true })
         /* A computer's name read that times out (a slow Pi 3): nameFails. */
         if (path === '/store/config/host.name' && bench.nameFails) throw new Error('timed out')
+        /* The computer's whole document, when a test hands one (Update now reads it: bench.hostDoc). */
+        if (path === '/store/config/host.name' && bench.hostDoc) return bench.hostDoc
         return { data: { name: bench.named || 'Studio', version: '1.87.4' } }
       }
     `
@@ -1910,6 +1912,40 @@ export function run(test) {
     await u.clock.advance(1000)
     assert.equal(u.bench.watching, true, 'a join that finished is not watched')
     await u.link.stopLink()
+  })
+
+  test('phone: Update now’s read of the computer answers what it says, a changed update note is kept and told, and an unread one is undefined', async () => {
+    const t = await connectedLoop()
+    const note = { kind: 'ready', version: '1.92.3', goesIn: 'idle', canNow: true }
+    const doc = (update, name = 'pedalboard') => ({ rev: 1, data: { name, version: '1.92.0', os: 'Raspberry Pi 5', update } })
+    t.bench.hostDoc = doc(note)
+    assert.deepEqual(await t.link.readHostAgain(), { name: 'pedalboard', version: '1.92.0', update: note })
+    assert.deepEqual(t.link.linkState().hostUpdate, note)
+    const heard = []
+    const off = t.link.subscribeLink((s) => heard.push(s.hostUpdate))
+    try {
+      // The same note again, read afresh as a new object: nobody is told.
+      t.bench.hostDoc = doc({ ...note })
+      await t.link.readHostAgain()
+      assert.equal(heard.length, 0, 'the same note read again is told as a change')
+      // A note that differs only in its kind, in canNow, or in its answer is another note, kept and told.
+      for (const changed of [{ ...note, kind: 'downloading' }, { ...note, canNow: false }, { ...note, asked: { at: 5, result: 'busy' } }, { ...note, asked: { at: 5, result: 'installing' } }]) {
+        heard.length = 0
+        t.bench.hostDoc = doc(changed)
+        assert.deepEqual(await t.link.readHostAgain(), { name: 'pedalboard', version: '1.92.0', update: changed })
+        assert.deepEqual(t.link.linkState().hostUpdate, changed, `${JSON.stringify(changed)} is not kept`)
+        assert.equal(heard.length, 1, `${JSON.stringify(changed)} is not told`)
+        assert.deepEqual(heard[0], changed)
+      }
+      // Not read: undefined, never the last answer.
+      t.bench.nameFails = true
+      assert.equal(await t.link.readHostAgain(), undefined, 'a read that failed answers the last one')
+      t.bench.nameFails = false
+      t.bench.hostDoc = { rev: 1, data: { version: '1.92.0' } }
+      assert.equal(await t.link.readHostAgain(), undefined, 'a computer that wrote no name answers')
+    } finally {
+      off()
+    }
   })
 
   test('one missed keepalive that recovers never dims the screen', async () => {
