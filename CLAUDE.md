@@ -2150,9 +2150,10 @@ UNIT YET: his next drag's log is the first check.
   sound. Add it again, or move one back."); past the Output or before the
   Input, where the sound does not stop, as a block no longer in the preset
   ("…so it isn’t in this preset now. Add it again, or move one back."),
-  only where that read has it nowhere. Each comes after whatever else the
-  row's read says (its cut, with Join the row for the joins that touch no
-  empty cell, first). A write that throws puts the blocks back
+  only where that read has it nowhere. The empty space and the row with no
+  Output or Input are said alone, with no button; a block gone from the
+  preset comes after whatever else the row's read says (its cut, with Join
+  the row for the joins that touch no empty cell, first). A write that throws puts the blocks back
   and joins them again the same way, and where the unit has joins to make
   the words (`afterMoveSaid`, `putBackSaid`) say "were put back" only where
   the read after shows every block in its own cell; otherwise they name the
@@ -2178,8 +2179,12 @@ UNIT YET: his next drag's log is the first check.
   over Bluetooth (no chain editor there). After it the row is asked again
   (its rows and the computer app's bytes as it was found, and its empty
   spaces ALWAYS counted), and "Row 3 is joined again." is said only of a
-  row that reads whole with no empty space between its Input and Output;
-  only the pressed row is said; and never "sent" of joins nothing sent. A
+  row that reads whole with no empty space between its Input and Output,
+  and only where that read after has both its Input and its Output: with
+  either missing (rowCuts skips such a row, so it alone finds nothing) the
+  answer is "Row 3 has no Output now, and no sound. Add one, or move one
+  back." (or Input), not green, with no button; only the pressed row is
+  said; and never "sent" of joins nothing sent. A
   press that sends nothing (every join already there, the unit on another
   preset or not saying, the read failing, a join into an empty cell) is no
   edit: the phone marks the chain written from joinRow's `starting`, called
@@ -2250,8 +2255,12 @@ UNIT YET: his next drag's log is the first check.
   failed them. In the fifth round (17 November 2026) its 23 mutants (the
   empty-cell joins, the moved Output or Input, the two halves of
   "between", the phone's hold, Join the row's `starting` at both ends, the
-  browser's part-way stop, What's new) each failed them too. A change to a
-  pinned piece is a change to that test.
+  browser's part-way stop, What's new) each failed them too. In the sixth
+  round (17 November 2026) its 5 mutants (a moved Output or Input the unit
+  did not take offered Join the row again, and Join the row's end check
+  taken out, never set, asking only for the Output, or asking the read
+  before the press) each failed them too. A change to a pinned piece is a
+  change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can
   be read as a cut; a move keeps a split's joins with the column, as

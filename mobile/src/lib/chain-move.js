@@ -91,7 +91,8 @@
  * Bluetooth, where the chain editor is not. After it, the row is asked again
  * (rowCuts on the read joinRow makes, ALWAYS with empty spaces counted), and
  * only a row that reads whole, with no empty space between its Input and
- * Output, is called joined again.
+ * Output, and that still has its Input and its Output on that read
+ * (`noEnd`), is called joined again.
  *
  * SETTINGS ARE MEASURED, NEVER WRITTEN BACK, AND ON HIS ACCOUNT ONLY
  * (`measure`). Before and after a move each moved block is read once
@@ -238,6 +239,12 @@ function rowEnds(cells, row, slugs) {
   return input && output ? { input: input.col, output: output.col, onRow } : null
 }
 
+/** Which end a read has missing on the row, as rowEnds finds them: 'Input', 'Output' (none after the Input), or null with both. */
+function endMissing(cells, row, slugs) {
+  if (rowEnds(cells, row, slugs)) return null
+  return cells.some((c) => c && c.row === row && isEnd(c, 'input', slugs)) ? 'Output' : 'Input'
+}
+
 /** A read worth acting on: an answer with cells in it (an empty one after a move is a read that went wrong, not a grid with nothing in it). */
 async function readCells(wire) {
   try {
@@ -273,6 +280,9 @@ export const cutAfterMove = (j) => `The blocks moved, but row ${rowLabel(j.destR
 /** After a move whose own joins all read back, but whose row the last read finds cut elsewhere (rowCuts' words, from "Row 3 …"). */
 export const foundAfterMove = (cut) => `The blocks moved, but ${String(cut.text).charAt(0).toLowerCase()}${String(cut.text).slice(1)}`
 
+/** A row whose read has no Input, or no Output after its Input: "row 3 has no Output now, and no sound". */
+const noEndWords = (row, end) => `row ${rowLabel(row)} has no ${end} now, and no sound`
+
 /**
  * After a move the unit did not take whole: a moved block not in its new
  * cell, which reads empty ({ name, col, between, gone }, runMove's
@@ -289,7 +299,7 @@ export function notPlacedWords(row, list) {
   const at = (xs) => listed(xs.map((x) => `${x.name} at column ${colLabel(x.col)}`))
   const holes = (list || []).filter((x) => x.between === true && !x.end)
   const lost = (list || []).filter((x) => x.between !== true && x.gone === true && !x.end)
-  const said = (list || []).filter((x) => x.end).map((x) => `The unit didn’t take ${at([x])}, so row ${rowLabel(row)} has no ${x.end} now, and no sound. Add it again, or move one back.`)
+  const said = (list || []).filter((x) => x.end).map((x) => `The unit didn’t take ${at([x])}, so ${noEndWords(row, x.end)}. Add it again, or move one back.`)
   if (holes.length) {
     const one = holes.length === 1
     said.push(`The unit didn’t take ${at(holes)}, so row ${rowLabel(row)} has ${one ? 'an empty space' : 'empty spaces'} there and no sound past ${one ? 'it' : 'them'}. Put a block in ${one ? 'it' : 'each'}, or move one back.`)
@@ -374,8 +384,8 @@ export function afterMoveSaid({ row, res }) {
   if (res.stopped === 'unknown') return { issue: null, note: { text: `The blocks moved, but the unit stopped saying which preset it’s on, so the app didn’t join row ${r} again.`, joins }, line: null }
   if (!res.checked) return { issue: null, note: { text: uncheckedAfterMove(row), joins }, line: null }
   const notPlaced = Array.isArray(res.notPlaced) ? res.notPlaced : []
-  /* A block the unit did not put in its new cell between the row's Input and Output: said by name, and no Join the row, which could only answer that the cell is empty. */
-  if (notPlaced.some((x) => x.between === true)) return { issue: null, note: { text: notPlacedWords(row, notPlaced), joins: [] }, line: null }
+  /* A block the unit did not put in its new cell between the row's Input and Output, or a moved Input or Output it did not put anywhere on the row: said by name, and no Join the row, which could only answer that the cell is empty, or that a row with no sound is joined. */
+  if (notPlaced.some((x) => x.between === true || x.end)) return { issue: null, note: { text: notPlacedWords(row, notPlaced), joins: [] }, line: null }
   /* One it did not put past the Output, or before the Input, stops no sound: the row is said as its read has it, and the block that is gone after that. */
   const lost = notPlacedWords(row, notPlaced)
   /* Never a join out of or into a cell the move left empty: Join the row could only answer that the cell is empty. */
@@ -391,17 +401,21 @@ export function afterMoveSaid({ row, res }) {
 
 /**
  * After "Join the row": joinRow's own answer. "Joined again" only where the
- * row was read after, every join asked for is there, and the row asked again
+ * row was read after, that read has the row's Input and its Output
+ * (`noEnd` null: rowCuts skips a row without both, so it alone would find
+ * nothing), every join asked for is there, and the row asked again
  * (rowCuts on that read, `cuts`) reads whole. Never "sent" of nothing sent.
  * `joins`, where given, is what the button is to send next ([] for none).
  */
-export function joinedWords({ row, still, checked, readBefore = true, sent = 0, failed = null, stopped = null, skipped = [], cuts = null }) {
+export function joinedWords({ row, still, checked, readBefore = true, sent = 0, failed = null, stopped = null, skipped = [], cuts = null, noEnd = null }) {
   const r = rowLabel(row)
   if (stopped === 'moved') return { ok: false, text: sent ? `The app stopped joining row ${r}: the unit went to another preset.` : 'No join was sent: the unit is on another preset now.', joins: [] }
   if (!readBefore) return { ok: false, text: `Nothing was sent: the unit didn’t answer when the app asked how row ${r} is joined. Try again.` }
   if (stopped === 'unknown') return { ok: false, text: `${sent ? `The app stopped joining row ${r}` : 'No join was sent'}: the unit didn’t say which preset it’s on. Try again.` }
   if (failed && !sent) return { ok: false, text: `Nothing was sent: ${failed}` }
   if (!checked) return { ok: false, text: `The app sent the joins, but couldn’t read row ${r} back to check them.` }
+  /* A row with no Input or no Output makes no sound, joined or not, and no join can mend it. */
+  if (noEnd) return { ok: false, text: `R${noEndWords(row, noEnd).slice(1)}. Add one, or move one back.`, joins: [] }
   const cut = firstCut(still, row)
   if (cut) {
     const at = `row ${rowLabel(cut.destRow)} at column ${colLabel(cut.srcCol + 1)}`
@@ -856,7 +870,8 @@ export async function moveBlocks({ row, moves, wire, rows = 4, cols = 12, cables
  * held to the unit's preset (`onPreset`), and `starting()` is called once,
  * just before the first join is let go: never for a press that sends
  * nothing (the phone marks the preset changed there). Answers joinedWords' input: { row,
- * readBefore, sent, failed, stopped, skipped, still, checked, after, cuts },
+ * readBefore, sent, failed, stopped, skipped, still, checked, after, cuts,
+ * noEnd } (`noEnd` the end the read after has missing on the row, or null),
  * and logs the row before and after.
  */
 export async function joinRow({ row, joins, wire, log = () => {}, names = null, blocks = null, rows = 4, law = false, version = null, onPreset = null, starting = () => {} }) {
@@ -879,7 +894,8 @@ export async function joinRow({ row, joins, wire, log = () => {}, names = null, 
   log(`join the row: row ${rowLabel(row)} after: ${rowSaid(after, row, first, last, names)}`)
   const cuts = after ? rowCuts({ cells: after, blocks: blocks || [], rows, law, version, holes: true, only: [row] }) : null
   if (cuts?.length) log(`join the row: row ${rowLabel(row)} asked again`, cuts[0].text)
-  return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: after ? missingJoins(after, list) : list, checked: !!after, after, cuts }
+  const noEnd = after ? endMissing(after, row, slugsOf(blocks)) : null
+  return { row, readBefore: true, sent: r.sent, failed: r.failed, stopped: r.stopped, skipped: r.skipped, still: after ? missingJoins(after, list) : list, checked: !!after, after, cuts, noEnd }
 }
 
 /* ---------------------------------------------------------------- */

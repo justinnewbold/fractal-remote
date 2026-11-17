@@ -50,7 +50,10 @@
  * refused before the Input said as gone from the preset; Join the row
  * marking the chain written only once a join goes, and a press that sends
  * nothing recorded as no edit; a move a preset change stopped part-way
- * keeping its history line without marking the next preset unsaved.
+ * keeping its history line without marking the next preset unsaved. From
+ * the sixth round: a moved Output or Input the unit did not take offers no
+ * Join the row even beside a cut, and Join the row pressed on a row whose
+ * read after has no Output, or no Input, is never "joined again".
  *
  * THE SCREENS ARE NOT RUN. Their calls into the plan are pinned by
  * patterns on the calls, not whole; the preset hold is pinned whole at
@@ -1452,7 +1455,7 @@ export function run(test) {
       assert.deepEqual(res.notPlaced, [{ name: 'Comp 1', col: 0, between: false, gone: true }], `${where}: a cell before the Input is counted as between the row’s ends`)
       assert.deepEqual(said.note, { text: 'The unit didn’t take Comp 1 at column 1, so it isn’t in this preset now. Add it again, or move one back.', joins: [] }, where)
       assert.ok(!/no sound past it/.test(said.note.text), `${where}: “no sound past it” before the Input`)
-      /* THE OUTPUT REFUSED, and a join elsewhere answered but not taken: the row's cut with Join the row, whose joins leave out the one into the empty cell, then the row with no Output. */
+      /* THE OUTPUT REFUSED, and a join elsewhere answered but not taken: the row with no Output, and no Join the row, which could only call a row with no sound joined (the sixth round). */
       const d = (await phoneMock()).createMockDevice('axefx3', { joinsAsOnUnit: true })
       for (const b of d.presetBlocks()) d.placeBlock(b.row, b.col, 0)
       ;[37, 46, 118, 206, 42].forEach((id, col) => d.placeBlock(R, col, id))
@@ -1471,8 +1474,7 @@ export function run(test) {
       res = await m.moveBlocks({ row: R, moves: drag, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
       assert.deepEqual(res.still.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 0, R], [R, 2, R]], `${where}: this case needs a cut and the join into the empty cell missing`)
       said = m.afterMoveSaid({ row: R, res })
-      assert.equal(said.note.text, 'The blocks moved, but row 3 isn’t joined at column 2, so there’s no sound past it. The unit didn’t take Output 1 at column 4, so row 3 has no Output now, and no sound. Add it again, or move one back.', where)
-      assert.deepEqual(said.note.joins.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 0, R], [R, 1, R]], `${where}: Join the row is offered a join into the empty cell`)
+      assert.deepEqual(said.note, { text: 'The unit didn’t take Output 1 at column 4, so row 3 has no Output now, and no sound. Add it again, or move one back.', joins: [] }, `${where}: Join the row is offered on a row with no Output`)
       /* THE INPUT REFUSED on a unit that also drops the joins out of a cell it empties: the join out of its empty cell is missing, and is never offered either. */
       const u = dropsOut(rowOf([[37, 'Input 1'], [46, 'Comp 1'], [118, 'Drive 1'], [42, 'Output 1']]))
       const put = u.wire.placeBlock
@@ -1488,6 +1490,68 @@ export function run(test) {
       res = await m.moveBlocks({ row: R, moves: past, wire: r2.wire, rows: 6, cols: 14, blocks: e.presetBlocks() })
       assert.deepEqual(res.notPlaced, [{ name: 'Output 1', col: 2, between: true, gone: false }], `${where}: an Output the unit put elsewhere on the row is said as gone from it`)
       assert.deepEqual(m.afterMoveSaid({ row: R, res }).note, { text: 'The unit didn’t take Output 1 at column 3, so row 3 has an empty space there and no sound past it. Put a block in it, or move one back.', joins: [] }, where)
+    }
+  })
+
+  test('chain move: Join the row pressed on a row the read after finds with no Output, or no Input, is never “joined again”: it says the end is missing, with no button', async () => {
+    const mod = await phoneMock()
+    /* A row on row 3, joined but at the given columns, and a wire that may change the row as each join goes (`onJoin`). */
+    const unit = (ids, cut) => {
+      const d = mod.createMockDevice('axefx3', { joinsAsOnUnit: true })
+      for (const b of d.presetBlocks()) d.placeBlock(b.row, b.col, 0)
+      ids.forEach((id, col) => d.placeBlock(R, col, id))
+      for (let col = 0; col < ids.length - 1; col++) if (!cut.includes(col)) d.cable(R, col, R, true)
+      return d
+    }
+    const press = async (m, d, joins, onJoin = () => {}) => {
+      const rec = recorded(d)
+      const cable = rec.wire.setCable
+      rec.wire.setCable = (a, b, c, on) => {
+        const done = cable(a, b, c, on)
+        onJoin(d)
+        return done
+      }
+      const r = await m.joinRow({ row: R, joins, wire: rec.wire, blocks: d.presetBlocks(), rows: 6 })
+      return { r, w: m.joinedWords(r) }
+    }
+    const NO_OUTPUT = { ok: false, text: 'Row 3 has no Output now, and no sound. Add one, or move one back.', joins: [] }
+    const NO_INPUT = { ok: false, text: 'Row 3 has no Input now, and no sound. Add one, or move one back.', joins: [] }
+    for (const [where, load] of BOTH) {
+      const m = await load()
+      /* THE FIFTH ROUND'S CASE: the Output refused at column 4, a join elsewhere answered but not taken, and Join the row pressed with the cut's joins anyway (round 5 offered them). The join goes, the row reads with no Output anywhere, and rowCuts skips it. */
+      const d = unit([37, 46, 118, 206, 42], [])
+      const rec = recorded(d)
+      const place = rec.wire.placeBlock
+      const cable = rec.wire.setCable
+      rec.wire.placeBlock = (r, c, x) => (x === 42 && c === 3 ? { ok: false } : place(r, c, x))
+      rec.wire.setCable = (a, b, c, on) => (b === 0 ? { ok: true } : cable(a, b, c, on))
+      const drag = [
+        { id: 118, name: 'Drive 1', from: 2, to: 1 },
+        { id: 206, name: 'NAM 1', from: 3, to: 2 },
+        { id: 42, name: 'Output 1', from: 4, to: 3 },
+        { id: 46, name: 'Comp 1', from: 1, to: 4 }
+      ]
+      const res = await m.moveBlocks({ row: R, moves: drag, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      assert.deepEqual(res.still.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 0, R], [R, 2, R]], `${where}: this case needs a cut and the join into the empty cell missing`)
+      let { r, w } = await press(m, d, [{ srcRow: R, srcCol: 0, destRow: R }, { srcRow: R, srcCol: 1, destRow: R }])
+      assert.equal(r.sent, 1, `${where}: this case needs the join sent`)
+      assert.deepEqual(r.cuts, [], `${where}: this case needs rowCuts to find nothing on the row`)
+      assert.equal(r.noEnd, 'Output', where)
+      assert.deepEqual(w, NO_OUTPUT, `${where}: a row with no Output is called joined again`)
+      /* NO INPUT on the row read after (Comp, Drive, Output, cut at column 2). */
+      ;({ r, w } = await press(m, unit([46, 118, 42], [0]), [{ srcRow: R, srcCol: 0, destRow: R }]))
+      assert.equal(r.sent, 1, where)
+      assert.equal(r.noEnd, 'Input', where)
+      assert.deepEqual(w, NO_INPUT, `${where}: a row with no Input is called joined again`)
+      /* THE READ AFTER, never the read before: both ends before the press and the Output gone after it is no Output; ... */
+      ;({ r, w } = await press(m, unit([37, 46, 118, 42], [1]), [{ srcRow: R, srcCol: 1, destRow: R }], (u) => u.placeBlock(R, 3, 0)))
+      assert.equal(r.sent, 1, where)
+      assert.deepEqual(w, NO_OUTPUT, `${where}: the ends are asked of the read before the press`)
+      /* ... and an Output the read before did not have, there after the press, is joined again. */
+      ;({ r, w } = await press(m, unit([37, 46, 118, 0], [1, 2]), [{ srcRow: R, srcCol: 1, destRow: R }], (u) => (u.placeBlock(R, 3, 42), u.cable(R, 2, R, true))))
+      assert.equal(r.sent, 1, where)
+      assert.equal(r.noEnd, null, where)
+      assert.deepEqual(w, { ok: true, text: 'Row 3 is joined again.' }, `${where}: the ends are asked of the read before the press`)
     }
   })
 
