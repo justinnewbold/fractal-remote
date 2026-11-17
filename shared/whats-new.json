@@ -4,11 +4,16 @@
   "days": [
     {
       "date": "2026-11-17",
-      "version": "1.92.1",
+      "version": "2.0.1",
       "lines": [
+        "From version 2.0.0 of the app, turn your phone on its side on Play to see your scenes on one side and your pedals on the other, as big square buttons. The smallest phones stay upright.",
+        "From version 2.0.0, over Bluetooth or a USB cable on an AM4, FM3, FM9 or Axe-Fx III: Save in Edit and on Play saves over the preset your unit is on, and on an empty preset Quick build puts in the blocks you tap, in order, and joins them up. Keep your own Starter chains in Settings → My rig → Starter chains.",
+        "From version 2.0.0, on an FM3, FM9 or Axe-Fx III over Bluetooth or a USB cable: your blocks show in the unit’s own order, Edit’s knobs follow a knob turned on the unit, and the volume button and each scene’s level are there. And Edit shows a block’s list settings, such as Bypass Mode, under its knobs.",
+        "From version 2.0.0, on an Axe-Fx III: a Capture button on the NAM block in Edit picks which capture it plays, and holding a NAM block on Play offers TONE3000, to browse captures, preview one through your own rig and get it onto your unit. Through a computer, Play names the NAM, IR Player and other newer blocks.",
+        "From version 2.0.0, Settings → Metronome has a flash round the edge of the screen with or without sound, a choice of where the click sounds, and Line up the light and click. On every version, its light now sits a little in from the edge, so its corners are no longer cut off where the screen is rounded.",
+        { "text": "From version 2.0.0, on Apple Watch: choose which pages it shows and their order in Settings → Apple Watch, a new Tempo page with Tap, and hold a pedal for its channels and knobs, turned with the Digital Crown. And Apple’s Bluetooth screen has its Done button back.", "only": "ios" },
         "In the chain editor on an FM3, FM9 or Axe-Fx III, dragging blocks along a row now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
-        "The computer app on a Raspberry Pi now puts in its own updates. It waits until nobody has used the Pi for half an hour (no phone connected, nobody touching its screen, nothing changed on the unit) and until a new version has been out for a day.",
-        "The metronome’s light round the edge of the screen now sits a little in from the edge, so its corners are no longer cut off where the screen is rounded."
+        "The computer app on a Raspberry Pi now puts in its own updates. It waits until nobody has used the Pi for half an hour (no phone connected, nobody touching its screen, nothing changed on the unit) and until a new version has been out for a day. From version 2.0.0, Phone & computer has Update now."
       ]
     },
     {

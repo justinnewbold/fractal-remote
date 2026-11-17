@@ -1071,7 +1071,7 @@ export function run(test) {
 
   test('capture picker: Edit draws it on a NAM block for his account alone, first, in place of the line that says the unit chooses, and picks by the unit’s own write', async () => {
     const features = await import('../mobile/src/lib/features.js')
-    assert.equal(features.NAM_PICKER_FOR_EVERYONE, false, 'the picker opened to everyone: that is his say, with its What’s new line')
+    assert.equal(features.NAM_PICKER_FOR_EVERYONE, true, 'the picker is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
     assert.match(flat(read('mobile/src/lib/useCapturePicker.js')), /export const useCapturePicker = \(\) => \{ const his = useBluetoothAdmin\(\) return NAM_PICKER_FOR_EVERYONE \|\| his \}/)
 
     const raw = read('mobile/src/screens/Edit.js')
@@ -1153,7 +1153,15 @@ export function run(test) {
     assert.ok(!Object.keys(namFamily.selectors || {}).map(Number).includes(0))
     /* The browser draws none of it: that would be a computer release nobody has asked for. */
     for (const f of ['src/components/Console.jsx', 'src/components/Gig.jsx']) assert.ok(!/CapturePicker|captureList|nam\/heads/.test(read(f)), f)
-    /* And no line in What's new until it is everybody's. */
-    assert.ok(!/capture/i.test(JSON.stringify(JSON.parse(read('shared/whats-new.json'))[0] ?? '')) || features.NAM_PICKER_FOR_EVERYONE, 'What’s new has a line for something only his account has')
+    /*
+     * And no line in What's new that names the capture picker until it is
+     * everybody's. (Until 17 November 2026 this read `[0]` of the file, which
+     * is an object with its days under `days`, so it could never fail: an
+     * independent read found it the day the picker opened.)
+     */
+    const said = JSON.parse(read('shared/whats-new.json')).days.flatMap((d) => d.lines.map((l) => (typeof l === 'string' ? l : l.text)))
+    assert.ok(said.length > 50, 'What’s new was not read')
+    assert.ok(!said.some((t) => /Capture button|picks which capture/i.test(t)) || features.NAM_PICKER_FOR_EVERYONE, 'What’s new has a line for something only his account has')
+    assert.ok(said.some((t) => /Capture button on the NAM block in Edit picks which capture it plays/.test(t)) === features.NAM_PICKER_FOR_EVERYONE, 'the capture picker is open with no line in What’s new, or the other way round')
   })
 }

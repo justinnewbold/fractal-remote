@@ -307,7 +307,7 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
   const keep = (name, value) => store.set(name, JSON.stringify(value))
 
   const tokensFrom = (data) => {
-    if (!data || typeof data.access_token !== 'string' || !data.access_token) throw failure('TONE3000 answered without a pass.')
+    if (!data || typeof data.access_token !== 'string' || !data.access_token) throw failure('TONE3000 didn’t finish signing you in. Try again.')
     return {
       access: data.access_token,
       refresh: typeof data.refresh_token === 'string' ? data.refresh_token : null,
@@ -404,7 +404,7 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
     try {
       await keep(T3K_TOKENS_KEY, tokensFrom(res.body))
     } catch (err) {
-      return { ok: false, why: err?.message || 'TONE3000 answered without a pass.' }
+      return { ok: false, why: err?.message || 'TONE3000 didn’t finish signing you in. Try again.' }
     }
     return { ok: true, toneId: back.toneId, canceled: back.canceled }
   }

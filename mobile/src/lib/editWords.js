@@ -60,23 +60,43 @@ export const NO_EDITING_LINE = 'No editing or saving over Bluetooth.'
  * computer's, lib/saveViaComputer), so the page was right about that. It
  * was wrong two other ways: it said the same sentence twice, once in the
  * paragraph and again as the first line of the list, and it left out what
- * else in Edit needs the computer (Edit's own BLE_NO_CHAIN, and copying a
+ * else in Edit needs the computer (Edit's own noChainLine, below, and copying a
  * channel). So what Edit DOES is the paragraph's (`EDIT_DOES`), and what it
  * does not is the list's first line, said once each.
  */
 export const EDIT_DOES = 'In Edit: knobs, models and effects on and off.'
 export const EDITING_LINE = 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.'
 /*
- * AND WHERE THE APP SAVES OVER BLUETOOTH (lib/bleSave; `saves`: his account
- * until a store version opens it, lib/features
+ * AND WHERE THE APP SAVES OVER BLUETOOTH (lib/bleSave; `saves`, lib/features
  * SAVE_OVER_BLUETOOTH_FOR_EVERYONE): "It still says we can't save in
  * Bluetooth ... Please enable that and remove the warning." (Justin, 13
  * November 2026.) Save joins what Edit does, and the list's first line
- * loses its sentence about saving. Every other account reads the two lines
- * above, word for word as before.
+ * loses its sentence about saving.
+ *
+ * AND QUICK BUILD WITH IT, since 2.0.0 (17 November 2026: "Enable all new
+ * features for all users that were on my account"). Saving, the chain over
+ * Bluetooth (CHAIN_OVER_BLUETOOTH_FOR_EVERYONE) and Quick build
+ * (QUICK_BUILD_FOR_EVERYONE) open together, for his account and for every
+ * account (a test holds the three switches equal), so where the app saves
+ * Quick build puts blocks into an empty preset and joins them, and what
+ * still needs the computer is the chain EDITOR: one block moved, added or
+ * removed in a chain that has blocks (Edit's noChainLine, below, says the same).
+ * Where it does not save, the two lines above, word for word as before.
  */
-export const EDIT_DOES_SAVES = 'In Edit: knobs, models, effects on and off, and Save.'
-export const EDITING_LINE_SAVES = 'Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.'
+export const EDIT_DOES_SAVES = 'In Edit: knobs, models, effects on and off, Save, and Quick build on an empty preset.'
+export const EDITING_LINE_SAVES = 'Moving, adding or removing a block in a chain that has blocks, modifiers, renaming and copying a channel need the computer.'
+/*
+ * EDIT → MORE'S OWN LINE over Bluetooth or a USB cable (Edit draws it where
+ * the chain editor's row would be): what is not there. It follows whether
+ * Quick build is offered on this connection (`quick`: lib/quickBuild
+ * quickBuildHere, which wants the account to have Quick build and the wire
+ * to say `gridEdit`), so the line never names Quick build where it is not
+ * drawn. Said plainly either way, no "for now".
+ */
+export const NO_CHAIN_LINE = 'Moving, adding and removing blocks, modifiers and renaming need the computer.'
+export const NO_CHAIN_LINE_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, modifiers and renaming need the computer.'
+export const noChainLine = (quick = false) => (quick === true ? NO_CHAIN_LINE_QUICK : NO_CHAIN_LINE)
+
 /** "What's different from USB", its first line. */
 export const editingLine = (open, saves = false) => (open !== true ? NO_EDITING_LINE : saves === true ? EDITING_LINE_SAVES : EDITING_LINE)
 
@@ -85,10 +105,11 @@ export const editingLine = (open, saves = false) => (open !== true ? NO_EDITING_
  * Bluetooth at all. Found by their absence until the line was written:
  * every one of them is hidden over Bluetooth, not broken. And where the
  * volume button IS there (`volume`, lib/bluetooth volumeOverBluetooth: the
- * Output block handed on by the wire, his account until lib/features
- * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, on an FM3, FM9 or Axe-Fx III with
- * Edit open), the line does not say it is missing. Every other account,
- * and every AM4, reads the first, word for word as before.
+ * Output block handed on by the wire, every account's since lib/features
+ * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before), on an FM3, FM9 or Axe-Fx III with
+ * Edit open), the line does not say it is missing. An AM4, and a unit
+ * whose Edit is not open over Bluetooth, reads the first, word for word as
+ * before.
  */
 export const NOT_OVER_BLUETOOTH = 'No looper, volume button, unit metronome click or Footswitches page.'
 export const NOT_OVER_BLUETOOTH_VOLUME = 'No looper, unit metronome click or Footswitches page.'

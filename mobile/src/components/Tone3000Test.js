@@ -112,7 +112,7 @@ import { logDebug } from '../lib/debugLog'
 import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
 import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE } from '../lib/tone3000Words'
-import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
+import { hostPage, onTone3000Return, pageInApp, signOutHere, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { captureLine, waitOver } from '../lib/captureLine'
@@ -838,7 +838,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
 
   const signOut = async () => {
     try {
-      await t3k.signOut()
+      /* The same sign-out as Settings' row: the pass goes, and TONE3000's page opens private from now on (lib/tone3000Here). */
+      await signOutHere()
     } catch (err) {
       /* Never "signed out" over a pass the device would not let go of. */
       logDebug('tone3000', `not signed out: ${err?.message || err}`)

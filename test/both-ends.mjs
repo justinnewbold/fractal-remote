@@ -258,7 +258,7 @@ export const AREAS = [
         web: null,
         phone: 'Keep as a starter chain',
         unreadable: ['phone'],
-        why: 'phone only, for now: Quick build and starter chains are his account’s until QUICK_BUILD_FOR_EVERYONE (mobile/src/lib/features.js); the browser comes in a later change, since importing shared/starter-chains.mjs there makes a computer release'
+        why: 'phone only, for now: Quick build and starter chains are on the phone for every account since 2.0.0 (QUICK_BUILD_FOR_EVERYONE, mobile/src/lib/features.js); the browser comes in a later change, since importing shared/starter-chains.mjs there makes a computer release'
       },
       {
         does: 'take a Quick build back out in one tap',
@@ -1131,7 +1131,10 @@ export function run(test) {
       /* STAGE_VIEW_NAME: "Stage view" (mobile/src/lib/stageView.js). */
       /* STARTERS_TITLE: "Starter chains" (shared/starter-chains.mjs). */
       STARTERS_TITLE:
-        'phone only, for now: the chains Quick build offers on an empty preset, built on 15 November 2026 for his account only until QUICK_BUILD_FOR_EVERYONE (mobile/src/lib/features.js), and the row is not drawn for an account without it (useQuickBuild). The browser comes in a later change: importing the shared file there would make a computer release',
+        'phone only, for now: the chains Quick build offers on an empty preset, built on 15 November 2026 for his account and open to every account since 2.0.0 (QUICK_BUILD_FOR_EVERYONE, mobile/src/lib/features.js; the row follows useQuickBuild). The browser comes in a later change: importing the shared file there would make a computer release',
+      /* T3K_ROW_TITLE: "TONE3000" (mobile/src/lib/tone3000Words.js). */
+      T3K_ROW_TITLE:
+        'phone only: the way out of a TONE3000 sign-in kept on the device, drawn only while one is kept (useTone3000SignedIn, mobile/src/screens/Settings.js), from 2.0.1, 17 November 2026. TONE3000 is browsed from the phone app alone, so a browser never holds a sign-in to end',
       STAGE_VIEW_NAME:
         'phone only, for now: Play drawn large to read from a stand, his account only until STAGE_VIEW_FOR_EVERYONE (mobile/src/lib/features.js); the browser has no such view yet, and the row is not drawn for an account without it (App.js hands Settings no onStageView)',
       'Get it on your phone or tablet': 'browser only, and only at the computer end (the computer app’s window, and the demo on a computer that could host the rig): a phone or tablet, in the app or in its browser, has no use for a way to get itself onto a phone, and the browser leaves it out there (phoneEnd). At the computer it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
@@ -1142,8 +1145,10 @@ export function run(test) {
 
     /* The phone's PAIR_TITLE is Phone & computer by another name: iPad &
        computer on an iPad (shared/device-word.mjs). The same row. */
+    /* A name may hold a digit (T3K_ROW_TITLE): without it the search ran past
+       that row and gave it the next quoted title on the page. */
     const rowsIn = (block, attr) =>
-      [...block.matchAll(new RegExp(`<SetupRow\\b[\\s\\S]*?${attr}=(?:"([^"]+)"|\\{([A-Z_]+)\\})`, 'g'))].map((m) =>
+      [...block.matchAll(new RegExp(`<SetupRow\\b[\\s\\S]*?${attr}=(?:"([^"]+)"|\\{([A-Z][A-Z0-9_]*)\\})`, 'g'))].map((m) =>
         m[2] === 'PAIR_TITLE' ? 'Phone & computer' : m[1] || m[2]
       )
 

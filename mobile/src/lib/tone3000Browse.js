@@ -38,7 +38,10 @@ import { T3K_CATALOG_PAGE } from './tone3000Words.js'
 export const ASKING = 'Asking TONE3000…'
 export const NO_TONES = 'No tones found.'
 /*
- * Search is not open to this app's key. Each says what the rows under it
+ * Search is not open to this app's key. Since 2.0.0 every account reads
+ * these, so they say what is so in the app and promise nothing of TONE3000
+ * ("hasn't opened its search to this app yet" did, 17 November 2026). Each
+ * says what the rows under it
  * are (no number: TONE3000's ten are cut down here to what the NAM block
  * plays, and for Newest to the kind of gear asked for), and where the rest
  * is. "Every capture the NAM block can play", not "everything": TONE3000's
@@ -47,11 +50,11 @@ export const NO_TONES = 'No tones found.'
 /* Only where that button is drawn (lib/tone3000Words `T3K_CATALOG_PAGE`): a sentence never names a button the view does not have. */
 const ELSEWHERE = T3K_CATALOG_PAGE ? ' Browse TONE3000, below, has every capture the NAM block can play.' : ''
 /** There is a short list of what is trending to show instead. */
-export const TRENDING_ONLY = `TONE3000 hasn’t opened its search to this app yet, so this is its own short trending list.${ELSEWHERE}`
+export const TRENDING_ONLY = `Search isn’t available in the app, so this is TONE3000’s own short trending list.${ELSEWHERE}`
 /** There is a short list of the newest to show instead. */
-export const NEWEST_ONLY = `TONE3000 hasn’t opened its search to this app yet, so these are from its newest tones.${ELSEWHERE}`
+export const NEWEST_ONLY = `Search isn’t available in the app, so these are from TONE3000’s newest tones.${ELSEWHERE}`
 /** There is nothing to show instead (a search for words, or Most downloaded): the sentence says where there is something, by the two chips' own names. */
-export const SEARCH_NOT_OPEN = `TONE3000 hasn’t opened its search to this app yet.${ELSEWHERE || ` With the search box empty, ${T3K_SORTS[0].label} and ${T3K_SORTS[1].label} show its own short lists.`}`
+export const SEARCH_NOT_OPEN = `Search isn’t available in the app.${ELSEWHERE || ` With the search box empty, ${T3K_SORTS[0].label} and ${T3K_SORTS[1].label} show TONE3000’s own short lists.`}`
 
 /** 44988 as "44,988". Written out: the phone's engine is not relied on for it. */
 export function grouped(n) {

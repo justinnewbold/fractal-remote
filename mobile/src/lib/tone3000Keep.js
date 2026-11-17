@@ -150,3 +150,76 @@ export function sureRandom(fill, spare, log = () => {}) {
     }
   }
 }
+
+/*
+ * SIGNING OUT OF TONE3000 ON PURPOSE (17 November 2026, for the store
+ * version that opens TONE3000 to everybody: Apple's 5.1.1(v) asks that a
+ * sign-in to another service can be ended in the app). Two ways: the
+ * TONE3000 row in Settings, and every way the app's own sign-in is ended on
+ * purpose (Sign out, Delete account, the purchase page's Try the Demo, Back
+ * and Delete account, and the way to the sign-in form), so the next person
+ * on the device is not signed in to the last one's TONE3000.
+ *
+ * Two things go: the pass (lib/tone3000 `signOut`, which takes a sign-in
+ * under way with it), and what TONE3000's own page inside the app would
+ * otherwise remember of the sign-in. That page keeps its own store, which
+ * the app cannot empty, so from the first sign-out on it opens as a private
+ * page (components/Tone3000Page `incognito`), and stays one on this device:
+ * it is written down before anything else, so a pass that will not let go
+ * still leaves the page private.
+ *
+ * ONLY WHERE THERE IS SOMETHING TO FORGET (the review of 17 November
+ * 2026). The way to the sign-in form is one of the sign-outs, and nearly
+ * every new customer takes it; a page made private there, on a device that
+ * never showed TONE3000's page and holds no pass, would ask every later
+ * TONE3000 sign-in on it for the email and code again, for nothing. So the
+ * page is made private only where it has been shown on the device
+ * (`pageShown`, written down when it first opens as an ordinary page) or a
+ * pass is kept (a device that showed it before `pageShown` was written).
+ *
+ * `client` is lib/tone3000's, `plain` the app's ordinary storage
+ * ({ get, set }, each a promise). A pass that runs out, or that TONE3000
+ * stops taking, is lib/tone3000's own business and makes nothing private.
+ */
+export const T3K_PRIVATE_KEY = 'fractal.tone3000.private'
+/** Written down the first time TONE3000's page opens on the device as an ordinary (not private) page: from then on it may remember a sign-in. */
+export const T3K_SHOWN_KEY = 'fractal.tone3000.shown'
+
+export function signOutKeeper({ client, plain, log = () => {} }) {
+  let fresh = false
+  let shown = false
+  /* Read once, at the start: the page comes up only on a tap, long after. */
+  const ready = Promise.resolve()
+    .then(() => Promise.all([plain.get(T3K_PRIVATE_KEY), plain.get(T3K_SHOWN_KEY)]))
+    .then(([v, w]) => {
+      if (v) fresh = true
+      if (w) shown = true
+    })
+    .catch((err) => log(`whether TONE3000’s page is private could not be read: ${err?.message || err}`))
+  return {
+    ready,
+    /** Whether TONE3000's page opens as a private one. */
+    pagePrivate: () => fresh,
+    /** TONE3000's page is opening: an ordinary one may remember a sign-in from now on. */
+    pageShown() {
+      if (fresh || shown) return
+      shown = true
+      Promise.resolve()
+        .then(() => plain.set(T3K_SHOWN_KEY, '1'))
+        .catch((err) => log(`that TONE3000’s page was shown could not be written down: ${err?.message || err}`))
+    },
+    /** Sign out of TONE3000 on this device. Throws where the pass would not let go, after the page is private. */
+    async signOut() {
+      const something = fresh || shown || (await client.signedIn().catch(() => true))
+      if (something && !fresh) {
+        fresh = true
+        try {
+          await plain.set(T3K_PRIVATE_KEY, '1')
+        } catch (err) {
+          log(`that TONE3000’s page is private could not be written down: ${err?.message || err}`)
+        }
+      }
+      await client.signOut()
+    }
+  }
+}

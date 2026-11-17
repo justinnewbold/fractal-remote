@@ -509,4 +509,20 @@ export function run(test) {
       []
     )
   })
+
+  test('phone turns: the phone emulator check holds the phone sideways again before it looks for Play drawn sideways', () => {
+    /*
+     * The startup card's upright request moves the emulator's rotation lock
+     * to 0, and Play on Android asks for the phone's own choice (USER),
+     * which with auto-rotate off is that lock: without a turn back to 1
+     * after the walk, Play stays upright and the check goes red for
+     * nothing (an independent read, 17 November 2026).
+     */
+    const sh = read('.github/android-smoke.sh')
+    const walked = sh.indexOf('[ "$walked" = yes ] || failed+=')
+    const look = sh.indexOf('look play sideways')
+    assert.ok(walked > 0 && look > walked, 'the look at Play comes after the walk into it')
+    const between = sh.slice(walked, look).replace(/#[^\n]*/g, '')
+    assert.match(between, /if \[ "\$where" = phone \]; then\s+turn 1\s+fi\s*$/)
+  })
 }

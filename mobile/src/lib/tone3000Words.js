@@ -136,3 +136,22 @@ export const quickSub = (n) => `Browse captures, preview them, and get one for $
 /** Over the page, while it is up in the block's pop-up, or in the capture list's sheet. */
 export const backToKnobs = (n) => `‹ Back to ${namBlockSaid(n)}’s knobs`
 export const BACK_TO_CAPTURES = '‹ Back to the captures on the unit'
+
+/*
+ * SIGNING OUT OF TONE3000, IN SETTINGS (17 November 2026, for the store
+ * version that opens TONE3000 to everybody; Apple's 5.1.1(v)). A row of its
+ * own, drawn only while a TONE3000 sign-in is kept on the device, that says
+ * whose it is where TONE3000 has said, and signs out after asking once.
+ * What goes is the app's TONE3000 sign-in; the captures already put on the
+ * unit stay on the unit, and the sentence says so, since that is the first
+ * thing a player would wonder.
+ */
+export const T3K_ROW_TITLE = 'TONE3000'
+/** The row's one line: whose sign-in it is, where TONE3000 has named it, and what a tap does. */
+export const t3kRowLine = (name) => (name ? `Signed in as @${name} · tap to sign out` : 'Signed in · tap to sign out')
+export const T3K_SIGN_OUT_ASK = 'Sign out of TONE3000?'
+export const t3kSignOutBody = (name) =>
+  `Fractal Remote forgets ${name ? `the TONE3000 sign-in of @${name}` : 'your TONE3000 sign-in'}. The captures already on your unit stay there. To get more, you sign in to TONE3000 again.`
+export const T3K_SIGN_OUT = 'Sign out'
+export const T3K_KEEP = 'Cancel'
+export const T3K_SIGN_OUT_FAILED = 'TONE3000’s sign-in couldn’t be removed just now. Try again.'

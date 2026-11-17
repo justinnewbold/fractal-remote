@@ -32,7 +32,16 @@ export const REVIEW_FIELDS = 'fields[appStoreReviewDetails]=notes'
  * (with a colon or not), every line that pairs a sign-in word with a colon,
  * equals sign or slash ("Log in: name / secret"), the line under a label that
  * ends in a colon on such a line, and every email address.
+ *
+ * AND EVERY WEB LINK, since 17 November 2026. The notes end with the links
+ * to the private review videos (a real unit on film: "never made public",
+ * CLAUDE.md), and three runs of 9 and 10 November printed all four of them
+ * in logs anybody can open. A link is not a login, so the rule above let
+ * them through. Every link in the notes is now printed as "[a link]",
+ * whoever's it is: the log is read for the notes' words, and the notes'
+ * real size, as Apple holds them, is printed on a line of its own.
  */
+const LINK = /\b(?:https?:\/\/|www\.)[^\s<>"')\]]+|(?<![\w@.-])(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s<>"')\]]*/gi
 const SECRET_WORD = /pass\s*(word|code|phrase)?|\bpw\b|\bpin\b|credential/i
 const LOGIN_WORD = /\blog\s*-?\s*in\b|\bsign\s*-?\s*in\b|\buser\s*-?\s*(name|id)\b/i
 export function redact(text) {
@@ -49,7 +58,7 @@ export function redact(text) {
     hideNext = false
     out.push(line)
   }
-  return out.join('\n').replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[an email address]')
+  return out.join('\n').replace(LINK, '[a link]').replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[an email address]')
 }
 
 /** A field, as it would be pasted, with its length. */
@@ -97,7 +106,10 @@ async function main() {
     }
     /* The notes alone: the review account, its password and the contact are never even fetched. */
     const review = await get(`/v1/appStoreVersions/${v.id}/appStoreReviewDetail?${REVIEW_FIELDS}`, { missingIsNone: true })
-    console.log(field('Notes for App Review', redact(review?.data?.attributes?.notes), 'bytes'))
+    const notes = String(review?.data?.attributes?.notes ?? '')
+    console.log(field('Notes for App Review', redact(notes), 'bytes'))
+    /* The size above is of what is printed. Apple's limit is counted on the notes as it holds them, links and all. */
+    console.log(`(as App Store Connect holds them: ${Buffer.byteLength(notes)} bytes; links, logins and email addresses are not printed here)\n`)
   }
 }
 

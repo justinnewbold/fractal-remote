@@ -31,7 +31,7 @@ import { gridReadTakesLong, overBluetooth } from '../lib/bleSwitch'
 import { bluetoothAdmin, useCableNow, useOutputAndSceneLevels } from '../lib/bluetooth'
 import { sceneFloor, sceneLevelToSend, sceneRowsFor } from '../lib/sceneLevel'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
-import { editNoteUp } from '../lib/editWords'
+import { editNoteUp, noChainLine } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import { NAM_ON_THE_UNIT, NO_KNOBS_YET } from '../lib/gen3Catalog'
@@ -461,7 +461,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   /*
    * QUICK BUILD (lib/quickBuild, components/QuickBuild): on a preset with
    * nothing but its Input and Output, the blocks tapped in order are laid in
-   * one row and joined. His account until features QUICK_BUILD_FOR_EVERYONE;
+   * one row and joined. Every account's since features QUICK_BUILD_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before);
    * never a VP4; only where the unit says it edits its grid (`gridEdit`); and
    * only on this preset's own chain. The wire is never asked: see
    * lib/quickBuild for why.
@@ -844,7 +844,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         MORE (lib/editMore): the four buttons that sat under the knobs until
         10 November 2026, by the same rules (`chainTools`, `modsHere`,
         `renameHere`), and what Edit cannot do here said once, where the
-        chain editor's row would be (VP4_NO_EDITS on a VP4, BLE_NO_CHAIN over
+        chain editor's row would be (VP4_NO_EDITS on a VP4, lib/editWords noChainLine over
         Bluetooth or a USB cable). And the beta note, which was a box at the
         foot of the page.
       */}
@@ -863,7 +863,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
               }}
             />
           ) : null}
-          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{BLE_NO_CHAIN}</Note> : null}
+          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{noChainLine(quickBuildHere({ on: quickOn, caps }))}</Note> : null}
           <Note tone="warn">{BETA_NOTE}</Note>
         </View>
       </Sheet>
@@ -894,15 +894,19 @@ const BETA_NOTE =
  * turns the unit's knobs itself (bleWire's edit routes, lib/am4-edit.js, and
  * lib/gen3-edit.js for the FM3, FM9 and Axe-Fx III): knobs, models and
  * on/off. On a unit's own USB cable it is the same wire, and the note says
- * the cable instead (lib/cableWords CABLE_EDIT_NOTE). Saving is the
- * computer's (lib/saveViaComputer), so a change made here plays and is lost
- * at the next preset change unless it is saved on the unit; and moving
- * blocks, modifiers and names are not built over Bluetooth yet. Plain about both, rather than a Save that cannot
- * work and doors that open on refusals.
+ * the cable instead (lib/cableWords CABLE_EDIT_NOTE). BLE_NOTE is drawn
+ * only where the app does not save there (lib/editWords editNoteUp), which
+ * since 2.0.0 (17 November 2026, every account) is nowhere Edit opens.
+ *
+ * What More says is not there over Bluetooth or the cable is lib/editWords
+ * noChainLine: since 2.0.0 Quick build places and joins blocks on an empty
+ * preset there, for every account, and the line names it only where Quick
+ * build is offered (quickBuildHere); what is not there is the chain EDITOR
+ * (one block moved, added or removed in a chain that has blocks),
+ * modifiers and names.
  */
 export const BLE_NOTE =
-  'Over Bluetooth you can turn knobs, change models and switch blocks on and off. Changes play right away, but the app can’t save them over Bluetooth yet: to keep a change, save it on the unit itself before you change presets.'
-export const BLE_NO_CHAIN = 'Moving, adding and removing blocks, modifiers and renaming need the computer for now.'
+  'Over Bluetooth you can turn knobs, change models and switch blocks on and off. Changes play right away, but the app can’t save them over Bluetooth: to keep a change, save it on the unit itself before you change presets.'
 
 /**
  * One block's controls.
@@ -1038,7 +1042,7 @@ export function BlockPanel({
   const [local, setLocal] = useState({})
   /*
    * ITS KNOBS FOLLOW THE UNIT (lib/liveKnobsHere, the rules in
-   * lib/liveKnobs): his account until lib/features LIVE_KNOBS_FOR_EVERYONE,
+   * lib/liveKnobs): every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before),
    * on an FM3, FM9 or Axe-Fx III. The block is read again every few seconds
    * over Bluetooth or the unit's cable, as the app comes back to the front,
    * and when the unit or the computer says a knob moved; a read changes
@@ -1180,8 +1184,7 @@ export function BlockPanel({
   const level = blockLevel(params)
   /*
    * AND EVERY SCENE'S LEVEL, IN AN OUTPUT BLOCK (lib/sceneLevel), for an
-   * account the levels are open to (lib/bluetooth outputAndSceneLevels: his,
-   * until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). "Scenes
+   * account the levels are open to (lib/bluetooth outputAndSceneLevels: every account's since lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)). "Scenes
    * levels" was a customer's ask. Fractal's editor has them on the Output
    * block's own Scene Levels page, which comes out empty here (every one is
    * a level, kept off the knobs), so they are typed under the Level, by the

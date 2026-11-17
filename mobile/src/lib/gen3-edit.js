@@ -522,7 +522,7 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
     const b = editBlock(eid)
     const f = b ? families[b.family] : null
     if (!f || f.typeId == null) return { refused: 'This block has no models to choose from.' }
-    if (NO_MODELS.has(b.slug.toLowerCase())) return { refused: 'A cab is picked with the computer for now.' }
+    if (NO_MODELS.has(b.slug.toLowerCase())) return { refused: 'A cab is picked with the computer.' }
     const v = Number(value)
     if (!modelHere(b, v)) return { refused: `There is no model ${value} for this block.` }
     return { frame: buildTyped(model, eid, f.typeId, v), what: `block ${eid} model to ${rosterOf(b.slug)[v][1]}` }

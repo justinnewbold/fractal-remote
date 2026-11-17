@@ -29,7 +29,7 @@ const lib = () => import('../mobile/src/lib/captureComputer.js')
 const PI = { name: 'raspberry pi 5', version: '1.90.63' }
 const TOO_OLD_PI = 'The computer app on raspberry pi 5 is version 1.90.63. The Axe-Fx III drops most captures sent through one that old. Update the computer app to 1.90.70 or later, then send it again. Or connect over Bluetooth, which sends it from this phone.'
 const NOT_KEPT_OLD = 'The Axe-Fx III took the capture 2 different ways and still shows slot 041 as empty, so it did not keep it. The computer app on raspberry pi 5 is older than 1.90.70, and the unit drops most captures sent through one that old. Update the computer app to 1.90.70 or later, then send it again. Or connect over Bluetooth, which sends it from this phone.'
-const NOT_KEPT_TODAY = 'The Axe-Fx III took the capture 2 different ways and still shows slot 041 as empty, so it did not keep it. The app’s log has what the unit answered each time.'
+const NOT_KEPT_TODAY = 'The Axe-Fx III took the capture 2 different ways and still shows slot 041 as empty, so it did not keep it. Send us a report from Settings → Troubleshooting → Feedback, with its log, so we can see what the unit answered.'
 
 /*
  * The card's world. Hooks kept by call order (a state keeps its value, an
@@ -66,6 +66,8 @@ export const logDebug = (...said) => { H.log.push(['log', ...said]) }
 export const gearSaid = () => 'amp', readCallback = () => null, T3K_POWERED = 'Powered by TONE3000', toneCredit = () => 'credit'
 export const creatorImage = () => null, creatorOf = () => 'maker', makesOf = () => '', toneBrowser = () => ({}), toneImage = () => null
 export const hostPage = () => () => {}, onTone3000Return = () => () => {}, pageInApp = () => false, startOutside = async () => {}
+/* The Developer page's Sign out goes through the device's own way out since 17 November 2026 (lib/tone3000Here signOutHere), which forgets what TONE3000's page kept too. */
+export const signOutHere = async () => { H.signedOutHere = (H.signedOutHere || 0) + 1 }
 export const t3k = {
   signedIn: async () => true,
   me: async () => ({ username: 'justin' }),
@@ -273,7 +275,9 @@ export function run(test) {
     assert.equal(c.oldAfterSend({ old: false, ...PI }), null)
     assert.equal(c.oldAfterSend({ old: true, name: 'x', version: '1.90.82' }), null)
     assert.equal(c.unkeptWords({ tries: 2, slotSaid: '041', computer: null }, 'phone'), NOT_KEPT_TODAY)
-    assert.equal(c.unkeptWords({ tries: 1, slotSaid: '035', computer: null }, 'phone'), 'The Axe-Fx III took the capture and then still shows slot 035 as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.')
+    assert.equal(c.unkeptWords({ tries: 1, slotSaid: '035', computer: null }, 'phone'), 'The Axe-Fx III took the capture and then still shows slot 035 as empty, so it did not keep it. Send it once more. If it says this again, send us a report from Settings → Troubleshooting → Feedback, with its log, so we can see what the unit answered.')
+    /* A player is pointed at a report, never told to read a log they cannot open (17 November 2026, the captures open to every account). */
+    for (const tries of [1, 2]) assert.doesNotMatch(c.unkeptWords({ tries, slotSaid: '035', computer: null }, 'phone'), /app’s log has|log has what/)
 
     /* lib/captureSend says when an answer had no byte in it (`old`), and when every answer did. */
     const { sendCapture } = await import('../mobile/src/lib/captureSend.js')
@@ -403,7 +407,7 @@ export function run(test) {
     await b.draw()
     assert.deepEqual(b.sent(), [['fetch', 748130], ['empty'], ['install', 40], ['install', 40]])
     assert.deepEqual(b.cards(), [{ head: 'Not on your Axe-Fx III', line: NOT_KEPT_OLD }])
-    assert.doesNotMatch(b.said(), /The app’s log has what the unit answered/)
+    assert.doesNotMatch(b.said(), /so we can see what the unit answered/)
     /* The log line stays as it was, and is still there. */
     assert.ok(b.logs().some((l) => /try 1, way 1 .*AN OLDER COMPUTER APP, WHICH PUTS THE NAME XORED IN.*Update the computer app, so that 0x60 goes/.test(l)))
 

@@ -143,9 +143,9 @@ export function run(test) {
     assert.deepEqual(s.blockSettings(cabOut.enums, cabOut.slug), [])
   })
 
-  test('edit settings: Edit draws them under the knobs for his account alone, writes with the write it already had, and reads the block again', async () => {
-    /* The switch, false: every other account's Edit is the knobs it always was. */
-    assert.match(read('mobile/src/lib/features.js'), /^export const EDIT_SETTINGS_FOR_EVERYONE = false$/m, 'a block’s list settings are open to every account before he has tapped one and said so')
+  test('edit settings: Edit draws them under the knobs for every account since 2.0.0, writes with the write it already had, and reads the block again', async () => {
+    /* The switch, true since 2.0.0 (17 November 2026): every account's Edit has them; his account's had them before. */
+    assert.match(read('mobile/src/lib/features.js'), /^export const EDIT_SETTINGS_FOR_EVERYONE = true$/m, 'a block’s list settings are closed to customers on 2.0.0 (open since 17 November 2026)')
     assert.match(flat(code(read('mobile/src/lib/useEditSettings.js'))), /export const useEditSettings = \(\) => \{ const his = useBluetoothAdmin\(\) return EDIT_SETTINGS_FOR_EVERYONE \|\| his \}/)
     const edit = code(read('mobile/src/screens/Edit.js'))
     const one = flat(edit)

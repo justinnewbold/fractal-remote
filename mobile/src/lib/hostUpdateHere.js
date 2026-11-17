@@ -22,6 +22,8 @@ import { keptAccount, remoteHosts, remoteRequest, remoteRollCall, remoteUserId, 
 export const useComputerUpdate = () => computerUpdateOn({ admin: useBluetoothAdmin(), everyone: COMPUTER_UPDATE_FOR_EVERYONE })
 /** The same, asked at a moment rather than drawn. */
 export const computerUpdateNow = () => computerUpdateOn({ admin: bluetoothAdmin() === true, everyone: COMPUTER_UPDATE_FOR_EVERYONE })
+/** Whether the computer this device drives is his own (signed in to his account, as this device is), so a new version skips the day's wait there: lib/hostUpdate computerUpdateWords `owner`. */
+export const useOwnComputer = () => useBluetoothAdmin() === true
 
 /* What the computer said about its update, in the log when it changes: only where the switch is on, so no other account's log grows a line. */
 let saidKey

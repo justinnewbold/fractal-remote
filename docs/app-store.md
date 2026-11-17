@@ -3680,6 +3680,261 @@ Apple says no to it*, above), for Edit:
   version after it whose notes say so. Android: Halt rollout. iPhone: Pause
   Phased Release.
 
+## 2.0.0: What had been the developer's own, for customers
+
+**The store version that opens everything built on Justin's account since
+1.90.0** (written 17 November 2026, release day):
+
+> "I'm gonna go ahead and submit the build to Apple. Go ahead and submit
+> the android build now. for 2.0.0. Enable all new features for all users
+> that were on my account. Except for the scroll wheel for presets, I wanna
+> just get rid of that altogether."
+
+No new build. The builds are the pair of 16 November (TestFlight build 33,
+Google Play's internal testing track), made for testers with five native
+pieces in (CLAUDE.md, *Or build them for testers first*). Three pull
+requests that day, in this order: the wheel out (#933, 1.92.7), release day
+itself (#934, 2.0.0: the same five pieces into main, the fingerprint the
+build's own, nothing switched on), and the one that opens the features
+(2.0.1). From #934 on, an update reaches a 2.0.0 copy and no other, so the
+1.90.0 copies in the stores, reviewed with notes that say there is no
+saving and no moving blocks over Bluetooth, never get any of it. That is
+why a plain switch was enough here where the notes had asked for a key to
+the store version.
+
+**The build carries none of it switched on.** Build 33's own copy of the
+app is main as it was on 16 November, every one of these his account's.
+A copy runs what is built into it on its first launch and takes the update
+by the next (`fallbackToCacheTimeout` is 0), so the review notes say to
+close the app and open it again.
+
+What opens, each on every unit and connection its own section in CLAUDE.md
+names:
+
+- a phone turned on its side on Play, on what opens beside it and in Stage
+  view (the smallest phones stay upright; iPads turn as before);
+- over Bluetooth or the unit's USB cable: Save over the preset the unit is
+  on (AM4, FM3, FM9, Axe-Fx III), Quick build and Starter chains on an
+  empty preset, blocks in the unit's own order, knobs that follow the unit,
+  the Output block's and each scene's level with the volume button (FM3,
+  FM9, Axe-Fx III);
+- a block's list settings under its knobs in Edit;
+- on an Axe-Fx III: the NAM block's capture picked in Edit, and TONE3000
+  from a held NAM block and from Edit's Capture screen;
+- through a computer: the Axe-Fx III's and FM9's own blocks named on Play
+  and in the chain editor (and in the browser and the computer's window);
+- the metronome's choices (where it clicks, the flash, lining it up,
+  following the unit's beat where it sends one);
+- the Apple Watch's pages, Tempo page, tuner buttons, edge light and quick
+  edit;
+- the Done button on Apple's Bluetooth MIDI screen;
+- the computer app's update shown on Phone & computer, with Update now for
+  a Raspberry Pi.
+
+**Most of it has never run on a real unit.** He chose to open it all the
+same; CLAUDE.md, *Everything that was his account's is open*, keeps the
+list of what is not proven, feature by feature. No text here says any of
+it has been tried, and none promises more than the code does.
+
+### The guideline pass for 2.0.0 (17 November 2026)
+
+Apple's guidelines page said **Last Updated: October 16, 2026** that day,
+the same as at the 1.90.0 pass, so nothing in them has moved since the last
+submission. Apple's news since 8 November: macOS data-access changes (16
+November, nothing to do with the phone app) and the Swift Student Challenge.
+The two age-rating questions of 2 November (Shared Location; Dating and
+Relationships) are due by 12 January 2027: both No.
+
+What the pass found, and what was done:
+
+- **Order (2.5.19, 2.3.1(a), the licence's 3.3.1(C); Google's rule on
+  features switched on after review).** Sent for review as it sat, the
+  build would have been reviewed with every new feature hidden and had them
+  switched on afterwards. So the features open by update BEFORE Add for
+  Review, on a copy only 2.0.0 owners have, and the notes describe each.
+- **A customer could not sign out of TONE3000 (5.1.1(v)).** The only Sign
+  out was on the Developer page. There is one for customers now, and the
+  app's own Sign out and Delete account take the TONE3000 sign-in off the
+  device too.
+- **TONE3000's sign-in page could open any web address (2.3.6, the age
+  rating's "no unrestricted web access").** It is held to TONE3000's own
+  pages; anything else opens in the device's browser or not at all.
+- **The privacy page did not name TONE3000 (5.1.1(i), 5.1.2(i)).** It has a
+  section now, and TONE3000 is in its list of services.
+- **A reviewer cannot reach TONE3000, or saving and Quick build over
+  Bluetooth, without a unit (2.1).** The demo has no NAM block, and the
+  notes say so; Save in the demo goes through its own pretend computer. A short private video of TONE3000 on his Axe-Fx III (hold a
+  NAM block, TONE3000, sign in, Preview, Get) as video 5 is the cheap
+  insurance, and is his to film; without it, the answer if Apple asks is a
+  reply with that video, not a build (as *No Edit video* for 1.90.0).
+- **The preset wheel (2.5.19).** A choice only the developer's account
+  could see: taken out whole.
+- **4.8 (login services) does not apply**: TONE3000 is not how anyone signs
+  in to Fractal Remote. **2.5.6**: the sign-in page is Apple's WebKit.
+- **App Privacy label: no new row**, and written down here because the
+  label's own notes say search history is not declared. What goes to
+  TONE3000 (a search, the tone and capture picked) goes under the player's
+  own TONE3000 account, to a service the screen names, only when they open
+  it; nothing of it reaches our servers. If Apple reads it otherwise, the
+  row is Search History (App Functionality, linked, not tracking). Google's
+  Data safety: the same reading (a transfer the person starts and expects
+  is not "sharing").
+- **Content rights**: the answer now covers TONE3000's tones, pictures and
+  names as well as Fractal's product names: third-party content, shown with
+  TONE3000's permission (keep their written approval to hand: 5.2.2 says it
+  is "provided upon request").
+- **User-made content (1.2, and the age rating's question).** TONE3000's
+  list shows what its members uploaded: tones, pictures, descriptions, the
+  maker's name. The age rating says the app has none. Apple may or may not
+  count a catalogue from a third party. HIS TO DECIDE in App Store Connect;
+  if it is raised, a "Report on TONE3000" link on each tone is an update.
+- **Two permission texts are built into build 33 and are true as they
+  stand**: Bluetooth ("change presets and scenes": it does more now, which
+  understates and is not false) and Photos (bug-report screenshots; the
+  profile photo uses the same picker, which asks nothing).
+- Every address in the app and the listing answered that day.
+
+### Notes for App Review, 2.0.0
+
+App Store Connect → the 2.0.0 version → App Review Information → Notes. A
+draft for pasting, started from the 1.90.0 notes as submitted (the reader
+could not read App Store Connect on 17 November: its key answered "not
+authorised"). About 2,760 bytes with four links of the usual shape, inside
+Apple's 4000. No VP4 anywhere. The Tested on line has his iPhone's version;
+the watch's brackets are his to fill. If video 5 is filmed, it goes on the
+list as `5. TONE3000 on an Axe-Fx III: [link]` and "see video 5" after "The
+demo has no NAM block."
+
+```
+A remote for Fractal Audio guitar units, by a Bluetooth MIDI adapter or a USB cable with no computer, or through a computer.
+
+No hardware? Use the demo, no account needed: tap OK on the independent-app card, Get started, Got it, Start free demo, pick any unit, Play with ..., then Let’s go. Every screen but Bluetooth and TONE3000 works in the demo.
+
+The demo account in App Review Information has the full version. In-app purchase: Unlock, at the top of the demo's Play; Restore is under Unlock Full Version.
+
+If something below is missing, close the app fully and open it again: it finishes updating on its first launch.
+
+New in 2.0.0:
+• Turn the iPhone on its side on Play: scenes on one half, the chain on the other. Settings, sign-in and the purchase page stay upright.
+• Over Bluetooth or USB, with a unit: Save over the preset the unit is on; Quick build and Starter chains fill an empty preset; blocks in the unit's own order; knobs that follow the unit; output and scene levels. Edit shows a block's list settings under its knobs.
+• TONE3000 (tone3000.com, a third-party library of NAM captures, shown with its permission), Axe-Fx III only: hold a NAM block on Play, tap TONE3000, then search, Preview and Get. Sign-in is TONE3000's own page, with a free TONE3000 account. Once signed in, Settings, My rig, TONE3000 signs out of it, and so does the app's own Sign out. The demo has no NAM block.
+• Settings, Metronome: where it clicks, an edge flash, lining it up with the unit.
+• Apple Watch: Settings, Apple Watch, Watch pages orders and hides its pages; a Tempo page; hold a pedal for quick edit with the Digital Crown. On screen, the watch messages the iPhone app about every 20 seconds so taps go through; no background mode.
+• Apple's Bluetooth MIDI screen has Done again.
+
+Developer pages and the Axiom switch in Settings show only on the developer's own account, checked by the server.
+
+Delete account: Settings, the account card, Delete account, "Delete my account" (video 3). Without the full version, it is at the foot of the purchase page.
+
+Hardware: video 1, a real FM3 through a computer; video 4, Bluetooth on a real AM4.
+
+Tested on: iPhone 17 Pro Max, iOS 27.2.1; Apple Watch [model], watchOS [version].
+
+Services: Supabase (accounts), RevenueCat with Apple in-app purchase, Resend (email), Expo (updates), TONE3000 (captures, only when opened). Bluetooth and USB use no server.
+
+Videos:
+1. FM3 hardware: [FM3 video link]
+2. Presets: [presets video link]
+3. Deleting an account: [account deletion video link]
+4. Bluetooth with an AM4: [Bluetooth video link]
+```
+
+### What's New in This Version, 2.0.0
+
+App Store Connect → the 2.0.0 version → What's New in This Version. A draft
+for pasting: 1085 characters of Apple's 4000.
+
+```
+• New: turn your iPhone on its side on Play and the screen splits in two, your scenes on one side and your pedals on the other.
+• New: save from the app over Bluetooth or a USB cable. On an AM4, FM3, FM9 or Axe-Fx III, Save keeps your changes in the preset, with no computer.
+• New: Quick build. On an empty preset, tap the blocks you want and the app puts them in and joins them up. Keep your own Starter chains in Settings.
+• On an FM3, FM9 or Axe-Fx III over Bluetooth: your blocks in the unit's own order, knobs that follow the unit, and the output and each scene's level.
+• Edit shows a block's list settings, like Bypass Mode, under its knobs.
+• Axe-Fx III: pick the NAM block's capture in Edit, or hold a NAM block on Play and tap TONE3000 to browse, preview and get new captures.
+• Metronome: choose where it clicks, flash the edge of the screen with or without sound, and line it up with your unit's click.
+• Apple Watch: choose and order its pages, a new Tempo page, and hold a pedal for quick edit with the Digital Crown.
+• Apple's Bluetooth screen has its Done button back.
+```
+
+### Description, 2.0.0 (App Store): one paragraph, his to change
+
+He sets the listing himself, and nothing here writes to App Store Connect.
+The live Description's EDIT YOUR TONE OVER BLUETOOTH paragraph ends "Save
+on the unit when you find a sound you love.", which is out of date once
+the app saves. A paragraph to put in its place, if he wants it:
+
+```
+On an AM4, FM3, FM9 or Axe-Fx III, open Edit and turn real knobs, change amp and effect models, switch blocks on and off and pick their channels. You hear every change right away, and Save keeps it in the preset, with no computer. On an empty preset, Quick build lays out a chain for you.
+```
+
+Keywords, subtitle and promotional text: as they are. No `tone3000` or
+`nam` in the keywords (another company's name; 2.3.7).
+
+### Google Play release notes, 2.0.0
+
+Play Console → the release being promoted → Release notes (en-US): 444 of
+Play's 500 characters. No Apple device named.
+
+```
+• Turn your phone on its side on Play: scenes on one side, pedals on the other.
+• Save from the app over Bluetooth or USB on an AM4, FM3, FM9 or Axe-Fx III.
+• Quick build fills an empty preset and joins it up.
+• FM3, FM9, Axe-Fx III over Bluetooth: blocks in the unit's order, knobs that follow the unit, scene levels.
+• Axe-Fx III: pick NAM captures, and get new ones from TONE3000.
+• Metronome: where it clicks, an edge flash, and line it up.
+```
+
+### Google Play App access, 2.0.0: what to change
+
+App content → App access → "Any other information". In 1.90.0's note, the
+Edit paragraph says "it does not save (save on the unit itself), move
+blocks…": replace that paragraph with the first below, and add the second.
+
+```
+Edit over Bluetooth, on an AM4, FM3, FM9 or Axe-Fx III: once connected, Play → Edit reads the unit's preset to turn knobs, change models, switch blocks on and off, pick a block's channel and its list settings, and Save over the preset the unit is on. On an empty preset, Quick build puts blocks in and joins them. It does not move or remove a block in a chain that has blocks, change modifiers or names, or pick cabs on an FM3, FM9 or Axe-Fx III. Not on a VP4. It talks only to the unit, through no server. A video of Bluetooth on a real AM4: [Bluetooth video link]
+
+TONE3000, new in this version, on an Axe-Fx III only: holding a NAM block on Play offers TONE3000 (tone3000.com, a third-party library of NAM captures) to search, preview and get a capture onto the unit. It needs a real Axe-Fx III with a NAM block, which the demo does not have, and a free TONE3000 account, made on TONE3000's own sign-in page inside the app; this review account is not a TONE3000 account. Once signed in, Settings, My rig, TONE3000 signs out of it, and so does the app's own Sign out.
+```
+
+### Submission day for 2.0.0
+
+Everything on GitHub is done by the time the features-on pull request has
+merged and its update is out. What is left is Justin's:
+
+1. **Before Promote release: one Android phone on the 2.0.0 test copy,
+   connected through a computer or the Pi, and a report sent from it.**
+   Google's own test machines never joined the relay on that build
+   (report a345130c), and no Android copy of 2.0.0 has been seen
+   connecting (CLAUDE.md has the whole of it, and the log line to read).
+2. **App Store Connect:** a new version 2.0.0; build 33; paste the notes
+   and What's New above; the Description's paragraph if he wants it;
+   Content Rights (third-party content, with the rights: TONE3000 now as
+   well as Fractal's product names); the age rating's two new questions,
+   both No, and his answer on user-made content; anything waiting under
+   Business; Add for Review.
+3. **Play Console:** Test and release → Internal testing → the 2.0.0
+   release → Promote release → Production; the release notes above; App
+   access as above. Managed publishing is off, so it goes live when Google
+   approves.
+4. **The watch's two tuner pictures** in App Store Connect are his to
+   replace: watch.yml, started by hand on main after release day, puts the
+   new ones in the watch-screenshots release.
+
+### Live day for 2.0.0 (each store's own day, not before)
+
+- public/store-versions.json: that store's number to 2.0.0. Moved early,
+  it tells every 1.90.0 copy to update to a version its store cannot give.
+- public/bluetooth.html and public/support.html still say there is no
+  saving over Bluetooth and that moving blocks needs the desktop app: true
+  of 1.90.0, which is what the stores offer until then. On the day 2.0.0
+  is live in BOTH stores they say Save and Quick build, and that changing
+  one block in a chain that has blocks still needs the computer.
+- The setup email's "with no saving (save on the unit itself)" changes
+  only with his yes and a redeploy (supabase/README.md).
+- The Google Play Description (store/google-play) still says "No editing
+  or saving" over Bluetooth: it changes when he asks for it on Google Play.
+- CLAUDE.md's "is live in both stores" paragraph.
+
 ## Kept for the record: the 1.87.1 texts (not for pasting)
 
 These were written for the 1.87.1 builds of 10 October 2026, and the 1.87.11

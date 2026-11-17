@@ -1,7 +1,7 @@
 /**
  * EDIT'S KNOBS FOLLOW THE UNIT (mobile/src/lib/liveKnobs.js, the rules;
  * lib/liveKnobsHere.js, the panel's side; bleWire heardReport and the
- * wire's `fresh` and `ifIdle` reads), his account only until lib/features
+ * wire's `fresh` and `ifIdle` reads), his account first, every account since 2.0.0 by lib/features
  * LIVE_KNOBS_FOR_EVERYONE.
  *
  * "Changing a parameter on the unit itself doesn't reflect on the Amp." (A
@@ -185,7 +185,8 @@ async function hookBench(t, over = {}) {
       export const refreshSceneState = async () => { bench.sceneReads++; return true }
     `,
     'bluetooth.js': "import { bench } from './bench.js'\nexport const useBluetoothAdmin = () => bench.admin === true\n",
-    'features.js': read('mobile/src/lib/features.js'),
+    /* The switch as it stands (open to everyone since 2.0.0), or closed (`over.closed`), so a test can still ask what an account it is closed to gets. */
+    'features.js': over.closed === true ? read('mobile/src/lib/features.js').replace(/^export const LIVE_KNOBS_FOR_EVERYONE = true$/m, 'export const LIVE_KNOBS_FOR_EVERYONE = false') : read('mobile/src/lib/features.js'),
     'liveKnobs.js': read('mobile/src/lib/liveKnobs.js'),
     'useLiveKnobs.js': read('mobile/src/lib/useLiveKnobs.js').replace(/from '\.\/(\w+)'/g, "from './$1.js'"),
     'liveKnobsHere.js':
@@ -1084,7 +1085,7 @@ function panelTests(test) {
   })
 
   test('live knobs, the panel: closed (not his account), it reads and sends exactly what it did: its own read from the copy, no timer, no listener, no news', async () => {
-    const { t, bench, panel, turn } = await opened('fm9', { bench: { admin: false } }, {})
+    const { t, bench, panel, turn } = await opened('fm9', { bench: { admin: false, closed: true } }, {})
     assert.deepEqual(bench.asks.map((a) => a.plain === true), [true], 'the first read was not the one the panel always made')
     assert.equal(bench.app.size, 0, 'an AppState listener for an account it is closed to')
     assert.equal(bench.news.size, 0, 'a news listener for an account it is closed to')
@@ -1294,7 +1295,7 @@ function panelTests(test) {
   })
 
   test('live knobs, the panel: closed and opened again with the panel up (a sign-in), it follows from then, the gap starting afresh', async () => {
-    const { t, bench, panel } = await opened()
+    const { t, bench, panel } = await opened('fm9', { bench: { closed: true } })
     await advance(t.clock, 6000)
     const n = bench.asks.length
     assert.ok(n >= 2)
@@ -1568,8 +1569,8 @@ function sourceTests(test) {
     assert.deepEqual([closed.value, closed.local, closed.errors], [5, { 7: 7 }, ['the read after it failed']])
   })
 
-  test('live knobs: one switch, off, asked the way every his-account switch is: lib/useLiveKnobs for the screens, lib/bluetooth for the wire', () => {
-    assert.match(read('mobile/src/lib/features.js'), /^export const LIVE_KNOBS_FOR_EVERYONE = false$/m, 'Edit’s knobs follow the unit for every account before he has seen a knob turned on a unit reach the app')
+  test('live knobs: one switch, on for every account since 2.0.0, asked the way every such switch is: lib/useLiveKnobs for the screens, lib/bluetooth for the wire', () => {
+    assert.match(read('mobile/src/lib/features.js'), /^export const LIVE_KNOBS_FOR_EVERYONE = true$/m, 'Edit’s knobs do not follow the unit for customers on 2.0.0 (open since 17 November 2026)')
     assert.equal(flat(read('mobile/src/lib/useLiveKnobs.js')).trim(), "import { useBluetoothAdmin } from './bluetooth' import { LIVE_KNOBS_FOR_EVERYONE } from './features' export const useLiveKnobs = () => { const his = useBluetoothAdmin() return LIVE_KNOBS_FOR_EVERYONE || his }")
     const ble = flat(read('mobile/src/lib/bluetooth.js'))
     assert.match(ble, /export const liveKnobsOverBluetooth = \(\) => allUnits === true \|\| LIVE_KNOBS_FOR_EVERYONE/)

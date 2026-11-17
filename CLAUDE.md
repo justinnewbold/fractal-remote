@@ -415,6 +415,174 @@ the new one. So a test line, with nothing committed for the build:
   Lock. His next report says which. A fix in the app's JavaScript is an
   update; one in the native side is another build pair, and his yes.
 
+**Everything that was his account's is open to every account since 2.0.1
+(17 November 2026), on a 2.0.0 copy. The preset wheel is gone.**
+
+> "Enable all new features for all users that were on my account. Except
+> for the scroll wheel for presets, I wanna just get rid of that
+> altogether." (17 November 2026, release day for 2.0.0)
+
+Eighteen switches went to true in one pull request, the one straight after
+release day's and before he sent the builds for review:
+
+- in mobile/src/lib/features.js: `SAVE_OVER_BLUETOOTH`, `CHAIN_OVER_BLUETOOTH`,
+  `QUICK_BUILD`, `BLOCK_ORDER_FROM_GRID`, `LIVE_KNOBS`,
+  `OUTPUT_AND_SCENE_LEVELS`, `EDIT_SETTINGS`, `OWN_BLOCKS_THROUGH_COMPUTER`,
+  `NAM_PICKER`, `TONE3000_QUICK`, `PHONE_SIDEWAYS`, `WATCH_QUICK_EDIT`,
+  `METRONOME_FLASH_CHOICE`, `METRONOME_LINE_UP`, `BEAT_LOCK` and
+  `COMPUTER_UPDATE`, each `_FOR_EVERYONE`;
+- for the browser and the computer's own window, which made a computer
+  release: `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE` (shared/own-blocks.mjs) and
+  `PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE` (src/lib/sidewaysPlay.js). Both
+  are open to a visitor who is not signed in and to the demo as well.
+
+Each feature's own section, below, still says what it is, and its heading
+says when it opened. What matters across all of them:
+
+- **A plain switch was enough, and only because of the order.** Several of
+  these sections say "opening it to customers is a store version, never the
+  switch alone", and asked for a key to the store version as Edit has
+  (`EDIT_FROM_STORE`). No key was made. Release day's merge moved main's
+  fingerprint to the 2.0.0 build's, so from it on an update reaches a 2.0.0
+  copy and no other: TestFlight build 33, Play's 2.0.0, and the public
+  apk-v2.0.x files, which are 2.0.0 copies too. The 1.90.0 copies, reviewed
+  with notes that say no saving and no moving blocks over Bluetooth, are
+  frozen on update 1.92.7 and can never be handed any of this. And the
+  2.0.0 notes describe every one of them (docs/app-store.md, *2.0.0*). SO
+  THE RULE FOR THE NEXT ONE IS UNCHANGED: something new for customers that
+  a copy's review notes do not describe still waits for a store version, or
+  is keyed to one. This day does not make switches a way round that.
+- **Build 33's own copy has every one of them off.** A copy runs what is
+  built into it on its first launch and has the update by the next, so a
+  fresh install shows none of this for one launch. The review notes say so.
+- **More than the switch, in three places.** (1) The capture tools' wire
+  gate, lib/bluetooth `capturesOverBluetooth` (his account, or either of
+  `NAM_PICKER` and `TONE3000_QUICK`), handed to the wire as `captures`:
+  until then the list, the pick and the send answered his account alone
+  over Bluetooth or the cable, so the switches by themselves would have
+  drawn buttons that did nothing there. `reader` (the Block reader) beside
+  it is still his alone, and a test holds that opening the one does not
+  open the other. Through the computer there was never an account gate on
+  the capture routes, only the phone's own hooks. (2) Words that did not
+  follow a switch: Edit's line under More and the Bluetooth page's list say
+  that Quick build fills an empty preset and that moving, adding or
+  removing a block in a chain that has blocks still needs the computer;
+  the "save it on the unit" notes are not drawn where the app saves. (3)
+  The computer update's two sentences are by whose computer it is
+  (lib/hostUpdate `owner`, from the device's own sign-in): a customer's
+  waits a day after a release and is told so in both; his own does not, and
+  is not told of a wait it does not make.
+- **TONE3000 was made fit for a customer the same day**, by what the
+  guideline pass found:
+  - *A way to sign out* (Apple's 5.1.1(v)). Settings → My rig → TONE3000,
+    drawn only while a TONE3000 sign-in is kept on the device, for any
+    account: "Signed in as @name · tap to sign out", a confirm, and the
+    pass is removed. The held-block pop-up still has none, on purpose (an
+    earlier read took it out). And the app's own goodbyes end it too:
+    `forgetTone3000()` right after each of the five
+    `allowBluetooth(null, { signedOut: true })` calls in App.js (the
+    sign-in form, the purchase page's three, and Settings' Sign out, which
+    Delete account goes through).
+  - *The page forgets too, where there is something to forget.* The web
+    view keeps TONE3000's own website login, which the app cannot empty, so
+    a sign-out on a device where TONE3000's page has been shown
+    (`fractal.tone3000.shown`), or where a pass is kept, makes the page
+    private from then on (`fractal.tone3000.private`, the web view's
+    `incognito`; lib/tone3000Keep `signOutKeeper`), and the next person is
+    not handed the last one's TONE3000 account. A device that never opened
+    the page is left as it was (a first cut made every device private the
+    first time anybody went to the sign-in form; an independent read found
+    it). The cost where it applies: each later TONE3000 sign-in on that
+    device asks for the email and the code again, and going to the app's
+    sign-in form and back ends the TONE3000 sign-in. That reverses the
+    older "never a private window" test on purpose. ON ANDROID A PRIVATE
+    PAGE IS LESS THAN ON AN iPHONE: the package empties cookies, the cache
+    and form data each time the page opens, not the page's local storage,
+    where an iPhone gives it a separate store. TONE3000's site keeps its
+    sign-in in cookies, so that is believed enough and has not been seen on
+    an Android device; the privacy page promises only what the code does.
+  - *Only TONE3000's pages load inside the app* (2.3.6, the age rating's
+    "no unrestricted web access"). lib/tone3000Page `pageRule`: the return
+    address; https on www.tone3000.com or tone3000.com; any other https
+    page is handed to the device's own browser; everything else (http,
+    mailto, intent, javascript and the rest) is refused. The web view's own
+    list is `['*']` so that every address reaches the rule: with a narrower
+    list the package itself opens whatever is not on it in the browser.
+    One tap opens the browser once (the same address again within two
+    seconds is not opened twice), and Android, which cannot say whether a
+    question is the whole page's or a frame's, keeps a frame's inline
+    pages (data: and blob:).
+  - *The privacy page* has a TONE3000 section and names it among the
+    services (5.1.1(i)). It is inside the computer app, which opens it from
+    The small print, so it made a computer release.
+  - NOT KNOWN, because nobody can run TONE3000's live sign-in here: whether
+    it ever moves the whole page through another host (that step would
+    open in the browser and the sign-in would not come back to the app),
+    what Android does with a frame on another host, and whether a private
+    page disturbs the sign-in. THE FIRST SIGN-IN ON A 2.0.1 COPY IS THE
+    CHECK: if the page will not finish, `pageRule` is the first thing to
+    read, and loosening it is an update.
+  - Not built, and Apple's or TONE3000's to raise: a "Report on TONE3000"
+    link on each tone (Apple's 1.2), TONE3000's logo, its Favorites,
+    Created and Downloaded lists, and the catalogue page.
+- **What customers have now and nobody has seen on a unit.** He chose to
+  open it all; no screen, store text or email says any of it was tried.
+  When a report comes in, this is the list to read first:
+  - *Save from the phone*: nothing has ever been saved from the phone to a
+    unit, on any of the four. A save writes over the preset the unit is on.
+  - *A chain built over Bluetooth*: once, his Axe-Fx III through a WIDI
+    Master, on row 3. Never another row, an FM3, FM9 or AM4, another
+    adapter, an Undo, a cell emptied or a cable parted.
+  - *Quick build*: his Axe-Fx III has joined row 3 four times (once over
+    Bluetooth, three through the Pi). Through a computer app older than
+    1.90.82, a six-row preset whose ends are on row 2, 5 or 6 is built and
+    not joined, and nothing tells that player to update (`COMPUTER_NEEDED`
+    was left at 1.87.23 on purpose: the card says the row is not joined).
+  - *Blocks in the unit's own order over Bluetooth*: no unit has answered
+    that read from a phone, and an Axe-Fx III's answer has never been seen.
+  - *Knobs that follow the unit*: never watched, and nobody has listened
+    for whether a read every few seconds is heard. The cost left when it
+    was built stands: a Play tap that lands just after such a read has
+    started waits for it, 0.3 to 0.9 s.
+  - *The Output block's and the scenes' levels, IN and OUT, the volume
+    button over Bluetooth*: none of it seen on a unit.
+  - *A block's list settings in Edit*: no setting tapped on a unit.
+  - *The capture picker*: no list read and no capture picked from Edit on
+    a unit. *TONE3000*: two captures kept through the Pi on computer app
+    1.90.90; over Bluetooth, no search for an empty slot and no whole send
+    has been seen since the fixes; its sign-in page inside the app has been
+    seen once, on his Android phone on the 2.0.0 copy (17 November 2026,
+    signed in, then a Preview kept in slot 050 through the Pi), never on an
+    iPhone; and the block switched on for a preview (1.92.7) has not been
+    run. Every Preview and every Get fills a slot on the unit
+    for good.
+  - *Own blocks through a computer*: NAM placed and switched on his
+    Axe-Fx III through the Pi; the other five never switched that way, and
+    never from the browser or the computer's window.
+  - *The metronome*: the flash and sound choices never seen on a phone;
+    line-up and Tap along never against a unit's click; whether any unit
+    sends its beat at all is not known (with none heard, nothing changes).
+  - *A phone on its side*: seen once, on his iPhone, on Play alone. Never
+    beside a tool, in Stage view, on an Android phone or in a phone's
+    browser; and why his iPhone once would not turn is not settled.
+  - *The watch's quick edit*: compiled on GitHub, never run on a watch.
+  - *Update now*: never pressed on a real Raspberry Pi.
+- **Still his alone**, and meant to be: the Developer pages (messages,
+  customers, sales, trials, access, app health, testing tools), the Block
+  reader, Developer → TONE3000 (the card with the sender), the Axiom
+  switch, and settings that are measured and never written back.
+- **If one has to be shut again**, its switch goes back to false in an
+  update, and the feature is his account's again that day. That is the
+  emergency way and it is allowed (shutting is not switching on), but it
+  takes from customers something their copy was reviewed with: tell him
+  first, in plain words, and say which.
+- **Left for each store's live day**, as at 1.90.0, because a merge
+  publishes the website before either store has approved 2.0.0:
+  public/store-versions.json; public/bluetooth.html and public/support.html,
+  which still say there is no saving over Bluetooth (true of 1.90.0, which
+  is what the stores offer until then); the setup email's "with no saving"
+  (his yes and a redeploy); the Google Play description (when he asks).
+
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with
 what it was for, and the line under each month says how many are left.
@@ -1218,7 +1386,7 @@ what the computer sends for the same edit, and a test holds it there.
     block's, were turned on his AX3 on 16 November 2026 and opened to
     every account the same day (above).
 - **A block's list settings in Edit, under its knobs: built 13 November
-  2026, HIS ACCOUNT ONLY** ("Yes, I like B for the edit screen" and "Menu
+  2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)** ("Yes, I like B for the edit screen" and "Menu
   style B", of three ways shown on a NAM block; the picture is in the
   session's scratchpad, not the repository). Edit drew knobs and nothing
   else; every setting that is one of a list (Bypass Mode, Tone Stack Type,
@@ -1228,7 +1396,7 @@ what the computer sends for the same edit, and a test holds it there.
   components/BlockSettings.js): two or three choices are buttons, one tap
   (`SHORT_MOST`); more is one button with its name over the choice it is
   on, which opens a list (with a find box from thirteen choices).
-  - *The switch* is `EDIT_SETTINGS_FOR_EVERYONE` in features.js, false:
+  - *The switch* is `EDIT_SETTINGS_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026):
     his account only (lib/useEditSettings). It opens when he says so, with
     its What's new line then. NO SWITCH OF ANY BLOCK HAS BEEN TAPPED FROM
     THE APP ON A UNIT: his first tap is the first check.
@@ -1312,7 +1480,7 @@ what the computer sends for the same edit, and a test holds it there.
     NAM capture picker (1.90.63) are both built since, his account only.
     Which of the Crossover's four levels and four pans is which was
     settled by the codec's mined table (above), not by a read.
-  - *Through the computer the phone names them itself, HIS ACCOUNT ONLY*
+  - *Through the computer the phone names them itself, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)*
     (1.90.48). "NAM shows up on Bluetooth but not when connected through
     my raspberry pie" and "I would rather use the pi if that's possible"
     (13 November 2026). The engine passes each of these on with its place,
@@ -1327,13 +1495,12 @@ what the computer sends for the same edit, and a test holds it there.
     still treats it as a New block (its cell held, never replaced, not
     opened in Edit): only `stageBlocks` lets it through, on `onPlay`. A
     hold on it opens its channels (`knobs: false`). The switch is
-    `OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE` in features.js, false;
+    `OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026);
     nobody has switched one through a computer yet, and his Raspberry Pi
     is the first check. Edit through the computer for these blocks came in
     1.90.51 (above): the engine serves their knobs, and the phone still
     names them.
-  - *The browser and the computer's own window name them on Play too, HIS
-    ACCOUNT ONLY* (1.90.56). "Nam blocks are showing in the APP but not
+  - *The browser and the computer's own window name them on Play too, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)* (1.90.56). "Nam blocks are showing in the APP but not
     computer" (13 November 2026, a picture of the computer app's window on
     his Raspberry Pi: an Axe-Fx III on a preset called NAM, no NAM tile).
     That end drew only blocks with a slug. shared/own-blocks.mjs is the
@@ -1344,11 +1511,11 @@ what the computer sends for the same edit, and a test holds it there.
     as Edit's strip has always switched a New block. The chain the page
     keeps is untouched, so Edit there, the chain editor and the report
     still say New block, and no knobs of theirs are drawn in the browser.
-    The switch is `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE` in that file, false
+    The switch is `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE` in that file, true since 2.0.1 (false until 17 November 2026)
     (`ownBlocksOpenTo(link.account?.id)`). It is inside the computer app,
     so it came with a computer release, and a change to the list is one
     too: KEEP IT IN STEP WITH mobile/src/lib/gen3Catalog.js `OWN`.
-  - *AND THE CHAIN EDITOR CAN ADD, MOVE AND REMOVE THEM, HIS ACCOUNT ONLY
+  - *AND THE CHAIN EDITOR CAN ADD, MOVE AND REMOVE THEM, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)
     (1.90.75).* "Looks like NAM blocks and some others are missing from
     the chain editor when adding new blocks not currently in the chain"
     (15 November 2026). The editor works through the computer only, and
@@ -1371,7 +1538,7 @@ what the computer sends for the same edit, and a test holds it there.
     and says when the unit did not take it, which is how his first try
     will tell. Same switches as the names
     (`OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE`,
-    `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE`), both false. Not over Bluetooth
+    `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE`), both true since 2.0.1 (false until 17 November 2026). Not over Bluetooth
     or a USB cable: the chain EDITOR is not there (the Bluetooth blocks
     read carries no positions). The messages that place a block and join
     a cable are, since 1.90.76, for Quick build (see "The chain over
@@ -1445,7 +1612,7 @@ what the computer sends for the same edit, and a test holds it there.
   lines. Quick build and the starter chains are not in that log (they are
   in the next one, the same day: below).
 - **Quick build and starter chains: built 15 November 2026 (1.90.76),
-  HIS ACCOUNT ONLY.** "Let's also look into building out a way to build a
+  OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then).** "Let's also look into building out a way to build a
   preset quickly from an empty preset. Maybe a "quick build" to build what
   blocks go in them (including NAM blocks) and a quick default starter
   chain option as well with settings a user where A user can create their
@@ -1537,7 +1704,7 @@ what the computer sends for the same edit, and a test holds it there.
     up to the one before the last, never out of the last), run by
     `runPlan`, and its Undo is the exact inverse, taken back only as far as
     a stopped run got.
-  - *The switch* is `QUICK_BUILD_FOR_EVERYONE` in features.js, false
+  - *The switch* is `QUICK_BUILD_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026)
     (lib/useQuickBuild). Where it is drawn is lib/quickBuild
     `quickBuildHere`: never a VP4, only where the unit's capabilities say
     `gridEdit === true`, and only on this preset's own chain. It opens to
@@ -1692,7 +1859,7 @@ what the computer sends for the same edit, and a test holds it there.
     the computer's store is no longer logged as a failure (relay.js, as the
     browser already did); every other failure still is. Nothing on screen
     changes. Seen on the bench only: his next log is the check.
-- **Saving over Bluetooth is built, HIS ACCOUNT ONLY, since 1.90.52 (13
+- **Saving over Bluetooth is built, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then), since 1.90.52 (13
   November 2026).** He had thought it existed ("I think we can actually
   save on Bluetooth now", 12 November, and was told it did not), and then
   asked for it: "It still says we can't save in Bluetooth when you pull up
@@ -1713,7 +1880,7 @@ what the computer sends for the same edit, and a test holds it there.
     passes a frame of a save's shape only while that one save is being
     sent, and only as the save over that slot (`saveAllowed`).
   - *The switch* is `SAVE_OVER_BLUETOOTH_FOR_EVERYONE` in features.js,
-    false. lib/bluetooth `saveOverBluetooth()` (his account, or the
+    true since 2.0.1 (false until 17 November 2026). lib/bluetooth `saveOverBluetooth()` (his account, or the
     switch) is handed to the wire as `save`, which also wants Edit open;
     the wire's capabilities then say `supportsSave`, a change counts as
     unsaved (rig.noteEdited), and Edit's Save and Play's appear as they do
@@ -1735,6 +1902,9 @@ what the computer sends for the same edit, and a test holds it there.
     1.90.0. So it goes in a build pair's pull request, keyed to that store
     version as `EDIT_FROM_STORE` keys Edit, with the review notes, What's
     New and the website's pages saying so, and never by an update.
+    (IT OPENED ON 17 NOVEMBER 2026, in 2.0.1, by the switch, on 2.0.0 copies
+    only: *Everything that was his account's is open*, above, says why a switch was
+    enough that day.)
   - Bluetooth → What Bluetooth can't do (lib/editWords, screens/Bluetooth
     `DIFFERENT`) still says, for everybody: no moving, adding or removing
     blocks (true for every account but his since 1.90.76: "The chain over
@@ -1860,7 +2030,7 @@ what the computer sends for the same edit, and a test holds it there.
   it saw move ('param', which the phone threw away; rig `onKnobNews`). A
   read changes only knobs whose value differs, never one still waiting to
   go, and nothing from a read sent before a write began. The switch is
-  `LIVE_KNOBS_FOR_EVERYONE` in features.js, false (lib/useLiveKnobs for
+  `LIVE_KNOBS_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026) (lib/useLiveKnobs for
   the screens, lib/bluetooth `liveKnobsOverBluetooth` for the wire);
   closed, Edit reads and sends exactly what it did. THE UNIT'S REPORT IS
   WRITTEN IN THE LOG FOR EVERY ACCOUNT ("the unit reported a change to
@@ -1926,7 +2096,7 @@ what the computer sends for the same edit, and a test holds it there.
   words are exactly what every customer copy has always shown.
 
 **The chain over Bluetooth: a block placed, a cable joined, the grid read.
-Built 15 November 2026, HIS ACCOUNT ONLY. Run from a phone once, 16
+Built 15 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then). Run from a phone once, 16
 November 2026: one Quick build on his Axe-Fx III over a WIDI Master, on row
 3 (report 913f344a, below under NOT PROVEN); nothing else of it yet.**
 
@@ -2074,12 +2244,15 @@ where the chain is open).
   the preset: … (the preset has: r2c1 37, …)", or "DISAGREES … at row r,
   column c"): READ THOSE LINES FIRST in his first log from each unit.
 - **The switch** is `CHAIN_OVER_BLUETOOTH_FOR_EVERYONE` in features.js,
-  false (lib/bluetooth `chainOverBluetooth`, handed to the wire as
+  true since 2.0.1 (false until 17 November 2026) (lib/bluetooth `chainOverBluetooth`, handed to the wire as
   `chain`, which also wants Edit open). OPENING IT TO CUSTOMERS IS A STORE
   VERSION, not the switch alone, as Edit and saving over Bluetooth: every
   copy out was reviewed with notes that say blocks are not moved, added
   or removed over Bluetooth, and Bluetooth → What Bluetooth can't do
   still says so to everybody (true for every account but his until then).
+  (It opened on 17 November 2026, in 2.0.1, by the switch, on 2.0.0 copies
+  only, and that page says Quick build now: *Everything that was his
+  account's is open*, above.)
 - **SEEN ON A UNIT ONCE, AND NO MORE (report 913f344a, 16 November
   2026).** "Looks like everything worked." His first Quick build over
   Bluetooth, his Axe-Fx III through a WIDI Master, on empty preset 390:
@@ -2109,7 +2282,7 @@ where the chain is open).
   read it needs exists now.
 
 **Play's and Edit's blocks in the unit's own order over Bluetooth: built
-16 November 2026, HIS ACCOUNT ONLY.** A customer (an FM9 through a WIDI
+16 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then).** A customer (an FM9 through a WIDI
 Master, an iPhone): "the order of the Effects doesn't correspond to the
 real order of the FM9". Over Bluetooth or the unit's USB cable the one
 block read is the status read, in effect-id order with no positions, and
@@ -2134,7 +2307,7 @@ read again. Never an AM4 (its slots come in order) or a VP4. The way out
 lets that one frame through, byte for byte, only while the order is open
 to the account at that moment (`orderHand`, `orderOr`); the grid's writes
 and the preset whole stay the chain's. The switch is
-`BLOCK_ORDER_FROM_GRID_FOR_EVERYONE` in features.js, false (lib/bluetooth
+`BLOCK_ORDER_FROM_GRID_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026) (lib/bluetooth
 `blockOrderFromGrid`, handed to the wire as `blockOrder`, not behind
 Edit's door); every other account gets today's order and today's bytes,
 which a test holds. READ "block order from the unit's grid, preset n: …"
@@ -2612,8 +2785,7 @@ UNIT YET: his next drag's log is the first check.
   release; COMPUTER_NEEDED did not move.
 
 **The Output block's levels: IN and OUT in Edit over Bluetooth, the volume
-button there, and each scene's own level. Built 16 November 2026, HIS
-ACCOUNT ONLY, and NONE OF IT HAS BEEN SEEN ON A UNIT.**
+button there, and each scene's own level. Built 16 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then), and NONE OF IT HAS BEEN SEEN ON A UNIT.**
 
 > "Scenes levels and IN and OUT blocks" (a customer, an FM9 over Bluetooth
 > through a WIDI Master on an iPhone, 16 November 2026)
@@ -2625,7 +2797,7 @@ level (the Output block's Scene 1 to 8 Level, -20 to +20 dB, ids 18 to 25
 on the FM3, FM9 and Axe-Fx III alike, each by its own catalog) came with
 every read of the block and was never drawn, since Edit keeps every
 "...Level" off its knobs. One switch now, `OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE`
-in features.js, false, asked through lib/bluetooth `outputAndSceneLevels`
+in features.js, true since 2.0.1 (false until 17 November 2026), asked through lib/bluetooth `outputAndSceneLevels`
 (his account, or the switch) and handed to the wire as `io`, which also
 wants Edit open (bleWire `ioOn`). For his account:
 
@@ -2684,8 +2856,10 @@ Pi); 1.90.70 sends one it drops again another way. THROUGH THE PI ON
 COMPUTER APP 1.90.90 IT KEPT TWO OF TWO, EACH ON THE FIRST TRY (17 November
 2026, his log: name byte 0x60 with the file's hash, in 0.5 and 0.6 s, slots
 043 and 044, each named back by the unit and played in NAM 1; the same Pi
-on 1.90.63 had dropped four that afternoon). IT GOES TO THE PUBLIC IN
-THE NEXT STORE VERSION, and no build until he says.**
+on 1.90.63 had dropped four that afternoon). IT WENT TO THE PUBLIC WITH
+STORE VERSION 2.0.0: open to every account since 2.0.1 (17 November 2026),
+from a held NAM block and from Edit's Capture screen; the Developer card
+with the sender stays his.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -2827,7 +3001,7 @@ the capture on the unit, which is the hard half.
     now); a file that read as A2 and that the packer refuses kept its
     buttons under two lines that contradicted each other; nothing on the
     view said a preview stays in its slot.
-  - *FROM A HELD NAM BLOCK, ON PLAY (1.90.67, HIS ACCOUNT ONLY).* "I want
+  - *FROM A HELD NAM BLOCK, ON PLAY (1.90.67, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)).* "I want
     it in the app in a few places. One is if they hold a nam block it pulls
     up the quick edit screen on top of it have it say tone 3000 where they
     can click on it and browse tones preview them and then download them
@@ -2915,7 +3089,7 @@ the capture on the unit, which is the hard half.
       one of the capture tools' two, in the pop-up that has the knobs. The
       pop-up with the channels alone is word for word what it was, and so
       is every other account's: the switch is
-      `TONE3000_QUICK_FOR_EVERYONE` in features.js, false
+      `TONE3000_QUICK_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026)
       (lib/useTone3000Quick). Play's own file holds the door's three names
       (components/Tone3000Quick) and nothing else of TONE3000's; a test
       holds that.
@@ -2977,7 +3151,10 @@ the capture on the unit, which is the hard half.
       the Pi, about 2.3 s a try, two tries each).
       OPENING IT TO CUSTOMERS IS A STORE VERSION (new for them, the capture
       tools answer his account alone on the wire, and TONE3000 signs the
-      screen off first), never the switch alone.
+      screen off first), never the switch alone. IT OPENED WITH 2.0.0 (17
+      November 2026, in 2.0.1): the wire's gate opened with it
+      (`capturesOverBluetooth`), and what a customer needed besides is in
+      *Everything that was his account's is open*, above.
   - *A PREVIEW THAT DOES NOT FILL A SLOT IS NOT BUILT, AND CANNOT BE FROM
     WHAT IS KNOWN.* Ten previews are ten slots. Reusing one slot means
     writing over a capture or clearing one, and the only upload ever
@@ -3429,8 +3606,7 @@ the capture on the unit, which is the hard half.
     COMPUTER_NEEDED did not move. namCaptures.ts and nam-install.js ARE
     CHANGED TOGETHER. NOTHING HAS BEEN SENT TO A REAL UNIT THROUGH THE
     COMPUTER: his Raspberry Pi is the first check.
-- **The capture picker in Edit: built 14 November 2026 (1.90.63), HIS
-  ACCOUNT ONLY.** On a NAM block, first, over the knobs: a button, Capture,
+- **The capture picker in Edit: built 14 November 2026 (1.90.63), OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then).** On a NAM block, first, over the knobs: a button, Capture,
   with the slot's number as the unit and Axe-Edit count it and the
   capture's name ("029 Orange Amp…"). A tap opens the captures on the unit
   with a box to find one; a pick points the block's channel at it and the
@@ -3439,13 +3615,15 @@ the capture on the unit, which is the hard half.
   list's rules, lib/captureListHere.js for the device's, screens/Edit
   `pickCapture`). Nothing is saved by a pick; the preset is saved the
   usual way.
-  - *The switch* is `NAM_PICKER_FOR_EVERYONE` in features.js, false
+  - *The switch* is `NAM_PICKER_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026)
     (lib/useCapturePicker). OPENING IT IS MORE THAN THE SWITCH: the list
     and the pick go through the captures' routes, which the wire answers
     only for his account (`captures`, lib/bluetooth), and that same gate
     is the sender's. To open the picker and keep the sender his, the wire
     needs a gate of its own for the list and the pick. Its What's new line
-    goes in then.
+    goes in then. (Both opened together on 17 November 2026, so the one
+    gate opened for every account, `capturesOverBluetooth`; nothing keeps
+    the sender his but the Developer card it sits on.)
   - *The pick is the captures' own write* (`namPickHere`, the typed write
     of setting 0 the card's Play it in NAM 1 sends), held by their guard.
     The capture has no row in Edit's list and must not get one: Edit's
@@ -3715,7 +3893,8 @@ the capture on the unit, which is the hard half.
     in slot 034), and asking the phone's own Bluetooth whether a question
     really left (native: a build).
 - **IT GOES TO THE PUBLIC IN THE NEXT STORE VERSION, AND NO BUILD UNTIL
-  HE SAYS.** "After you have the screenshots built, let me know and show
+  HE SAYS. (It did: 2.0.0, opened on 17 November 2026 in 2.0.1. What
+  follows is how it was planned.)** "After you have the screenshots built, let me know and show
   me those and then I'll let you know where to move forward and we'll do a
   new expo build where I can test it on TestFlight and on android. ...
   Don't push out a build until I tell you it's OK and we get it all built
@@ -3794,8 +3973,7 @@ from its strip wider. A Play hidden under a full-screen tool is asleep
   test/two-sides.mjs, and his first look is the real check.
 
 **A phone held on its side splits in two as well: built 10 November 2026,
-HIS ACCOUNT ONLY, and in the phone app IT CANNOT SHOW UNTIL A BUILD LETS
-PHONES TURN.**
+OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then), on a copy that can turn: the 2.0.0 build is the first whose phones do.**
 
 THE PHONE APP IS HELD UPRIGHT ON A PHONE, NATIVELY. iPhones by
 `"orientation": "portrait"` in mobile/app.json (iPads turn through
@@ -3823,8 +4001,9 @@ when it needs a build. His answer to the two ways forward was "Do both":
   tall, 720 or more across, 250 to under 500 tall, in a browser that
   calls itself a phone; never the computer app's window, a laptop or a
   tablet. Its switch is `PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE` in
-  src/lib/sidewaysPlay.js, false: his account only
-  (`isAdmin(link.account?.id)`). The browser has its own copy of the
+  src/lib/sidewaysPlay.js, true since 2.0.1 (false until 17 November 2026,
+  when it was his account's only, `isAdmin(link.account?.id)`). The browser
+  has its own copy of the
   squares' rule, held equal to the phone's by a test, and nothing under
   mobile/ imports it. It is in the web app the computer serves, so a
   change to it makes a computer release.
@@ -3847,10 +4026,12 @@ The six pictures he approved are docs/two-sides/phone-sideways-01…06.png
   what keeps every tablet and the Duo on `twoSidesOn`, untouched. App.js
   asks it only where the big-screen rule said no (`low`).
 - **The switch** is `PHONE_SIDEWAYS_FOR_EVERYONE` in
-  mobile/src/lib/features.js, false: his account only (the kept sign-in).
-  It opens to everyone the two sides are open to when he says so, with its
-  What's new line in that pull request. Every other account's Play on a
-  phone on its side is what it always was.
+  mobile/src/lib/features.js, true since 2.0.1 (false until 17 November
+  2026, when it was his account's only, by the kept sign-in). It opened to
+  everyone the two sides are open to on his word that day, with its What's
+  new line. PHONES TURN ONLY FROM THE 2.0.0 COPY: a copy built before it
+  has no package to ask (lib/turnScreen finds none and says so once in the
+  log), so it shows Play upright whatever this switch says.
 - **Squares win over filling here**, the opposite of a tablet's `tilePlan`:
   mobile/src/lib/sidewaysPlay.js (`sidewaysPlan`). Play alone is two
   halves, scenes left and chain right, each grid centred in its half (an
@@ -4032,8 +4213,8 @@ written while it waited:
     (docs/watch/quick-edit-list.png). Where the iPhone offers it, the line
     under the pedals reads "Hold a pedal for quick edit." and a hold opens
     the channels in one row over a list of the block's knobs; a tap picks
-    one and the Digital Crown turns it. HIS ACCOUNT ONLY
-    (`WATCH_QUICK_EDIT_FOR_EVERYONE` in features.js, false), and only
+    one and the Digital Crown turns it. OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)
+    (`WATCH_QUICK_EDIT_FOR_EVERYONE` in features.js, true), and only
     where Play's own hold pop-up carries knobs (`popKnobsOn`: Edit's door,
     never a VP4). The knobs are Edit's: listed by lib/watchQuick, read and
     written by lib/watchQuickEdit through `blockParams` and
@@ -4084,7 +4265,7 @@ written while it waited:
   photo.
 
 **The metronome's flash round the edge of the screen is a choice: built
-12 November 2026, HIS ACCOUNT ONLY.**
+12 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then).**
 
 > "Also on the metronome, can we set it where it can run the metronome on
 > the device and the phone at the same time or either one? And then on the
@@ -4102,10 +4283,11 @@ on unlit. On with the click on the unit alone, the edge lights on every
 beat and the device makes no sound and no tap, and opens no audio.
 
 - **The switch** is `METRONOME_FLASH_CHOICE_FOR_EVERYONE` in
-  mobile/src/lib/features.js, false: the choice is drawn for his account
-  only, and for every other account the edge flashes with the device's own
-  click and never without it, whatever the device has kept. It opens when
-  he says so, with its What's new line in that pull request.
+  mobile/src/lib/features.js, true since 2.0.1 (false until 17 November
+  2026): until then the choice was drawn for his account only, and for
+  every other account the edge flashed with the device's own click and
+  never without it, whatever the device had kept. It opened on his word
+  that day, with its What's new line.
 - **The light keeps the unit's tempo, and its beat only where the unit
   sends one.** A unit does not answer "where is your beat": the app can
   read its tempo and nothing more. So the light and the unit's click can
@@ -4120,9 +4302,8 @@ beat and the device makes no sound and no tap, and opens no audio.
   > of speakers. There's a delay." (16 November 2026, the light on his
   > account against his Axe-Fx III's own click, through the Pi)
 
-- **The device's beat on the unit's own beat: built 16 November 2026, HIS
-  ACCOUNT ONLY** (`BEAT_LOCK_FOR_EVERYONE` in mobile/src/lib/features.js,
-  false). A gen-3 unit with Send Realtime Sysex on (Setup → MIDI/Remote)
+- **The device's beat on the unit's own beat: built 16 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)** (`BEAT_LOCK_FOR_EVERYONE` in mobile/src/lib/features.js,
+  true since 2.0.1 (false until 17 November 2026)). A gen-3 unit with Send Realtime Sysex on (Setup → MIDI/Remote)
   sends one short message on its tempo's beat. Where the player has the
   unit's click picked (Unit or Both: over Bluetooth the app cannot switch
   the unit's click, and it may be clicking all the same, switched on at the
@@ -4208,7 +4389,7 @@ beat and the device makes no sound and no tap, and opens no audio.
     test/bluetooth.mjs (the wire handing the beat on) and ForgeFX
     test/drivers/unit-beat.test.ts.
 - **The sound is a choice of four, with Off among them: built 16 November
-  2026, HIS ACCOUNT ONLY, behind the same switch.**
+  2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then), behind the same switch.**
 
   > "Additionally, add a feature where you can either have sound on,
   > sound off, or you can have it flash on the phone with sound or flash
@@ -4285,9 +4466,8 @@ beat and the device makes no sound and no tap, and opens no audio.
   Nothing in Axiom was changed.
 - **The watch's light** is native, and is in the 2.0.0 build (it waited
   in watch-page-order, above, until release day).
-- **Line up the light and click: built 16 and 17 November 2026, HIS
-  ACCOUNT ONLY** (`METRONOME_LINE_UP_FOR_EVERYONE` in
-  mobile/src/lib/features.js, false).
+- **Line up the light and click: built 16 and 17 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then)** (`METRONOME_LINE_UP_FOR_EVERYONE` in
+  mobile/src/lib/features.js, true since 2.0.1 (false until 17 November 2026)).
 
   > "Will you make sure everything's in sync properly somehow or have a
   > way for a user to calibrate" (16 November 2026)
@@ -4980,7 +5160,7 @@ and `quietFor` in desktop/lib/autostart.mjs; `heldStanding`, `heldGoes` and
   for Restart to update, and tap it. Once an update is held the app does
   not fetch a newer one in the same run, so a Pi holding an older one
   installs that first and has to be done once more.
-- *THE PHONE'S HALF: built 17 November 2026, HIS ACCOUNT ONLY.* Under the
+- *THE PHONE'S HALF: built 17 November 2026, OPEN TO EVERY ACCOUNT SINCE 2.0.1 (17 November 2026; his account only until then).* Under the
   computer's card on Settings → Phone & computer, a line says how the
   computer app's own update is going, as the computer says it (the
   `update` note in host.name, read with its name and version every couple
@@ -5013,7 +5193,7 @@ and `quietFor` in desktop/lib/autostart.mjs; `heldStanding`, `heldGoes` and
   whole and hands the computer's own `updateNote` and `updateAsk` what it
   builds); the wiring is lib/hostUpdateHere.js and the card
   components/HostUpdate.js.
-  - *The switch* is `COMPUTER_UPDATE_FOR_EVERYONE` in features.js, false
+  - *The switch* is `COMPUTER_UPDATE_FOR_EVERYONE` in features.js, true since 2.0.1 (false until 17 November 2026)
     (lib/hostUpdateHere `useComputerUpdate`, his kept sign-in). Every other
     account sees the card as it was and nothing is written for it; its log
     gets no new line either. It opens when he says so, with its What's new

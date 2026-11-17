@@ -115,7 +115,7 @@ async function bench({ block = DRIVE(), failRead = false } = {}) {
 const settle = () => new Promise((done) => setTimeout(done, 0))
 
 export function run(test) {
-  test('watch quick edit: his account only until its switch, only where the hold pop-up has knobs, and the switch is off', async () => {
+  test('watch quick edit: his account only until its switch, only where the hold pop-up has knobs, and the switch is on since 2.0.0', async () => {
     const r = await rules()
     assert.equal(r.watchQuickOn({ allowed: true, popKnobs: true }), true)
     assert.equal(r.watchQuickOn({ allowed: false, popKnobs: true }), false, 'quick edit is offered on the wrist to an account it is not open to')
@@ -125,7 +125,7 @@ export function run(test) {
       assert.equal(r.watchQuickOn({ allowed: odd, popKnobs: true }), false, String(odd))
       assert.equal(r.watchQuickOn({ allowed: true, popKnobs: odd }), false, String(odd))
     }
-    assert.match(read('mobile/src/lib/features.js'), /^export const WATCH_QUICK_EDIT_FOR_EVERYONE = false$/m, 'quick edit on the watch is open to every account before he has said so')
+    assert.match(read('mobile/src/lib/features.js'), /^export const WATCH_QUICK_EDIT_FOR_EVERYONE = true$/m, 'quick edit on the watch is his account’s alone again: it opened to everyone with 2.0.0 (17 November 2026)')
 
     /* App asks the rule with the pop-up's own answer (so Edit's door and never a VP4, lib/holdPop) and his kept sign-in or the switch; Play is told only that, and hands it to the watch's picture and nowhere else. */
     const app = code(read('mobile/App.js'))

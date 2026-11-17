@@ -728,7 +728,7 @@ const captureAsks = (path, onWire = {}, throughComputer = undefined, needsComput
 const captureAsksNow = async (path, onWire, throughComputer, needsComputer) => {
   if (demoDevice() || onVp4) throw Object.assign(new Error(CAPTURES_NEED_A_UNIT), { status: 501 })
   const ble = bluetoothWire()
-  /* A unit that is not an Axe-Fx III (or an account the captures are not open to) is answered "unsupported" by the wire, which is no sentence: the computer's own words for it. */
+  /* A unit that is not an Axe-Fx III (or an account the captures are not open to: lib/bluetooth capturesOverBluetooth) is answered "unsupported" by the wire, which is no sentence: the computer's own words for it. */
   if (ble) {
     return ble.request(path, { ...CAPTURING, ...onWire }).catch((err) => {
       if (err?.unsupported === true) throw Object.assign(new Error(CAPTURES_ONLY_A_III), { status: 501 })

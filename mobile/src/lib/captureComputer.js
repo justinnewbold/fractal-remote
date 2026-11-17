@@ -79,12 +79,15 @@ export function oldAfterSend({ old = false, version = null, name = null } = {}) 
   return { name: typeof name === 'string' ? name.trim() : '', version: known ? String(version).trim() : null }
 }
 
+/** Where a capture the unit did not keep is sent on to, for every account: the report carries the log of what the unit answered. */
+export const UNKEPT_REPORT = 'Send us a report from Settings → Troubleshooting → Feedback, with its log, so we can see what the unit answered.'
+
 /**
  * The card's words for a capture the unit took and did not keep: `tries`
  * how many ways it went, `slotSaid` the slot as a player reads it ("041"),
  * `computer` what `oldAfterSend` answered. Through a computer app too old,
- * the reason and the remedy in place of "the app's log has what the unit
- * answered"; every other case as it always was.
+ * the reason and the remedy; every other case points at a report
+ * (UNKEPT_REPORT), which carries the log.
  */
 export function unkeptWords({ tries = 1, slotSaid = '', computer = null } = {}, noun = deviceNoun()) {
   const took = tries > 1 ? `The Axe-Fx III took the capture ${tries} different ways and still shows slot ${slotSaid} as empty, so it did not keep it.` : `The Axe-Fx III took the capture and then still shows slot ${slotSaid} as empty, so it did not keep it.`
@@ -92,7 +95,8 @@ export function unkeptWords({ tries = 1, slotSaid = '', computer = null } = {}, 
     const which = computer.version ? `is version ${computer.version}` : `is older than ${CAPTURES_KEPT_FROM}`
     return `${took} ${onIt(computer.name)} ${which}, and the unit drops most captures sent through one that old. ${remedy(noun)}`
   }
-  return tries > 1 ? `${took} The app’s log has what the unit answered each time.` : `${took} Send it once more; if it says this again, the app’s log has what the unit answered.`
+  /* What the unit answered is in the app's log, which a report carries: so the player is pointed at the report, never at a log they cannot read (17 November 2026, with the captures open to every account). */
+  return tries > 1 ? `${took} ${UNKEPT_REPORT}` : `${took} Send it once more. If it says this again, ${UNKEPT_REPORT.charAt(0).toLowerCase()}${UNKEPT_REPORT.slice(1)}`
 }
 
 /**

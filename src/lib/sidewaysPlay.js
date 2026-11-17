@@ -34,12 +34,17 @@ import { isAdmin } from '../../shared/admin.mjs'
 /* ------------------------------------------------------------------ */
 
 /**
- * THE SWITCH. False: Justin's account only, until he has looked at it on
- * his own iPhone. True opens it to everybody whose browser is a phone on
- * its side. Every other account, signed out, and the demo with nobody
- * signed in get exactly the page they had.
+ * THE SWITCH. True opens it to everybody whose browser is a phone on its
+ * side, signed out and the demo included; false is Justin's account only,
+ * and every other account gets the page upright as it was.
+ *
+ * ON SINCE 17 NOVEMBER 2026, with the phone app's own switch (features
+ * PHONE_SIDEWAYS_FOR_EVERYONE) on the day of store version 2.0.0: "Enable
+ * all new features for all users that were on my account. Except for the
+ * scroll wheel for presets" (Justin). It is inside the computer app, so it
+ * came with a computer release.
  */
-export const PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE = false
+export const PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE = true
 
 /** Whether the account signed in on this page is let in: `id` is the same read the Developer rows use (link.account?.id). */
 export const sidewaysOpenTo = (id, everyone = PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE) => everyone === true || isAdmin(id)
