@@ -2180,11 +2180,15 @@ UNIT YET: his next drag's log is the first check.
   (its rows and the computer app's bytes as it was found, and its empty
   spaces ALWAYS counted), and "Row 3 is joined again." is said only of a
   row that reads whole with no empty space between its Input and Output,
-  and only where that read after has both its Input and its Output: with
-  either missing (rowCuts skips such a row, so it alone finds nothing) the
-  answer is "Row 3 has no Output now, and no sound. Add one, or move one
-  back." (or Input), not green, with no button; only the pressed row is
-  said; and never "sent" of joins nothing sent. A
+  and never of a row that has LOST its Input or its Output since the read
+  before the press: with one gone (rowCuts skips such a row, so it alone
+  finds nothing) the answer is "Row 3 has no Output now, and no sound. Add
+  one, or move one back." (or Input), not green, with no button. Only an
+  end the row HAD counts: a parallel branch, or a row whose Output is on
+  another row, never had both, and is "joined again" when its joins read
+  back (the sixth round asked every row for both, and refused the green on
+  a branch that played; the seventh put that right). Only the pressed row
+  is said; and never "sent" of joins nothing sent. A
   press that sends nothing (every join already there, the unit on another
   preset or not saying, the read failing, a join into an empty cell) is no
   edit: the phone marks the chain written from joinRow's `starting`, called
@@ -2259,8 +2263,13 @@ UNIT YET: his next drag's log is the first check.
   round (17 November 2026) its 5 mutants (a moved Output or Input the unit
   did not take offered Join the row again, and Join the row's end check
   taken out, never set, asking only for the Output, or asking the read
-  before the press) each failed them too. A change to a pinned piece is a
-  change to that test.
+  before the press) each failed them too. In the seventh (the same day) its
+  8 mutants, each in each copy of the library (the sixth round's rule put
+  back, the end check never set, not heeded, asking only for the Output,
+  asking the read before the press, asking that read whether the row had
+  both ends, taking any row with cells for one that had, and the button
+  back beside a refused Output) each failed them too. A change to a pinned
+  piece is a change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can
   be read as a cut; a move keeps a split's joins with the column, as
