@@ -1,0 +1,183 @@
+# TEST BUILD, NEVER MERGED TO MAIN: an Android APK of the NEXT store version
+# (2.0.0), to put on a phone straight from a GitHub link.
+#
+# "What's the android download link for 2.0.0" and "Is there a direct
+# download from github?" (Justin, 17 November 2026.) The 2.0.0 Android build
+# of 16 November went to Google Play's internal testing track, which is
+# Google Play's own install for testers; there was no file. apk.yml makes an
+# installable file at every merge, but from main as it is: the store copies'
+# line, without the native work that waits in docs/pending.
+#
+# This is apk.yml's own build (read its notes: the memory it needs, the one
+# processor, how it is signed) with three differences:
+#
+#   - every patch in docs/pending goes in first, in the README's order
+#     (scripts/apply-pending.sh), and the version the copy carries is 2.0.0
+#     (scripts/store-version.mjs), exactly as mobile.yml's "Build the next
+#     store version" does for the store build;
+#   - it asks for the updates the 2.0.0 testers get: the runtime version is
+#     docs/pending/next-store.json's android fingerprint, and the channel is
+#     production, the only one the testers' update is published to (apk.yml's
+#     files listen on preview, where no update for this fingerprint goes);
+#   - it is left on the Releases page as a PRE-RELEASE under its own tag
+#     (apk-test-v2.0.0), marked as a test build, never as the latest.
+#
+# Free: an ordinary ubuntu runner, no Expo build, no slot.
+#
+# SIGNED AS apk.yml'S FILES ARE (the template's debug key), NOT as Google
+# Play signs: it installs over an earlier APK from GitHub, and not over a
+# copy from Google Play, which has to be taken off the phone first.
+#
+# Started by a push to the working branch that touches this file (a new
+# workflow on a branch cannot be started by hand until it is on main).
+name: apk-next
+
+on:
+  push:
+    branches: [claude/fractal-remote-continue-ljfqcd]
+    paths:
+      - '.github/workflows/apk-next.yml'
+
+concurrency:
+  group: apk-next-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  STORE_VERSION: '2.0.0'
+  TAG: apk-test-v2.0.0
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: The next store version's native work, for this build only
+        run: bash scripts/apply-pending.sh
+
+      - name: The version number this copy carries
+        run: node scripts/store-version.mjs "$STORE_VERSION"
+
+      - name: Install the app's own dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Make the native Android project
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Make it able to take the testers' updates
+        id: fp
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          hash="$(node -p "require('../docs/pending/next-store.json').android")"
+          [ -n "$hash" ] && [ "$hash" != "undefined" ] || { echo "::error::No android fingerprint in docs/pending/next-store.json."; exit 1; }
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          mkdir -p android/app/src/main/assets
+          printf '%s' "$hash" > android/app/src/main/assets/fingerprint
+          python3 - "$hash" <<'PY'
+          import sys
+          key = 'expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY'
+          at = 'android/app/src/main/AndroidManifest.xml'
+          s = open(at).read()
+          if key in s:
+              raise SystemExit('the channel is already set: prebuild now does this, so look again at this step')
+          anchor = '<meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL"'
+          if anchor not in s:
+              raise SystemExit('no updates URL in the manifest: updates are off, so the channel would mean nothing')
+          row = '<meta-data android:name="%s" android:value="{&quot;expo-channel-name&quot;:&quot;production&quot;}"/>\n    ' % key
+          open(at, 'w').write(s.replace(anchor, row + anchor, 1))
+          print('runtime version', sys.argv[1], 'and channel production written in')
+          PY
+          grep -c 'expo-channel-name' android/app/src/main/AndroidManifest.xml
+
+      - name: Only the processor a phone actually has
+        working-directory: mobile/android
+        run: |
+          sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a/' gradle.properties
+          grep reactNativeArchitectures gradle.properties
+
+      - name: Give the build enough memory to finish
+        working-directory: mobile/android
+        run: |
+          sed -i 's/^org\.gradle\.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8/' gradle.properties
+          printf '\n# Raised as .github/workflows/apk.yml raises it: see the note there.\nkotlin.daemon.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=768m\n' >> gradle.properties
+          grep jvmargs gradle.properties
+
+      - name: Build it
+        working-directory: mobile/android
+        env:
+          EXPO_UPDATES_FINGERPRINT_OVERRIDE: ${{ steps.fp.outputs.hash }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: The APK asks for the testers' updates, and says 2.0.0
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          want="${{ steps.fp.outputs.hash }}"
+          got="$(unzip -p android/app/build/outputs/apk/release/app-release.apk assets/fingerprint)"
+          echo "the testers' updates are published under: $want"
+          echo "the APK asks for:                          $got"
+          [ "$want" = "$got" ] || { echo "::error::This APK would never receive a testers' update. Built $got, they go to $want."; exit 1; }
+          echo "version in app.json: $(node -p "require('./app.json').expo.version")"
+          [ "$(node -p "require('./app.json').expo.version")" = "$STORE_VERSION" ] || { echo "::error::The copy does not carry $STORE_VERSION."; exit 1; }
+
+      - name: Name it
+        id: apk
+        run: |
+          set -e
+          built=mobile/android/app/build/outputs/apk/release/app-release.apk
+          out="fractal-remote-v${STORE_VERSION}-test.apk"
+          mv "$built" "$out"
+          ls -la "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fractal-remote-apk-next
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 7
+
+      - name: Put it on the Releases page, as a test build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --latest=false \
+              --title "Fractal Remote ${STORE_VERSION} test build (Android)" \
+              --notes "A TEST BUILD of Fractal Remote ${STORE_VERSION} for Android, not a store release. It carries the native work of the next store version. Download it on the phone and open it; Android asks once whether this browser may install apps. It installs over an earlier APK from this page, and NOT over a copy from Google Play: take that one off the phone first."
+          fi
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$TAG" "${{ steps.apk.outputs.path }}" --clobber; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "The upload failed five times; the file is still in this run's artifacts." >&2
+              exit 1
+            fi
+            echo "Upload attempt $attempt failed; trying again in 30s."
+            sleep 30
+          done
+          echo "### Install it" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${{ github.repository }}/releases/download/${TAG}/${{ steps.apk.outputs.path }}" >> "$GITHUB_STEP_SUMMARY"
