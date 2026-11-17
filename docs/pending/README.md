@@ -190,25 +190,34 @@ owners take the new version. Nothing about it is one phone alone.
   watch.yml's `iphone` job builds the iPhone project too, on the build pull
   request (it runs when mobile/app.json or the package files change).
 
-**The first look, 17 November 2026: his iPhone did not turn.** An iPhone
-17 Pro Max on iOS 27.2.1 with the 2.0.0 test build, his account, on Play:
-"It does not turn it all." (He can turn other apps; whether the phone's own
+**The first look, 17 November 2026: his iPhone did not turn.** An iPhone 17
+Pro Max on iOS 27.2.1 with the 2.0.0 test build, his account, on Play: "It
+does not turn it all." (He can turn other apps; whether the phone's own
 Portrait Orientation Lock was off was not asked, and an app that forces
-landscape turns with it on.) Item 1 below, and not settled. CLAUDE.md, "His
-iPhone does not turn on its side on the 2.0.0 test build", has what is
-known, what a simulator showed, and how to read the line the log has for it
-since 1.92.6 ("turning: after "turns" — the phone holds lock 0, ways 1,3,4,
-way up 1", written by lib/turnScreen `sayTurn` after every ask the phone
-takes; it only reads). That line and the three moments components/PhoneTurns
-writes it at are JavaScript inside this patch, so they go to the 2.0.0
-testers by update and move no fingerprint (web.yml's testers job holds
-every pull request to that).
+landscape turns with it on.) Later the same day it did turn ("I just tried
+the landscape view again and now it's working"), and he sent a picture of
+Play on its side on 1.92.6: item 1 below, seen. Why it would not turn before
+is not known. CLAUDE.md, "His iPhone would not turn on its side on the 2.0.0
+test build", has what is known,
+what a simulator showed, and how to read the line the log has for it since
+1.92.6 ("turning: after "turns" — the phone holds lock 0, ways 1,3,4, way up
+1", written by lib/turnScreen `sayTurn` after every ask the phone takes; it
+only reads). That line and the three moments components/PhoneTurns writes it
+at are JavaScript inside this patch, so they go to the 2.0.0 testers by
+update and move no fingerprint (web.yml's testers job holds every pull
+request to that). The simulator check itself is kept:
+.github/workflows/turn-check.yml with mobile/turn-check, started by hand from
+Actions (free, no Expo build); it works only while phone-turns.patch is here
+or in main, since it stands in for the file that patch makes.
 
 **What only a real phone can show**, most likely first:
 
 1. An iPhone on Play, turned on its side: the screen turns, and the two
    halves appear (his account). This is the whole point, and nothing here
-   can see it.
+   can see it. SEEN, 17 November 2026, on his iPhone 17 Pro Max (iOS
+   27.2.1, build 33, the app on 1.92.6): his picture of Play on its side,
+   the scenes on the left and the chain on the right, both ends clear of
+   the island.
 2. From Play on its side, open Settings: the screen turns upright. Back to
    Play with the phone still on its side: it should turn back by itself. If
    it waits until the phone is moved, that is iOS, and the fix is in the
