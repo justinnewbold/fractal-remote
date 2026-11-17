@@ -2065,6 +2065,9 @@ async function readNamesOf(number, copy) {
   const era = unitEra
   const names = await namesOfLoaded(number, copy)
   if (!sameUnit(slug, era)) return
+  /* The unit has just said this preset's scenes have no names: the computer
+     files none for it, so its store is not asked again (followComputerNames). */
+  if (Array.isArray(names) && names.length && !names.some((n) => (n || '').trim()) && state.preset?.number === number) unnamedAt = visitKey(number)
   /* Over Bluetooth, a slot read and found unnamed is written down too, so
      it is not read again after the next reconnect. */
   if (Array.isArray(names) && names.length && !names.some((n) => n) && viaBluetooth() && state.preset?.number === number) {
@@ -2197,6 +2200,16 @@ const named = () => (state.sceneNames || []).some((n) => (n || '').trim())
 
 /* The preset change whose names are being followed, and when its last ask is due. */
 let following = null
+/*
+ * The preset change whose own read said every scene is unnamed. The computer
+ * files a preset's names only when one exists, so for such a preset its store
+ * answers "not found" at every ask: the follow is not made for it. Keyed to
+ * the preset change and the unit, so a later visit, or another unit, whose
+ * read does not answer (a stale copy, an AM4's failed read, an older
+ * computer app) is followed as before.
+ */
+let unnamedAt = null
+const visitKey = (number) => `${presetRun}:${unitEra}:${keyFor(number)}`
 
 /*
  * AN AM4'S SCENE NAMES OVER BLUETOOTH WAIT FOR A QUIET MOMENT.
@@ -2241,6 +2254,7 @@ function followComputerNames() {
      landing meanwhile) are one follow, not two sets of asks in one millisecond. */
   const key = `${presetRun}:${keyFor(number)}`
   if (following?.key === key && Date.now() < following.until) return
+  if (unnamedAt === visitKey(number)) return
   following = { key, until: Date.now() + COMPUTER_NAMES_AFTER_MS[COMPUTER_NAMES_AFTER_MS.length - 1] }
   /* The unit they are followed for: another since is not asked for this one's (startClean). */
   const slug = state.deviceSlug

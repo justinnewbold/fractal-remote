@@ -2370,7 +2370,8 @@ async function requestOnce(path, method, options, trip = { went: false }) {
       // that answered "no" — those are answers, and asking again gets the same
       // one a second slower.
       if (!err?.linkDown) {
-        logDebug('wire', `${method} ${path} failed`, err?.message)
+        /* A computer's store with no such document is an answer, not a failure: the browser does not log it either (src/lib/forgefx.js routine). */
+        if (!(method === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404)) logDebug('wire', `${method} ${path} failed`, err?.message)
         throw err
       }
       last = err
