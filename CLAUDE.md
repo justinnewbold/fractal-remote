@@ -2269,11 +2269,12 @@ the capture on the unit, which is the hard half.
       (Sheet `scrollKey`).
     - RUN ON HIS PHONE, 16 November 2026 (his log, through the Pi): hold
       NAM 1, TONE3000, a tone picked, Preview, then Back to NAM 1's knobs
-      and the same again with another tone. The list and its search inside
-      the pop-up's sheet (a sheet in a sheet) worked. NOT SEEN YET:
+      and the same again with another tone. The list inside the pop-up's
+      sheet (a sheet in a sheet) worked; its search box was not seen used
+      (the log has the pick, not how it was found). NOT SEEN YET:
       TONE3000's own page coming up over that sheet, and a half-minute
       send over Bluetooth with the pop-up open (both of his went through
-      the Pi, two seconds each).
+      the Pi, about 2.3 s a try, two tries each).
       OPENING IT TO CUSTOMERS IS A STORE VERSION (new for them, the capture
       tools answer his account alone on the wire, and TONE3000 signs the
       screen off first), never the switch alone.
@@ -2525,6 +2526,11 @@ the capture on the unit, which is the hard half.
       keeps its words. The log line is as it was. His Pis (both on
       1.90.63) and anybody else's older computer app: update to 1.90.70
       or later; COMPUTER_NEEDED did not move (captures are his account's).
+      THE REFUSAL IS FOR EVERY CAPTURE, ON PURPOSE: it also turns away a
+      name whose XOR has 0x60's two bits (0x7C and 0x78 were kept through
+      such a computer app on 14 November), which by that reading an old
+      computer app would have got kept. One rule and the remedy that
+      mends all of them, in place of a guess per name.
     - *0x60 was kept every time, so it is the only byte and the XOR ways
       are dropped* (done 16 November 2026, 1.90.88, above).
     - *Two readers and a skeptic each went through it before it went
