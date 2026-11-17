@@ -336,6 +336,21 @@ export function computerKind({ platform = process.platform, release = '', system
 }
 
 /**
+ * The board's own name on a Linux computer that has one (a Raspberry Pi says
+ * "Raspberry Pi 5 Model B Rev 1.0"), from /proc/device-tree/model; '' where
+ * there is none. Never throws. The update that goes in by itself asks it
+ * (selfUpdatingBox in autostart.mjs), as thisComputer does for its words.
+ */
+export function deviceModel() {
+  if (process.platform !== 'linux') return ''
+  try {
+    return readFileSync('/proc/device-tree/model', 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+/**
  * This computer's kind, read from where it is kept here. Never throws.
  *
  * `arch` is the processor's, when the caller knows better than this copy's
@@ -344,14 +359,7 @@ export function computerKind({ platform = process.platform, release = '', system
  * Electron's app.runningUnderARM64Translation).
  */
 export function thisComputer({ arch = process.arch } = {}) {
-  let model = ''
-  if (process.platform === 'linux') {
-    try {
-      model = readFileSync('/proc/device-tree/model', 'utf8')
-    } catch {
-      model = ''
-    }
-  }
+  const model = deviceModel()
   let systemVersion = ''
   try {
     systemVersion = typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : ''
@@ -505,19 +513,26 @@ export async function armHost({
       return { on: false, reason: 'signed-out' }
     }
     const email = cloud.user.email || null
+    /*
+     * And the account's id, beside the address, when the device server says
+     * it: a phone's request to put an update in now names the account it
+     * comes from, and is answered only when it is this computer's own
+     * (updateAsk in updates.mjs). Left out when there is none to say.
+     */
+    const who = cloud.user.id ? { email, accountId: String(cloud.user.id) } : { email }
 
     // 4. Already on — switched on, and its link up.
     const link = relayState((await call('/remote/status')).body)
     if (link.enabled && link.connected) {
       log(`Phone remote: on for ${email || 'this account'}.`)
-      return { on: true, email }
+      return { on: true, ...who }
     }
 
     // 5. Turned off on purpose.
     const wanted = (await call('/store/config/remote.host')).body?.data
     if (wanted && wanted.wanted === false) {
       log('Phone remote: off — it was turned off in the app.')
-      return { on: false, reason: 'turned-off', email }
+      return { on: false, reason: 'turned-off', ...who }
     }
 
     /*
@@ -545,7 +560,7 @@ export async function armHost({
      */
     const turnedOff = () => {
       log('Phone remote: off — it was turned off in the app while it was being turned on.')
-      return { on: false, reason: 'turned-off', email }
+      return { on: false, reason: 'turned-off', ...who }
     }
     /*
      * RETRYING: a device server that reports its state, switched on and not
@@ -559,7 +574,7 @@ export async function armHost({
      */
     const retrying = (why) => {
       log(`Phone remote: switched on, not on the account service yet (${why}); the device server keeps trying by itself.`)
-      return { on: false, reason: 'retrying', email, error: why }
+      return { on: false, reason: 'retrying', ...who, error: why }
     }
 
     // 6. Turn it on.
@@ -574,7 +589,7 @@ export async function armHost({
           const now = said.connected === false ? await joined() : null
           if (!now || now.connected) {
             log(`Phone remote: on for ${email || 'this account'}.`)
-            return { on: true, email }
+            return { on: true, ...who }
           }
           if (!now.enabled) return turnedOff()
           last = said.lastError || 'its link never came up'
@@ -597,7 +612,7 @@ export async function armHost({
            */
           if (!res.ok && !link.sure) {
             log(`Phone remote: couldn't turn it on (${last}), and this device server can't be asked twice. Quit Fractal Remote and open it again.`)
-            return { on: false, reason: 'stuck', email, error: last }
+            return { on: false, reason: 'stuck', ...who, error: last }
           }
         }
       } catch (err) {
@@ -606,7 +621,7 @@ export async function armHost({
       if (i < 2) await sleep(5000)
     }
     log(`Phone remote: couldn't turn it on (${last}). Open the app on this computer to try again.`)
-    return { on: false, reason: 'failed', email, error: last }
+    return { on: false, reason: 'failed', ...who, error: last }
   } catch (err) {
     log(`Phone remote: left alone (${err.message}).`)
     return { on: false, reason: 'failed', error: err.message }
@@ -734,6 +749,13 @@ export async function tellPhones({
   version = null,
   /* What kind of computer this is (thisComputer), beside the name and the version, when the app says it. */
   os = null,
+  /*
+   * How its update is going (updateNote in updates.mjs), when there is
+   * something to say. Every write replaces the whole document, so it is in
+   * every write or in none; `name` stays where it is, because the device
+   * server keeps it for itself.
+   */
+  update = null,
   log = () => {}
 } = {}) {
   const said = version ? `${hostname}, v${version}` : hostname
@@ -744,7 +766,8 @@ export async function tellPhones({
       body: JSON.stringify({
         data: {
           ...(version ? { name: hostname, version: String(version) } : { name: hostname }),
-          ...(os ? { os: String(os).slice(0, 40) } : {})
+          ...(os ? { os: String(os).slice(0, 40) } : {}),
+          ...(update ? { update } : {})
         },
         origin: 'fractal'
       })
@@ -784,6 +807,7 @@ export async function tellPhonesChecked({
   hostname = prettyHostname(),
   version = null,
   os = null,
+  update = null,
   log = () => {},
   now = Date.now
 } = {}) {
@@ -794,6 +818,7 @@ export async function tellPhonesChecked({
     hostname,
     version,
     os,
+    update,
     log: (line) => {
       said.push(line)
       log(line)

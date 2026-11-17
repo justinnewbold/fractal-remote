@@ -51,9 +51,16 @@
  *     app (Electron's user data, and ForgeFX's own sign-in), and the Windows
  *     installer keeps them (deleteAppDataOnUninstall: false).
  *
- * The phone cannot tell a Mac from a Windows PC from a Linux box (the
- * computer sends only its name and version), so the steps name each where
- * they differ rather than guessing from the name.
+ * The computer has said what kind it is (`os`, beside its name and version)
+ * since 1.89.8, but the steps do not lean on it: a computer older than that
+ * says nothing, and the steps are for computers that are behind. So they
+ * name each kind where they differ rather than guessing.
+ *
+ * AND A RASPBERRY PI THAT PUTS IN ITS OWN (computer app 1.92.0). Its menu
+ * says "Update … goes in when nobody is using it" (updateLine in
+ * desktop/lib/updates.mjs, for a computer that takes its own), and the entry
+ * keyed to that line says what it means. Only a computer new enough to do it
+ * shows that line, so the entry is true wherever somebody sees it.
  */
 export const UPDATE_STEPS = {
   title: 'Updating the computer app',
@@ -101,6 +108,10 @@ export const UPDATE_STEPS = {
     {
       says: 'A password box, on Linux',
       body: 'The .deb package asks for your computer’s password when it installs. Type it to finish. The AppImage never asks.'
+    },
+    {
+      says: '“Update … goes in when nobody is using it”',
+      body: 'It goes in by itself once it has been out for a day and nobody has used the computer for half an hour. To put it in now, tap Restart to update on its screen.'
     }
   ]
 }

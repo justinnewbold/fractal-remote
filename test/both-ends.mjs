@@ -2803,7 +2803,12 @@ export function run(test) {
           body: 'A Mac only updates an app in its Applications folder. Open Fractal Remote and choose Move to Applications when it asks, or in its window go to ⚙ → About → Updates → Move to Applications.'
         },
         { says: '“Version … is still being built”', body: 'A new version is a few minutes from ready. Choose Check for updates… again in ten minutes.' },
-        { says: 'A password box, on Linux', body: 'The .deb package asks for your computer’s password when it installs. Type it to finish. The AppImage never asks.' }
+        { says: 'A password box, on Linux', body: 'The .deb package asks for your computer’s password when it installs. Type it to finish. The AppImage never asks.' },
+        /* Computer app 1.92.0: a Raspberry Pi puts its own in, and its menu says so. */
+        {
+          says: '“Update … goes in when nobody is using it”',
+          body: 'It goes in by itself once it has been out for a day and nobody has used the computer for half an hour. To put it in now, tap Restart to update on its screen.'
+        }
       ]
     })
     /* The lines about every computer say "computer". Only a step that differs by platform names one. */
@@ -2830,6 +2835,23 @@ export function run(test) {
     assert.match(updateLine({ kind: 'ready', version: '1.87.21' }), quoted(ready), 'step 2 quotes a line the computer’s menu does not say')
     assert.equal(updateLine({ kind: 'misplaced' }), UPDATE_STEPS.ifItSays[0].says.replace(/[“”]/g, ''), 'the steps quote a Mac line the menu does not say')
     assert.match(updateLine({ kind: 'building', version: '1.87.21' }), quoted(UPDATE_STEPS.ifItSays[1].says), 'the steps quote a building line the menu does not say')
+    /*
+     * A Pi that puts its own in (1.92.0): the entry quotes the line its menu
+     * says exactly, and only that computer says it, so the entry is never
+     * shown about a line somebody's computer cannot say. A Mac, a PC and the
+     * .deb still say "installs when you quit", word for word.
+     */
+    const pi = UPDATE_STEPS.ifItSays.find((e) => /nobody is using it/.test(e.says))
+    assert.ok(pi, 'the steps say nothing about a Pi that puts its own update in')
+    assert.match(updateLine({ kind: 'ready', version: '1.92.1' }, { selfUpdating: true }), quoted(pi.says), 'the steps quote a Pi line the menu does not say')
+    assert.equal(updateLine({ kind: 'ready' }, { selfUpdating: true }), 'Update goes in when nobody is using it')
+    for (const options of [undefined, {}, { selfUpdating: false }, { selfUpdating: false, deb: true }, { selfUpdating: true, deb: true }]) {
+      assert.doesNotMatch(updateLine({ kind: 'ready', version: '1.92.1' }, options), quoted(pi.says), 'a computer that waits for a quit says it goes in by itself')
+      assert.equal(updateLine({ kind: 'ready', version: '1.92.1' }, options), 'Update 1.92.1 installs when you quit')
+    }
+    assert.match(pi.body, /half an hour/)
+    assert.match(pi.body, /out for a day/, 'the entry promises half an hour, and a new version waits a day first')
+    assert.match(pi.body, /Restart to update/, 'the entry names a button the computer does not have')
     const main = read('desktop/main.js')
     assert.match(main, /label: 'Check for updates…',/, 'the steps send somebody to a menu item that is not there')
     assert.match(main, /\{ label: 'Quit', click: \(\) => app\.quit\(\) \}/, 'the menu has no Quit')

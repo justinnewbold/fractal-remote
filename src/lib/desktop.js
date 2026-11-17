@@ -98,6 +98,22 @@ export function onAPhoneOrTablet(
 export const updateReady = (state) => state?.kind === 'ready'
 
 /**
+ * WHETHER A READY UPDATE GOES IN BY ITSELF HERE: a Raspberry Pi (or a box
+ * started with no window that nobody has opened) puts one in once it has
+ * been out for a day and nobody has used it for half an hour, since
+ * computer app 1.92.0. The app says so
+ * (goesIn 'idle', beside the state); a Mac, a PC and the .deb say 'quit' or
+ * 'password', and keep their words.
+ */
+export const goesInByItself = (state) => state?.kind === 'ready' && state?.goesIn === 'idle'
+
+/** The words for a ready update that goes in by itself, on the notice and the Updates page alike. */
+export function idleReadyWords(state) {
+  const ready = state?.version ? `Version ${state.version} is ready.` : 'An update is ready.'
+  return `${ready} Restart to update, or leave it: it goes in by itself once it has been out for a day and nobody has used this computer for half an hour.`
+}
+
+/**
  * What to say about an update in the app.
  *
  * The sentence comes from the main process, which is where the menu's own
@@ -108,6 +124,7 @@ export const updateReady = (state) => state?.kind === 'ready'
 export function updateAdvice(state) {
   switch (state?.kind) {
     case 'ready':
+      if (goesInByItself(state)) return idleReadyWords(state)
       return 'Restart to update and the app comes back on the new version in a few seconds. Or leave it: it installs the next time you quit. Anything newer is checked for when it opens again.'
     case 'downloading':
     case 'found':

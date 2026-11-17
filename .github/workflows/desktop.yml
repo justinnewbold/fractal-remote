@@ -1132,6 +1132,45 @@ jobs:
 
           xvfb-run -a --server-args="-screen 0 1280x800x24" bash "$RUNNER_TEMP/hidden-start.sh" "$bin"
 
+      # A LINUX BUILD THAT DOES NOT START IS HELD BACK.
+      #
+      # Since 1.92.0 a Raspberry Pi left on puts a new version in by itself
+      # (unattendedInstall in desktop/lib/autostart.mjs), with nobody there
+      # to put a broken one right. On a push the step above runs after the
+      # files are already on the release, so when this build fails (the app
+      # did not start, or anything before it), the release is marked a
+      # pre-release, and the run is red for Justin to see. Then:
+      #   - a computer that has not downloaded it never finds it: GitHub's
+      #     /releases/latest skips a pre-release, and so does every
+      #     computer's own look (releaseVerdict);
+      #   - a computer that already holds the download asks GitHub about that
+      #     release's own tag before it puts it in by itself (heldStanding in
+      #     desktop/lib/updates.mjs), finds it a pre-release, and never puts
+      #     it in by itself that run, by any route;
+      #   - but one that gets no answer from GitHub at that moment (no
+      #     internet, GitHub erroring, or a rate limit) still puts it in at
+      #     power-on (a Pi switched on at a gig with no internet) or at a
+      #     phone's Update now, and any computer still puts it in at a quit or
+      #     when somebody presses Restart to update.
+      # So no computer that gets an answer from GitHub puts a pre-release in
+      # by itself.
+      # The day a Pi left on waits (RELEASE_SETTLE_MS) is the time this has to
+      # land for it, and the copy an install of its own restarted waits that
+      # day too; a Pi switched on does not wait a day, only for this check.
+      # Any publishing run counts, not only a push: a hand-started one with
+      # Publish ticked puts files on the release too.
+      - name: A Linux build that does not start is held back
+        if: ${{ failure() && github.event_name != 'pull_request' && (github.event_name == 'push' || inputs.publish) && (startsWith(github.ref, 'refs/tags/desktop-v') || github.ref == 'refs/heads/main') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./desktop/package.json').version")"
+          gh release edit "v$VERSION" --prerelease --repo "$GITHUB_REPOSITORY"
+          echo "::error::v$VERSION was marked a pre-release: its Linux ${{ matrix.arch }} build did not pass, so no computer that gets an answer from GitHub puts it in by itself."
+          echo "### v$VERSION is held back (pre-release)" >> "$GITHUB_STEP_SUMMARY"
+          echo "The Linux ${{ matrix.arch }} build did not pass. No computer that gets an answer from GitHub puts a pre-release in by itself. Fix it and merge a new version." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: fractal-remote-linux-${{ matrix.arch }}

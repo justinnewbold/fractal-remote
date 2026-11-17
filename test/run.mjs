@@ -2697,7 +2697,8 @@ test('the computer app says which version it is, where the phone already looks',
    * said, and the menu says which version the phones are told.
    */
   assert.match(main, /setInterval\(tell, TELL_PHONES_MS\)/, 'the name and version are written once and never again')
-  assert.match(main, /told = await tellPhonesChecked\(\{ port, version: app\.getVersion\(\), os: computerOs, log: phoneLog \}\)/, 'the write is not read back')
+  /* Changed on purpose, 17 November 2026 (1.92.0): how the update is going rides along (updateNote in lib/updates.mjs). */
+  assert.match(main, /told = await tellPhonesChecked\(\{ port, version: app\.getVersion\(\), os: computerOs, update: updateNoteNow\(\), log: phoneLog \}\)/, 'the write is not read back')
   assert.match(main, /this app is v\$\{app\.getVersion\(\)\}/, 'the menu does not say which version the phones are told')
   assert.match(main, /phonesHearLine\(told, app\.getVersion\(\)\)/, 'the menu does not say what the phones hear')
   assert.equal(host.TELL_PHONES_MS, 5 * 60 * 1000)
@@ -4204,7 +4205,8 @@ test('every settings name either app keeps on the computer travels the relay as 
 
   // Every way a unit is named, the odd ones included: a slug is what the names are built from.
   const slugs = ['FM3', 'FM3 Mk II', 'FM9', 'Axe-Fx III', 'AM4', 'VP4', '', 'a/b\\c%2F', { short: 'Axe-Fx III Mk II' }, null].map((u) => deviceSlug(u))
-  const ids = ['host.name', 'remote.host', PHONE_NOTE_ID]
+  /* host.update: a phone asking the computer to put its update in now (HOST_UPDATE_ID in desktop/lib/updates.mjs), so a tighter list cannot drop it unseen. */
+  const ids = ['host.name', 'remote.host', PHONE_NOTE_ID, 'host.update']
   for (const slug of slugs) {
     ids.push(`preset-names-${slug}`, `fractal.pendingName.${slug}.97`)
     for (const n of [1, 8, 486]) ids.push(`scene-names-${slug}:${n}`)
@@ -11379,38 +11381,44 @@ test('with nobody there, the phone remote is asked for again until it is on, and
 })
 
 test('an update ready just after a windowless start installs then, and never on a .deb or later on', () => {
+  /*
+   * REWRITTEN ON PURPOSE, 17 November 2026 (1.92.0). This was the table of
+   * the power-on install alone, decided on the update turning ready: a
+   * hidden start or an ARM board, no phone ever seen, the first three
+   * minutes, the AppImage. "I will update the pis but we need to figure out
+   * how to have them auto update" (Justin, 16 November 2026): a Pi left on
+   * never updated. The rule now also puts an update in on a Pi once nobody
+   * has used it for half an hour, the power-on install waits for three
+   * watched minutes, and nothing is decided on a look that could not see
+   * everything. Its whole table, with the mistake each case would catch, is
+   * in test/pi-update.mjs; what is kept here is what did not change.
+   */
   const appImage = { APPIMAGE: '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage' }
-  assert.deepEqual(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'linux', env: appImage }), { install: true })
-  assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', env: appImage }).install, false, 'an app somebody opened restarts itself')
-  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 3 * 60 * 1000 + 1, platform: 'linux', env: appImage }).install, false, 'an app restarts itself mid-set')
+  const quiet = { lookComplete: true, quietMs: 3 * 60 * 1000, sinceLaunchMs: 4 * 60 * 1000 }
+  assert.deepEqual(autostart.unattendedInstall({ hidden: true, platform: 'linux', env: appImage, ...quiet }), { install: true, how: 'power-on' })
   /* The .deb's install asks for a password through pkexec or sudo, and the
      updater waits on it without a deadline, with the server already down. */
-  const deb = autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'linux', env: {} })
+  const deb = autostart.unattendedInstall({ hidden: true, platform: 'linux', env: {}, ...quiet })
   assert.equal(deb.install, false, 'a .deb update is started where nobody can type its password')
   assert.match(deb.why, /password/)
-  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'darwin', env: {} }).install, true)
-  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'win32', env: {} }).install, true)
   /*
-   * A Raspberry Pi with its WINDOW open is a pedalboard box too (16 November
-   * 2026: his Pi, opened with its window as the guide says and switched off
-   * at the wall, sat on 1.90.63 with 1.90.82 out, waiting for a quit that
-   * never comes). At power-on, before anybody plays, a waiting update goes
-   * in. Only on an ARM board on Linux, only the AppImage, only in the
-   * window after power-on.
+   * Changed on purpose, 17 November 2026: these went in at four minutes. A
+   * Mac and a Windows PC keep the rule they had before 1.92.0 (startupInstall
+   * in lib/autostart.mjs): the first three minutes, and never once anybody
+   * has used them or opened their window. An independent read found the new
+   * watched quiet restarting a Mac four to six minutes after login.
    */
-  for (const arch of ['arm64', 'armv7l']) {
-    assert.deepEqual(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', arch, env: appImage }), { install: true }, `a ${arch} Pi with its window open never installs a waiting update by itself`)
-    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 3 * 60 * 1000 + 1, platform: 'linux', arch, env: appImage }).install, false, 'a Pi restarts itself mid-set')
-    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', arch, env: {} }).install, false, 'a Pi’s .deb update is started where nobody can type its password')
-    assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform: 'linux', arch }), autostart.UPDATE_RETRY_MS, 'a Pi with its window open does not look again when its wifi was late')
-    /* Never once a phone has used it this run: somebody is playing through it. */
-    const playing = autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 100000, platform: 'linux', arch, env: appImage, phoneSeen: true })
-    assert.equal(playing.install, false, 'a Pi restarts itself with a phone playing through it')
-    assert.match(playing.why, /phone/)
+  for (const platform of ['darwin', 'win32']) {
+    assert.equal(autostart.unattendedInstall({ hidden: true, platform, env: {}, ...quiet, sinceLaunchMs: 2 * 60 * 1000 }).install, true)
+    assert.equal(autostart.unattendedInstall({ hidden: true, platform, env: {}, ...quiet }).install, false, `a ${platform} computer restarts itself four minutes after login`)
   }
-  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 100000, platform: 'linux', env: appImage, phoneSeen: true }).install, false, 'a windowless Pi restarts itself with a phone playing through it')
+  for (const arch of ['arm64', 'armv7l']) {
+    assert.deepEqual(autostart.unattendedInstall({ platform: 'linux', arch, env: appImage, ...quiet }), { install: true, how: 'power-on' }, `a ${arch} Pi with its window open never installs a waiting update at power-on`)
+    const playing = autostart.unattendedInstall({ platform: 'linux', arch, env: appImage, ...quiet, everUsed: true })
+    assert.equal(playing.install, false, 'a Pi that is not a self-updating box restarts itself with a phone playing through it')
+  }
   for (const [platform, arch] of [['linux', 'x64'], ['darwin', 'arm64'], ['win32', 'arm64'], ['linux', '']]) {
-    assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform, arch, env: appImage }).install, false, `a ${platform} ${arch} computer with somebody at it restarts itself`)
+    assert.equal(autostart.unattendedInstall({ platform, arch, env: appImage, ...quiet }).install, false, `a ${platform} ${arch} computer with somebody at it restarts itself`)
     assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform, arch }), null)
   }
   /*
@@ -11428,8 +11436,15 @@ test('an update ready just after a windowless start installs then, and never on 
 test('a look for updates that failed just after a windowless start is taken again, while an install could still follow', () => {
   // A Pi often boots before its wifi; its one look at power-on lands in that gap.
   assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 20 * 1000 }), 30 * 1000)
-  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 3 * 60 * 1000 - 1 }), 30 * 1000)
-  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 3 * 60 * 1000 }), null, 'the retries outlast the install window, and the box looks every half minute for ever')
+  /*
+   * Changed on purpose, 17 November 2026 (1.92.0): the window after power-on
+   * is six minutes now (POWER_ON_WINDOW_MS; it was three), so a look that
+   * failed is taken again for six. Only a retry of a failed look at GitHub.
+   */
+  assert.equal(autostart.POWER_ON_WINDOW_MS, 6 * 60 * 1000)
+  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 6 * 60 * 1000 - 1 }), 30 * 1000)
+  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 6 * 60 * 1000 }), null, 'the retries outlast the install window, and the box looks every half minute for ever')
+  for (const arch of ['arm64', 'armv7l']) assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 5000, platform: 'linux', arch }), autostart.UPDATE_RETRY_MS, 'a Pi with its window open does not look again when its wifi was late')
   assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 0 }), null, 'an app somebody opened looks again by itself')
   for (const kind of ['current', 'found', 'downloading', 'ready', 'building', 'checking', null]) {
     assert.equal(autostart.updateRetryDelay({ hidden: true, kind, sinceLaunchMs: 0 }), null, `${kind} is looked at again as if it had failed`)
@@ -11466,7 +11481,13 @@ function loadDesktopMain({
   packaged = true,
   execPath = '/opt/Fractal Remote/fractal-remote-desktop',
   home = '/home/pi',
-  files = {}
+  files = {},
+  /* For the update that goes in by itself (test/pi-update.mjs): the forward-only clock, the processor, the app's own open files, Electron's processes, and modules stood in. */
+  clock = null,
+  arch = undefined,
+  links = {},
+  metrics = [],
+  modules = {}
 } = {}) {
   const disk = new Map(Object.entries(files))
   const dirs = new Set(['/', '/userdata'])
@@ -11499,12 +11520,25 @@ function loadDesktopMain({
     mkdirSync: (p, options) => {
       if (!options?.recursive && !dirs.has(posixPath.dirname(p))) throw missing(p)
       addDirs(p)
+    },
+    // /proc/<pid>/fd as a folder of links: { '/proc/4242/fd': { 3: 'socket:[111]' } }.
+    readdirSync: (p) => {
+      if (!links[p]) throw missing(p)
+      return Object.keys(links[p])
+    },
+    readlinkSync: (p) => {
+      const dir = posixPath.dirname(p)
+      const fd = posixPath.basename(p)
+      if (!links[dir] || !(fd in links[dir])) throw missing(p)
+      return links[dir][fd]
     }
   }
 
   const events = {}
   // What the page may ask the app, by channel: ipcMain.handle's handlers.
   const handlers = {}
+  // And what it only listens for from the page (ipcMain.on), by channel.
+  const heard = {}
   const menus = []
   const windows = []
   const dialogs = []
@@ -11569,7 +11603,8 @@ function loadDesktopMain({
       exit: (code) => exits.push(`exit ${code}`),
       relaunch: (options) => exits.push({ relaunch: options }),
       getVersion: () => '1.87.16',
-      getPath: () => '/userdata'
+      getPath: () => '/userdata',
+      getAppMetrics: () => metrics
     },
     BrowserWindow,
     Tray,
@@ -11585,6 +11620,9 @@ function loadDesktopMain({
     ipcMain: {
       handle: (channel, fn) => {
         handlers[channel] = fn
+      },
+      on: (channel, fn) => {
+        heard[channel] = fn
       }
     },
     autoUpdater: {},
@@ -11606,6 +11644,8 @@ function loadDesktopMain({
   const listeners = {}
   const proc = {
     platform,
+    arch,
+    pid: 4242,
     argv: [execPath, ...argv],
     env: { ...env },
     execPath,
@@ -11615,7 +11655,8 @@ function loadDesktopMain({
     }
   }
   const real = createRequire(new URL('../desktop/main.js', import.meta.url))
-  const stand = { electron, 'node:fs': fs, 'node:os': { homedir: () => home } }
+  const stand = { electron, 'node:fs': fs, 'node:os': { homedir: () => home }, ...modules }
+  if (clock) stand['node:perf_hooks'] = { performance: { now: () => clock.now } }
   const timer = (fn, ms) => {
     const t = { fn, ms, unref() {} }
     timers.push(t)
@@ -11633,7 +11674,7 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, handlers, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, opened, process: proc }
+  return { run, disk, dirs, events, handlers, heard, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, opened, process: proc, links }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 
@@ -12536,15 +12577,28 @@ test('a device server trying by itself reads as reconnecting, and as on once its
 test('an update ready just after a windowless start installs through the same path as the button', () => {
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
   const unattended = main.slice(main.indexOf('function installIfUnattended()'), main.indexOf('async function settleInPlace'))
+  /*
+   * Changed on purpose, 17 November 2026 (1.92.0). This pinned the install
+   * being asked from onState('ready') and handed `phoneSeen`. It is asked
+   * only at the end of a fresh look now, never on facts up to a minute old,
+   * and handed what every look saw (test/pi-update.mjs runs it).
+   */
   assert.match(unattended, /boot\.unattendedInstall\(\{\s*\n\s*hidden: startHidden,\s*\n\s*sinceLaunchMs: uptime\(\) - launchedAt,/)
   assert.match(unattended, /installNow\(\)\.catch\(/, 'an unattended install goes around the marker and the teardown')
-  assert.match(unattended, /if \(installedUnattended \|\| !boot\) return/, 'one run can install twice')
-  // Only once the update is really ready, and never after one that did not take.
-  assert.match(main, /if \(state\.kind === 'ready' && outcome !== 'stuck'\) installIfUnattended\(\)/, 'an install that did not take is tried again and again')
-  /* And decided before the menu is drawn: a menu that failed to draw once
-     took the install at power-on down with it, quietly. */
-  const onState = main.slice(main.indexOf('onState: (state) => {'), main.indexOf("log: (err) => console.error('[updates]'"))
-  assert.ok(onState.indexOf('installIfUnattended()') < onState.indexOf('drawTray()'), 'the menu is drawn before the install is decided, so a menu that fails cancels it')
+  /* Changed on purpose, 17 November 2026: nor while the held release is being asked about on GitHub (heldWaiting). */
+  assert.match(unattended, /if \(installedUnattended \|\| heldWaiting \|\| !boot \|\| !updateRules\) return/, 'one run can install twice')
+  /*
+   * Changed on purpose, 17 November 2026: the updater's state is heard in
+   * heardUpdate, and a Mac or a Windows PC is asked there again the moment
+   * the update turns ready, as before 1.92.0; Linux never (test/pi-update.mjs
+   * runs both).
+   */
+  assert.match(main, /onState: heardUpdate,/)
+  const onState = main.slice(main.indexOf('function heardUpdate(state) {'), main.indexOf('async function beginUpdates() {'))
+  assert.match(onState, /if \(state\.kind === 'ready' && updateOutcome !== 'stuck' && \(process\.platform === 'darwin' \|\| process\.platform === 'win32'\)\) installIfUnattended\(\)/, 'the install is decided on the update turning ready on a Pi, on what the last look saw up to a minute ago')
+  assert.match(main, /if \(update\?\.kind === 'ready' && updateOutcome !== 'stuck'\) installIfUnattended\(\)/, 'an install that did not take is tried again and again')
+  /* And the retry decided before the menu is drawn: a menu that failed to draw once took what came after it down. */
+  assert.ok(onState.indexOf('retryUpdateCheck()') < onState.indexOf('drawTray()'), 'the menu is drawn before the retry is decided, so a menu that fails cancels it')
   assert.ok(!/buildTray\(\)/.test(onState), 'the menu is drawn where a failure can cancel what comes after it')
   // The new copy is told how to come back: the environment is what the AppImage updater passes on.
   const install = main.slice(main.indexOf('async function installNow('))
@@ -12552,10 +12606,11 @@ test('an update ready just after a windowless start installs through the same pa
   assert.ok(note !== -1 && note < install.indexOf('updates.install()'), 'the new copy is not told it is the update’s, or how to come back')
   // Decided before the teardown, which hides the window and would make nobody look to be there.
   assert.ok(install.indexOf('const comeBack = boot.comeBackAs({') < install.indexOf('await stopServing()'), 'how to come back is decided after the window has been hidden')
-  assert.match(install, /if \(startHidden \|\| installedUnattended\) app\.relaunch\(\{ execPath: process\.env\.APPIMAGE \|\| process\.execPath/, 'a windowless install that did not take leaves the pedalboard with nothing running')
-  assert.match(unattended, /phoneSeen: phoneSeenAt !== null/, 'a Pi restarts itself with a phone playing through it')
+  /* Changed on purpose (1.92.0): the safety restart starts the AppImage's new file when the old one has gone (relaunchPath). */
+  assert.match(install, /if \(startHidden \|\| installedUnattended\) \{\s*\n\s*const from = process\.env\.APPIMAGE \? boot\.relaunchPath\(\{ appimage: process\.env\.APPIMAGE, movedTo, exists: existsSync \}\) : process\.execPath\s*\n\s*app\.relaunch\(\{ execPath: from,/, 'a windowless install that did not take leaves the pedalboard with nothing running')
+  assert.match(unattended, /everUsed: people\.some\(\(t\) => t !== null\)/, 'a Pi restarts itself at power-on with a phone playing through it')
   // A look that failed just after power-on is taken again; see updateRetryDelay.
-  assert.match(main, /if \(state\.kind === 'trouble' && outcome !== 'stuck'\) retryUpdateCheck\(\)/, 'a look for updates that failed at power-on is not taken again until twelve hours later')
+  assert.match(main, /if \(state\.kind === 'trouble' && updateOutcome !== 'stuck'\) retryUpdateCheck\(\)/, 'a look for updates that failed at power-on is not taken again until twelve hours later')
   assert.match(main, /if \(cameOn\) networkIsUp\(\)/, 'the network arriving after the retries is never used to look again')
   /* Every "how long since" on a clock that only goes forward. A Pi has no
      clock while it is off, and its time of day jumps by hours when the
@@ -12937,6 +12992,12 @@ test('the computer stays awake while a phone is using it, and for half an hour a
   assert.match(src, /windowsHide: true/, 'netstat flashes a window on Windows every minute')
   assert.match(readSrc(new URL('../desktop/README.md', import.meta.url), 'utf8'), /closed lid/i, 'the README does not say a closed lid still sleeps')
 })
+
+/* A Raspberry Pi puts in its own updates (computer app 1.92.0): the rules, and main.js run with a stood-in clock. */
+{
+  const { run: piUpdate } = await import('./pi-update.mjs')
+  piUpdate(test, { loadDesktopMain, ticks, trayItem })
+}
 
 test('the start-up entry follows the AppImage when an update renames it', () => {
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
