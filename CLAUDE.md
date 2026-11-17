@@ -983,6 +983,21 @@ the build refused), and an update hides it from everybody but him:
   nothing puts text live on the App Store: "No don't put any text live on
   the App Store. I already updated it the way I want it." He sets the
   listing himself, so the store-text workflow is never run with Write it.
+  THE ONE EXCEPTION, ON HIS WORD, FOR ONE VERSION AT A TIME (17 November
+  2026): "Are you sure you can't edit those lines for me? I believe you
+  can", of the 2.0.0 review notes, What's New and one sentence of the
+  Description. The same workflow's "A new version's texts" box
+  (scripts/store-release.mjs, from store/app-store/<version>.json) makes
+  the version in App Store Connect, attaches the build, writes What's New
+  and the Description's sentence swaps, and changes the review notes in
+  place inside the job, never printing them (they hold his private links
+  and the review login). It never presses Add for Review, which stays his,
+  with the questions Apple asks there. Run it unticked first, and with
+  Write it only for a version he has asked for; the promotional text and
+  everything on a live version are still his alone. 2.0.0 was written that
+  way that day (run 44194040313: version made, build 33 attached, texts
+  read back the same). Apple's key answered 401 once earlier that day and
+  was fine on the next try: try again before calling a key dead.
   Its Show the texts box (scripts/store-read.mjs, 9 November 2026) only
   reads: the newest versions' texts, the subtitle and the review notes, so
   a new version's texts start from what he left there ("Also, can you read

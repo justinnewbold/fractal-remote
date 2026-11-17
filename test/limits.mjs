@@ -3110,8 +3110,51 @@ export function run(test) {
     assert.match(code, /if \(res\.status === 404 && missingIsNone\) return null/, 'a 404 anywhere is taken for "none yet"')
     assert.equal(field('Keywords', 'a,b'), '--- Keywords (3 characters) ---\na,b\n')
     const wf = read('.github/workflows/store-text.yml')
-    assert.match(wf, /if: \$\{\{ inputs\.show \}\}[\s\S]{0,300}run: node scripts\/store-read\.mjs/, 'Show the texts does not run the reader')
-    assert.match(wf, /if: \$\{\{ !inputs\.show \}\}[\s\S]{0,300}run: node scripts\/store-text\.mjs/, 'Show the texts can still write the promotional text')
+    assert.match(wf, /if: \$\{\{ inputs\.show && inputs\.release == '' \}\}[\s\S]{0,300}run: node scripts\/store-read\.mjs/, 'Show the texts does not run the reader')
+    assert.match(wf, /if: \$\{\{ !inputs\.show && inputs\.release == '' \}\}[\s\S]{0,300}run: node scripts\/store-text\.mjs/, 'Show the texts can still write the promotional text')
+    assert.match(wf, /if: \$\{\{ inputs\.release != '' \}\}[\s\S]{0,400}run: node scripts\/store-release\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/, 'a new version’s texts are written without Write it')
+  })
+
+  test('a new App Store version’s texts: the review notes are changed in place, never printed, and nothing presses Add for Review', async () => {
+    /*
+     * "Are you sure you can't edit those lines for me? I believe you can"
+     * (17 November 2026). scripts/store-release.mjs runs only with the real
+     * key, so its text work is run here on a stand-in for his notes.
+     */
+    const { newNotes, swap } = await import('../scripts/store-release.mjs')
+    const plan = JSON.parse(read('store/app-store/2.0.0.json'))
+    const was = [
+      'A remote.',
+      'No hardware? Use the demo. Every screen but Bluetooth works in the demo, Edit included.',
+      'New in 1.90.0:',
+      '• Edit over Bluetooth. It does not save.',
+      '• A trial.',
+      'Developer pages.',
+      'Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].',
+      'Services: Supabase (accounts), Expo (updates). Bluetooth and USB use no server.',
+      'Videos:',
+      '1. FM3 hardware: https://example.com/private/1'
+    ].join('\n\n').replace('New in 1.90.0:\n\n• Edit over Bluetooth. It does not save.\n\n• A trial.', 'New in 1.90.0:\n• Edit over Bluetooth. It does not save.\n• A trial.')
+    const { text, report, bad } = newNotes(was, plan)
+    assert.deepEqual(bad, [])
+    assert.ok(text.includes('1. FM3 hardware: https://example.com/private/1'), 'his links were not kept')
+    assert.ok(text.includes('Developer pages.'), 'a line the plan does not name was lost')
+    assert.doesNotMatch(text, /New in 1\.90\.0|It does not save|A trial|\[version\]|\[model\]/, 'the old version’s lines are still in the notes')
+    assert.match(text, /New in 2\.0\.0:\n• Turn the iPhone on its side/)
+    assert.match(text, /Bluetooth and TONE3000 works in the demo/)
+    assert.match(text, /Expo \(updates\), TONE3000 \(captures, only when opened\)\. Bluetooth and USB use no server\./)
+    assert.doesNotMatch(report.join('\n'), /example\.com|private/, 'the report of what changed carries the notes’ own words')
+    /* A second run changes nothing, and a line that is not there stops the notes being written. */
+    assert.equal(newNotes(text, plan).text, text)
+    assert.ok(newNotes(was.replace('Edit included.', 'Edit too.'), plan).bad.length > 0, 'a line that was not found is not reported')
+    assert.equal(swap('a b a', ['a', 'c']).did, 'ambiguous')
+    /* What goes to Apple: no VP4, inside the boxes. */
+    for (const t of [plan.whatsNew, plan.notesNew, plan.testedOn, ...plan.notes.flat(), ...plan.description.flat()]) assert.doesNotMatch(t, /VP4|\bbeta\b|official/i)
+    assert.ok([...plan.whatsNew].length <= 4000)
+    const code = read('scripts/store-release.mjs')
+    assert.doesNotMatch(code, /appStoreVersionSubmissions|reviewSubmissions/, 'the job can send a version for review')
+    assert.doesNotMatch(code, /console\.\w+\((text|notes)\b|console\.\w+\([^\n]*\$\{(text|notes)\b/, 'the notes are printed')
+    assert.doesNotMatch(code, /body\.slice/, 'Apple’s answer is printed raw, and could carry what was sent')
   })
 
   test('the promotional text goes to App Store Connect signed the way Apple checks it', async () => {
