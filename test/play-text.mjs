@@ -18,7 +18,7 @@
  *   - and the repo's copy of the words, the one docs/app-store.md keeps.
  */
 import assert from 'node:assert/strict'
-import { generateKeyPairSync, verify } from 'node:crypto'
+import { createHash, generateKeyPairSync, verify } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,6 +63,7 @@ function pretendGoogle({ listings = [], defaultLanguage = 'en-US', commit, valid
   const calls = []
   const live = new Map(listings.map((l) => [l.language, { ...l }]))
   const drafts = new Map()
+  const sent = []
   let edits = 0
   const answer = (status, body) => ({
     ok: status >= 200 && status < 300,
@@ -75,6 +76,15 @@ function pretendGoogle({ listings = [], defaultLanguage = 'en-US', commit, valid
     const call = { method, url: String(url), host: u.host, path: u.pathname, query: Object.fromEntries(u.searchParams), body: init.body, headers: init.headers ?? {} }
     calls.push(call)
     if (u.host === 'oauth2.googleapis.com') return answer(200, { access_token: 'ya29.pretend-token', expires_in: 3600, token_type: 'Bearer' })
+    if (u.host === 'androidpublisher.googleapis.com' && u.pathname.startsWith(`/upload${APP}`)) {
+      /* A picture sent: kept with the draft, and shown from the commit on. */
+      const m = u.pathname.slice(`/upload${APP}`.length).match(/^\/edits\/(e\d+)\/listings\/([^/]+)\/([A-Za-z]+)$/)
+      if (!m || !drafts.has(m[1]) || method !== 'POST') return answer(400, 'pretend Google does not know that upload')
+      const sha256 = createHash('sha256').update(init.body).digest('hex')
+      const key = `${decodeURIComponent(m[2])}/${m[3]}`
+      sent.push({ id: m[1], key, sha256 })
+      return answer(200, { image: { id: `img${sent.length}`, url: `https://pictures.example/${sent.length}`, sha256 } })
+    }
     if (u.host === 'androidpublisher.googleapis.com') {
       if (!u.pathname.startsWith(APP)) return answer(404, 'no such app')
       const rest = u.pathname.slice(APP.length)
@@ -112,6 +122,7 @@ function pretendGoogle({ listings = [], defaultLanguage = 'en-US', commit, valid
           const own = commit?.(call)
           if (own) return answer(...own)
           for (const [k, v] of draft) live.set(k, v)
+          for (const p of sent.filter((x) => x.id === id)) (images[p.key] ??= { images: [] }).images.push({ id: `kept${p.sha256.slice(0, 4)}`, url: 'https://pictures.example/kept', sha256: p.sha256 })
           drafts.delete(id)
           return answer(200, { id })
         }
@@ -465,7 +476,7 @@ export function run(test) {
     assert.match(log.text(), /::warning::Play has no fr-FR listing, and this job never adds a language/)
 
     /* And a mode it does not know is refused, naming the three. */
-    await assert.rejects(job({ mode: 'everything', rawKey: keyFile(), fetch: g.fetch }), /there is no mode "everything": it is listing, images or vitals/)
+    await assert.rejects(job({ mode: 'everything', rawKey: keyFile(), fetch: g.fetch }), /there is no mode "everything": it is listing, images, vitals or screenshots/)
   })
 
   test('while Google reviews something else, nothing is sent and nothing is cancelled', async () => {
@@ -699,6 +710,59 @@ export function run(test) {
     assert.equal(flatInterval(new Date(Date.UTC(2026, 0, 2, 3)), new Date(Date.UTC(2026, 0, 3, 4)))['interval.endTime.hours'], 4)
   })
 
+  test('phone screenshots are added after the ones Play has, never twice, never past eight, and only with Write it', async () => {
+    /* "Same with Google, if you can. You might need to crop them so it doesn't look like Apple" (17 November 2026). */
+    const { phoneShots, SHOTS_MOST, pngSides, readRepo, run: job } = await import(SCRIPT)
+    /* A PNG's first 24 bytes are all the job reads of its shape. */
+    const png = (w, h, salt) => {
+      const b = Buffer.alloc(64, salt)
+      Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').copy(b)
+      b.writeUInt32BE(w, 16)
+      b.writeUInt32BE(h, 20)
+      return b
+    }
+    const dir = `${repoFolder([await cleanListing()])}/`
+    mkdirSync(join(dir, 'screenshots', '2.0.0', 'phone'), { recursive: true })
+    writeFileSync(join(dir, 'screenshots', '2.0.0', 'phone', '01-a.png'), png(1320, 2640, 1))
+    writeFileSync(join(dir, 'screenshots', '2.0.0', 'phone', '02-b.png'), png(1320, 2640, 2))
+    assert.deepEqual(phoneShots(dir).map((p) => p.name), ['2.0.0/phone/01-a.png', '2.0.0/phone/02-b.png'])
+    const sha = (b) => createHash('sha256').update(b).digest('hex')
+    const images = { 'en-US/phoneScreenshots': { images: [{ id: 'old', sha256: 'x'.repeat(64) }, { id: 'same', sha256: sha(png(1320, 2640, 1)) }] } }
+    const g = pretendGoogle({ listings: [await cleanListing()], images })
+
+    /* Unticked: it says what it would add and sends nothing. */
+    let log = lines()
+    assert.deepEqual(await job({ mode: 'screenshots', rawKey: keyFile(), fetch: g.fetch, log, repoDir: dir }), { wrote: [] })
+    assert.match(log.text(), /2 phone screenshots now; 1 to add \(1 already there\), making 3\./)
+    assert.ok(!g.calls.some((c) => c.path.startsWith('/upload') || c.path.endsWith(':commit')), 'something was sent without Write it')
+
+    /* Ticked: only the one Play does not have, then a commit that never cancels a review, then read back. */
+    log = lines()
+    assert.deepEqual(await job({ mode: 'screenshots', apply: true, rawKey: keyFile(), fetch: g.fetch, log, repoDir: dir }), { wrote: ['2.0.0/phone/02-b.png'] })
+    const ups = g.calls.filter((c) => c.path.startsWith('/upload'))
+    assert.equal(ups.length, 1)
+    assert.match(ups[0].path, /\/listings\/en-US\/phoneScreenshots$/)
+    assert.equal(ups[0].headers['Content-Type'], 'image/png')
+    assert.equal(g.calls.find((c) => c.path.endsWith(':commit')).query.changesInReviewBehavior, 'ERROR_IF_IN_REVIEW')
+    assert.ok(!g.calls.some((c) => c.method === 'DELETE' && /phoneScreenshots/.test(c.path)), 'a picture Play had was taken away')
+    assert.match(log.text(), /and they read back: 3 phone screenshots\./)
+    /* Again: nothing to do. */
+    assert.deepEqual(await job({ mode: 'screenshots', apply: true, rawKey: keyFile(), fetch: g.fetch, log: lines(), repoDir: dir }), { wrote: [] })
+
+    /* Past eight, nothing is added; and a picture Play would refuse stops the job before Google is asked anything. */
+    const full = pretendGoogle({ listings: [await cleanListing()], images: { 'en-US/phoneScreenshots': { images: Array.from({ length: SHOTS_MOST - 1 }, (_, i) => ({ sha256: String(i).repeat(64) })) } } })
+    await assert.rejects(job({ mode: 'screenshots', apply: true, rawKey: keyFile(), fetch: full.fetch, log: lines(), repoDir: dir }), /that would be 9 phone screenshots; Play takes 8\. Nothing was added\./)
+    assert.ok(!full.calls.some((c) => c.path.startsWith('/upload')))
+    writeFileSync(join(dir, 'screenshots', '2.0.0', 'phone', '03-tall.png'), png(1320, 2868, 3))
+    assert.throws(() => phoneShots(dir), /03-tall\.png is 1320x2868: Play takes sides from 320 to 3840, the long one no more than twice the short/)
+    /* The real ones: his four, cropped of the iPhone's clock row and home bar, and the listing's words still read with the folder there. */
+    const real = phoneShots()
+    assert.equal(real.length, 4)
+    for (const p of real) assert.equal(p.size, '1320x2640', `${p.name} is not cropped to Play's shape`)
+    for (const p of real) assert.deepEqual(pngSides(readFileSync(new URL(`../store/app-store/screenshots/${p.name.replace('/phone/', '/iphone/')}`, import.meta.url))), [1320, 2868], `${p.name} has no iPhone picture it was cropped from`)
+    assert.ok(readRepo()['en-US'], 'the screenshots folder is read as a language')
+  })
+
   test('the job runs by hand, on main, with its key in one step’s environment, and installs nothing', () => {
     const yml = read('.github/workflows/play-text.yml')
     const on = yml.slice(yml.indexOf('\non:\n'), yml.indexOf('\npermissions:'))
@@ -713,7 +777,7 @@ export function run(test) {
     assert.ok(!/\$\{?GOOGLE_PLAY_KEY/.test(yml), 'the shell touches the key (printed, or written to a file)')
     assert.ok(!/\b(echo|printf|cat|tee)\b/.test(yml.slice(yml.indexOf('steps:'))), 'a step prints something')
     assert.match(yml, /run: node scripts\/play-text\.mjs --mode "\$MODE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\} \$\{\{ inputs\.hold && '--hold' \|\| '' \}\}\n/)
-    assert.match(yml, / {6}mode:\n {8}description: [^\n]+\n {8}type: choice\n {8}options:\n {10}- listing\n {10}- images\n {10}- vitals\n {8}default: listing\n/, 'the three modes are not offered, with listing first')
+    assert.match(yml, / {6}mode:\n {8}description: [^\n]+\n {8}type: choice\n {8}options:\n {10}- listing\n {10}- images\n {10}- vitals\n {10}- screenshots\n {8}default: listing\n/, 'the modes are not offered, with listing first')
     const apply = (f) => read(f).match(/ {6}apply:\n {8}description: ([^\n]+)\n {8}type: boolean\n {8}default: false\n/)?.[1]
     assert.equal(apply('.github/workflows/play-text.yml'), apply('.github/workflows/store-text.yml'), 'Write it is not worded the way store-text words it')
     assert.match(yml, / {6}hold:\n {8}description: [^\n]+\n {8}type: boolean\n {8}default: false\n/)

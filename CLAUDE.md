@@ -998,6 +998,19 @@ the build refused), and an update hides it from everybody but him:
   way that day (run 44194040313: version made, build 33 attached, texts
   read back the same). Apple's key answered 401 once earlier that day and
   was fine on the next try: try again before calling a key dead.
+  AND SCREENSHOTS THE SAME WAY (17 November 2026): "Add these iPhone
+  screenshots to App Store Connect", then "Same with Google, if you can.
+  You might need to crop them so it doesn't look like Apple". His own
+  pictures are kept in store/app-store/screenshots/<version>/iphone/ as
+  they came off his phone, and in store/google-play/screenshots/<version>/
+  phone/ cropped of the iPhone's clock row and home bar (1320x2640, which
+  is also Play's limit: the long side no more than twice the short). The
+  store-text workflow's Screenshots box (scripts/store-shots.mjs) and
+  play-text's `screenshots` mode ADD them after the ones already there,
+  never twice, never in place of one, and stop at Apple's ten or Play's
+  eight: which old one goes is his to say. An iPhone picture is never
+  stretched or padded into an iPad one (Apple refuses listings for it);
+  the iPad's pictures are real iPad screenshots.
   Its Show the texts box (scripts/store-read.mjs, 9 November 2026) only
   reads: the newest versions' texts, the subtitle and the review notes, so
   a new version's texts start from what he left there ("Also, can you read

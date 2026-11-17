@@ -30,6 +30,11 @@ on:
         type: string
         default: ''
 
+      shots:
+        description: With a version above, its screenshots in place of its texts (store/app-store/screenshots/<version>/, added after the ones already there)
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -69,13 +74,22 @@ jobs:
         run: node scripts/store-text.mjs ${{ inputs.apply && '--apply' || '' }}
 
       - name: A new version's texts
-        if: ${{ inputs.release != '' }}
+        if: ${{ inputs.release != '' && !inputs.shots }}
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           RELEASE: ${{ inputs.release }}
         run: node scripts/store-release.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }}
+
+      - name: A new version's screenshots
+        if: ${{ inputs.release != '' && inputs.shots }}
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          RELEASE: ${{ inputs.release }}
+        run: node scripts/store-shots.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }}
 
       - name: The key is gone
         if: always()
