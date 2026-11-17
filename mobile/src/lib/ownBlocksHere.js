@@ -15,7 +15,7 @@ import { setChainNamer } from './device'
 import { getState } from './rig'
 import { bluetoothAdmin, ownKnobsLevel } from './bluetooth'
 import { OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE } from './features'
-import { nameOwnBlocks, ownInChainEditor, ownInPalette } from './ownBlocks'
+import { nameOwnBlocks, ownCellName, ownInChainEditor, ownInPalette } from './ownBlocks'
 
 /* Whether this account is offered the phone's own names for a unit's blocks through the computer. */
 const openHere = () => bluetoothAdmin() === true || OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE
@@ -25,5 +25,8 @@ export const ownPaletteHere = (list) => ownInPalette(list, getState().deviceSlug
 
 /** The chain as the chain editor takes it: a block named here is one it can move and remove (lib/ownBlocks ownInChainEditor). */
 export const ownChainHere = (blocks) => ownInChainEditor(blocks, openHere())
+
+/** A grid cell's name as the phone has it, for Quick build's log line (lib/ownBlocks ownCellName). Log only, so not behind the account's switch: it changes nothing on a screen. */
+export const ownCellNameHere = (cell) => ownCellName(cell, getState().deviceSlug)
 
 setChainNamer((blocks) => nameOwnBlocks(blocks, getState().deviceSlug, bluetoothAdmin() === true || OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel(bluetoothAdmin() === true)))

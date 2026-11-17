@@ -6528,7 +6528,8 @@ export function run(test) {
         'export const bodies = []\n' +
         'export const hooks = { fail: null }\n' +
         "export async function remoteRequest(path, options = {}) { asked.push(String(options.method || 'GET').toUpperCase() + ' ' + path); bodies.push(options.body ?? null); const bad = hooks.fail && hooks.fail(path, options); if (bad) throw bad; return { number: 7, name: 'FROM THE COMPUTER', ok: true } }\n",
-      'demo.js': 'export const demoDevice = () => null\n',
+      /* `on` lets one test put the demo up: nothing else on this bench does. */
+      'demo.js': 'export const stand = { on: null }\nexport const demoDevice = () => stand.on\n',
       'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on this bench') }\n",
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
@@ -6543,7 +6544,8 @@ export function run(test) {
     const relay = await import(at('relay.js'))
     const gate = await import(at('tapGate.js'))
     const vp4wire = await import(at('bleVp4.js'))
-    return { device, sw, relay, gate, vp4wire, done: () => rmSync(dir, { recursive: true, force: true }) }
+    const demo = await import(at('demo.js'))
+    return { device, sw, relay, gate, vp4wire, demo, done: () => rmSync(dir, { recursive: true, force: true }) }
   }
 
   /*
@@ -6555,7 +6557,7 @@ export function run(test) {
    * to the wire, marked as the captures', and the computer hears nothing.
    */
   test('a capture goes through the computer when the device is not on its own wire, and to the wire when it is', async () => {
-    const { device, sw, relay, done } = await deviceOnABench()
+    const { device, sw, relay, demo, done } = await deviceOnABench()
     try {
       const words = new Uint32Array(16384)
       for (let i = 0; i < 14095; i++) words[i] = (0x41424344 + i * 2654435761) >>> 0
@@ -6563,6 +6565,11 @@ export function run(test) {
 
       /* Off: the computer, the paths its three routes have, and the bodies they take. */
       sw.setSwitch({ on: false })
+      assert.equal(device.capturesThroughComputer(), true)
+      /* The demo is no computer: a capture there goes through nobody's computer app, so nothing about one is said (lib/captureComputer). */
+      demo.stand.on = {}
+      assert.equal(device.capturesThroughComputer(), false, 'the demo was taken for a computer a capture goes through')
+      demo.stand.on = null
       assert.equal(device.capturesThroughComputer(), true)
       await device.namEmptySlotHere()
       await device.namInstallHere(30, words, { replace: true, onProgress: () => assert.fail('a count was promised through the computer') })
@@ -12786,7 +12793,8 @@ export function run(test) {
     assert.match(bare, /if \(went\.ok && went\.got\.name && went\.got\.name !== NAM_EMPTY && Number\.isInteger\(went\.way\)\) keptWay = went\.way/)
     assert.equal((bare.match(/keptWay = /g) || []).length, 2)
     assert.equal(nam.NAM_NAME_PLACES, 31)
-    assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: tries > 1 \? `The Axe-Fx III took the capture \$\{tries\} different ways and still shows slot \$\{said\} as empty, so it did not keep it\. The app’s log has what the unit answered each time\.` : `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
+    /* The words are lib/captureComputer unkeptWords' (run whole in test/capture-computer.mjs), with the computer's own say on which byte went. */
+    assert.match(bare, /if \(got\.name === NAM_EMPTY\) \{ setSend\(\{ id: m\.id, slot, line: unkeptWords\(\{ tries, slotSaid: said, computer: oldAfterSendHere\(went\.old\) \}\) \}\) return \}/)
     /* A send that stopped part-way is offered again with its name as it was going. */
     assert.match(bare, /if \(err\?\.partial === true && Number\.isInteger\(err\?\.slot\)\) setStopped\(\(was\) => \(\{ \.\.\.was, \[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \} \}\)\)/)
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */

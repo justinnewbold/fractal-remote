@@ -132,6 +132,20 @@ export function ownInPalette(list, deviceSlug, open) {
   return more.length ? [...list, ...more] : list
 }
 
+/**
+ * The name the phone has for one cell of a grid read, for the log only
+ * (Quick build's "row 3 as read", shared/starter-chains rowAsRead): a III's
+ * or an FM9's own block by its effect id, the name Play and the chain editor
+ * give it ("NAM 1", where the computer's grid read says "eid_206"). Null for
+ * anything else, and on a unit with no such list.
+ */
+export function ownCellName(cell, deviceSlug) {
+  const unit = ownUnit(deviceSlug)
+  if (!unit || !cell || !Number.isInteger(cell.effectId)) return null
+  const own = catalogFor(unit).find((c) => c.page === cell.effectId && OWN_FAMILIES.includes(c.slug))
+  return own ? own.name : null
+}
+
 /** The chain for the chain editor: a block named here is one of the editor's own, no longer held as a New block. The same list back when there is none. */
 export function ownInChainEditor(blocks, open) {
   if (open !== true || !Array.isArray(blocks)) return blocks

@@ -311,6 +311,32 @@ export function run(test) {
     /* Nothing to say of a read that did not come, of no plan, or of a linear unit, whose slots have no cables. */
     assert.equal(s.rowAsRead(plan, null), '')
     assert.equal(s.rowAsRead(null, []), '')
+
+    /*
+     * HIS LOG OF 16 NOVEMBER 2026, through the Raspberry Pi: the computer's
+     * grid read calls the III's NAM 1 "eid_206", and the line said so. With
+     * the phone's own names (lib/ownBlocks ownCellName, handed in by
+     * QuickBuild) it says NAM 1; a cell the namer cannot name, or one the
+     * read named, keeps what the read said.
+     */
+    const { ownCellName } = await import('../mobile/src/lib/ownBlocks.js')
+    const raw = [own[0], blocks[0], cell(1, 2, 206, 'eid_206', { fromRows: [1] }), { ...own[1], fromRows: [1] }]
+    const namer = (c) => ownCellName(c, 'axefxiii')
+    assert.equal(s.rowAsRead(plan, raw), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from nothing), column 3 eid_206 (fed from row 2), column 4 Output 1 (fed from row 2)')
+    assert.equal(s.rowAsRead(plan, raw, namer), 'row 2 as read: column 1 Input 1, column 2 Drive 1 (fed from nothing), column 3 NAM 1 (fed from row 2), column 4 Output 1 (fed from row 2)')
+    assert.equal(ownCellName({ effectId: 207 }, 'axefxiii'), 'NAM 2')
+    /* Not the III's own block, another unit, or no id: no name, and the read's stands. */
+    assert.equal(ownCellName({ effectId: 118 }, 'axefxiii'), null)
+    assert.equal(ownCellName({ effectId: 206 }, 'fm3'), null)
+    assert.equal(ownCellName({}, 'axefxiii'), null)
+    assert.match(s.rowAsRead(plan, [own[0], blocks[0], cell(1, 2, 9999, 'eid_9999'), own[1]], namer), /column 3 eid_9999/)
+    /* A cell the read named is never renamed by the namer. */
+    assert.match(s.rowAsRead(plan, [own[0], blocks[0], cell(1, 2, 206, 'NAM Player'), own[1]], () => 'NAM 1'), /column 3 NAM Player/)
+    /* And Quick build hands its namer in, for the log only: the card's words are whatLanded's, which takes none. */
+    const qbText = read('mobile/src/components/QuickBuild.js')
+    assert.match(qbText, /const read = rowAsRead\(plan, after, ownCellNameHere\)\n\s+if \(read\) logDebug\('chain', 'quick build', read\)/)
+    assert.match(read('mobile/src/lib/ownBlocksHere.js'), /export const ownCellNameHere = \(cell\) => ownCellName\(cell, getState\(\)\.deviceSlug\)/)
+    assert.doesNotMatch(qbText, /whatLanded\([^)]*ownCellName/)
     const am4 = s.planBuild({ cells: [], shape: AM4_SHAPE, palette: AM4, picks: s.resolveChain(['amp'], AM4).picks, blocks: [] })
     assert.equal(am4.ok, true)
     assert.equal(s.rowAsRead(am4, []), '')
@@ -339,7 +365,7 @@ export function run(test) {
     assert.equal(s.rowAsRead({ row: 1 }, []), '')
     /* And the screen writes it down, with whether the row read as connected, after every build that was read back. */
     const qb = code(read('mobile/src/components/QuickBuild.js')).replace(/\s+/g, ' ')
-    assert.match(qb, /const read = rowAsRead\(plan, after\) if \(read\) logDebug\('chain', 'quick build', read\)/)
+    assert.match(qb, /const read = rowAsRead\(plan, after, ownCellNameHere\) if \(read\) logDebug\('chain', 'quick build', read\)/)
     assert.match(qb, /plan\.joined \? \(landed\.joined \? '; connected from the input to the output' : `; NOT connected\$\{Number\.isInteger\(landed\.stops\) \? `, stops at column \$\{landed\.stops \+ 1\}` : ''\}`\) : ''/)
   })
 

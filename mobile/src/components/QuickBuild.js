@@ -10,7 +10,7 @@ import { UNDO_STALE, runPlan, stepWords } from '../lib/split-chain'
 import { blockColor } from '../lib/blockColors'
 import { blockIconOwn } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
-import { ownPaletteHere } from '../lib/ownBlocksHere'
+import { ownCellNameHere, ownPaletteHere } from '../lib/ownBlocksHere'
 import { takeQuickBuildAsk } from '../lib/quickBuild'
 import { addStarterHere, adoptUnlinkedHere, keepPaletteHere, roomForStarterHere, useStarterChains } from '../lib/starterChainsHere'
 import {
@@ -620,7 +620,8 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
     const landed = whatLanded(plan, after, tried)
     logDebug('chain', 'quick build landed', landed.unread ? 'not read' : `${landed.landed.length} in, ${landed.missing.length} not${landed.missing.length ? `: ${landed.missing.map((p) => p.name).join(', ')}` : ''}${plan.joined ? (landed.joined ? '; connected from the input to the output' : `; NOT connected${Number.isInteger(landed.stops) ? `, stops at column ${landed.stops + 1}` : ''}`) : ''}`)
     /* The whole row as the unit read it back, not only where it first stops: which cables took is what tells a dropped message from a wrong one. */
-    const read = rowAsRead(plan, after)
+    /* With the names the phone has for the III's own blocks: through the computer the grid read calls NAM 1 "eid_206". Log only. */
+    const read = rowAsRead(plan, after, ownCellNameHere)
     if (read) logDebug('chain', 'quick build', read)
     const undo = undoSteps(plan, tried)
     if (!alive.current) return

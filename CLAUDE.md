@@ -1382,12 +1382,14 @@ what the computer sends for the same edit, and a test holds it there.
       FM3 keeps the second, and a preset that has an end keeps its row).
       Along rows 3 and 4 the old message and the corrected one are the
       same bytes, so that row does not depend on which computer app is
-      sending. HIS AXE-FX III HAS JOINED IT TWICE, 16 November 2026:
+      sending. HIS AXE-FX III HAS JOINED IT THREE TIMES, 16 November 2026:
       from the phone over a WIDI Master (report 913f344a, "6 in, 0 not;
       connected"), and through his Raspberry Pi on computer app 1.90.63,
       older than 1.90.82 and so sending the law's bytes, which are the
       corrected ones along this row (report adc7d553, "9 in, 0 not;
-      connected", every column "fed from row 3"). That second one bears
+      connected", every column "fed from row 3"), and through the Pi on
+      1.90.63 again (his capture log: 4 blocks, "6 in, 0 not; connected
+      from the input to the output", 4.4 s from the tap). Those two bear
       out why the row was chosen. Not seen on an FM3 or FM9, or on any
       other row. Do not move it back to row 2 while computer apps older
       than 1.90.82 are about.
@@ -1395,12 +1397,16 @@ what the computer sends for the same edit, and a test holds it there.
       (`rowAsRead`: "row 3 as read: column 1 Input 1, column 2 Drive 1
       (fed from row 3), …") and whether it read as connected. The card
       says only where the row FIRST stops, and his log could not tell one
-      cable lost from three. READ THAT LINE FIRST in his next log.
+      cable lost from three. READ THAT LINE FIRST in his next log. Since
+      1.91.8 it names the III's own blocks as the phone does (lib/ownBlocks
+      `ownCellName`, handed in as `nameOf`): through the computer the grid
+      read called NAM 1 "eid_206" (16 November 2026). Log only; the card
+      and what is sent are as they were.
     - The card's words are as they were. Preset 389 was saved unjoined
       (and 388's build was never saved): no sound path, build again on
       another empty preset.
   - *STILL NOT PROVEN ON A UNIT:* a row other than row 3 that reads back
-    joined (row 3 has, twice, on his Axe-Fx III: over Bluetooth and through
+    joined (row 3 has, three times, on his Axe-Fx III: over Bluetooth and twice through
     the Pi, above); the Undo; on a six-row unit with the Input on the top
     row it builds there but lays no cables (that row's cable from an even column
     is still refused) and says so; and whether the unit keeps a bare
@@ -2261,9 +2267,14 @@ the capture on the unit, which is the hard half.
       (the tone's says "Back to the list" there); Sign out is not drawn in
       the pop-up; and the sheet's two pages each start at their own top
       (Sheet `scrollKey`).
-    - NOT TRIED ON A PHONE: the list and its search box inside the
-      pop-up's sheet, TONE3000's own page coming up over that sheet (a
-      sheet over a sheet), and a half-minute send with the pop-up open.
+    - RUN ON HIS PHONE, 16 November 2026 (his log, through the Pi): hold
+      NAM 1, TONE3000, a tone picked, Preview, then Back to NAM 1's knobs
+      and the same again with another tone. The list inside the pop-up's
+      sheet (a sheet in a sheet) worked; its search box was not seen used
+      (the log has the pick, not how it was found). NOT SEEN YET:
+      TONE3000's own page coming up over that sheet, and a half-minute
+      send over Bluetooth with the pop-up open (both of his went through
+      the Pi, about 2.3 s a try, two tries each).
       OPENING IT TO CUSTOMERS IS A STORE VERSION (new for them, the capture
       tools answer his account alone on the wire, and TONE3000 signs the
       screen off first), never the switch alone.
@@ -2488,6 +2499,38 @@ the capture on the unit, which is the hard half.
       the phone knows the XOR went (the unit drops most of those) and its
       log says to update the computer app. HIS PI HAS TO TAKE THAT UPDATE
       before a send through it carries 0x60.
+    - *SEEN AGAIN, 16 November 2026, and now said on the screen.* Two
+      Previews from the held NAM block went through "raspberry pi 5" on
+      computer app 1.90.63 and were dropped, name bytes 0x02 ("FNDR BFSR
+      VB Edge WRM2 CAB FREE") and 0x17 ("MRSH JC800 Hi Lead2 BAL2 CAB"):
+      two more for "every byte dropped lacks 0x60's two bits". The card
+      said only "… so it did not keep it. The app's log has what the unit
+      answered each time." Since 1.91.8 (lib/captureComputer, run whole
+      by test/capture-computer.mjs, which drives the card itself): THROUGH
+      A COMPUTER WHOSE APP SAYS A VERSION OLDER THAN 1.90.70 NOTHING IS
+      SENT. 1.90.70 is the computer release that pinned ForgeFX 64c44a7
+      (the byte as packed, and `nameByte`); this phone packs 0x60, so from
+      it on 0x60 goes. The tone's view says once, up top, "The computer
+      app on raspberry pi 5 is version 1.90.63. The Axe-Fx III drops most
+      captures sent through one that old. Update the computer app to
+      1.90.70 or later, then send it again. Or connect over Bluetooth,
+      which sends it from this phone." (the device's own word), and a
+      Preview, Get or Send it again sends and fetches nothing and puts
+      the same words on that capture's card in place of the one up top.
+      Never over Bluetooth, the unit's USB cable or the demo, never on a
+      version not said, and playing a capture already on the unit (Play
+      it in NAM 1, Use it and go back, the capture picker) is not a send.
+      Where the version was not said and the answer had no `nameByte`
+      (lib/captureSend `old`), a capture not kept says the same reason
+      and remedy in place of the log sentence; every other not-kept case
+      keeps its words. The log line is as it was. His Pis (both on
+      1.90.63) and anybody else's older computer app: update to 1.90.70
+      or later; COMPUTER_NEEDED did not move (captures are his account's).
+      THE REFUSAL IS FOR EVERY CAPTURE, ON PURPOSE: it also turns away a
+      name whose XOR has 0x60's two bits (0x7C and 0x78 were kept through
+      such a computer app on 14 November), which by that reading an old
+      computer app would have got kept. One rule and the remedy that
+      mends all of them, in place of a guess per name.
     - *0x60 was kept every time, so it is the only byte and the XOR ways
       are dropped* (done 16 November 2026, 1.90.88, above).
     - *Two readers and a skeptic each went through it before it went
