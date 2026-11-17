@@ -52,6 +52,25 @@ final class PhoneLink: NSObject, ObservableObject {
     private var awayTimer: Task<Void, Never>?
     let demo: Bool
 
+    /*
+     * THE CHECK-IN (Model.swift watchHereDue). While the watch app is on its
+     * screen, a timer asks every `watchHereTick` seconds whether one is due
+     * and sends "here" when it is: twenty seconds since anything was last
+     * sent, with the pages up. `lastSent` is the last time a request really
+     * went (a tap counts, so somebody tapping away sends none). The timer
+     * exists only while the app is on screen: onScreen(false), from the
+     * root view when the wrist goes down, ends it at once.
+     */
+    private var lastSent: Date?
+    private var screenOn = false
+    private var hereTimer: Timer?
+
+    /** Whether the pages are up rather than the waiting page: the root view's own test. */
+    private var pagesUp: Bool {
+        guard let state else { return false }
+        return state.linked && !state.tooNew && !away
+    }
+
     private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
 
     init(demo: Bool = Launch.flag("demo")) {
@@ -62,6 +81,7 @@ final class PhoneLink: NSObject, ObservableObject {
             if Launch.flag("tunerDemo") { sample = sample.answering(.tuner(on: true)) }
             if Launch.flag("boostDemo") { sample = sample.boostDemo }
             if Launch.flag("am4Demo") { sample = sample.am4Demo }
+            if Launch.flag("quickDemo") { sample = sample.quickDemo }
             state = sample
             reachable = true
             return
@@ -79,13 +99,18 @@ final class PhoneLink: NSObject, ObservableObject {
             return
         }
         guard let session, session.activationState == .activated, session.isReachable else { return }
+        /* Anything sent holds the iPhone awake for its 25 seconds, so the next check-in is counted from here. */
+        lastSent = Date()
         /*
          * The message wakes the iPhone app in the background if it is asleep
          * (the phone locked in a pocket), and the phone answers when it has it.
          * Waking can miss the first time; one more try a second later.
          */
         let body: [String: Any] = ["json": command.json]
+        /* A tap is sent once or not at all (WatchCommand.once): a second try would be a second, late beat. A check-in too: the next is two seconds off. */
+        let once = command.once
         session.sendMessage(body, replyHandler: { _ in }, errorHandler: { _ in
+            guard !once else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 guard session.isReachable else { return }
                 session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
@@ -114,6 +139,28 @@ final class PhoneLink: NSObject, ObservableObject {
                 self.away = true
             }
         }
+    }
+
+    /*
+     * The watch app came on its screen (true) or left it (false: the wrist
+     * down, another app, the clock face). On: a check-in now if one is due,
+     * which it is after any pause, and the timer that asks from then on.
+     * Off: the timer gone, and nothing more sent until the wrist is raised.
+     */
+    func onScreen(_ on: Bool) {
+        screenOn = on
+        hereTimer?.invalidate()
+        hereTimer = nil
+        guard on, !demo else { return }
+        checkIn()
+        hereTimer = Timer.scheduledTimer(withTimeInterval: watchHereTick, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.checkIn() }
+        }
+    }
+
+    private func checkIn() {
+        guard watchHereDue(onScreen: screenOn, pagesUp: pagesUp, demo: demo, lastSent: lastSent, now: Date()) else { return }
+        send(.here)
     }
 
     /* Asked again whenever the app comes back to the front: the wrist raised. */

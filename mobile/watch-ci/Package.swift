@@ -14,7 +14,7 @@ let package = Package(
             name: "WatchModelTests",
             dependencies: ["WatchModel"],
             path: "Tests/WatchModelTests",
-            resources: [.copy("state.json")]
+            resources: [.copy("state.json"), .copy("pages.json")]
         )
     ]
 )

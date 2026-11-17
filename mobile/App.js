@@ -1,6 +1,6 @@
 /* First, so every sentence that names the device knows which one it is on. */
 import './src/lib/thisDevice'
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, ScrollView, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
@@ -89,6 +89,7 @@ import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH, HOLD_KNOBS_FOR_EVERYONE, PHONE_SIDEWAYS_FOR_EVERYONE, SIDES_FOR_EVERYONE } from './src/lib/features'
 import Sides, { SidesFrame } from './src/components/Sides'
+import { PhoneTurns } from './src/components/PhoneTurns'
 import SidesLead from './src/components/SidesLead'
 import PlayHead from './src/components/PlayHead'
 import { usePlayHead } from './src/lib/playHead'
@@ -808,6 +809,8 @@ export default function App() {
   const low = sidewaysAllowed && !big && phoneSidewaysOn(frame || {}, lowWas.current)
   lowWas.current = low
   const wide = big || low
+  /* On a phone on its side the line between the two sides is the middle of the frame, never a fold's place: an Android phone keeps its camera clear down ONE side, and that is not a crease to put the line on (lib/twoSides splitSides, phoneSidewaysOn). An iPhone keeps the same down both, so nothing on it moves. */
+  const sidesFrame = useMemo(() => (low && frame ? { ...frame, left: 0, right: 0 } : frame), [low, frame])
   /* Where the line between the sides was dragged to on a big screen (lib/useSidesSplit), for an account the tidier Edit is open to (his, until features TIDY_EDIT_FOR_EVERYONE). Null for everybody else, and the sides are where they always were. */
   const tidyAllowed = sidesAdmin || (sidesAllowed && TIDY_EDIT_FOR_EVERYONE)
   const split = useSidesSplit({ allowed: tidyAllowed, big })
@@ -1014,7 +1017,7 @@ export default function App() {
     return sideTool === 'tuner' ? writeTuner(false) : sideTool === BLOCK ? closeBlock() : closeSide()
   }
   const sideLead = !wide ? null : twoSidesUp ? (
-    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} three={thirdUp ? third : null} onAdd={thirdCanOpen ? openThirdList : null} onThird={openThirdList} />
+    <SidesLead frame={sidesFrame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} three={thirdUp ? third : null} onAdd={thirdCanOpen ? openThirdList : null} onThird={openThirdList} />
   ) : low ? (
     screen === 'stage' && playHeadUp ? (
       <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
@@ -1227,6 +1230,19 @@ export default function App() {
   /* And not elsewhere while it is beside a tool on two sides (playBeside): Play is showing, so a command is for it, not "Open Play". A tool filling the window over it is the tool's screen, and elsewhere. */
   const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen: stageViewUp ? 'stage' : screen, shareCard: askHow || askShare }) && !playBeside
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
+  /*
+   * WHICH WAY UP A PHONE MAY BE HELD (lib/phoneTurns; components/PhoneTurns
+   * asks the phone): upright on every page, except that Play, what opens
+   * beside it and Stage view may be turned on either side, for an account
+   * the sideways layout is open to (`sidewaysAllowed`). `turnsInApp` is the
+   * app past everything that stands in front of it: the startup card, the
+   * walkthrough, the sign-in, the purchase page (its own page, and the one
+   * opened over a screen), How do you connect to your unit? and the sharing
+   * card are all upright. The wait for a rig in Play's place counts as Play:
+   * a phone on a stand is not turned upright and back each time its adapter
+   * drops. A tablet is asked for nothing.
+   */
+  const turnsInApp = auth === 'in' && seenWalk === true && !independentDue && !askHow && !askShare && !buying
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
    * reader says it does cannot disagree (TopBar unitGoes). Which unit only
@@ -1660,6 +1676,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      {/* Draws nothing: holds a phone upright or lets it turn, by the screen that is up (`turnsInApp`, above). */}
+      <PhoneTurns allowed={sidewaysAllowed} inApp={turnsInApp} onPlay={screen === 'stage'} beside={sideTool !== null} stageView={stageViewUp} frame={frame} />
       {/* The clock and the battery, which have to be readable against whatever
           is behind them: light ink on the dark palette, dark on the light one. */}
       <StatusBar style={isDark() ? 'light' : 'dark'} />
@@ -2263,7 +2281,7 @@ export default function App() {
                 tool={twoSidesUp ? sideTool : null}
                 full={sideFull}
                 playOnRight={playOnRight}
-                frame={frame}
+                frame={sidesFrame}
                 tools={toolsOffered}
                 onPick={openTool}
                 /* The list of what goes beside Play, opened from a side's name in the top bar (`sideLead`, above). */

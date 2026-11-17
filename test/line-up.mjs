@@ -16,8 +16,7 @@
  * it, runs on the click bench in test/mobile.mjs.
  */
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -340,40 +339,27 @@ export function run(test) {
     assert.deepEqual(link.WATCH_KNOWS, ['pages', 'tempo', 'stay', 'here', 'quick'])
     assert.deepEqual(link.WATCH_KNOWS_NEXT, ['beat'])
     assert.deepEqual(link.watchKnows(['beat', 'pages', 'x']), ['pages', 'beat'])
-    const patch = read('docs/pending/watch-page-order.patch')
-    const helloes = [...(read('mobile/targets/watch/Model.swift') + patch).matchAll(/"do":"hello"[^}]*\}/g)].map((m) => m[0])
+    /*
+     * The 2.0.0 build's watch is the tree's own Model.swift since release day
+     * (17 November 2026), when docs/pending/watch-page-order.patch went into
+     * main and its file was deleted. Until then this read both forms, the
+     * tree's and the tree's with the patch put in (or taken back out); the
+     * 1.90.0 copies' watch, the form without the patch, is no longer in the
+     * repository, and it said nothing in its hello of what it knows.
+     */
+    const helloes = [...read('mobile/targets/watch/Model.swift').matchAll(/"do":"hello"[^}]*\}/g)].map((m) => m[0])
     assert.ok(helloes.length > 0)
     for (const hello of helloes) assert.doesNotMatch(hello, /beat/, 'a watch out today says it knows `beat`, and would be sent what it cannot read')
     /*
-     * And were it sent to them, both read the metronome with Swift's own
+     * And were it sent to it, it reads the metronome with Swift's own
      * decoder, which passes over a key it does not know, into a two-field
      * WatchMetronome whose == is those two: so `.onChange(of: metronome)`
      * would not fire for it either.
      */
-    /*
-     * The store copies' Model.swift, and the 2.0.0 build's: main's with the
-     * waiting patch put in, as the build was. The check runs the tests a
-     * second time with every waiting patch already in (PENDING_APPLIED):
-     * there the tree's file IS the build's, and the store copies' is that
-     * with the patch taken back out.
-     */
-    const applied = Boolean(process.env.PENDING_APPLIED)
-    const built = mkdtempSync(join(tmpdir(), 'line-up-watch-'))
-    let other
-    try {
-      mkdirSync(join(built, 'mobile/targets/watch'), { recursive: true })
-      writeFileSync(join(built, 'mobile/targets/watch/Model.swift'), read('mobile/targets/watch/Model.swift'))
-      execFileSync('git', ['apply', ...(applied ? ['--reverse'] : []), '--include=mobile/targets/watch/Model.swift', repo('docs/pending/watch-page-order.patch')], { cwd: built, stdio: 'pipe' })
-      other = readFileSync(join(built, 'mobile/targets/watch/Model.swift'), 'utf8')
-    } finally {
-      rmSync(built, { recursive: true, force: true })
-    }
-    assert.notEqual(other, read('mobile/targets/watch/Model.swift'), applied ? 'the patch was not taken back out' : 'the patch was not put in')
-    for (const swift of [read('mobile/targets/watch/Model.swift'), other]) {
-      assert.match(swift, /struct WatchMetronome: Codable, Equatable \{\s*var on: Bool\s*var bpm: Double\s*\}/)
-      assert.match(swift, /try\? JSONDecoder\(\)\.decode\(WatchState\.self, from: data\)/)
-      assert.doesNotMatch(swift, /init\(from decoder/, 'a watch reads the picture with its own decoder, which may refuse a key it does not know')
-    }
+    const swift = read('mobile/targets/watch/Model.swift')
+    assert.match(swift, /struct WatchMetronome: Codable, Equatable \{\s*var on: Bool\s*var bpm: Double\s*\}/)
+    assert.match(swift, /try\? JSONDecoder\(\)\.decode\(WatchState\.self, from: data\)/)
+    assert.doesNotMatch(swift, /init\(from decoder/, 'a watch reads the picture with its own decoder, which may refuse a key it does not know')
 
     /* The contract, made safe. */
     assert.deepEqual(link.beatForWatch({ at: 1763300000123.6, bpm: 120.00049, nudge: 27 }), { at: 1763300000124, bpm: 120, nudge: 30 })

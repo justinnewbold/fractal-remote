@@ -137,3 +137,17 @@ pair of 16 November, which spends one of each:
 
 **Left this month: 6 iOS, 9 Android**, his count of 13 November less the
 2.0.0 pair.
+
+**Release day for 2.0.0 was 17 November 2026, and it spent no build.** "I'm
+gonna go ahead and submit the build to Apple. Go ahead and submit the
+android build now. for 2.0.0." (Justin.) The five patches went into main in
+the release-day pull request, in the README's order, with their files and
+docs/pending/next-store.json deleted in the same change, and the fingerprint
+recorded there is the 16 November pair's own (ios 9d75d6bd…, android
+e44134a7…, watch 34149f04…; `node scripts/next-store.mjs --strict` said so
+before the file went). So from that merge on main's updates reach the 2.0.0
+copies only, and the App Store's and Google Play's 1.90.0 copies keep the
+last update made before it (1.92.7) until their owners take 2.0.0 from the
+store. He sends the builds the testers already have: TestFlight build 33
+for review in App Store Connect, and Android with Promote release from
+internal testing to production in Play Console.

@@ -6916,6 +6916,10 @@ console.log('\nTwo sides on a big screen: Play beside Edit, Setlists or All pres
 const { run: twoSides } = await import('./two-sides.mjs')
 twoSides(test)
 
+console.log('\nwhich way up a phone may be held: upright everywhere, either side on Play, and a tablet asked for nothing')
+const { run: phoneTurns } = await import('./phone-turns.mjs')
+phoneTurns(test)
+
 console.log('\nthe hold pop-up: the block’s knobs over its channels, his account only')
 const { run: holdPop } = await import('./hold-pop.mjs')
 holdPop(test)

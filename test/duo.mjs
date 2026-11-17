@@ -259,18 +259,22 @@ export function run(test) {
       assert.equal(p.name, 'ANY_WAY_UP', `${p.file}:${p.line} turns only upright on an iPhone`)
       assert.ok(p.imported, `${p.file}:${p.line} has its own ANY_WAY_UP, not lib/screenShape's`)
     }
-    /* The app itself is still locked upright on an iPhone: this is the pop-ups following it, not the lock lifted. */
-    assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'portrait')
+    /* An iPhone may turn to either side since the phone-turns build, where lib/phoneTurns lets it (test/phone-turns.mjs): a pop-up follows the app there, which is what this is for. */
+    assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'default')
   })
 
-  test('on Android a tablet turns sideways and a phone stays upright, by the whole screen’s short side, and the iPhone keeps its lock', async () => {
+  test('on Android a tablet turns sideways and a phone starts upright, by the whole screen’s short side, and stays upright until the app asks for more', async () => {
     /*
      * Google Play on 1.88.0: "Remove resizability and orientation restrictions
      * in your app to support large screen devices." Justin: "The large-screen
      * change is the one most worth doing for reach, since a lot of guitarists
      * keep a tablet on a music stand." mobile/plugins/withTabletTurns.js takes
-     * the upright lock out of the Android manifest and holds the app upright
-     * from MainActivity when the screen is a phone's. Nothing here compiles
+     * the upright lock out of the Android manifest and starts the app upright
+     * from MainActivity when the screen is a phone's, where it stays until the
+     * app's own code asks for more (lib/phoneTurns, test/phone-turns.mjs: only
+     * on Play, and only for an account the sideways layout is open to; before
+     * the phone-turns build it was held upright at every turn, so no phone
+     * could be turned at all). Nothing here compiles
      * Kotlin, so the plugin is RUN, against stand-ins for Expo's config
      * plugins and the template's MainActivity, and the Kotlin it writes is
      * READ. android-minified builds it, and turns it on a phone and a tablet.
@@ -278,8 +282,8 @@ export function run(test) {
     const file = 'mobile/plugins/withTabletTurns.js'
     const app = JSON.parse(read('mobile/app.json')).expo
     assert.equal(app.plugins.filter((p) => p === './plugins/withTabletTurns').length, 1, 'the plugin is not in app.json, or is there twice')
-    /* The iPhone keeps its lock, and an iPad its four ways: the plugin is Android's alone. */
-    assert.equal(app.orientation, 'portrait')
+    /* The plugin is Android's alone: the iPhone's turning is app.json's and expo-screen-orientation's (test/phone-turns.mjs). */
+    assert.equal(app.orientation, 'default')
 
     const mods = []
     const stand = {
@@ -346,8 +350,16 @@ export function run(test) {
     /* The rule: the app's own tablet line, read off the whole screen and never the window. */
     const rule = made.slice(made.indexOf('// withTabletTurns: begin'), made.indexOf('// withTabletTurns: end')).replace(/\/\*[\s\S]*?\*\//g, ' ')
     const { TABLET_SIDE, appDevice } = await import('../shared/device-word.mjs')
-    const side = rule.match(/screenShortSideDp\(\) >= (\d+(?:\.\d+)?)f\) \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_UNSPECIFIED\s*\} else \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_PORTRAIT\s*\}/)
-    assert.ok(side, 'a screen at or over the line is not let turn, or one under it is not held upright')
+    /*
+     * A tablet: whatever was asked is set back to "unspecified", every time,
+     * as before. A phone: upright ONLY while nothing has been asked, so what
+     * the app asks for through expo-screen-orientation is left alone, and a
+     * phone turning (a configuration change, which asks this rule again) is
+     * not put upright under the hand that turned it.
+     */
+    const side = rule.match(/val unspecified = android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_UNSPECIFIED\s*if \(screenShortSideDp\(\) >= (\d+(?:\.\d+)?)f\) \{\s*if \(requestedOrientation != unspecified\) requestedOrientation = unspecified\s*\} else if \(requestedOrientation == unspecified\) \{\s*requestedOrientation = android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_PORTRAIT\s*\}/)
+    assert.ok(side, 'a screen at or over the line is not let turn, or one under it does not start upright, or is put upright again after the app asked for more')
+    assert.equal(rule.split('requestedOrientation = ').length - 1, 2, 'the rule sets the orientation somewhere else as well')
     assert.equal(Number(side[1]), TABLET_SIDE, 'Android turns at a different size from the one at which the app calls itself a tablet')
     assert.match(rule, /val density = resources\.displayMetrics\.density/)
     assert.match(rule, /windowManager\.maximumWindowMetrics\.bounds/, 'from Android 11 the rule does not read the whole screen')

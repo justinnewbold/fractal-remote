@@ -47,6 +47,15 @@ for page in 0 1 2 3; do
 done
 shoot -page 3 -tunerDemo YES
 xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
+# The Tempo page, which came after the four above and so is page 4: the
+# number, Tap and the wrist's switch. For looking at a pull request only;
+# watch.yml's App Store list does not take it.
+shoot -page 4
+xcrun simctl io "$UDID" screenshot "screens/tempo.png"
+# And with the metronome's light round the edge of the screen held lit
+# (-beatDemo), which on a wrist is there for a blink on every beat.
+shoot -page 4 -beatDemo YES
+xcrun simctl io "$UDID" screenshot "screens/tempo-beat.png"
 # A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
 # looking at a pull request only; watch.yml's App Store list does not take it.
 # Three seconds more than the others: the sheet opens 0.8 s after the page
@@ -55,6 +64,14 @@ xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
 shoot -page 1 -pick 50
 sleep 3
 xcrun simctl io "$UDID" screenshot "screens/channels.png"
+# Quick edit, where the iPhone offers it (-quickDemo): the line under the
+# pedals, and Drive 1 held, its channels in one row over its knobs with the
+# first picked. For looking at a pull request only, like the channels.
+shoot -page 1 -quickDemo YES
+xcrun simctl io "$UDID" screenshot "screens/quick-line.png"
+shoot -page 1 -pick 50 -quickDemo YES
+sleep 3
+xcrun simctl io "$UDID" screenshot "screens/quick.png"
 # An AM4's amp saying its boost under its name, dark with "Boost off", as the
 # phone sends it for an AM4 (the demo is an FM3, which has no words). For
 # looking at a pull request only, like the channels.
