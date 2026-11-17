@@ -13006,6 +13006,13 @@ test('the computer stays awake while a phone is using it, and for half an hour a
   piUpdate(test, { loadDesktopMain, ticks, trayItem })
 }
 
+/* And the phone's half (computer app 1.92.0 on): the computer's version and how its update is going on Phone & computer, and Update now, his account only. */
+console.log('\nThe computer app’s update on Phone & computer: the computer’s own note in words, the request the computer’s own rule acts on, at most two writes a tap, his account only')
+{
+  const { run: hostUpdate } = await import('./host-update.mjs')
+  hostUpdate(test)
+}
+
 test('the start-up entry follows the AppImage when an update renames it', () => {
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
   assert.match(main, /autoUpdater\.on\('appimage-filename-updated', \(path\) => followTheAppImage\(path\)\)/, 'an AppImage update leaves the entry naming a file that was deleted')

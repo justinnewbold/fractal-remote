@@ -515,3 +515,24 @@ export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false
  * the day the wire says `gridEdit` there.
  */
 export const QUICK_BUILD_FOR_EVERYONE = false
+
+/**
+ * THE COMPUTER APP'S OWN UPDATE ON PHONE & COMPUTER (lib/hostUpdate,
+ * components/HostUpdate): under the computer's card, how its update is going
+ * as the computer says it (computer app 1.92.0 on), and Update now when a
+ * Raspberry Pi has one ready; and in Which unit, each computer's version
+ * and how its update is going, read only.
+ *
+ * "I will update the pis but we need to figure out how to have them auto
+ * update" (Justin, 17 November 2026). The computer half came first (1.92.0):
+ * a Pi puts its update in by itself once nobody has used it for half an
+ * hour, and acts on a phone's request written into its store.
+ *
+ * His account first: NOBODY HAS PRESSED UPDATE NOW ON A REAL PI YET, and how
+ * long the restart takes, and whether the unit's sound carries on through
+ * it, have not been seen. Off, it is his account only
+ * (lib/hostUpdateHere useComputerUpdate); every other account sees the
+ * computer's card as it was and nothing is written for it. When it opens to
+ * everyone, its What's new line goes in then, with the time he measured.
+ */
+export const COMPUTER_UPDATE_FOR_EVERYONE = false

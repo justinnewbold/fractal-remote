@@ -94,6 +94,13 @@ const initial = {
    * Null until it says, and cleared with the version.
    */
   hostOs: null,
+  /*
+   * How the computer app's own update is going, as it says it (computer app
+   * 1.92.0 on, the `update` note beside its name, as it came: lib/hostUpdate
+   * noteOf reads it), or null. Read with the name and the version, and cleared with the version.
+   * Drawn for his account only (lib/hostUpdateHere useComputerUpdate).
+   */
+  hostUpdate: null,
   hosts: [],
   units: {},
   /* While a computer that has not said its unit is asked again (askUnknownUnits): Which unit says so. */
@@ -203,6 +210,8 @@ let downAsleep = 0
 
 const set = (patch) => {
   const next = { ...state, ...patch }
+  /* A version cleared (another computer, Bluetooth, the demo) clears what that computer said about its update with it. */
+  if ('hostVersion' in patch && !('hostUpdate' in patch)) next.hostUpdate = null
   next.down = downNow(next.link)
   if (
     next.down === state.down &&
@@ -213,6 +222,7 @@ const set = (patch) => {
     // without it left that line up after the update had already happened.
     next.hostVersion === state.hostVersion &&
     next.hostOs === state.hostOs &&
+    sameNote(next.hostUpdate, state.hostUpdate) &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
     next.missingPick === state.missingPick &&
@@ -901,12 +911,30 @@ async function readMacName() {
      * stopped saying one is a screen reporting an app that may not be running
      * any more.
      */
-    set({ macName: String(name), hostVersion: version ? String(version) : null, hostOs: data?.os ? String(data.os).slice(0, 40) : null })
+    set({ macName: String(name), hostVersion: version ? String(version) : null, hostOs: data?.os ? String(data.os).slice(0, 40) : null, hostUpdate: data?.update && typeof data.update === 'object' ? data.update : null })
     say(version ? `the computer is ${name}, v${version}` : `the computer is ${name} and did not say its version`)
+    return true
   } catch (err) {
     // "your Mac" is a fine name. The log still says the asking failed.
     say(`could not read what the computer is — ${err?.message || String(err)}`)
   }
+  return false
+}
+
+/** Two update notes the same, by what they say (they are read afresh as new objects every couple of minutes). */
+function sameNote(a, b) {
+  return a === b || Boolean(a && b && JSON.stringify(a) === JSON.stringify(b))
+}
+
+/**
+ * Read the computer's document again now, for Update now (lib/hostUpdateHere):
+ * { name, version, update } as it says them, or undefined when it could not
+ * be read (as while a computer restarts). The same read, and the same state,
+ * as every couple of minutes.
+ */
+export async function readHostAgain() {
+  if (!(await readMacName())) return undefined
+  return { name: state.macName, version: state.hostVersion, update: state.hostUpdate }
 }
 
 /** When the computer was last told a phone is using it; 0 for not yet on this link. */

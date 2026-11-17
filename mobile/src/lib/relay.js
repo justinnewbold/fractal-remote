@@ -89,6 +89,8 @@ const seers = new Set()
 
 /* Every Mac that answered the last roll call, by the name it calls itself. */
 let hosts = []
+/* And the answers they were read from, kept as they came: what each said beside its name (version, kind, update) is read from them for Which unit, his account (lib/hostUpdateHere, hostUpdate hostFactsFrom). */
+let rollAnswers = []
 /** Which of them requests are addressed to. Null while there is only one. */
 let chosen = null
 /** How that one was chosen, for the log: 'pick' or 'first' (see rollCallLine). */
@@ -725,6 +727,8 @@ export const remoteLinked = () => !!session
 export const remoteHostSeen = () => hostSeen
 export const lastAnswerAt = () => answeredAt
 export const remoteHosts = () => hosts
+/** The last roll call's answers and how to read one, for what each computer said beside its name (hostUpdate hostFactsFrom). */
+export const remoteRollCall = () => ({ answers: rollAnswers, read: decode })
 
 /** Which unit each answering computer has, by its name: { model, plugged }. */
 export const remoteUnits = () => units
@@ -1075,6 +1079,7 @@ export async function remoteDisconnect() {
   // Who answered belongs to the channel that is going away. Carrying it over
   // would keep writes refused on a link where the second Mac is long gone.
   hosts = []
+  rollAnswers = []
   units = {}
   chosen = null
   targeted = false
@@ -1199,6 +1204,7 @@ async function takeCensus({
     /* A link that went while it counted: what it heard is not the next link's. */
     if (session !== link) return hosts
     hosts = await namesFrom(answers, decode)
+    rollAnswers = answers
     /* Two or more heard: a write waits for the rest of this count, even one taken while writes went at once (censusHosts). */
     if (hosts.length > 1) countFree = false
 
@@ -2283,7 +2289,34 @@ function pushesNow(chan) {
   return isJoined(chan) && socketUp()
 }
 
+/*
+ * WHAT THIS DEVICE IS SENDING THE COMPUTER, for Update now (lib/hostUpdate
+ * busySending): writes still out, and when the last one finished. Every
+ * write but the phone's own note (written every few minutes whatever is
+ * happening) and the update request itself: a save, a capture and a change
+ * of the chain are all writes, and a computer that restarts under one cuts
+ * it off. Only counted; nothing is held or sent differently for it.
+ */
+let sendsOut = 0
+let lastSentAt = 0
+/* Spelled out rather than imported (the relay's benches stand in for every import): phone-note PHONE_NOTE_PATH and hostUpdate HOST_UPDATE_PATH, held equal by test/host-update.mjs. */
+const NOT_SENDING = ['/store/config/phone.seen', '/store/config/host.update']
+const countsAsSending = (method, path) => method !== 'GET' && !NOT_SENDING.includes(path)
+/** { out, at }: writes to the computer still out, and when the last one finished (0 for none yet). */
+export const sendingHere = () => ({ out: sendsOut, at: lastSentAt })
+
 async function requestOnce(path, method, options, trip = { went: false }) {
+  if (!countsAsSending(method, path)) return requestOnceNow(path, method, options, trip)
+  sendsOut++
+  try {
+    return await requestOnceNow(path, method, options, trip)
+  } finally {
+    sendsOut = Math.max(0, sendsOut - 1)
+    lastSentAt = Date.now()
+  }
+}
+
+async function requestOnceNow(path, method, options, trip = { went: false }) {
   /*
    * Nothing is changed while two Macs are listening. A write is not sent to the
    * wrong unit — it is carried out on both. Reads are left alone deliberately:
