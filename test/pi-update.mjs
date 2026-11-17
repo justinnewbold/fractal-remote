@@ -17,8 +17,17 @@
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { posix as posixPath } from 'node:path'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+/*
+ * The stood-in disk is keyed the Linux way ('/userdata/pending-update.json'),
+ * so the app is handed Linux path rules whatever computer runs the tests. On
+ * GitHub's Windows job main.js joined that note's path with backslashes, the
+ * stood-in disk never had it, and the two tests that read the note off the
+ * disk failed there and nowhere else.
+ */
+const LINUX_PATHS = { 'node:path': posixPath }
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
 
@@ -424,7 +433,7 @@ export function run(test, { loadDesktopMain, ticks }) {
     const updates = await import('../desktop/lib/updates.mjs')
     const awake = await import('../desktop/lib/awake.mjs')
     const clock = { now: 1000 }
-    const main = loadDesktopMain({ platform, arch, argv, env, clock, files: { '/proc/net/tcp': QUIET_TCP, ...files }, links })
+    const main = loadDesktopMain({ platform, arch, argv, env, clock, files: { '/proc/net/tcp': QUIET_TCP, ...files }, links, modules: LINUX_PATHS })
     /*
      * GitHub, as the app asks it (askGitHub): `github` is what it answers
      * about the held version's own release, { status, release } or 'offline';
@@ -751,7 +760,7 @@ export function run(test, { loadDesktopMain, ticks }) {
     const updates = await import('../desktop/lib/updates.mjs')
     const awake = await import('../desktop/lib/awake.mjs')
     const clock = { now: 1000 }
-    const mac = loadDesktopMain({ platform: 'darwin', arch: 'arm64', argv: ['--hidden'], clock })
+    const mac = loadDesktopMain({ platform: 'darwin', arch: 'arm64', argv: ['--hidden'], clock, modules: LINUX_PATHS })
     const installs = []
     mac.run('boot = __given', autostart)
     mac.run('updateRules = __given', updates)
