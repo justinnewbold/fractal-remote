@@ -1,0 +1,1145 @@
+{
+  "state": {
+    "v": 1,
+    "at": 1759363200000,
+    "linked": true,
+    "preset": {
+      "number": 12,
+      "label": "012",
+      "name": "Crunch Rhythm"
+    },
+    "canPrevious": false,
+    "canNext": false,
+    "scene": 1,
+    "scenes": [
+      "Clean",
+      "Crunch",
+      "Lead",
+      "Scene 4",
+      "Scene 5",
+      "Scene 6",
+      "Scene 7",
+      "Scene 8"
+    ],
+    "pedals": [
+      {
+        "id": 50,
+        "short": "DRV",
+        "name": "Drive 1",
+        "on": true,
+        "fill": "#c0392b",
+        "ink": "#ffffff",
+        "channel": "B",
+        "channels": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "word": ""
+      }
+    ],
+    "tuner": {
+      "on": false,
+      "note": "",
+      "octave": -1,
+      "cents": 0,
+      "inTune": false
+    },
+    "metronome": {
+      "on": false,
+      "bpm": 0
+    },
+    "tempo": {
+      "bpm": 121.4,
+      "tap": true,
+      "why": "",
+      "wrist": true,
+      "running": false
+    },
+    "tunerStays": true,
+    "pages": [
+      "tuner",
+      "scenes",
+      "presets",
+      "tempo",
+      "pedals"
+    ],
+    "hidden": [
+      "presets"
+    ],
+    "quickEdit": true,
+    "quick": {
+      "id": 50,
+      "knobs": [
+        {
+          "key": "11",
+          "name": "Drive",
+          "text": "6.20",
+          "at": 0.62,
+          "min": 0,
+          "max": 10,
+          "log": false,
+          "unit": ""
+        },
+        {
+          "key": "12",
+          "name": "Low Cut",
+          "text": "632.46 Hz",
+          "at": 0.5,
+          "min": 20,
+          "max": 20000,
+          "log": true,
+          "unit": "Hz"
+        }
+      ]
+    }
+  },
+  "tuner": {
+    "leaving": [
+      {
+        "on": true,
+        "stays": true,
+        "stops": false
+      },
+      {
+        "on": true,
+        "stays": false,
+        "stops": true
+      },
+      {
+        "on": true,
+        "stays": null,
+        "stops": true
+      },
+      {
+        "on": false,
+        "stays": true,
+        "stops": false
+      },
+      {
+        "on": false,
+        "stays": false,
+        "stops": false
+      },
+      {
+        "on": false,
+        "stays": null,
+        "stops": false
+      }
+    ],
+    "hiding": [
+      {
+        "was": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo",
+          "tuner"
+        ],
+        "now": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo"
+        ],
+        "on": true,
+        "stops": true
+      },
+      {
+        "was": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo",
+          "tuner"
+        ],
+        "now": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo"
+        ],
+        "on": false,
+        "stops": false
+      },
+      {
+        "was": [
+          "tuner",
+          "scenes",
+          "presets",
+          "tempo",
+          "pedals"
+        ],
+        "now": [
+          "scenes"
+        ],
+        "on": true,
+        "stops": true
+      },
+      {
+        "was": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo",
+          "tuner"
+        ],
+        "now": [
+          "tuner",
+          "scenes",
+          "presets",
+          "tempo",
+          "pedals"
+        ],
+        "on": true,
+        "stops": false
+      },
+      {
+        "was": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo",
+          "tuner"
+        ],
+        "now": [
+          "tuner"
+        ],
+        "on": true,
+        "stops": false
+      },
+      {
+        "was": [
+          "scenes",
+          "pedals"
+        ],
+        "now": [
+          "scenes"
+        ],
+        "on": true,
+        "stops": false
+      },
+      {
+        "was": [
+          "scenes"
+        ],
+        "now": [
+          "scenes",
+          "pedals",
+          "presets",
+          "tempo",
+          "tuner"
+        ],
+        "on": true,
+        "stops": false
+      },
+      {
+        "was": [
+          "tuner"
+        ],
+        "now": [
+          "tempo"
+        ],
+        "on": true,
+        "stops": true
+      }
+    ]
+  },
+  "here": {
+    "everyMs": 20000,
+    "tickMs": 2000,
+    "cases": [
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363200000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363219999,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363220000,
+        "due": true
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363222000,
+        "due": true
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363800000,
+        "due": true
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": null,
+        "now": 1759363200000,
+        "due": true
+      },
+      {
+        "onScreen": false,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363800000,
+        "due": false
+      },
+      {
+        "onScreen": false,
+        "pages": true,
+        "demo": false,
+        "lastSent": null,
+        "now": 1759363200000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": false,
+        "demo": false,
+        "lastSent": 1759363200000,
+        "now": 1759363800000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": false,
+        "demo": false,
+        "lastSent": null,
+        "now": 1759363200000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": true,
+        "lastSent": 1759363200000,
+        "now": 1759363800000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": true,
+        "lastSent": null,
+        "now": 1759363200000,
+        "due": false
+      },
+      {
+        "onScreen": false,
+        "pages": false,
+        "demo": true,
+        "lastSent": 1759363200000,
+        "now": 1759363800000,
+        "due": false
+      },
+      {
+        "onScreen": true,
+        "pages": true,
+        "demo": false,
+        "lastSent": 1759363205000,
+        "now": 1759363200000,
+        "due": false
+      }
+    ]
+  },
+  "quick": {
+    "everyMs": 100,
+    "settleMs": 1500,
+    "askMs": 2500,
+    "asks": 4,
+    "hold": {
+      "channels": "Hold a pedal for its channels.",
+      "quick": "Hold a pedal for quick edit."
+    },
+    "knobs": [
+      {
+        "at": 0.62,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 0.62,
+        "value": 6.2,
+        "text": "6.20"
+      },
+      {
+        "at": 0.5,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 0.5,
+        "value": 5,
+        "text": "5.00"
+      },
+      {
+        "at": 1,
+        "min": 0,
+        "max": 100,
+        "log": false,
+        "unit": "%",
+        "place": 1,
+        "value": 100,
+        "text": "100.00 %"
+      },
+      {
+        "at": 0.25,
+        "min": -80,
+        "max": 20,
+        "log": false,
+        "unit": "dB",
+        "place": 0.25,
+        "value": -55,
+        "text": "-55.00 dB"
+      },
+      {
+        "at": 0.4,
+        "min": -12,
+        "max": 12,
+        "log": false,
+        "unit": "dB",
+        "place": 0.4,
+        "value": -2.4,
+        "text": "-2.40 dB"
+      },
+      {
+        "at": 0.5,
+        "min": 20,
+        "max": 20000,
+        "log": true,
+        "unit": "Hz",
+        "place": 0.5,
+        "value": 632.456,
+        "text": "632.46 Hz"
+      },
+      {
+        "at": 0,
+        "min": 20,
+        "max": 20000,
+        "log": true,
+        "unit": "Hz",
+        "place": 0,
+        "value": 20,
+        "text": "20.00 Hz"
+      },
+      {
+        "at": 1,
+        "min": 20,
+        "max": 20000,
+        "log": true,
+        "unit": "Hz",
+        "place": 1,
+        "value": 20000,
+        "text": "20000 Hz"
+      },
+      {
+        "at": 0.75,
+        "min": 20,
+        "max": 20000,
+        "log": true,
+        "unit": "Hz",
+        "place": 0.75,
+        "value": 3556.559,
+        "text": "3557 Hz"
+      },
+      {
+        "at": 0.333,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 0.333,
+        "value": 3.33,
+        "text": "3.33"
+      },
+      {
+        "at": 0.1234,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 0.123,
+        "value": 1.234,
+        "text": "1.23"
+      },
+      {
+        "at": 0.5,
+        "min": 0,
+        "max": 1,
+        "log": false,
+        "unit": "",
+        "place": 0.5,
+        "value": 0.5,
+        "text": "0.50"
+      },
+      {
+        "at": 0.5,
+        "min": 1000,
+        "max": 5000,
+        "log": false,
+        "unit": "ms",
+        "place": 0.5,
+        "value": 3000,
+        "text": "3000 ms"
+      },
+      {
+        "at": -0.2,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 0,
+        "value": 0,
+        "text": "0.00"
+      },
+      {
+        "at": 1.7,
+        "min": 0,
+        "max": 10,
+        "log": false,
+        "unit": "",
+        "place": 1,
+        "value": 10,
+        "text": "10.00"
+      },
+      {
+        "at": 0.5,
+        "min": 0,
+        "max": 10,
+        "log": true,
+        "unit": "",
+        "place": 0.5,
+        "value": 5,
+        "text": "5.00"
+      },
+      {
+        "at": 0.5,
+        "min": null,
+        "max": null,
+        "log": false,
+        "unit": "dB",
+        "place": 0.5,
+        "value": null,
+        "text": "— dB"
+      },
+      {
+        "at": 0.5,
+        "min": 3,
+        "max": 3,
+        "log": false,
+        "unit": "",
+        "place": 0.5,
+        "value": null,
+        "text": "—"
+      },
+      {
+        "at": 0.5,
+        "min": 0,
+        "max": 10,
+        "log": null,
+        "unit": null,
+        "place": 0.5,
+        "value": 5,
+        "text": "5.00"
+      }
+    ],
+    "waits": [
+      {
+        "lastSent": null,
+        "now": 1759363200000,
+        "wait": 0
+      },
+      {
+        "lastSent": 1759363200000,
+        "now": 1759363200000,
+        "wait": 100
+      },
+      {
+        "lastSent": 1759363200000,
+        "now": 1759363200040,
+        "wait": 60
+      },
+      {
+        "lastSent": 1759363200000,
+        "now": 1759363200099,
+        "wait": 1
+      },
+      {
+        "lastSent": 1759363200000,
+        "now": 1759363200100,
+        "wait": 0
+      },
+      {
+        "lastSent": 1759363200000,
+        "now": 1759363205000,
+        "wait": 0
+      },
+      {
+        "lastSent": 1759363200050,
+        "now": 1759363200000,
+        "wait": 100
+      }
+    ]
+  },
+  "cases": [
+    {
+      "pages": null,
+      "hidden": null,
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [],
+      "hidden": [],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "hidden": [],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "hidden": [
+        "presets"
+      ],
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "off": [
+        "presets"
+      ],
+      "shown": [
+        "tuner",
+        "scenes",
+        "tempo",
+        "pedals"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "hidden": null,
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "off": [],
+      "shown": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "pedals"
+      ],
+      "hidden": [
+        "presets"
+      ],
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "pedals",
+        "tempo"
+      ],
+      "off": [
+        "presets"
+      ],
+      "shown": [
+        "tuner",
+        "scenes",
+        "pedals",
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "pedals"
+      ],
+      "hidden": null,
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "pedals",
+        "tempo"
+      ],
+      "off": [],
+      "shown": [
+        "tuner",
+        "scenes",
+        "presets",
+        "pedals",
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tuner"
+      ],
+      "hidden": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tuner"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tuner",
+        "tempo"
+      ],
+      "off": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tuner"
+      ],
+      "shown": [
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "tuner"
+      ],
+      "hidden": null,
+      "order": [
+        "tuner",
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo"
+      ],
+      "off": [],
+      "shown": [
+        "tuner",
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "presets",
+        "presets",
+        "scenes"
+      ],
+      "hidden": [
+        "pedals"
+      ],
+      "order": [
+        "presets",
+        "scenes",
+        "pedals",
+        "tempo",
+        "tuner"
+      ],
+      "off": [
+        "pedals"
+      ],
+      "shown": [
+        "presets",
+        "scenes",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "looper",
+        "pedals"
+      ],
+      "hidden": [
+        "looper"
+      ],
+      "order": [
+        "tuner",
+        "pedals",
+        "scenes",
+        "presets",
+        "tempo"
+      ],
+      "off": [],
+      "shown": [
+        "tuner",
+        "pedals",
+        "scenes",
+        "presets",
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "Tuner",
+        "TUNER",
+        " tuner",
+        ""
+      ],
+      "hidden": [
+        "Tuner",
+        " tuner",
+        ""
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "pedals",
+        "scenes",
+        "presets",
+        "tuner",
+        "scenes",
+        "setlists"
+      ],
+      "hidden": [
+        "tuner",
+        "scenes"
+      ],
+      "order": [
+        "pedals",
+        "scenes",
+        "presets",
+        "tuner",
+        "tempo"
+      ],
+      "off": [
+        "scenes",
+        "tuner"
+      ],
+      "shown": [
+        "pedals",
+        "presets",
+        "tempo"
+      ]
+    },
+    {
+      "pages": [
+        "setlists",
+        "looper"
+      ],
+      "hidden": [
+        "setlists"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": null,
+      "hidden": [
+        "tuner"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [
+        "tuner"
+      ],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo"
+      ]
+    },
+    {
+      "pages": null,
+      "hidden": [
+        "tuner",
+        "tuner",
+        "tuner"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [
+        "tuner"
+      ],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo"
+      ]
+    },
+    {
+      "pages": null,
+      "hidden": [
+        "presets",
+        "scenes",
+        "pedals",
+        "tempo"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo"
+      ],
+      "shown": [
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "hidden": [
+        "scenes",
+        "pedals",
+        "tuner",
+        "tempo"
+      ],
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "off": [
+        "scenes",
+        "pedals",
+        "tempo",
+        "tuner"
+      ],
+      "shown": [
+        "presets"
+      ]
+    },
+    {
+      "pages": null,
+      "hidden": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    },
+    {
+      "pages": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "hidden": [
+        "tuner",
+        "presets",
+        "pedals",
+        "tempo",
+        "scenes"
+      ],
+      "order": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ],
+      "off": [],
+      "shown": [
+        "tuner",
+        "scenes",
+        "presets",
+        "tempo",
+        "pedals"
+      ]
+    },
+    {
+      "pages": [
+        "scenes"
+      ],
+      "hidden": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner",
+        "looper"
+      ],
+      "order": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ],
+      "off": [],
+      "shown": [
+        "scenes",
+        "pedals",
+        "presets",
+        "tempo",
+        "tuner"
+      ]
+    }
+  ]
+}

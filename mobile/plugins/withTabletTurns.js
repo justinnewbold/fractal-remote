@@ -1,5 +1,6 @@
 /**
- * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES STAY UPRIGHT.
+ * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES START UPRIGHT AND STAY
+ * UPRIGHT UNLESS THE APP ITSELF ASKS FOR MORE.
  *
  * Google Play, October 2026, on 1.88.0: "Remove resizability and orientation
  * restrictions in your app to support large screen devices." Justin: "The
@@ -22,8 +23,39 @@
  * draws for a large screen, and the app's own TABLET_SIDE
  * (shared/device-word.mjs), by which the app calls itself a tablet
  * (mobile/src/lib/thisDevice.js). So the device the app calls a tablet is the
- * device that turns. app.json keeps "portrait", so an iPhone stays upright as
- * it always has and an iPad keeps the four ways it has (test/duo.mjs).
+ * device that turns by itself.
+ *
+ * A PHONE MAY TURN WHERE THE APP SAYS SO, since November 2026. "Landscape
+ * mode on iPhone is not working" (Justin, 10 November 2026): Play on a phone
+ * held on its side had been built to split in two (lib/twoSides
+ * phoneSidewaysOn), and no phone could be turned to see it, because this rule
+ * put a phone back upright at every configuration change, and a phone turning
+ * IS a configuration change. So the rule on a phone is now only where it
+ * STARTS:
+ *
+ *   a tablet   every way up, as it has been since October 2026: whatever was
+ *              asked for is set back to "unspecified", which is what Google
+ *              Play asked for and what the app's own code never changes (it
+ *              asks nothing on a tablet).
+ *   a phone    upright while nothing has been asked ("unspecified", which is
+ *              how every launch and every new MainActivity begins), and left
+ *              alone once something has. The asking is the app's own, through
+ *              expo-screen-orientation (mobile/src/lib/turnScreen.js, by the
+ *              rule in mobile/src/lib/phoneTurns.js): upright ("portrait") on
+ *              every page but Play and what opens beside it, and there the
+ *              phone's own choice ("user": it turns if the phone's auto-rotate
+ *              is on, and never upside down). Never "unspecified" from a
+ *              phone, which this rule would take for nothing asked and put
+ *              upright again the moment the phone turned.
+ *
+ * So a phone that never reaches Play (the startup card, the walkthrough, the
+ * sign-in, the purchase page) is upright exactly as before, and an account
+ * the sideways layout is not open to is upright everywhere. A fold shut again
+ * comes back "unspecified" from its time as a tablet, so it starts upright
+ * here and the app asks again. On the iPhone the same rule is applied by the
+ * same code through the same package; app.json lets an iPhone turn to either
+ * side and starts it upright (expo-screen-orientation's initialOrientation),
+ * and an iPad keeps the four ways it has (test/duo.mjs, test/phone-turns.mjs).
  *
  * THE SCREEN, NOT THE WINDOW. Google's recipe reads the window
  * (Configuration.screenWidthDp). This reads the whole screen the app is on:
@@ -56,8 +88,9 @@
  * has changed shape, and a guess would build a phone that turns or a tablet
  * that does not, which only a store build would show.
  *
- * Nothing here touches the iPhone app: there is no iOS part. The plugin file
- * is hashed for both phones all the same, so it moves both fingerprints.
+ * Nothing here touches the iPhone app: there is no iOS part (the iPhone's is
+ * app.json and expo-screen-orientation's own plugin). The plugin file is
+ * hashed for both phones all the same, so it moves both fingerprints.
  */
 const { withAndroidManifest, withMainActivity } = require('expo/config-plugins')
 
@@ -70,19 +103,23 @@ const END = '// withTabletTurns: end'
 const RULE = `
   ${BEGIN}
   /*
-   * Upright on a phone, every way up on a tablet. A screen whose short side
-   * is under ${TABLET_SIDE} dp is a phone's (TABLET_SIDE in shared/device-word.mjs).
-   * The whole screen, never the window, so a tablet beside another app is
-   * still a tablet. Asked at launch and at every configuration change, which
-   * is how a fold and an unfold arrive.
+   * Every way up on a tablet. On a phone, upright while nothing has been
+   * asked, and left alone once the app has asked (expo-screen-orientation,
+   * by mobile/src/lib/phoneTurns.js: upright on most pages, the phone's own
+   * choice on Play). A screen whose short side is under ${TABLET_SIDE} dp is a
+   * phone's (TABLET_SIDE in shared/device-word.mjs). The whole screen, never
+   * the window, so a tablet beside another app is still a tablet. Asked at
+   * launch and at every configuration change, which is how a fold and an
+   * unfold arrive, and how a phone turning arrives: so a phone that has been
+   * let turn must not be put upright here.
    */
   private fun holdPhonesUpright() {
-    val wanted = if (screenShortSideDp() >= ${TABLET_SIDE}f) {
-      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    } else {
-      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    val unspecified = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    if (screenShortSideDp() >= ${TABLET_SIDE}f) {
+      if (requestedOrientation != unspecified) requestedOrientation = unspecified
+    } else if (requestedOrientation == unspecified) {
+      requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
-    if (requestedOrientation != wanted) requestedOrientation = wanted
   }
 
   @Suppress("DEPRECATION")

@@ -163,7 +163,11 @@ the new one. So a test line, with nothing committed for the build:
   version goes to testers, never to everyone"), since either would go to
   Google Play production, everyone. keep_packages as the build before it
   needed. NOTHING IN mobile/eas.json CHANGES ON MAIN between store
-  versions, not even a submit profile.
+  versions, not even a submit profile. (Since release day for 2.0.0, 17
+  November 2026, the `testing` profile IS on main: play-internal went in
+  with the other four. It is part of the fingerprint like everything else
+  in that file, so it is not a stray to tidy away, and the next build for
+  testers first needs no patch for it.)
 - *Its ledger*: the first pull request after it is started writes its row
   in docs/expo-builds.md and docs/pending/next-store.json, `{ "version",
   "ios", "android", "watch" }`: the two fingerprints the build carries (its
@@ -191,6 +195,42 @@ the new one. So a test line, with nothing committed for the build:
   Connect, Android's with Promote release from internal testing to
   production in Play Console. No new build, and from that merge on main's
   updates reach only the new store version, as at every store version.
+- *RELEASE DAY FOR 2.0.0 WAS 17 NOVEMBER 2026.* "I'm gonna go ahead and
+  submit the build to Apple. Go ahead and submit the android build now. for
+  2.0.0. Enable all new features for all users that were on my account.
+  Except for the scroll wheel for presets, I wanna just get rid of that
+  altogether." In two pull requests, in this order, so that a red check on
+  the first could only ever be about the build matching. ONE, release day
+  itself and nothing else: the five patches into main in the README's order
+  (scripts/apply-pending.sh, then `npm ci` in mobile from the patched lock,
+  never `npm install`, which may write the lock again), `npm run notices`
+  for the four packages they bring (which also brought the list level with
+  the lock: it had gone stale, and still showed the camera's packages, out
+  since the picker took their place), the app's number to 2.0.0, and the
+  fingerprint recorded, which IS the build's (ios 9d75d6bd…, android
+  e44134a7…, watch 34149f04…: `node scripts/next-store.mjs --strict` said
+  "the 2.0.0 build's own" three times BEFORE next-store.json was deleted;
+  once it is gone web.yml's `testers` job passes without checking anything,
+  and the only proof left on GitHub is mobile.yml's fingerprint step
+  against the recorded file, so read that file's diff against the three
+  values by eye). The patch files and next-store.json went in that same
+  change, and three tests that read the watch's patch read the watch's own
+  files now. From that merge on main's updates reach the 2.0.0 copies only
+  (TestFlight build 33, Play's internal testing, the stores' once approved,
+  and the public apk-v2.0.x files), every merge publishes once again, and
+  the App Store's and Google Play's 1.90.0 copies keep update 1.92.7 until
+  their owners take 2.0.0. TWO, straight after and BEFORE he presses
+  Submit: the pull request that opens what was his account's to everyone
+  (below, each feature's own section). It could not go first: merged before
+  release day, an update reaches the 1.90.0 copies, which were reviewed
+  with notes that say there is no saving and no moving blocks over
+  Bluetooth. And not after Submit: an update then reaches the copy Apple is
+  reviewing. NOTHING IS WAITING in docs/pending now. Still his: build 33
+  into a 2.0.0 version in App Store Connect with its notes (docs/app-store.md),
+  Promote release in Play Console, and public/store-versions.json moves on
+  each store's live day, not before. STILL OPEN from the test line, both
+  below: no Android phone on the 2.0.0 build has been seen connecting
+  through a computer, and why his iPhone once would not turn.
 - A patch changed after the test build means the testers' copy no longer
   matches it, so that change waits for release day or for another build.
   web.yml's `testers` job holds every pull request to that while
@@ -3947,7 +3987,10 @@ says so.**
 > And if there's any other native changes to make to the iPhone app."
 
 So native work goes into docs/pending as it is finished, and the build is
-asked for once, when he says the list is whole. Waiting there now:
+asked for once, when he says the list is whole. NOTHING WAITS THERE NOW:
+these four, and play-internal, went into main on release day for 2.0.0 (17
+November 2026) and are in the 2.0.0 builds. What each one is, as it was
+written while it waited:
 
 - **phone-turns** (above): a phone may be turned on its side on Play.
 - **watch-page-order** (11 November 2026), everything he asked of the
@@ -4240,7 +4283,8 @@ beat and the device makes no sound and no tap, and opens no audio.
   the same three places, Phone / Pedal / Both, and a green light by Tap,
   and no flash round the screen: the edge flash is this app's own.
   Nothing in Axiom was changed.
-- **The watch's light** is native and waits in watch-page-order (above).
+- **The watch's light** is native, and is in the 2.0.0 build (it waited
+  in watch-page-order, above, until release day).
 - **Line up the light and click: built 16 and 17 November 2026, HIS
   ACCOUNT ONLY** (`METRONOME_LINE_UP_FOR_EVERYONE` in
   mobile/src/lib/features.js, false).
@@ -5130,8 +5174,9 @@ time:
 - *A second time with every patch in docs/pending put in* (web.yml, "The
   tests again, with every patch waiting for a build in", which sets
   `PENDING_APPLIED=1`). A test that puts a waiting patch in for itself has
-  to allow for it being in already (test/line-up.mjs takes it back out
-  then), and a test that reads a file a patch changes has to hold both
+  to allow for it being in already (test/line-up.mjs took it back out
+  then, until the patch it read went into main on release day for 2.0.0),
+  and a test that reads a file a patch changes has to hold both
   ways. To run it that way before pushing: make a copy of the working
   tree, apply each patch named in docs/pending/README.md the way that step
   does, and run `PENDING_APPLIED=1 npm test`.

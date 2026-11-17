@@ -731,6 +731,18 @@ export function run(test) {
     assert.deepEqual(frameOf(956, 440, { left: 62, right: 62 }), { width: 832, height: 332, left: 62, right: 62 })
     assert.deepEqual(r.splitSides({ width: 832, left: 62, right: 62 }), { first: 416, second: 416 })
     assert.deepEqual(r.splitSides({ width: 734, left: 59, right: 59 }), { first: 367, second: 367 })
+    /*
+     * An Android phone on its side keeps its camera clear down ONE side, and
+     * that is no fold: it splits down the middle of its own frame (App.js
+     * `sidesFrame`), so a 780-point phone with 748 across is two halves of
+     * 374. Cut where a fold would be, one side came out 358 and it did not
+     * split at all. Its three buttons down the other side leave it 700, and
+     * that is one screen.
+     */
+    assert.equal(side(780, 360, { left: 32 }), true, 'a 780-point Android phone on its side, its camera down one side')
+    assert.equal(side(780, 360, { right: 32 }), true, 'the same phone turned the other way')
+    assert.equal(side(780, 360, { left: 32, right: 48 }), false, 'the same phone with three buttons down its other side: 700 across')
+    assert.match(code(read('mobile/App.js')), /const sidesFrame = useMemo\(\(\) => \(low && frame \? \{ \.\.\.frame, left: 0, right: 0 \} : frame\), \[low, frame\]\)/, 'the line between a phone’s two sides is put where a fold would be')
     /* Too narrow for two halves: one screen, as today. */
     assert.equal(side(812, 375, { left: 50, right: 50 }), false, 'an iPhone 13 mini on its side: 712 across')
     assert.equal(side(667, 375), false, 'an iPhone SE on its side')
@@ -905,7 +917,7 @@ export function run(test) {
     assert.match(app, /tools=\{toolsOffered\}\s*onPick=\{openTool\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
     assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
     /* There the bar's left is the two sides' buttons, or Play's own preset and Setlists; and the account's photo gives way to them only there. */
-    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\} onAdd=\{thirdCanOpen \? openThirdList : null\} onThird=\{openThirdList\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
+    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{sidesFrame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\} onAdd=\{thirdCanOpen \? openThirdList : null\} onThird=\{openThirdList\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
     assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     /* The bar: something on its left in the version's place, and less padding, only when App says. */

@@ -307,13 +307,22 @@ export function run(test) {
     assert.doesNotMatch(flat(read('mobile/src/components/TempoBox.js')), /setMetronomeSound|soundChoices|SOUND_WORDS/)
   })
 
-  test('edge flash: the watch lights its edge on the beat its metronome taps, over every page and under no thumb (waiting in the watch’s patch)', () => {
-    const patch = read('docs/pending/watch-page-order.patch')
-    const added = patch
-      .split('\n')
-      .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-      .map((line) => line.slice(1))
-      .join('\n')
+  test('edge flash: the watch lights its edge on the beat its metronome taps, over every page and under no thumb', () => {
+    /*
+     * The watch's own files. They waited in docs/pending/watch-page-order.patch
+     * until release day for 2.0.0 (17 November 2026), when the patch went into
+     * main and its file was deleted; this read the lines the patch added until
+     * then.
+     */
+    const added = [
+      'mobile/targets/watch/FractalWatchApp.swift',
+      'mobile/targets/watch/Metronome.swift',
+      'mobile/targets/watch/Model.swift',
+      'mobile/targets/watch/Pages.swift',
+      'mobile/targets/watch/PhoneLink.swift',
+      'mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift',
+      'mobile/watch-ci/screens.sh',
+    ].map(read).join('\n')
     const swift = added.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     /* The same beat as the tap: the metronome hands it over, and there is no second clock. */
     assert.match(swift, /var onBeat: \(\(\) -> Void\)\?/)

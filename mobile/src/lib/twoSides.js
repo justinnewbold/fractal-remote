@@ -137,8 +137,16 @@ export function twoSidesOn({ width, height, left = 0, right = 0 } = {}, was = fa
  *            or over that line and keep twoSidesOn's answer, untouched.
  *   tall     at least SIDEWAYS_LOW down, under which two halves of tiles
  *            are not worth drawing (a phone in a small split window).
- *   sideways wider than tall, and
- *   room     each side at least SIDE_LEAST, both as twoSidesOn has them.
+ *   sideways wider than tall, as twoSidesOn has it, and
+ *   room     each HALF OF THE FRAME at least SIDE_LEAST. Not twoSidesOn's
+ *            sides, which are cut where a fold is (the middle of the whole
+ *            screen, `left` and `right` counted): a phone has no fold, and
+ *            an Android phone on its side keeps its camera clear down one
+ *            side only, which that sum took for a crease and cut one side
+ *            short by it, so a 780-point phone with 748 across did not
+ *            split. App.js draws the line in the middle of the frame there
+ *            too (`sidesFrame`). An iPhone keeps the same down both sides,
+ *            and its answer is the one it had.
  *
  * Each line goes off LETS_GO past where it came on, as the others do. The
  * two answers are never both acted on: App.js asks this one only where
@@ -164,8 +172,7 @@ export function phoneSidewaysOn({ width, height, left = 0, right = 0 } = {}, was
   const low = h < (was ? SIDES_TALL + LETS_GO : SIDES_TALL)
   const tall = past(h, SIDEWAYS_LOW, was)
   const sideways = past(w, h, was)
-  const { first, second } = splitSides({ width: w, left, right })
-  const room = past(Math.min(first, second), SIDE_LEAST, was)
+  const room = past(w / 2, SIDE_LEAST, was)
   return wide && low && tall && sideways && room
 }
 

@@ -14,7 +14,7 @@
  * (mobile/src/lib/watchQuick.js, which imports nothing), and the one place
  * it is joined to the unit (lib/watchQuickEdit.js), by Edit's own read and
  * Edit's own checked write and nothing else. The watch's half is Swift and
- * waits in docs/pending/watch-page-order.patch.
+ * waited in docs/pending/watch-page-order.patch until release day for 2.0.0.
  *
  * What is held here:
  *
@@ -628,30 +628,16 @@ export function run(test) {
     assert.match(bridge, /sub\?\.remove\?\.\(\) onQuickChange\(null\)/)
   })
 
-  test('watch quick edit: the watch’s half is in the patch that waits for a build, with mockup B’s sheet and the phone’s own rules', async () => {
+  test('watch quick edit: the watch’s half, in the tree since release day for 2.0.0, with mockup B’s sheet and the phone’s own rules', async () => {
     const { WATCH_KNOWS, WATCH_HOLD_CHANNELS, WATCH_HOLD_QUICK, WATCH_KNOB_MS, WATCH_KNOB_SETTLE_MS, WATCH_KNOBS_ASK_MS, WATCH_KNOBS_ASKS } = await link()
-    const patched = /\bvar quickEdit: Bool\? = nil/.test(read('mobile/targets/watch/Model.swift'))
-    const patch = read('docs/pending/watch-page-order.patch')
-    /* The lines the patch adds to a file, or the file itself where the patch is in (web.yml's second run, and the build pull request). */
-    const swift = (file) => {
-      if (patched) return read(file)
-      const from = patch.indexOf(`diff --git a/${file} b/${file}`)
-      assert.ok(from >= 0, `the waiting patch does not carry ${file}`)
-      const next = patch.indexOf('\ndiff --git ', from + 1)
-      return patch
-        .slice(from, next < 0 ? undefined : next)
-        .split('\n')
-        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-        .map((l) => l.slice(1))
-        .join('\n')
-    }
-    if (!patched) {
-      /* The tree as main has it: none of the watch's half, so its line of the fingerprint is where it was. */
-      for (const f of ['Model.swift', 'Pages.swift', 'PhoneLink.swift']) {
-        assert.doesNotMatch(read(`mobile/targets/watch/${f}`), /quickEdit|WatchKnob|QuickSheet|"quick"/, `part of quick edit’s watch half is in the tree (${f}), which moves the watch’s fingerprint`)
-      }
-      assert.match(read('docs/pending/README.md'), /^\| `watch-page-order\.patch` \|[^\n]*quick edit/m, 'docs/pending’s table does not say the watch’s patch carries quick edit')
-    }
+    /*
+     * The watch's half waited in docs/pending/watch-page-order.patch until
+     * release day for 2.0.0 (17 November 2026), when the patch went into main
+     * and its file was deleted. Until then this read the lines the patch
+     * added, and held the tree to none of them.
+     */
+    assert.match(read('mobile/targets/watch/Model.swift'), /\bvar quickEdit: Bool\? = nil/, 'the watch’s half of quick edit is not in mobile/targets/watch/Model.swift, where the 2.0.0 build has it')
+    const swift = (file) => read(file)
     const model = swift('mobile/targets/watch/Model.swift')
     const flatModel = model.replace(/\s+/g, ' ')
     const pages = swift('mobile/targets/watch/Pages.swift')
@@ -700,12 +686,11 @@ export function run(test) {
       /if state\.quickEdit == true \{ QuickSheet\(pedal: pedal, lit: pendingChannel\[pedal\.id\] \?\? pedal\.channel, quick: watchQuickFor\(state\.quick, pedal: pedal\.id\)\) \{ name in choose\(name, for: pedal\) \} \.environmentObject\(link\) \} else \{ ChannelsSheet\(pedal: pedal, lit: pendingChannel\[pedal\.id\] \?\? pedal\.channel\) \{ name in choose\(name, for: pedal\) \} \.environmentObject\(link\)/,
       'the held pedal’s sheet is not today’s channel picker where quick edit is not offered'
     )
-    /* The same hold, on the same pedals, and the same channel picker under the other branch: quick edit changes what opens where it is offered, never what can be held. (None of the three is the patch's to change, so they are read from the tree.) */
+    /* The same hold, on the same pedals, and the same channel picker under the other branch: quick edit changes what opens where it is offered, never what can be held. (None of the three was the patch's to change.) */
     const tree = read('mobile/targets/watch/Pages.swift').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     assert.match(tree, /private func hold\(_ pedal: WatchPedal\) \{ guard pedal\.canPickChannel else \{ return \}/)
     assert.match(tree, /including: pedal\.canPickChannel \? \.all : \.subviews/)
     assert.match(tree, /private struct ChannelsSheet: View \{ let pedal: WatchPedal let lit: String\? let pick: \(String\) -> Void/)
-    assert.doesNotMatch(patch.split('\n').filter((l) => /^[-+]/.test(l)).join('\n'), /^-.*(private struct ChannelsSheet|Text\("CHANNEL"\)|minHeight: 44)/m, 'the waiting patch changes the channel picker itself')
     const sheet = drawn.slice(drawn.indexOf('private struct QuickSheet: View {'), drawn.indexOf('private struct KnobRow: View {'))
     assert.ok(sheet.length > 1500, 'the watch has no quick edit sheet')
     /* MOCKUP B: the name, the channels in ONE row (an HStack, never the two-column grid), the lit one green, then the knobs, a row each. */

@@ -8,7 +8,7 @@ until Justin agrees to the next build.
 When the build is agreed:
 
     git apply docs/pending/<name>.patch      # in the order of the table below
-    (cd mobile && npm install)                # when a patch adds a package
+    (cd mobile && npm ci)                     # when a patch adds a package: the patch carries the lock, and npm install may write it again
     npm run notices                           # when a patch adds a package: NOTICES.md and public/notices.txt list every package the app ships
     npm run sync:rules
     npm run fingerprint -- --write
@@ -30,17 +30,24 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, opens quick edit on a held pedal where the iPhone offers it (its channels in one row over a list of the block's knobs, the Digital Crown turning the one picked; "Hold a pedal for quick edit." under the pedals), and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
-| `bluetooth-done.patch` | Puts a Done button on Apple's Bluetooth MIDI Devices screen, top right, where iOS 27 shows only Edit: Apple's screen is drawn inside a screen whose bar is the app's own (`PairingHost`), so Apple's code can no longer take the button off. Edit stays, on the left. The build says so (`pairHasDone`), and the app's words go back from "swipe that screen down" to "then Done". | **iPhone only** (android and the watch do not move) |
-| `tone3000-in-app.patch` | TONE3000's page comes up inside the app instead of in the browser: a web view over the Developer card, with TONE3000's name and a Close button, the way TONE3000's own examples for a phone do it. Its sign-in is kept in the phone's secure storage, on that phone only, and a sign-in's one-time word comes from the phone's secure random numbers. Adds react-native-webview, expo-secure-store and expo-crypto, and nothing else: everything that uses them is already in the tree and does what it did before until a build brings them. His account only, as the card is. | **android and ios** (the watch line does not move) |
-| `play-internal.patch` | Adds a second way to send a build, `testing` in mobile/eas.json: the iPhone to TestFlight exactly as the `production` one does, Android to Google Play's internal testing track (testers only) in place of production. mobile.yml's "Send Android to Google Play's internal testing track" box asks for it. Nothing in the app changes. | **android and ios**, because eas.json is in the fingerprint (the watch line does not move) |
 
-Five patches are waiting: phone-turns (10 November 2026), whose section is
-next, watch-page-order (11 November 2026), whose section follows it,
-bluetooth-done (14 November 2026), whose section is after that, and
-tone3000-in-app (14 November 2026), whose section follows that, and
-play-internal (16 November 2026), whose section is the last of the five.
+Nothing is waiting. phone-turns (10 November 2026), watch-page-order (11
+November 2026), bluetooth-done (14 November 2026), tone3000-in-app (14
+November 2026) and play-internal (16 November 2026) were applied on 17
+November 2026, in that order, in the release-day pull request for store
+version 2.0.0, and their files and next-store.json deleted in the same
+change. That build pair (16 November 2026: TestFlight build 33, and Google
+Play's internal testing track) was not made from a merge: it was built from
+main with these five put in in the build's own checkout, so testers had it
+first while main and its updates stayed as they were ("Or build them for
+testers first", CLAUDE.md). On release day main took the same five, and the
+fingerprint recorded in mobile/fingerprint.json was the build's own, the
+three values next-store.json had held (ios 9d75d6bd, android e44134a7, watch
+34149f04), checked with `node scripts/next-store.mjs --strict` before that
+file went. So updates made on main from that merge on reach only 2.0.0
+copies, and the 1.90.0 copies in the stores keep the last update made
+before it. Their sections follow the next paragraph, in that order.
+
 Before them, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
@@ -58,7 +65,7 @@ deleted in the same change. The four before it
 2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
 what goes with it that was not in it, is in its section below.
 
-**phone-turns.patch, and why it waits.** Justin, 10 November 2026, with two
+**phone-turns.patch, and why it waited** (applied for 2.0.0). Justin, 10 November 2026, with two
 screenshots of his iPhone held on its side and the app still upright:
 "Landscape mode on iPhone is not working." It could not: the split for a
 phone on its side (lib/twoSides `phoneSidewaysOn`, lib/sidewaysPlay, merged
@@ -263,7 +270,7 @@ build, and a copy built before it has no package to ask (lib/turnScreen
 finds none and says so once in the log), so no update can turn an older
 copy.
 
-**watch-page-order.patch, and why it waits.** Justin, 11 November 2026: "On
+**watch-page-order.patch, and why it waited** (applied for 2.0.0). Justin, 11 November 2026: "On
 the watch, can we add a way for a user to select which order their pages
 show up in on the Watch app?" And, asked whether a page could be hidden as
 well: "Yes, add hiding pages." The watch app is Swift built into the iPhone
@@ -726,7 +733,7 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
 No store-version key: the rows wait for the watch's own word, and only a
 watch from the new build says it.
 
-**bluetooth-done.patch, and why it waits.** Justin, 14 November 2026, with a
+**bluetooth-done.patch, and why it waited** (applied for 2.0.0). Justin, 14 November 2026, with a
 picture of Apple's Bluetooth MIDI Devices sheet on his iPhone (iOS 27.2.1),
 its title and Edit and nothing else: "Can we have this screen have a button
 that says done? All it says now is edit, which is confusing to people." The
@@ -811,7 +818,7 @@ nothing has to. The words follow the build by themselves. Say in that
 build's What's new (`only: 'ios'`) that Apple's Bluetooth screen has a
 Done button again.
 
-**tone3000-in-app.patch, and why it waits.** Justin, 14 November 2026:
+**tone3000-in-app.patch, and why it waited** (applied for 2.0.0). Justin, 14 November 2026:
 "Have you built out the built-in tone 3000 into our app so you don't have
 to go to Safari?" It had not been. The Developer card's Browse TONE3000
 opens the device's browser, and TONE3000 sends the device back by the
@@ -957,7 +964,7 @@ That screen, and the privacy page and App Store notes that go with showing
 another company's page and keeping a sign-in to it, are a store version's
 work and not this patch's.
 
-**play-internal.patch, and why it waits.** Justin, 16 November 2026: "Can
+**play-internal.patch, and why it waited** (applied for 2.0.0). Justin, 16 November 2026: "Can
 you do the iphone and android builds as version. 2.0, but leave the over the
 air updates at the intervals we are doing now? I want to test it all on test
 flight first before a public release". The iPhone's testers are TestFlight,

@@ -13,6 +13,8 @@ extension Color {
 
 /** The app's own green: lit, in tune. */
 private let signal = Color(red: 0.36, green: 0.85, blue: 0.47)
+/** Quick edit's amber (#F5A623): the outline of the knob the Crown turns, and its value, as the mockup. */
+private let amber = Color(red: 0.961, green: 0.651, blue: 0.137)
 
 /*
  * A PAGE OF FEW TILES TAKES HALF THE WATCH'S BOTTOM MARGIN. The first try left
@@ -152,6 +154,17 @@ struct ScenesPage: View {
  * from before this build cannot do it. This line is only ever on a watch
  * that can.
  *
+ * AND WHERE THE IPHONE OFFERS QUICK EDIT, THE HOLD IS QUICK EDIT. Justin, 12
+ * November 2026: "On the watch, we have pushed to hold on the channels to
+ * switch amps. Can we set up quick edits on that as well? And change the
+ * name to hold to quick edit?" and, of three pictures, "For the watch, mock
+ * up B." Where the picture says `quickEdit`, the line reads "Hold a pedal
+ * for quick edit." and the hold opens QuickSheet, below: the channels in
+ * one row, then the block's knobs. Where it does not (a phone that has not
+ * had the update, a unit or connection the iPhone's own Edit page is closed
+ * on, a VP4, an account it is not open to), the line and the sheet are the
+ * ones they always were: the same hold, the same pedals (canPickChannel).
+ *
  * AN AM4'S AMP SAYS ITS BOOST under its name, in Play's own words: Boost on,
  * Boost off, or Amp off when the amp itself is off in that scene, and nothing
  * until the unit has said (the word is the phone's, WatchPedal.word). Its
@@ -230,7 +243,7 @@ struct PedalsPage: View {
                         if state.pedals.isEmpty {
                             Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
                         } else if footed {
-                            Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
+                            Text(pedalHoldLine(quickEdit: state.quickEdit)).font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -240,10 +253,18 @@ struct PedalsPage: View {
            or its channels go, and lights what the phone says it is on. */
         .sheet(item: $picking, onDismiss: { held = false }) { picked in
             if let pedal = offered(picked.id) {
-                ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
-                    choose(name, for: pedal)
+                if state.quickEdit == true {
+                    /* Quick edit, where the iPhone offers it: the same channels, in one row, over the block's knobs. */
+                    QuickSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel, quick: watchQuickFor(state.quick, pedal: pedal.id)) { name in
+                        choose(name, for: pedal)
+                    }
+                    .environmentObject(link)
+                } else {
+                    ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
+                        choose(name, for: pedal)
+                    }
+                    .environmentObject(link)
                 }
-                .environmentObject(link)
             }
         }
         .onChange(of: state.pedals) { _, _ in
@@ -293,7 +314,7 @@ struct PedalsPage: View {
                 }
             }
             if footed {
-                Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
+                Text(pedalHoldLine(quickEdit: state.quickEdit)).font(.footnote).foregroundStyle(.secondary)
             }
         }
         .padding(.bottom, -extra)
@@ -488,6 +509,290 @@ private struct ChannelsSheet: View {
     }
 }
 
+/*
+ * QUICK EDIT: a pedal held, where the iPhone offers it. Mockup B, which
+ * Justin picked ("For the watch, mock up B", 12 November 2026): the block's
+ * name, its channels in ONE row of four (the one it is on lit green, as
+ * ever), then a list of its knobs, a name and a value to a row. A tap picks
+ * a row (an amber outline, its value amber) and the Digital Crown turns the
+ * picked knob; the first is picked when the sheet opens. The list is moved
+ * with a finger, since the Crown is the knob's.
+ *
+ * THE KNOBS ARE THE IPHONE'S (Model.swift, WatchKnob). The sheet asks for
+ * them when it opens (`knobs`) and says when it closes; until they come it
+ * says it is reading, and a block with none, or one the iPhone could not
+ * read, is its channels alone. The first ask may be the one that woke the
+ * iPhone and was dropped, so a sheet not yet answered asks again every two
+ * and a half seconds, four times in all, and once more whenever the watch
+ * app comes back on screen.
+ *
+ * A TURN IS SHOWN AT ONCE AND SENT AT MOST TEN TIMES A SECOND, the last one
+ * always (watchKnobWait). While the Crown is ahead of the iPhone the row's
+ * number is worked out here by the iPhone's own rule; a second and a half
+ * after the last turn the iPhone's numbers are the ones shown again, so
+ * what the unit really holds is the last word. A turn is never sent twice
+ * (WatchCommand.once).
+ *
+ * WHAT IS A TURN: the Crown's number rounding to another place than the
+ * picked knob is shown at. The sheet itself puts the Crown where the picked
+ * knob is whenever that moves for any other reason (another row tapped, the
+ * iPhone's answer, the knobs arriving), and that is never a turn, because
+ * then the two agree.
+ *
+ * A channel picked closes the sheet, as it always did: each channel has
+ * its own settings, and the knobs read were the old channel's.
+ */
+private struct QuickSheet: View {
+    let pedal: WatchPedal
+    let lit: String?
+    /** This pedal's knobs as the iPhone last said them; nil while it has not. */
+    let quick: WatchQuick?
+    let pick: (String) -> Void
+    @EnvironmentObject private var link: PhoneLink
+    @Environment(\.scenePhase) private var phase
+    /** The knob tapped, by its key; none tapped yet is the first. */
+    @State private var chosen: String?
+    /** Where the Crown has put a knob, ahead of the iPhone: by key, 0 to 1. */
+    @State private var turned: [String: Double] = [:]
+    /** The last place sent to the iPhone for each knob, so the last turn is never left unsent. */
+    @State private var went: [String: Double] = [:]
+    /** The Crown's own number, 0 to 1. */
+    @State private var crown: Double = 0
+    /** When a turn last went, and the knob whose newest turn is waiting its tenth of a second. */
+    @State private var lastSent: Date?
+    @State private var owed: String?
+    /** Counts the turns, so only the last one's settling hands the numbers back to the iPhone. */
+    @State private var turns = 0
+    /** Counts the asks for the knobs, how many are left, and whether the sheet is still waiting for them. */
+    @State private var ask = 0
+    @State private var asksLeft = watchKnobsAsks
+    @State private var waiting = true
+    @FocusState private var crownOn: Bool
+
+    private var knobs: [WatchKnob] { quick?.knobs ?? [] }
+    private var picked: WatchKnob? { watchKnobPicked(knobs, chosen) }
+
+    /** Where a knob is shown: where the Crown has put it, or where the iPhone says it is. */
+    private func place(_ knob: WatchKnob) -> Double {
+        knob.place(turned: turned[knob.key])
+    }
+
+    var body: some View {
+        /* Where the picked knob is shown: when it moves for any reason but the Crown, the Crown is put there (setCrown). */
+        let target: Double? = picked.map { place($0) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(pedal.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: 4) {
+                    ForEach(pedal.channels ?? [], id: \.self) { name in
+                        Button {
+                            pick(name)
+                        } label: {
+                            Text(name)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .foregroundStyle(name == lit ? Color.black : Color.white)
+                                .background(name == lit ? signal : Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Channel \(name)")
+                        .accessibilityAddTraits(name == lit ? .isSelected : [])
+                    }
+                }
+                if !knobs.isEmpty {
+                    VStack(spacing: 4) {
+                        ForEach(knobs, id: \.key) { knob in
+                            KnobRow(
+                                knob: knob,
+                                value: knob.shown(turned: turned[knob.key]),
+                                on: knob.key == picked?.key,
+                                tap: { choose(knob) },
+                                step: { by in move(knob, to: place(knob) + by) }
+                            )
+                        }
+                    }
+                    /* The Crown is the picked knob's while this has the focus, which the sheet gives it when the knobs come and at every tap on a row. */
+                    .focusable(true)
+                    .focused($crownOn)
+                    .digitalCrownRotation($crown, from: 0, through: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .focusEffectDisabled()
+                } else if waiting, quick == nil {
+                    Text("Reading \(pedal.name)…").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .disabled(!link.reachable)
+        .opacity(link.reachable ? 1 : 0.55)
+        .onAppear {
+            setCrown()
+            crownOn = true
+            askForKnobs()
+        }
+        .onChange(of: ask) { _, _ in askForKnobs() }
+        .onChange(of: target) { _, _ in setCrown() }
+        .onChange(of: crown) { _, now in
+            if let knob = picked { move(knob, to: now) }
+        }
+        .onChange(of: knobs.isEmpty) { _, none in
+            if !none { crownOn = true }
+        }
+        /* The wrist raised again with the sheet still open: the iPhone may have let the knobs go meanwhile, so it is asked afresh. */
+        .onChange(of: phase) { _, now in
+            guard now == .active else { return }
+            asksLeft = watchKnobsAsks
+            waiting = true
+            ask += 1
+        }
+        .onDisappear {
+            sendUnsent()
+            link.send(.knobs(id: nil))
+        }
+    }
+
+    /** Ask the iPhone for this pedal's knobs, unless it has said them or has been asked enough; and again in a while, in case this one woke it and was dropped. */
+    private func askForKnobs() {
+        guard quick == nil else { return }
+        guard asksLeft > 0 else {
+            waiting = false
+            return
+        }
+        asksLeft -= 1
+        link.send(.knobs(id: pedal.id))
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(watchKnobsAskSeconds * 1_000_000_000))
+            ask += 1
+        }
+    }
+
+    /*
+     * The Crown's number put where the picked knob is shown: never a turn,
+     * since the two then agree. Left alone while it is within a rounding of
+     * there already (a place is kept to three figures, so the Crown's own
+     * number is up to half a thousandth off it mid-turn), or every move of
+     * the Crown would be answered by a nudge back.
+     */
+    private func setCrown() {
+        guard let knob = picked else { return }
+        let at = place(knob)
+        if abs(crown - at) > 0.0006 { crown = at }
+    }
+
+    /** A row tapped: the Crown is its knob's from here. Whatever the last knob was owed goes first. */
+    private func choose(_ knob: WatchKnob) {
+        tap()
+        sendUnsent()
+        chosen = knob.key
+        crownOn = true
+    }
+
+    /*
+     * A knob to a place, 0 to 1, by the Crown or by VoiceOver's up and
+     * down: shown at once, sent now if a tenth of a second has gone by
+     * since the last one and otherwise when it has, and the iPhone's
+     * numbers put back a second and a half after the last move. Nothing
+     * for a place it is already shown at.
+     */
+    private func move(_ knob: WatchKnob, to now: Double) {
+        let at = watchKnobAt(now)
+        guard at != place(knob) else { return }
+        let key = knob.key
+        turned[key] = at
+        turns += 1
+        let mine = turns
+        let wait = watchKnobWait(lastSent: lastSent, now: Date())
+        if wait <= 0 {
+            send(key)
+        } else if owed == nil {
+            owed = key
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                sendOwed()
+            }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(watchKnobSettle * 1_000_000_000))
+            guard turns == mine else { return }
+            sendUnsent()
+            turned = [:]
+            went = [:]
+        }
+    }
+
+    /** The turn that waited its tenth of a second. */
+    private func sendOwed() {
+        guard let key = owed else { return }
+        owed = nil
+        send(key)
+    }
+
+    /** Every knob whose last place has not gone to the iPhone yet: before another knob is picked, before the numbers are handed back, and before the sheet closes. */
+    private func sendUnsent() {
+        owed = nil
+        for (key, at) in turned where went[key] != at {
+            send(key)
+        }
+    }
+
+    /** One knob's newest place to the iPhone. */
+    private func send(_ key: String) {
+        guard let at = turned[key] else { return }
+        lastSent = Date()
+        went[key] = at
+        link.send(.knob(id: pedal.id, key: key, at: at))
+    }
+}
+
+/*
+ * One knob's row: its name on the left, its value on the right; picked, an
+ * amber outline and an amber value. The whole row takes the tap. VoiceOver
+ * reads the name and the value, and its up and down move the knob a
+ * hundredth of its range, since the Crown is VoiceOver's while it is on.
+ */
+private struct KnobRow: View {
+    let knob: WatchKnob
+    /** Its value as the row writes it: the iPhone's words, or the Crown's own number while it is ahead of the iPhone. */
+    let value: String
+    let on: Bool
+    let tap: () -> Void
+    let step: (Double) -> Void
+
+    var body: some View {
+        Button(action: tap) {
+            HStack(spacing: 6) {
+                Text(knob.name ?? "")
+                    .font(.system(size: 15))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Text(value)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .foregroundStyle(on ? amber : Color.white.opacity(0.8))
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .background(on ? amber.opacity(0.2) : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(amber, lineWidth: on ? 1.5 : 0))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(knob.name ?? "")
+        .accessibilityValue(value)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: step(0.01)
+            case .decrement: step(-0.01)
+            @unknown default: break
+            }
+        }
+    }
+}
+
 // MARK: - Presets
 
 /*
@@ -532,17 +837,122 @@ struct PresetsPage: View {
     }
 }
 
+// MARK: - Tempo
+
+/*
+ * The tempo as a big number, one Tap button, and the metronome's tap on the
+ * wrist. "OK, well let's add that as well then" (Justin, 11 November 2026).
+ *
+ * TAP IS THE IPHONE'S OWN TAP BUTTON: each press asks the phone for one tap
+ * of it (WatchCommand.tap) and the phone counts them as it counts its own,
+ * so the number that comes back is the one its Tap button shows. With no
+ * tempo known the number is a dash and the button still taps. Where the
+ * iPhone's Tap sends nothing for this unit or this connection the phone
+ * says so in the picture (`tap` false, with its own sentence in `why`): the
+ * button is switched off and the sentence is under it. The watch never
+ * decides that for itself.
+ *
+ * THE SWITCH is the metronome's "Tap on the watch" from the iPhone's
+ * Settings, and only that: it does not start the metronome, which is the
+ * iPhone's to start. So with the switch on and the metronome off nothing
+ * taps, and the page says which.
+ *
+ * In a ScrollView because the phone's sentence can be four lines on a small
+ * watch; with nothing to say it fits and does not move.
+ */
+struct TempoPage: View {
+    let state: WatchState
+    @EnvironmentObject private var link: PhoneLink
+
+    var body: some View {
+        let tempo = state.tempo
+        let canTap = tempo?.tap == true
+        let why = tempo?.why ?? ""
+        let number = tempoNumber(tempo?.bpm)
+        let spoken: String = number == "—" ? "No tempo yet" : "\(number) beats per minute"
+        ScrollView {
+            VStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(number)
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("BPM").font(.caption2).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+                Button {
+                    tap()
+                    link.send(.tap)
+                } label: {
+                    Label("Tap", systemImage: "metronome").frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .disabled(!canTap)
+                .accessibilityLabel("Tap tempo")
+                if !canTap, !why.isEmpty {
+                    Text(why)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Toggle("Wrist metronome", isOn: Binding(get: { tempo?.wrist == true }, set: { link.send(.wrist(on: $0)) }))
+                    .disabled(tempo == nil)
+                    /* In from the sides: its words began on the very edge of the screen, under the metronome's light. */
+                    .padding(.horizontal, 10)
+                if tempo?.wrist == true, tempo?.running != true {
+                    Text("The metronome is off on your iPhone.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Tuner
 
 /*
- * Off until tapped, and off again when the page is left. Whether the unit
+ * Off until tapped, and off again when the page is left, unless the iPhone
+ * has said it stays on (its "Stays on when you swipe away" switch, the
+ * picture's `tunerStays`; Model.swift watchTunerStopsOnLeaving): then
+ * leaving does nothing, and the page shows it on, with Stop tuning, when it
+ * is come back to. Whether the unit
  * mutes while it tunes is the unit's own setting (Setup, Tuner, Mute), never
  * the app's: "We don't want the unit to mute while the tuner is on, unless
  * they set that in settings somewhere." Tapped rather than on arrival so a
  * unit that IS set to mute is never muted by a swipe past. The note in big
  * letters, a needle for how far off, green within three cents, as on the
  * phone.
+ *
+ * THE SCREEN SAYS WHAT THE TUNER IS; THE BUTTONS SAY WHAT A TAP WILL DO.
+ * The off screen used to be one button that said "Tuner on" while the tuner
+ * was off, and Justin read it as the state: "where it says tuner on I feel
+ * like that means it on." Of three mockups he picked the second, "Go with
+ * option B for the watch I like that one" (11 November 2026; the picture is
+ * docs/watch/tuner-start-stop.png):
+ *
+ *   off  TUNER, small, then "Off", big and grey, then one large green
+ *        button with the tuning fork: "Start tuning". No "Tap to tune.",
+ *        and nothing on the screen says "on".
+ *   on   the note, the needle and the cents as they were, then "Stop
+ *        tuning", red, where "Tuner off" was.
+ *
+ * Never "Tuner on" or "Tuner off" as a button's words again (the words are
+ * TunerWords in Model.swift, which the tests hold). Nothing it does changed
+ * with the words: the same two requests, and nothing until tapped. VoiceOver reads the buttons by their words and "Off" as
+ * "Tuner is off"; the small TUNER over it is not read twice.
  */
+
+/** Start tuning's words on the green: near black (#06210E), as the mockup. */
+private let startInk = Color(red: 0.024, green: 0.129, blue: 0.055)
+/** Stop tuning: red words (#FF6961) on a red-tinted fill (255, 69, 58 at 28%), as a button that ends something reads on the watch. */
+private let stopInk = Color(red: 1, green: 0.412, blue: 0.38)
+private let stopFill = Color(red: 1, green: 0.271, blue: 0.227).opacity(0.28)
+
 struct TunerPage: View {
     let state: WatchState
     @EnvironmentObject private var link: PhoneLink
@@ -560,26 +970,38 @@ struct TunerPage: View {
                 Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Button("Tuner off") {
+                Button {
                     tap()
                     link.send(.tuner(on: false))
+                } label: {
+                    Text(TunerWords.stop)
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(stopInk)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(stopFill, in: Capsule())
                 }
+                .buttonStyle(.plain)
             } else {
-                Text("TUNER").font(.caption2).foregroundStyle(.secondary)
+                Text("TUNER").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+                Text(TunerWords.off)
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(TunerWords.offSpoken)
                 Button {
                     tap()
                     link.send(.tuner(on: true))
                 } label: {
-                    Label("Tuner on", systemImage: "tuningfork").frame(maxWidth: .infinity, minHeight: 56)
+                    Label(TunerWords.start, systemImage: "tuningfork")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(startInk)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(signal, in: Capsule())
                 }
-                Text("Tap to tune.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                .buttonStyle(.plain)
             }
         }
         .onDisappear {
-            if state.tuner.on { link.send(.tuner(on: false)) }
+            if watchTunerStopsOnLeaving(tunerOn: state.tuner.on, stays: state.tunerStays) { link.send(.tuner(on: false)) }
         }
     }
 }
@@ -627,6 +1049,13 @@ struct WaitingPage: View {
             )
             .font(.footnote)
             .multilineTextAlignment(.center)
+            /* The watch wakes an iPhone app that is asleep, not one that is not on Play at all: said where the wearer is told to open it. */
+            if !tooNew, !phoneOnly {
+                Text(WaitingWords.closed)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(.horizontal, 4)
     }

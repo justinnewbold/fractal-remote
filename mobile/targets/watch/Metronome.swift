@@ -9,6 +9,13 @@ import WatchKit
  * from shared/metronome.mjs's setting), and this taps on every beat: the
  * system's click, which is a tap you feel and a tick you hear.
  *
+ * AND A LIGHT YOU SEE. "I also wanna make it so the watch can do a light up
+ * type function as well on the metronome ... have the watch outside edge
+ * flash with the same as the tempo" (Justin, 12 November 2026). `onBeat` is
+ * handed every beat as it is tapped, and the app lights the edge of the
+ * screen on it (FractalWatchApp.swift, EdgeBeat): the same beat as the tap,
+ * never a clock of its own.
+ *
  * Counted from when it started rather than from the last beat, the same rule
  * as the phone's (nextBeat in shared/metronome.mjs), so a late timer once does
  * not push every beat after it. It only runs while the watch app is on the
@@ -20,6 +27,8 @@ final class WristMetronome {
     private var timer: Timer?
     private var bpm: Double = 0
     private var started = Date()
+    /** Handed every beat, as it is tapped: the edge of the screen lights on it. */
+    var onBeat: (() -> Void)?
 
     /** Follow the phone's word: on at this tempo, or off. Restarts only when the tempo moves. */
     func follow(_ metronome: WatchMetronome?) {
@@ -40,6 +49,7 @@ final class WristMetronome {
 
     private func beat() {
         WKInterfaceDevice.current().play(.click)
+        onBeat?()
         let step = 60.0 / bpm
         let elapsed = Date().timeIntervalSince(started)
         let next = (floor(elapsed / step) + 1) * step - elapsed

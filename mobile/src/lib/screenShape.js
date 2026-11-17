@@ -11,7 +11,9 @@
  * one side of the screen, make neither true.
  *
  * Neither changes a phone held upright: it has nothing of its own down its
- * sides, and it cannot be turned while the app is locked upright.
+ * sides. A phone turns only where lib/phoneTurns lets it (Play and what
+ * opens beside it, for an account the sideways layout is open to), and there
+ * both hold for it as for a tablet.
  */
 
 /**
@@ -29,11 +31,12 @@ export const SAFE_EDGES = ['top', 'bottom', 'left', 'right']
  * An iPhone pop-up turns only upright unless it is told otherwise, whatever
  * the screen under it is doing (React Native's RCTModalHostViewComponentView);
  * an iPad's already turns every way, which is what this asks for by name.
- * A pop-up can only turn the ways the app itself is allowed to (app.json's
- * "portrait" lock on an iPhone), so an iPhone held upright sees no change.
- * The one place it can show is an iPhone with a Home button held upside
- * down, where iOS may now turn an open pop-up the right way up for whoever
- * is holding it, as an iPad's always has.
+ * A pop-up can only turn the ways the app itself is allowed to at that
+ * moment, which on an iPhone is what lib/phoneTurns last asked for (upright,
+ * or upright and either side on Play; expo-screen-orientation answers iOS
+ * for the whole app, pop-ups included), so a pop-up over Settings stays
+ * upright and one over Play turns with Play. Never upside down on an iPhone:
+ * neither the app's Info.plist nor either lock offers it.
  */
 export const ANY_WAY_UP = ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']
 

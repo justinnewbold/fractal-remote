@@ -22,10 +22,13 @@
     "expo-blur": "~57.0.3",
     "expo-build-properties": "~57.0.22",
     "expo-clipboard": "~57.0.2",
+    "expo-crypto": "~57.0.4",
+    "expo-secure-store": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
     "expo-keep-awake": "~57.0.2",
+    "expo-screen-orientation": "~57.0.3",
     "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.26",
@@ -34,7 +37,8 @@
     "react-native": "0.86.3",
     "react-native-purchases": "^10.10.0",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-url-polyfill": "^4.0.0"
+    "react-native-url-polyfill": "^4.0.0",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
