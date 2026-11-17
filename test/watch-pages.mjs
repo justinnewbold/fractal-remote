@@ -27,6 +27,7 @@
  */
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 
 const at = (p) => new URL(`../${p}`, import.meta.url)
 const read = (p) => readFileSync(at(p), 'utf8')
@@ -961,5 +962,49 @@ export function run(test) {
     ]) {
       assert.ok(tests.includes(`func ${name}(`), `the watch’s own tests have no ${name}`)
     }
+  })
+  test('watch CI: a launch the simulator refuses is tried again, twice, for every picture and the last, and a third refusal still fails the run', () => {
+    /*
+     * "Scene update failed" twice on 16 November 2026, at the seventh and
+     * eighth picture, and the whole watch check went red. Every launch in
+     * mobile/watch-ci/screens.sh goes through its launch(), which tries a
+     * refused one twice more (the app stopped, four seconds between) and
+     * fails the run on the third. Run here under bash, with the simulator
+     * and the clock stood in for.
+     */
+    const shots = read('mobile/watch-ci/screens.sh')
+    assert.equal(shots.split('xcrun simctl launch ').length - 1, 1, 'a launch in the watch’s pictures goes round the retry')
+    assert.match(shots, /\nshoot\(\) \{\n  launch -demo YES "\$@"\n  sleep 5\n\}\n/, 'a picture is not opened through the retry')
+    assert.match(shots, /\nlaunch -demo NO\nsleep 5\n/, 'the last picture, with no phone, is not opened through the retry')
+    const fns = ['launch', 'shoot'].map((name) => {
+      const at = shots.indexOf(`\n${name}() {\n`)
+      assert.ok(at >= 0, `screens.sh has no ${name}()`)
+      return shots.slice(at + 1, shots.indexOf('\n}\n', at) + 3)
+    })
+    if (process.platform === 'win32') return
+    const run = (refusals) => {
+      const script = [
+        'set -eEuo pipefail',
+        `trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR`,
+        'UDID=u; ID=i; N=0',
+        `xcrun() { if [ "$2" = launch ]; then N=$((N+1)); if [ "$N" -le ${refusals} ]; then echo "Scene update failed" >&2; return 1; fi; echo "opened: \${*:6}"; else echo "asked: $2"; fi; }`,
+        'sleep() { echo "waited $1"; }',
+        ...fns,
+        'shoot -page 1',
+        'echo "launches: $N"'
+      ].join('\n')
+      return spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+    }
+    const once = run(0)
+    if (once.error) return
+    assert.equal(once.status, 0)
+    assert.match(once.stdout, /^opened: -demo YES -page 1\nwaited 5\nlaunches: 1\n$/, 'a launch that is taken is tried again, or waited on differently')
+    const twice = run(2)
+    assert.equal(twice.status, 0, `two refusals fail the run: ${twice.stdout}`)
+    assert.match(twice.stdout, /try 1 of 3[^\n]*\nasked: terminate\nwaited 4\n[^\n]*try 2 of 3[^\n]*\nasked: terminate\nwaited 4\nopened: -demo YES -page 1\nwaited 5\nlaunches: 3\n$/, 'a refused launch is not stopped, waited on and tried again')
+    const thrice = run(3)
+    assert.notEqual(thrice.status, 0, 'a third refusal does not fail the run')
+    assert.match(thrice.stdout, /::error::the simulator refused the launch \(-demo YES -page 1\) three times/)
+    assert.ok(!/launches: /.test(thrice.stdout), 'the run went on after a third refusal')
   })
 }

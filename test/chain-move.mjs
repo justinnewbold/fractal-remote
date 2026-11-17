@@ -37,8 +37,23 @@
  * wire after them and a split out of the first moved column; a cut the plan
  * did not cover, and a block the unit did not take, said after a move; an
  * Add that moves a block saying the space it left; the newest truth under
- * each row. THE SCREENS ARE NOT RUN: their calls into the plan, and what
- * they store, let through and draw for a cut row, are pinned by their text.
+ * each row. From the fourth round: a move his settings' reads held back
+ * before anything was sent said as one never sent, and the browser's read
+ * after a move that sent nothing recording nothing; a block the unit did
+ * not take said as "no sound past it" only between the row's Input and
+ * Output, and past them as gone from the preset; and the row asked after a
+ * move with the move's own rows, computer app and chain read (row 5
+ * through 1.90.63 and 1.90.82, the top row, a space already in the row,
+ * ends only the chain read names).
+ *
+ * THE SCREENS ARE NOT RUN. Their calls into the plan are pinned by
+ * patterns on the calls, not whole. What they read and draw for a cut row
+ * (the cut-row read, RowCut, where RowCut is drawn, the browser's read
+ * after a write, the phone's read of the row a block left) is pinned
+ * WHOLE, token for token, in the last test; the review's one-token mutants
+ * of those places and of the reads' arguments (SP10-SP19, SB7-SB16, L5c,
+ * L7, L8, L8b, L9) each fail here, as do the fourth round's own of its
+ * fixes in this file (What's new's fail in test/whats-new.mjs).
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -1119,21 +1134,53 @@ export function run(test) {
     for (const [file] of SCREENS) assert.ok(!/holes: !!cut\.holes/.test(read(file)), `${file}: Join the row is told whether to count empty spaces`)
   })
 
-  test('chain move: with settings measured, the first clear asks the unit’s preset again, so a footswitch during the reads gets nothing cleared', async () => {
+  test('chain move: with settings measured, the first clear asks the unit’s preset again, so a footswitch during the reads gets nothing cleared, and the move is said as one never sent', async () => {
     for (const [where, load] of BOTH) {
       const m = await load()
+      /*
+       * On another preset at that ask, or not saying: nothing is written, and
+       * the answer is a refusal's (notSent, the BEFORE words, `stopped`), so
+       * both screens take their not-sent path: the words under the row, no
+       * failure, no history line, and `starting` never called (the screens
+       * drop the Undo there, and the phone marks the preset changed).
+       */
+      for (const [after, why] of [
+        ['moved', m.PRESET_MOVED_BEFORE],
+        ['unknown', m.UNIT_QUIET_BEFORE]
+      ]) {
+        const d = await hisUnit(await phoneMock())
+        const rec = recorded(d)
+        let stepped = false
+        rec.wire.readBlock = (eid) => ((stepped = true), d.blockParams(eid))
+        let asked = 0
+        let started = 0
+        const lines = []
+        const res = await m.moveBlocks({ row: R, moves: await hisDrag(d), wire: rec.wire, rows: 6, cols: 14, measure: true, onPreset: async () => ((asked += 1), stepped ? after : 'same'), starting: () => (started += 1), log: (a, b) => lines.push(b ? `${a} — ${b}` : a) })
+        assert.deepEqual(writes(rec.sent), [], `${where}, ${after}: a clear went to a preset the unit stepped to, or would not name, while settings were read`)
+        assert.equal(asked, 2, `${where}: the unit was not asked again after the settings were read`)
+        assert.equal(res.notSent, true, `${where}, ${after}: a move held back before anything was sent is answered as one that failed part-way`)
+        assert.equal(res.why, why, `${where}, ${after}: not the words of a move never sent`)
+        assert.equal(res.stopped, after, where)
+        assert.equal(res.threw, undefined, `${where}, ${after}: a move never sent is answered as a failure`)
+        assert.equal(started, 0, `${where}, ${after}: the Undo was dropped, and the preset marked changed, for a move that sent nothing`)
+        assert.match(lines.join('\n'), new RegExp(`move on row 3 — not sent: ${after === 'moved' ? 'the unit is on another preset' : 'the unit didn’t say which preset it’s on'}`), `${where}, ${after}: the log does not say the move was not sent`)
+        assert.ok(!/put .* back after|straight after/.test(lines.join('\n')), `${where}, ${after}: the log says blocks were taken out and put back`)
+      }
+      /* The same unit saying 'same' at that ask: the move goes, and `starting` is called once, before the first clear and after the settings were read. */
       const d = await hisUnit(await phoneMock())
       const rec = recorded(d)
-      let stepped = false
-      rec.wire.readBlock = (eid) => ((stepped = true), d.blockParams(eid))
-      let asked = 0
-      const res = await m.moveBlocks({ row: R, moves: await hisDrag(d), wire: rec.wire, rows: 6, cols: 14, measure: true, onPreset: async () => ((asked += 1), stepped ? 'moved' : 'same') })
+      const order = []
+      rec.wire.readBlock = (eid) => (order.push('read'), d.blockParams(eid))
+      const clear = rec.wire.clearCell
+      rec.wire.clearCell = (row, col) => (order.push('clear'), clear(row, col))
+      const res = await m.moveBlocks({ row: R, moves: await hisDrag(d), wire: rec.wire, rows: 6, cols: 14, measure: true, onPreset: async () => 'same', starting: () => order.push('starting') })
       assert.equal(res.notSent, false)
-      assert.equal(res.stopped, 'moved', where)
-      assert.deepEqual(writes(rec.sent), [], `${where}: a clear went into the preset a footswitch stepped to while settings were read`)
-      assert.equal(asked, 2, `${where}: the unit was not asked again after the settings were read`)
-      assert.equal(m.afterMoveSaid({ row: R, res }).issue, m.PRESET_MOVED_MID)
+      assert.deepEqual(order.slice(0, 6), ['read', 'read', 'read', 'read', 'starting', 'clear'], `${where}: the move is not begun once, just before its first write`)
+      assert.equal(order.filter((x) => x === 'starting').length, 1)
     }
+    /* THE SCREENS take the not-sent path for it: the phone says it under the row and follows the unit; the browser reads the chain again and records nothing (below). */
+    const phone = flat(code(read('mobile/src/screens/Edit.js')))
+    assert.match(phone, /if \(res\.notSent\) \{ setSettling\(null\) if \(res\.stopped\) followPresetAfterChainWrite\(\) if \(res\.why\) leaveRow\(lane\.row, \{ text: res\.why, joins: \[\], n \}\)/, 'the phone: a move never sent is not said under its row')
     /* With nothing measured, the ask made just before the move still counts for its first clear. */
     const m = await lib()
     const d = await hisUnit(await phoneMock())
@@ -1287,9 +1334,9 @@ export function run(test) {
       const place = rec.wire.placeBlock
       rec.wire.placeBlock = (row, col, id) => (id === 206 ? (rec.sent.push(['refused', row, col, id]), { ok: false }) : place(row, col, id))
       const refused = await m.moveBlocks({ row: R, moves: await hisDrag(e), wire: rec.wire, rows: 6, cols: 14 })
-      assert.deepEqual(refused.notPlaced, [{ name: 'NAM 1', col: 2 }])
+      assert.deepEqual(refused.notPlaced, [{ name: 'NAM 1', col: 2, between: true, gone: true }])
       assert.deepEqual(m.afterMoveSaid({ row: R, res: refused }).note, { text: 'The unit didn’t take NAM 1 at column 3, so row 3 has an empty space there and no sound past it. Put a block in it, or move one back.', joins: [] }, `${where}: a block the unit did not take is said as a join to make`)
-      assert.equal(m.notPlacedWords(R, [{ name: 'NAM 1', col: 2 }, { name: 'Comp 1', col: 4 }]), 'The unit didn’t take NAM 1 at column 3 and Comp 1 at column 5, so row 3 has empty spaces there and no sound past them. Put a block in each, or move one back.')
+      assert.equal(m.notPlacedWords(R, [{ name: 'NAM 1', col: 2, between: true }, { name: 'Comp 1', col: 4, between: true }]), 'The unit didn’t take NAM 1 at column 3 and Comp 1 at column 5, so row 3 has empty spaces there and no sound past them. Put a block in each, or move one back.')
     }
     /* The screens hand the chain read in, for the ends. */
     for (const [file, name] of SCREENS) {
@@ -1298,12 +1345,191 @@ export function run(test) {
     }
   })
 
+  test('chain move: a block the unit did not take says “no sound past it” only between the row’s Input and Output; past the Output it is a block gone from the preset, said after what the row’s read says', async () => {
+    /* INPUT, COMP, DRIVE, OUTPUT, joined; Drive dragged past the Output, and its placement at column 4 refused. */
+    const start = async () => {
+      const d = (await phoneMock()).createMockDevice('axefx3', { joinsAsOnUnit: true })
+      for (const b of d.presetBlocks()) d.placeBlock(b.row, b.col, 0)
+      ;[37, 46, 118, 42].forEach((id, col) => d.placeBlock(R, col, id))
+      for (let col = 0; col < 3; col++) d.cable(R, col, R, true)
+      return d
+    }
+    const past = [
+      { id: 118, name: 'Drive 1', from: 2, to: 3 },
+      { id: 42, name: 'Output 1', from: 3, to: 2 }
+    ]
+    const refuse = (d, rec, elsewhere = null) => {
+      const place = rec.wire.placeBlock
+      rec.wire.placeBlock = (row, col, id) => {
+        if (id !== 118 || col !== 3) return place(row, col, id)
+        if (elsewhere !== null) d.placeBlock(row, elsewhere, id)
+        return { ok: false }
+      }
+    }
+    const { joinBreak } = await import('../shared/starter-chains.mjs')
+    for (const [where, load] of BOTH) {
+      const m = await load()
+      /* The row still carries sound (Input, Comp and Output joined): never "no sound past it" over it, and the block that is gone is said. */
+      let d = await start()
+      let rec = recorded(d)
+      refuse(d, rec)
+      let res = await m.moveBlocks({ row: R, moves: past, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      assert.equal(joinBreak({ joined: true, row: R, span: { first: 0, last: 2 } }, d.grid().cells), null, `${where}: the row this case needs is not joined`)
+      assert.deepEqual(res.notPlaced, [{ name: 'Drive 1', col: 3, between: false, gone: true }], where)
+      assert.deepEqual(m.afterMoveSaid({ row: R, res }).note, { text: 'The unit didn’t take Drive 1 at column 4, so it isn’t in this preset now. Add it again, or move one back.', joins: [] }, `${where}: an empty cell past the Output is said as a row with no sound`)
+      /* The same, and the join into the Output answered but not taken: the row's cut first, with its Join the row, then the block that is gone. */
+      d = await start()
+      rec = recorded(d)
+      refuse(d, rec)
+      rec.wire.setCable = () => ({ ok: true })
+      res = await m.moveBlocks({ row: R, moves: past, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      const both = m.afterMoveSaid({ row: R, res }).note
+      assert.equal(both?.text, 'The blocks moved, but row 3 isn’t joined at column 3, so there’s no sound past it. The unit didn’t take Drive 1 at column 4, so it isn’t in this preset now. Add it again, or move one back.', `${where}: a block gone past the Output hides the row's own cut`)
+      assert.deepEqual(both.joins.map((j) => [j.srcRow, j.srcCol, j.destRow]), [[R, 1, R]], `${where}: the row's cut has no Join the row`)
+      /* Refused there, but put somewhere else by the unit: not gone, so nothing is said of it here (the screens' own check says where the unit has it). */
+      d = await start()
+      rec = recorded(d)
+      refuse(d, rec, 5)
+      res = await m.moveBlocks({ row: R, moves: past, wire: rec.wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      assert.deepEqual(res.notPlaced, [{ name: 'Drive 1', col: 3, between: false, gone: false }], where)
+      assert.equal(m.afterMoveSaid({ row: R, res }).note, null, `${where}: a block the unit put elsewhere is said to be gone from the preset`)
+    }
+    /* Both kinds in one list: the space that stops the sound first, then the block that is gone; '' with nothing to say. */
+    const m = await lib()
+    assert.equal(
+      m.notPlacedWords(R, [{ name: 'NAM 1', col: 2, between: true, gone: true }, { name: 'Delay 1', col: 7, between: false, gone: true }, { name: 'Drive 1', col: 8, between: false, gone: false }]),
+      'The unit didn’t take NAM 1 at column 3, so row 3 has an empty space there and no sound past it. Put a block in it, or move one back. The unit didn’t take Delay 1 at column 8, so it isn’t in this preset now. Add it again, or move one back.'
+    )
+    assert.equal(m.notPlacedWords(R, [{ name: 'Delay 1', col: 0, between: false, gone: true }, { name: 'Drive 1', col: 7, between: false, gone: true }]), 'The unit didn’t take Delay 1 at column 1 and Drive 1 at column 8, so they aren’t in this preset now. Add them again, or move one back.')
+    assert.equal(m.notPlacedWords(R, [{ name: 'Drive 1', col: 7, between: false, gone: false }]), '')
+  })
+
+  test('chain move: the row asked after a move is asked with the move’s own rows, computer app and chain read, empty spaces counted', async () => {
+    /* NAM 1 PARKED AFTER AN OUTPUT, fed from nothing, dragged before it: the plan joins only into NAM's column, and the Output it pushes along is fed from nothing after. */
+    const parked = async (row, ids) => {
+      const d = (await phoneMock()).createMockDevice('axefx3', { joinsAsOnUnit: true })
+      for (const b of d.presetBlocks()) d.placeBlock(b.row, b.col, 0)
+      ids.forEach((id, col) => d.placeBlock(row, col, id))
+      const out = ids.indexOf(42)
+      for (let col = 0; col < out; col++) d.cable(row, col, row, true)
+      return { d, moves: [{ id: 206, name: 'NAM 1', from: out + 1, to: out }, { id: 42, name: 'Output 1', from: out, to: out + 1 }] }
+    }
+    const keys = (js) => (js || []).map((j) => [j.srcRow, j.srcCol, j.destRow])
+    for (const [where, load] of BOTH) {
+      const m = await load()
+      /*
+       * ROW 5 THROUGH HIS PI ON 1.90.63: Input, Comp, Drive, Flanger, Delay,
+       * Output 1 at column 6, NAM 1 at 7. The plan's one join (row 5,
+       * column 5 into 6) is right under the old law, so the move goes; the
+       * Output, now at column 7, would need a join that computer app sends
+       * to the wrong cell: said with its reason, and NO Join the row.
+       */
+      let { d, moves } = await parked(4, [37, 46, 118, 82, 70, 42, 206])
+      let res = await m.moveBlocks({ row: 4, moves, wire: recorded(d).wire, rows: 6, cols: 14, law: true, version: '1.90.63', blocks: d.presetBlocks() })
+      assert.equal(res.notSent, false, where)
+      assert.deepEqual(keys(res.plan.joins), [[4, 4, 4]], where)
+      let note = m.afterMoveSaid({ row: 4, res }).note
+      assert.equal(note?.text, 'The blocks moved, but row 5 isn’t joined at column 7, so there’s no sound past it. The computer app on 1.90.63 sends the join into row 5 at column 7 to the wrong place. Update the computer app to 1.90.82 or later.', `${where}: the cut a 1.90.63 computer app cannot join is not said with why`)
+      assert.deepEqual(note.joins, [], `${where}: Join the row offered for a join a 1.90.63 computer app sends to the wrong cell`)
+      assert.equal(m.joinAsTheLaw(6, 5, 4), false)
+      /* The same row through 1.90.82, which builds that join right: offered. */
+      ;({ d, moves } = await parked(4, [37, 46, 118, 82, 70, 42, 206]))
+      res = await m.moveBlocks({ row: 4, moves, wire: recorded(d).wire, rows: 6, cols: 14, law: m.oldCableBytes('1.90.82'), version: '1.90.82', blocks: d.presetBlocks() })
+      note = m.afterMoveSaid({ row: 4, res }).note
+      assert.equal(note?.text, 'The blocks moved, but row 5 isn’t joined at column 7, so there’s no sound past it.', where)
+      assert.deepEqual(keys(note.joins), [[4, 5, 4]], `${where}: a join 1.90.82 builds right is not offered`)
+
+      /* THE TOP ROW OF A SIX-ROW UNIT: the Output pushed to column 5 needs a join out of column 4, which the app cannot build. Said, with no button. */
+      ;({ d, moves } = await parked(0, [37, 46, 118, 42, 206]))
+      res = await m.moveBlocks({ row: 0, moves, wire: recorded(d).wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      assert.equal(res.notSent, false, `${where}: the top-row move this case needs was refused`)
+      note = m.afterMoveSaid({ row: 0, res }).note
+      assert.equal(note?.text, 'The blocks moved, but row 1 isn’t joined at column 5, so there’s no sound past it. The app can’t join the top row out of column 4.', where)
+      assert.deepEqual(note.joins, [], `${where}: Join the row offered out of the top row's even column`)
+
+      /*
+       * AN EMPTY SPACE ALREADY IN THE ROW: Input, Comp, an empty column 3
+       * (Drive keeps its feed across it), Drive, Flanger, NAM, Output;
+       * Flanger and NAM swapped. Every join of the move reads back, and the
+       * space is still there: said, with nothing to press.
+       */
+      d = (await phoneMock()).createMockDevice('axefx3', { joinsAsOnUnit: true })
+      for (const b of d.presetBlocks()) d.placeBlock(b.row, b.col, 0)
+      ;[[0, 37], [1, 46], [3, 118], [4, 82], [5, 206], [6, 42]].forEach(([c, id]) => d.placeBlock(R, c, id))
+      for (const c of [0, 2, 3, 4, 5]) d.cable(R, c, R, true)
+      res = await m.moveBlocks({ row: R, moves: [{ id: 206, name: 'NAM 1', from: 5, to: 4 }, { id: 82, name: 'Flanger 1', from: 4, to: 5 }], wire: recorded(d).wire, rows: 6, cols: 14, blocks: d.presetBlocks() })
+      assert.deepEqual(res.still, [], where)
+      assert.deepEqual(m.afterMoveSaid({ row: R, res }).note, { text: 'The blocks moved, but row 3 has an empty space at column 3 between its Input and Output, so the sound may stop there. Put a block in it, or move one back.', joins: [] }, `${where}: the empty space in the row is not said after the move`)
+
+      /*
+       * ENDS THE GRID READ NEITHER NAMES NOR NUMBERS (only the chain read's
+       * word says which is the Input and which the Output): the row is asked
+       * after with the chain read handed in, and so is where a block the unit
+       * did not take sits.
+       */
+      const nameless = [
+        { row: R, col: 0, effectId: 900, fromRows: [] },
+        { row: R, col: 1, effectId: 46, fromRows: [R] },
+        { row: R, col: 2, effectId: 118, fromRows: [R] },
+        { row: R, col: 3, effectId: 901, fromRows: [R] }
+      ]
+      const slugs = [
+        { effectId: 900, slug: 'input' },
+        { effectId: 46, slug: 'comp' },
+        { effectId: 118, slug: 'drive' },
+        { effectId: 901, slug: 'output' },
+        { effectId: 206, slug: 'nam' }
+      ]
+      let u = dropsOut([...nameless, { row: R, col: 4, effectId: 206, fromRows: [] }])
+      res = await m.moveBlocks({ row: R, moves: [{ id: 206, name: 'NAM 1', from: 4, to: 3 }, { id: 901, name: 'Output 1', from: 3, to: 4 }], wire: u.wire, rows: 6, cols: 14, blocks: slugs })
+      note = m.afterMoveSaid({ row: R, res }).note
+      assert.equal(note?.text, 'The blocks moved, but row 3 isn’t joined at column 5, so there’s no sound past it.', `${where}: the row is asked after the move without the chain read's ends`)
+      assert.deepEqual(keys(note.joins), [[R, 3, R]])
+      u = dropsOut(nameless)
+      const place = u.wire.placeBlock
+      u.wire.placeBlock = (row, col, id) => (id === 46 && col === 2 ? { ok: false } : place(row, col, id))
+      res = await m.moveBlocks({ row: R, moves: [{ id: 118, name: 'Drive 1', from: 2, to: 1 }, { id: 46, name: 'Comp 1', from: 1, to: 2 }], wire: u.wire, rows: 6, cols: 14, blocks: slugs })
+      assert.deepEqual(res.notPlaced, [{ name: 'Comp 1', col: 2, between: true, gone: true }], `${where}: where a block the unit did not take sits is read without the chain read's ends`)
+      /* And Join the row asks the row again the same way: an empty space between such ends is never "joined again". */
+      u = dropsOut([
+        { row: R, col: 0, effectId: 900, fromRows: [] },
+        { row: R, col: 1, effectId: 46, fromRows: [] },
+        { row: R, col: 3, effectId: 118, fromRows: [R] },
+        { row: R, col: 4, effectId: 901, fromRows: [R] }
+      ])
+      const found = m.rowCuts({ cells: u.wire.gridCells(), blocks: slugs, rows: 6, only: [R] })[0]
+      assert.deepEqual(keys(found.joins), [[R, 0, R]])
+      const w = m.joinedWords(await m.joinRow({ row: R, joins: found.joins, wire: u.wire, blocks: slugs, rows: 6 }))
+      assert.equal(w.ok, false, `${where}: Join the row says “joined again” over an empty space, asked without the chain read's ends`)
+      assert.match(w.text, /^Row 3 has an empty space at column 3 between its Input and Output/)
+    }
+  })
+
   test('chain move: a move refused because the chain changed reads it again, as its words say, and the hosted website beside an older computer app is held to that app’s bytes', async () => {
     const m = await lib()
     assert.match(m.CHAIN_CHANGED, /It has been read again\.$/)
     const refusal = (text) => text.slice(text.indexOf('if (res.notSent) {'), text.indexOf('const said = afterMoveSaid'))
     assert.match(refusal(flat(code(read('mobile/src/screens/Edit.js')))), /if \(res\.why === CHAIN_CHANGED\) await refreshBlocks\(\{ quiet: true \}\) return \}\s*$/, 'the phone: “It has been read again” over a chain nobody read')
-    assert.match(refusal(flat(code(read('src/components/GridEditor.jsx')))), /if \(res\.stopped\) onChanged\(.*?\) else if \(res\.why === CHAIN_CHANGED\) onChanged\(`A move on row/, 'the browser: “It has been read again” over a chain nobody read')
+    /*
+     * THE BROWSER READS IT AGAIN AND RECORDS NOTHING: a move that sent nothing
+     * (the chain changed on the unit, or the unit was on another preset, the
+     * ask after his settings were read included) is no edit. App's onChanged
+     * writes a history line, hands the assistant a hand edit and marks the
+     * preset unsaved (record('grid'): Save and Revert over a preset nothing
+     * was written to), so it is a plain re-read of its own (`onReread`),
+     * wired to App's read() alone at both of the editor's places.
+     */
+    const web = refusal(flat(code(read('src/components/GridEditor.jsx'))))
+    assert.match(web, /if \(res\.stopped \|\| res\.why === CHAIN_CHANGED\) onReread\?\.\(\) return \}\s*$/, 'the browser: “It has been read again” over a chain nobody read, or a move never sent read again with a record of it')
+    assert.ok(!/onChanged|onError|setIssue|record\(/.test(web), 'the browser: a move that sent nothing is recorded as a change, or said as a failure')
+    assert.match(flat(code(read('src/components/GridEditor.jsx'))), /export default function GridEditor\(\{ [^}]*?, onReread = null \}\) \{/, 'the browser: the chain editor has no plain re-read')
+    const app = flat(code(read('src/App.jsx')))
+    const mounts = app.split('<GridEditor ').slice(1).map((s) => s.slice(0, s.indexOf('/>')))
+    assert.equal(mounts.length, 2)
+    for (const mount of mounts) {
+      assert.match(mount, / onReread=\{\(\) => read\(\)\} $/, 'the browser: a chain editor whose re-read is not App’s read() alone')
+      assert.match(mount, / onChanged=\{\(summary\) => \{ record\('grid', summary\) read\(\) \}\} /, 'the browser: a chain editor whose changes are no longer recorded')
+    }
 
     /* WHOSE BYTES: a computer app this page did not come from. */
     assert.equal(m.builtElsewhere({ role: 'remote', served: false }), true, 'through the relay')
@@ -1445,14 +1671,63 @@ export function run(test) {
     }
   })
 
-  test('chain move: what each screen stores, lets through and draws for a cut row is pinned, not only the calls', () => {
+  test('chain move: what each screen stores, lets through and draws for a cut row is pinned whole, not only the calls', () => {
+    /*
+     * THE SCREENS ARE NOT RUN, so what they do for a cut row is held by its
+     * text, WHOLE: each piece below is the flattened code (comments out) of
+     * the cut-row read, RowCut, the place RowCut is drawn and the browser's
+     * read after a write, token for token. A pin of a piece's first line let
+     * one-token switch-offs through (the review's SP10-SP19 and SB7-SB16:
+     * `!stop`, `!busy`, `!canJoin`, no words, a button that sends the joins
+     * with no row, does nothing, or is never pressable, the read after a
+     * write saying only its first row), each green on the whole suite. A
+     * change to any of these is a change to this test, made on purpose.
+     */
+    const PINS = {
+      'mobile/src/screens/Edit.js': [
+        [
+          'the cut-row read (the grid read only when the chain read shows a cut, nothing while a write is out, nothing kept from a read that was dropped)',
+          "useEffect(() => { if (busy) return undefined if (!joinsHere || !maybeCut(blocks)) { setCutRows([]) return undefined } let stop = false ;(async () => { const cells = await gridCells().catch(() => null) if (stop || !Array.isArray(cells)) return const cuts = rowCuts({ cells, blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion }) const said = cuts.map((c) => `row ${rowLabel(c.row)} at column ${colLabel(c.col)} (${c.joins.length} to join${c.blocked.length ? `, ${c.blocked.length} the app can’t` : ''})`).join('; ') if (said && said !== cutsSaid.current) logDebug('chain', 'a row reads cut', said) cutsSaid.current = said setCutRows(cuts) })() return () => { stop = true } }, [blocks, busy, joinsHere])"
+        ],
+        [
+          'RowCut (the words, and Join the row where there are joins to send, pressable while nothing else is being written, sending the joins with their row)',
+          "function RowCut({ said, row, joining, busy, onJoin }) { if (!said?.text) return null const canJoin = Array.isArray(said.joins) && said.joins.length > 0 return ( <View style={{ gap: space.sm }}> <Note tone={said.tone === 'ok' ? 'hint' : 'warn'}>{said.text}</Note> {canJoin ? <Press label={joining ? JOINING_ROW : JOIN_ROW} height={40} disabled={busy} onPress={() => onJoin({ ...said, row })} /> : null} </View> ) }"
+        ],
+        ['where RowCut is drawn (under each row, its note or the read’s cut, Join the row sent to mendRow with that row)', '<RowCut said={rowNote(leftUnder[lane.row], cutRows.find((c) => c.row === lane.row), presetHere)} joining={joining === lane.row} busy={busy} onJoin={mendRow} row={lane.row} />']
+      ],
+      'src/components/GridEditor.jsx': [
+        [
+          'the cut-row read',
+          "useEffect(() => { if (busy || working) return undefined if (!joinsHere || !maybeCut(blocks)) { setCutRows([]) return undefined } let stop = false ;(async () => { const cells = await gridNow().catch(() => null) if (stop || !Array.isArray(cells)) return const cuts = rowCuts({ cells, blocks, rows, law: oldBytes(), version: cablesVersion() }) const said = cuts.map((c) => `row ${rowLabel(c.row)} at column ${label(c.col)} (${c.joins.length} to join${c.blocked.length ? `, ${c.blocked.length} the app can’t` : ''})`).join('; ') if (said && said !== cutsSaid.current) logDebug('chain', 'a row reads cut', said) cutsSaid.current = said setCutRows(cuts) })() return () => { stop = true } }, [blocks, busy, working, joinsHere])"
+        ],
+        [
+          'RowCut',
+          'function RowCut({ said, joining, disabled, onJoin }) { if (!said?.text) return null const canJoin = Array.isArray(said.joins) && said.joins.length > 0 return ( <div className="notice chain-cut" data-kind={said.tone === \'ok\' ? \'did\' : \'fault\'} role="status"> <p>{said.text}</p> {canJoin ? ( <button type="button" className="chip" onClick={() => onJoin(said)} disabled={disabled}> {joining ? JOINING_ROW : JOIN_ROW} </button> ) : null} </div> ) }'
+        ],
+        ['where RowCut is drawn (pressable only where the chain may be edited and nothing is being written)', '<RowCut said={rowNote(leftUnder[lane.row], cutRows.find((c) => c.row === lane.row), chainNow.number)} joining={joining === lane.row} disabled={!editable || busy || !!working} onJoin={(said) => mendRow({ ...said, row: lane.row })} />'],
+        [
+          'the read after a write (every row it touched, each said under itself with its own joins)',
+          "const checkRows = async (touched, { holes = false, what = 'change', n = chainNow.number } = {}) => { if (!joinsHere) return const cells = await gridNow().catch(() => null) if (!Array.isArray(cells)) return const cuts = rowCuts({ cells, blocks, rows, law: oldBytes(), version: cablesVersion(), holes, only: touched }) for (const r of touched) { const cut = cuts.find((c) => c.row === r) leaveRow(r, cut ? { text: cut.text, joins: cut.joins, n } : null) if (cut) logDebug('chain', `row ${rowLabel(r)} after the ${what}`, cut.text) } }"
+        ]
+      ]
+    }
+    for (const [file, pins] of Object.entries(PINS)) {
+      const text = flat(code(read(file)))
+      for (const [what, pinned] of pins) assert.ok(text.includes(pinned), `${file}: ${what} is not as pinned`)
+      /* Each drawn once, and Join the row pressed nowhere else. */
+      assert.equal(text.split('<RowCut ').length - 1, 1, `${file}: RowCut drawn more or less than once`)
+      assert.equal(text.split('mendRow(').length - 1 + text.split('onJoin={mendRow}').length - 1, 1, `${file}: Join the row is sent from more than its button`)
+    }
+    /* The phone's read of the row a block left (an Add that moved it), whole. */
+    assert.ok(
+      flat(code(read('mobile/src/screens/Edit.js'))).includes(
+        "const sayRowLeft = async (row, n) => { const cells = await gridCells().catch(() => null) if (!Array.isArray(cells)) return const cut = rowCuts({ cells, blocks: getState().allBlocks || blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, holes: true, only: [row] })[0] leaveRow(row, cut ? { text: cut.text, joins: cut.joins, n } : null) if (cut) logDebug('chain', `row ${rowLabel(row)} after a block was moved out of it`, cut.text) }"
+      ),
+      'the phone: the read of the row a block left is not as pinned'
+    )
     for (const [file, name] of SCREENS) {
       const text = flat(code(read(file)))
-      assert.match(text, /if \(!joinsHere \|\| !maybeCut\(blocks\)\) \{ setCutRows\(\[\]\) return undefined \} let stop = false ;\(async \(\) => \{ const cells = await (?:gridCells|gridNow)\(\)\.catch\(\(\) => null\)/, `${name}: the cut-row read never lands, or reads the chain in place of the grid`)
-      assert.match(text, /cutsSaid\.current = said setCutRows\(cuts\)/, `${name}: the cut-row read finds a cut and keeps nothing`)
       assert.match(text, /const mendRow = async \(cut\) => \{ if \(!cut\?\.joins\?\.length\) return/, `${name}: Join the row lets nothing through`)
-      assert.match(text, /function RowCut\(\{[^}]*\}\) \{ if \(!said\?\.text\) return null const canJoin = Array\.isArray\(said\.joins\) && said\.joins\.length > 0/, `${name}: a cut row draws no words, or no Join the row`)
     }
-    assert.match(flat(code(read('src/components/GridEditor.jsx'))), /const checkRows = async \(touched, [^)]*?\) => \{ if \(!joinsHere\) return/, 'the browser: no write is read back for a cut row')
   })
 }

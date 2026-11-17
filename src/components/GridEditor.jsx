@@ -79,7 +79,7 @@ const REMOVE_WARNING = 'Its settings go with it. Adding it again brings it back 
  * that answer as a failure: it re-reads the chain from the unit instead and
  * lets you look.
  */
-export default function GridEditor({ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false, admin = false }) {
+export default function GridEditor({ blocks: asRead, capabilities, busy, onError, onChanged, deviceKey = null, ownOpen = false, admin = false, onReread = null }) {
   /*
    * The chain as this editor takes it: an Axe-Fx III's NAM and the other
    * blocks the engine sends with no name are named and are the editor's own
@@ -491,9 +491,16 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
       })
       if (res.notSent) {
         if (res.why) leaveRow(lane.row, { text: res.why, joins: [], n })
-        /* Stopped by the preset, or refused because the chain on the unit is not the one on screen: onChanged reads the chain again, as the words say. */
-        if (res.stopped) onChanged(`A move on row ${rowLabel(lane.row)} was not sent: ${res.why}`)
-        else if (res.why === CHAIN_CHANGED) onChanged(`A move on row ${rowLabel(lane.row)} was not sent: the chain had changed on the unit`)
+        /*
+         * Stopped by the preset before anything was sent, or refused because
+         * the chain on the unit is not the one on screen: the chain is read
+         * again, as the words say, and NOTHING ELSE. Not onChanged, which
+         * writes a line in the history, hands the assistant a hand edit and
+         * marks the preset unsaved (Save and Revert, over a preset nothing
+         * was written to, whose Revert would throw away edits made at the
+         * unit).
+         */
+        if (res.stopped || res.why === CHAIN_CHANGED) onReread?.()
         return
       }
       /* What the move leaves said, over the chain, under its row and in the history (afterMoveSaid, the phone's words too). */

@@ -10,9 +10,20 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-17",
+    "day": "17 November 2026",
+    "version": "1.91.7",
+    "lines": [
+      {
+        "text": "In the chain editor on an FM3, FM9 or Axe-Fx III, moving blocks now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-16",
     "day": "16 November 2026",
-    "version": "1.91.5",
+    "version": "1.91.2",
     "lines": [
       {
         "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a middle setting such as Pan lights up from the top. From version 1.90.0 of the app, Edit on an Axe-Fx III over Bluetooth or USB also has knobs for the IR Player, Vocoder, Crossover, Tone Match and Dynamic Distortion.",
@@ -31,7 +42,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons. Chain editor: a move joins its row again, or isn’t made, saying why.",
+        "text": "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons.",
         "only": null
       },
       {

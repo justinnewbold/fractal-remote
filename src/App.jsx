@@ -5345,6 +5345,8 @@ export default function App() {
                     record('grid', summary)
                     read()
                   }}
+                  /* A re-read and nothing else: a move that sent nothing (the chain had changed on the unit, or it was on another preset) is no edit, and marks nothing unsaved. */
+                  onReread={() => read()}
                 />
               </Section>
 
@@ -5497,6 +5499,8 @@ export default function App() {
                       record('grid', summary)
                       read()
                     }}
+                    /* A re-read and nothing else: a move that sent nothing (the chain had changed on the unit, or it was on another preset) is no edit, and marks nothing unsaved. */
+                    onReread={() => read()}
                   />
                 </Section>
 

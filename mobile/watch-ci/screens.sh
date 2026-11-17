@@ -22,8 +22,23 @@ xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
 mkdir -p screens
+# The app opened for a picture, and opened again if the simulator refuses it.
+# It did, twice on 16 November 2026 ("Scene update failed", at the seventh and
+# eighth picture), and the whole run went red for pictures a moment's wait
+# would have taken. So a refused launch is tried twice more, the app stopped
+# and four seconds given between; a third refusal is the run's failure, as
+# any refusal was before.
+launch() {
+  for try in 1 2 3; do
+    xcrun simctl launch --terminate-running-process "$UDID" "$ID" "$@" && break
+    [ "$try" = 3 ] && { echo "::error::the simulator refused the launch ($*) three times"; return 1; }
+    echo "::warning::the simulator refused the launch ($*), try $try of 3; trying again"
+    xcrun simctl terminate "$UDID" "$ID" 2>/dev/null || true
+    sleep 4
+  done
+}
 shoot() {
-  xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo YES "$@"
+  launch -demo YES "$@"
   sleep 5
 }
 for page in 0 1 2 3; do
@@ -52,8 +67,9 @@ shoot -page 0 -am4Demo YES
 xcrun simctl io "$UDID" screenshot "screens/am4-scenes.png"
 shoot -page 1 -am4Demo YES
 xcrun simctl io "$UDID" screenshot "screens/am4-pedals.png"
-# And with no phone: what it says when the iPhone app is not open.
-xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
+# And with no phone: what it says when the iPhone app is not open. Opened the
+# same way, tried again if the simulator refuses it.
+launch -demo NO
 sleep 5
 xcrun simctl io "$UDID" screenshot "screens/waiting.png"
 ls -la screens

@@ -2070,7 +2070,7 @@ space is further down the row. The browser's editor is another design and
 was not looked at for this.
 
 **Moving blocks in the chain editor joins the row again after the move and
-checks it, since 1.91.5, for every account, at both ends.** NOT SEEN ON A
+checks it, since 1.91.7, for every account, at both ends.** NOT SEEN ON A
 UNIT YET: his next drag's log is the first check.
 
 > "Editing the chain, moving compressor after the NAM block caused the
@@ -2103,14 +2103,23 @@ UNIT YET: his next drag's log is the first check.
   bytes either way, so his drag on row 3 goes through his Pi; a move on row
   3 whose blocks also join another row may be refused through it. A move
   refused because the chain on the unit is not the one on screen reads the
-  chain again, as its words say. WHERE THE APP MAKES THE JOINS (a gen-3
+  chain again, as its words say: in the browser a plain re-read
+  (GridEditor `onReread`, App's read() alone at both of its places), never
+  `onChanged`, whose record('grid') writes a history line, hands the
+  assistant a hand edit and marks the preset unsaved (Save and Revert over
+  a preset nothing was written to). WHERE THE APP MAKES THE JOINS (a gen-3
   unit, the demo's grid units) AND THE SCREEN CAN NAME THE PRESET, the unit
   is asked which preset it is on before every write of the move
   (`presetHold`, Quick build's rig unitOnPreset; the browser's GET
   /preset): a footswitch mid-move stops it there, and nothing more, the old
   row's joins least of all, goes into the other preset. The first clear
   goes on the ask made just before it, unless his account's settings were
-  read in between (below), when it is asked again. An AM4 or Axe-Fx II
+  read in between (below), when it is asked again; on another preset then,
+  or not saying, nothing is sent and the move is answered as one refused
+  before anything ("Nothing was moved: the unit is on another preset now."
+  or "…didn’t say which preset it’s on."), with no failure, no history line,
+  the Undo kept and nothing marked unsaved (the screens' `starting` is
+  called only just before the first write). An AM4 or Axe-Fx II
   move is not held. What it costs: a customer's four-block drag on his row
   makes 12 preset asks and 3 grid reads besides its 12 writes. Then the
   clear and put as before, the grid read again and THE ROW WRITTEN TO THE
@@ -2119,13 +2128,23 @@ UNIT YET: his next drag's log is the first check.
   sent, and the row read again and checked. Still cut, it says so under
   the row ("The blocks moved, but row 3 isn’t joined at column 2, so
   there’s no sound past it.") with Join the row. The row is then asked on
-  that last read as a cut row is (`rowCuts`, empty spaces counted), so a
-  cut the plan did not cover is said too, with Join the row for it: a
-  block brought up from after the Output, whose column nothing fed, leaves
-  the Output joined to nothing, and the plan itself still joins only the
-  columns it moved. A moved block the unit did not put in its new cell is
-  named ("The unit didn’t take NAM 1 at column 3, so row 3 has an empty
-  space there…") with no button. A write that throws puts the blocks back
+  that last read as a cut row is (`rowCuts`, empty spaces counted, with
+  the move's own rows, computer app and chain read), so a cut the plan did
+  not cover is said too, with Join the row only where the app can make
+  that join: a block brought up from after the Output, whose column
+  nothing fed, leaves the Output joined to nothing, and the plan itself
+  still joins only the columns it moved. Through a computer app older than
+  1.90.82, a join into row 5 that app sends to the wrong cell is said with
+  its reason and no button, and so is the top row's out of an even column
+  (the tests hold both, and the same row through 1.90.82 offered the
+  join). A moved block the unit did not put in its new cell is named with
+  no button: between the row's Input and Output on the last read as an
+  empty space with no sound past it ("The unit didn’t take NAM 1 at column
+  3, so row 3 has an empty space there…"); past the Output or before the
+  Input, where the sound does not stop, as a block no longer in the preset
+  ("…so it isn’t in this preset now. Add it again, or move one back."),
+  only where that read has it nowhere, and after whatever the row's read
+  says (its cut and Join the row first). A write that throws puts the blocks back
   and joins them again the same way, and where the unit has joins to make
   the words (`afterMoveSaid`, `putBackSaid`) say "were put back" only where
   the read after shows every block in its own cell; otherwise they name the
@@ -2173,7 +2192,8 @@ UNIT YET: his next drag's log is the first check.
   says whether they were kept. Two reads a block (eight for his four-block
   drag) would slow every drag, so only his account's are measured (the
   phone's kept sign-in, `bluetoothAdmin`; the browser's account, `admin`
-  from App.jsx), and the first clear after them asks the preset again.
+  from App.jsx), and the first clear after them asks the preset again (a
+  unit on another preset then, or not saying, gets nothing: above).
   Through the computer the capture comes with no name.
 - *STILL NOT KNOWN, AND HIS NEXT LOG SETTLES BOTH:* whether his unit keeps
   a join through a clear and a put ("straight after the move" says "fed
@@ -2197,13 +2217,23 @@ UNIT YET: his next drag's log is the first check.
   in the test file (`dropsOut`, tests only, never the mocks): his drag, a
   bare wire after the moved blocks, and a split out of the first of two
   moved columns are held on it. The demo itself is unchanged.
-- *The screens are not run by the tests.* What they hand the plan, and
-  what they store, let through and draw for a cut row (the cut-row read,
-  Join the row's guard, RowCut's words and button, the browser's read
-  after a write, the reads after an Add that moved a block), is pinned by
-  its text in test/chain-move.mjs; each of those pins, and each library
-  fix, was seen to fail with its line taken out (16 November 2026, the
-  third round).
+- *The screens are not run by the tests.* What they hand the plan is
+  pinned by patterns on the calls (moveBlocks' and joinRow's arguments),
+  not whole. What they read and draw for a cut row is pinned WHOLE, token
+  for token, in test/chain-move.mjs (the flattened code, comments out): the
+  cut-row read (its busy and stop guards included), RowCut on each screen
+  (its words, `canJoin` before the button, the button sending the joins
+  with their row, `disabled`), the place each draws RowCut, the browser's
+  read after a write (`checkRows`, every row it touched) and the phone's
+  read of the row a block left (`sayRowLeft`); Join the row's guard by its
+  first line. The third round's pins were first lines only, and the
+  review's one-token switch-offs next to them passed every test. In the
+  fourth round (16 November 2026) the review's 25 mutants (SP10 to SP19,
+  SB7 to SB16 on the screens; L5c, L7, L8, L8b and L9 on the after-move
+  and Join the row reads' arguments) and 24 of that round's own (the
+  measured stop, the browser's re-read, the not-taken words, What's new,
+  the watch pictures' retry) were each run against the tests: all 49
+  failed them. A change to a pinned piece is a change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can
   be read as a cut; a move keeps a split's joins with the column, as

@@ -1,9 +1,20 @@
 {
   "days": [
     {
+      "date": "2026-11-17",
+      "day": "17 November 2026",
+      "version": "1.91.7",
+      "lines": [
+        {
+          "text": "In the chain editor on an FM3, FM9 or Axe-Fx III, moving blocks now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-16",
       "day": "16 November 2026",
-      "version": "1.91.5",
+      "version": "1.91.2",
       "lines": [
         {
           "text": "Knobs now point the way your unit’s do: lowest at the bottom left, highest at the bottom right, and a middle setting such as Pan lights up from the top. From version 1.90.0 of the app, Edit on an Axe-Fx III over Bluetooth or USB also has knobs for the IR Player, Vocoder, Crossover, Tone Match and Dynamic Distortion.",
@@ -22,7 +33,7 @@
           "only": null
         },
         {
-          "text": "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons. Chain editor: a move joins its row again, or isn’t made, saying why.",
+          "text": "In the app on a phone or tablet, dragging the volume slider no longer says there is no output level to move yet. The level you let go on is now checked against your unit, and Save knows the preset changed, as they already were for the − and + buttons.",
           "only": null
         },
         {
@@ -259,37 +270,6 @@
         },
         {
           "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-06",
-      "day": "6 November 2026",
-      "version": "1.89.55",
-      "lines": [
-        {
-          "text": "On a tablet or a foldable opened up, Play now uses the whole screen: your scenes on the left and your chain on the right, lined up row for row, with the preset across the top and Previous and Next at the two ends of the bottom row. Setlists is at the end of the preset bar.",
-          "only": null
-        },
-        {
-          "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked, and when a new version is ready, its card has What’s new, which takes you straight to the list of what changed. The Help make Fractal Remote better? card is now three short lines, with a link to exactly what’s sent.",
-          "only": null
-        },
-        {
-          "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on. And switching to a computer with no unit plugged in no longer makes the screen flicker back and forth.",
-          "only": null
-        },
-        {
-          "text": "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",
-          "only": null
-        },
-        {
-          "text": "Plug your unit in by USB cable while connected another way and the app notices: from a Bluetooth adapter it switches by itself, through the computer it asks first. Unplug the cable and, after a few seconds, it goes back the way it was connected before, and back to the cable when it’s plugged in again.",
-          "only": null
-        },
-        {
-          "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, with the Bluetooth symbol, and Stop is only offered for what’s really connected.",
           "only": null
         }
       ]
