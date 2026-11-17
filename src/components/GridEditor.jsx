@@ -224,7 +224,9 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
       const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(shown.find((l) => l.row === cut.row)), blocks, rows, law: oldBytes(), version: cablesVersion(), onPreset: presetHeld(n) })
       const w = joinedWords(r)
       leaveRow(cut.row, w.ok ? { text: w.text, joins: [], tone: 'ok', n } : { text: w.text, joins: w.joins ?? cut.joins, n })
-      onChanged(w.ok ? `Joined row ${rowLabel(cut.row)} again` : `Tried to join row ${rowLabel(cut.row)} again`)
+      /* A press that sent nothing is no edit: the chain is read again, and nothing is marked unsaved. */
+      if (r.sent) onChanged(w.ok ? `Joined row ${rowLabel(cut.row)} again` : `Tried to join row ${rowLabel(cut.row)} again`)
+      else onReread?.()
     } catch (err) {
       setIssue(err.message)
       onError(err.message)
@@ -510,7 +512,8 @@ export default function GridEditor({ blocks: asRead, capabilities, busy, onError
         /* A write threw, or the unit stopped saying its preset or went to another: the words claim no more than the read after shows. */
         setIssue(said.issue)
         if (res.threw) onError(res.threw.message)
-        onChanged(said.line)
+        /* The line goes in the history, but the preset the unit stepped to is not marked unsaved: nothing was written to it. */
+        onChanged(said.line, { stepped: res.stopped === 'moved' })
         return
       }
       /* Straight to the read. The computer's copy of the chain is dropped by

@@ -1858,7 +1858,7 @@ export default function App() {
    * `fromAssistant` marks the changes it made itself, which are already in the
    * transcript and must not appear twice.
    */
-  const record = useCallback((kind, summary, detail = [], fromAssistant = false) => {
+  const record = useCallback((kind, summary, detail = [], fromAssistant = false, stepped = false) => {
     setLog((prev) => append(prev, newEntry(kind, summary, detail)))
     // The same line in the debug log, where it sits in order with the wire.
     logDebug('app', `${kind}: ${summary}`, detail?.length ? detail : undefined)
@@ -1876,7 +1876,8 @@ export default function App() {
      * that has to know. The assistant's own writes are excluded: perform()
      * decides that case, since a plan containing a save leaves things clean.
      */
-    if (!fromAssistant && UNSAVES_PRESET.has(kind)) setDirty(true)
+    /* `stepped`: a chain move the unit's preset change stopped part-way, whose line is kept, but which wrote nothing to the preset it stepped to. */
+    if (!fromAssistant && !stepped && UNSAVES_PRESET.has(kind)) setDirty(true)
     /* The chain this window kept for the preset, or for a slot, is out of date. */
     if (CHANGES_CHAIN.has(kind)) chainChanged()
     else if (CHANGES_SLOTS.has(kind)) chainChanged({ all: true })
@@ -5341,8 +5342,8 @@ export default function App() {
                   /* His account: a move's settings are measured for his log (shared/chain-move.mjs), nobody else's drag slowed by it. */
                   admin={isAdmin(link.account?.id)}
                   onError={setError}
-                  onChanged={(summary) => {
-                    record('grid', summary)
+                  onChanged={(summary, how) => {
+                    record('grid', summary, [], false, how?.stepped === true)
                     read()
                   }}
                   /* A re-read and nothing else: a move that sent nothing (the chain had changed on the unit, or it was on another preset) is no edit, and marks nothing unsaved. */
@@ -5495,8 +5496,8 @@ export default function App() {
                     busy={busy}
                     admin={isAdmin(link.account?.id)}
                     onError={setError}
-                    onChanged={(summary) => {
-                      record('grid', summary)
+                    onChanged={(summary, how) => {
+                      record('grid', summary, [], false, how?.stepped === true)
                       read()
                     }}
                     /* A re-read and nothing else: a move that sent nothing (the chain had changed on the unit, or it was on another preset) is no edit, and marks nothing unsaved. */

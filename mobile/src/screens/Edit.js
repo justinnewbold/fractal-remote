@@ -2558,11 +2558,10 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
     setBusy(true)
     setJoining(cut.row)
     setIssue(null)
-    beginChainWrite()
     try {
       logDebug('chain', `Join the row tapped on row ${rowLabel(cut.row)}`, `${cut.joins.length} join${cut.joins.length === 1 ? '' : 's'}`)
       /* And the row asked again after, the way it was found (rowCuts, its empty spaces always counted), so "joined again" is said only of a row that reads whole. */
-      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(lanes.find((l) => l.row === cut.row)), blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, onPreset: presetHeld(n) })
+      const r = await joinRow({ row: cut.row, joins: cut.joins, wire: moveWire, log: chainLog, names: namesOf(lanes.find((l) => l.row === cut.row)), blocks, rows: gridRows, law: oldBytes(), version: linkState().hostVersion, onPreset: presetHeld(n), starting: () => beginChainWrite() })
       endChainWrite({ refresh: false })
       if (r.stopped) followPresetAfterChainWrite()
       else await refreshBlocks({ quiet: true })

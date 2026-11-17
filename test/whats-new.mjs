@@ -116,7 +116,7 @@ export function run(test) {
     if (preset === metronome) assert.match(preset, /^Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, .+ And in the metronome, tapping/, 'the folded line does not say each fix by its own place')
   })
 
-  test('16 November 2026 stays as it was published, and the chain editor’s fix is one line of its own on 17 November 2026, true of every move, on every screen', () => {
+  test('16 November 2026 stays as it was published, and the chain editor’s fix is one line of its own on 17 November 2026, true of every drag, on every screen', () => {
     /*
      * The chain editor's fix came on a day already at six lines, all of them
      * published (the website keeps every day). Folding it into one of them
@@ -128,8 +128,10 @@ export function run(test) {
      * already cut. So 16 November is as it was published, and the fix has a
      * day of its own: one line, for both phones and the browser alike (no
      * `only`, no phone or tablet in it), naming the units whose rows the app
-     * joins, saying what a move does and that the app says why where it
-     * can't, and Join the row for a row found cut where the app can join it.
+     * joins, saying what a drag along a row does (the browser's Move here
+     * joins nothing, and is then offered Join the row) and that the app
+     * says why where it can't, and Join the row for a row found cut where
+     * the app can join it.
      */
     const days = JSON.parse(read('shared/whats-new.json')).days
     const texts = (date) => days.find((d) => d.date === date).lines.map((l) => (typeof l === 'string' ? l : l.text))
@@ -142,14 +144,15 @@ export function run(test) {
       assert.ok(texts('2026-11-16').includes(published), `a published line of 16 November 2026 is not as it was published: ${published.slice(0, 60)}…`)
     }
     assert.ok(!texts('2026-11-16').some((t) => /chain editor/i.test(t)), 'the chain editor’s fix is folded into 16 November 2026')
-    const chain = days.flatMap((d) => d.lines.map((l) => ({ date: d.date, line: l, text: typeof l === 'string' ? l : l.text }))).filter((x) => x.date >= '2026-11-16' && /chain editor/i.test(x.text))
+    const chain = days.flatMap((d) => d.lines.map((l) => ({ date: d.date, line: l, text: typeof l === 'string' ? l : l.text }))).filter((x) => x.date === '2026-11-17' && /chain editor/i.test(x.text))
+    /* Its own day only: a later day's line may name the chain editor. */
     assert.equal(chain.length, 1, 'the chain editor’s fix is said in more than one place, or not at all')
     const [{ date, line, text }] = chain
     assert.equal(date, '2026-11-17')
     assert.equal(typeof line, 'string', 'the chain editor’s fix is shown on one phone only, though it is in the browser and the computer window too')
     assert.match(text, /^In the chain editor on an FM3, FM9 or Axe-Fx III, /, 'the line is not headed by the chain editor and the units whose rows the app joins')
     assert.ok(!/phone|tablet|browser|computer window/i.test(text), 'the line names one screen, though it is true on all of them')
-    assert.match(text, /moving blocks now joins the row up again and checks it\. /, 'what a move does now is not said')
+    assert.match(text, /dragging blocks along a row now joins the row up again and checks it\. /, 'what a drag does now is not said')
     assert.match(text, /Where it can’t, it says why/, 'that the app says why where it cannot join the row is not said')
     assert.match(text, /a row it finds cut offers Join the row wherever the app can join it\.$/, 'Join the row for a row already cut is not said, or promised where the app cannot join it')
     assert.ok(!/isn’t made|no longer silent|no longer leaves the chain silent/i.test(text), `the line promises what a move cannot always do: ${text}`)

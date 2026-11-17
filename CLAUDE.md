@@ -2070,7 +2070,7 @@ space is further down the row. The browser's editor is another design and
 was not looked at for this.
 
 **Moving blocks in the chain editor joins the row again after the move and
-checks it, since 1.91.7, for every account, at both ends.** NOT SEEN ON A
+checks it, since 1.91.9, for every account, at both ends.** NOT SEEN ON A
 UNIT YET: his next drag's log is the first check.
 
 > "Editing the chain, moving compressor after the NAM block caused the
@@ -2119,7 +2119,9 @@ UNIT YET: his next drag's log is the first check.
   before anything ("Nothing was moved: the unit is on another preset now."
   or "…didn’t say which preset it’s on."), with no failure, no history line,
   the Undo kept and nothing marked unsaved (the screens' `starting` is
-  called only just before the first write). An AM4 or Axe-Fx II
+  called only just before the first write). A move a preset change stops
+  part-way keeps its history line in the browser, but does not mark the
+  preset the unit stepped to unsaved (App's record `stepped`). An AM4 or Axe-Fx II
   move is not held. What it costs: a customer's four-block drag on his row
   makes 12 preset asks and 3 grid reads besides its 12 writes. Then the
   clear and put as before, the grid read again and THE ROW WRITTEN TO THE
@@ -2137,14 +2139,20 @@ UNIT YET: his next drag's log is the first check.
   1.90.82, a join into row 5 that app sends to the wrong cell is said with
   its reason and no button, and so is the top row's out of an even column
   (the tests hold both, and the same row through 1.90.82 offered the
-  join). A moved block the unit did not put in its new cell is named with
-  no button: between the row's Input and Output on the last read as an
-  empty space with no sound past it ("The unit didn’t take NAM 1 at column
-  3, so row 3 has an empty space there…"); past the Output or before the
+  join). A moved block the unit did not put in its new cell is named, and
+  Join the row is never offered a join into or out of a cell the move left
+  empty (it could only answer that the cell is empty): between the row's
+  Input and Output on the last read as an empty space with no sound past
+  it, with no button ("The unit didn’t take NAM 1 at column 3, so row 3
+  has an empty space there…"); a moved Output or Input that read has
+  nowhere on the row as a row with no sound, with no button ("The unit
+  didn’t take Output 1 at column 3, so row 3 has no Output now, and no
+  sound. Add it again, or move one back."); past the Output or before the
   Input, where the sound does not stop, as a block no longer in the preset
   ("…so it isn’t in this preset now. Add it again, or move one back."),
-  only where that read has it nowhere, and after whatever the row's read
-  says (its cut and Join the row first). A write that throws puts the blocks back
+  only where that read has it nowhere. Each comes after whatever else the
+  row's read says (its cut, with Join the row for the joins that touch no
+  empty cell, first). A write that throws puts the blocks back
   and joins them again the same way, and where the unit has joins to make
   the words (`afterMoveSaid`, `putBackSaid`) say "were put back" only where
   the read after shows every block in its own cell; otherwise they name the
@@ -2171,7 +2179,12 @@ UNIT YET: his next drag's log is the first check.
   (its rows and the computer app's bytes as it was found, and its empty
   spaces ALWAYS counted), and "Row 3 is joined again." is said only of a
   row that reads whole with no empty space between its Input and Output;
-  only the pressed row is said; and never "sent" of joins nothing sent. It
+  only the pressed row is said; and never "sent" of joins nothing sent. A
+  press that sends nothing (every join already there, the unit on another
+  preset or not saying, the read failing, a join into an empty cell) is no
+  edit: the phone marks the chain written from joinRow's `starting`, called
+  just before the first join, and the browser writes a history line only
+  where a join was sent, and otherwise reads the chain again. It
   should mend 390 and any customer's preset cut the same way: NOT YET
   PRESSED ON A UNIT. The browser's tap-to-move and Replace read the rows
   they touched after, and say a row left cut (or with an empty space
@@ -2219,7 +2232,8 @@ UNIT YET: his next drag's log is the first check.
   moved columns are held on it. The demo itself is unchanged.
 - *The screens are not run by the tests.* What they hand the plan is
   pinned by patterns on the calls (moveBlocks' and joinRow's arguments),
-  not whole. What they read and draw for a cut row is pinned WHOLE, token
+  not whole. The preset hold is pinned whole at both ends, and the phone's
+  is also built from the screen's own text and run against a stubbed rig. What they read and draw for a cut row is pinned WHOLE, token
   for token, in test/chain-move.mjs (the flattened code, comments out): the
   cut-row read (its busy and stop guards included), RowCut on each screen
   (its words, `canJoin` before the button, the button sending the joins
@@ -2233,7 +2247,11 @@ UNIT YET: his next drag's log is the first check.
   and Join the row reads' arguments) and 24 of that round's own (the
   measured stop, the browser's re-read, the not-taken words, What's new,
   the watch pictures' retry) were each run against the tests: all 49
-  failed them. A change to a pinned piece is a change to that test.
+  failed them. In the fifth round (17 November 2026) its 23 mutants (the
+  empty-cell joins, the moved Output or Input, the two halves of
+  "between", the phone's hold, Join the row's `starting` at both ends, the
+  browser's part-way stop, What's new) each failed them too. A change to a
+  pinned piece is a change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can
   be read as a cut; a move keeps a split's joins with the column, as
