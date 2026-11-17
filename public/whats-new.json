@@ -3,10 +3,14 @@
     {
       "date": "2026-11-17",
       "day": "17 November 2026",
-      "version": "1.91.9",
+      "version": "1.92.0",
       "lines": [
         {
           "text": "In the chain editor on an FM3, FM9 or Axe-Fx III, dragging blocks along a row now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
+          "only": null
+        },
+        {
+          "text": "The computer app on a Raspberry Pi now puts in its own updates. It waits until nobody has used the Pi for half an hour (no phone connected, nobody touching its screen, nothing changed on the unit) and until a new version has been out for a day.",
           "only": null
         }
       ]

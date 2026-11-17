@@ -4314,6 +4314,193 @@ if one was showing (`installedUnattended` in installNow). An independent
 read found all three missing from the first cut. Usually the first
 power-on after a release downloads it and the next one puts it in. A Pi on a version older than 1.90.86 is still the old rule
 until it is quit once from its menu (Quit puts the waiting update in).
+(Since 1.92.0 the power-on rule is the one below: `phoneSeen` became
+"anybody used it", and it waits three watched minutes first.)
+
+**A Raspberry Pi puts in its own updates, since computer app 1.92.0 (17
+November 2026).**
+
+> "I will update the pis but we need to figure out how to have them auto
+> update" (16 November 2026)
+
+Until then a Pi took a waiting update only at power-on, and a Pi left on
+never updated. Now (`unattendedInstall`, `startupInstall`, `selfUpdatingBox`
+and `quietFor` in desktop/lib/autostart.mjs; `heldStanding`, `heldGoes` and
+`heldAskDue` in desktop/lib/updates.mjs; the looks in desktop/main.js):
+
+- *A Pi puts a ready update in once NOBODY HAS USED IT FOR HALF AN HOUR*
+  (`IDLE_INSTALL_MS`, equal to the computer's own "nobody is here" half
+  hour, `AWAKE_FOR_MS`). Used is six signs, each a way somebody can be
+  playing: a phone app's note (phone.seen), a phone's browser on the
+  Wi-Fi, the window touched (desktop/preload.js says so, at most every ten
+  seconds), the unit changing a preset, scene, setting or the tuner (the
+  device server's /events, `unitUse`; never its meters or tempo), another
+  program on the Pi using the device server (Axiom: `otherLocalClients`,
+  from /proc/net/tcp, the app's own sockets left out), and the computer
+  waking from sleep. It is decided only at the end of a look, once a
+  minute, and only when that look could read every sign; never when the
+  update turns ready.
+- *It waits a day after a release comes out* (`RELEASE_SETTLE_MS`, from
+  GitHub's published time, `releaseSettled` in updates.mjs), so a bad one
+  can be pulled first. EXCEPT A COMPUTER SIGNED IN TO HIS OWN ACCOUNT
+  (`OWNER_ACCOUNTS` in updates.mjs, held equal to shared/admin.mjs ADMINS):
+  his Pis take a release after the half hour alone, a day before anybody
+  else's, so they are the first to meet a bad one. Nothing on any screen
+  says so (the window and the phone's entry say the day, which is the rule
+  for everybody else).
+- *And a release pulled after the download never goes in by itself.* Once
+  a download is held, the six-hourly look never asks GitHub again that run,
+  so a Pi left on had it long before anybody could pull it. Before ANY
+  install nobody pressed for (the idle route, the power-on route, a phone's
+  Update now) the app asks GitHub about the HELD version's own release, by
+  its tag (`releaseTagUrl`, the same repository as the look, through
+  `askGitHub`, never the update library), never whether it is still the
+  newest: several computer releases come out a day, and a Pi holding the
+  one before the newest must still put it in and then take the newer one.
+  There, not a draft, not a pre-release: on as before. A pre-release, a
+  draft or gone (404): PULLED, remembered for the run, said once in the
+  log; no route puts it in, a phone's request is refused `pulled`, the
+  phones are not offered it (`canNow` false) and the menu and window word
+  it as one that goes in at a quit. No answer (offline, GitHub erroring,
+  rate-limited): the idle route waits for a later look, the power-on route
+  goes on (a Pi at a gig with no internet), a phone's request goes on (a
+  person asked). Asked only when an install would otherwise go, and at
+  most once in ten minutes whatever the answer (`HELD_LOOK_MS`: GitHub
+  allows 60 unsigned asks an hour per address). The answer has 15 seconds
+  (`HELD_ASK_TIMEOUT_MS`) for its header AND its body together: a 200
+  whose body never comes, a body that is not JSON, or a throw is no
+  answer, and the ask is cleared (`heldAsking`) and the install's wait let
+  go (`heldWaiting`) whatever happens inside it. And somebody can arrive
+  while GitHub is asked, so once the answer is back the verdict is made
+  again from scratch on everything read fresh (`unattendedVerdict`, the
+  same call before the ask and after it), and the install goes only if it
+  still says install BY THE SAME ROUTE; otherwise it says why it waits, as
+  on any look. A phone's Update now has its busy check (`askBusy`) made
+  again after the answer, and is refused `screen` or `busy` if somebody
+  arrived. A Mac or PC whose answer comes after its three minutes does not
+  install at that login. Restart to update or Quit at the computer is a
+  person's choice and still puts it in.
+- *Which computers.* Only the Linux AppImage, and then ANY Raspberry Pi by
+  its board's name (/proc/device-tree/model), window or not, a Pi 400 or
+  500 at a desk included (it puts its own in once nobody has touched the
+  Fractal Remote window, the unit and the rest for half an hour, even
+  while somebody works in another program on it); and any other Linux
+  box running the AppImage that was started with no window (start at
+  login passes --hidden, on x64 or ARM) and whose window nobody has opened
+  this run. Never a Mac or a Windows PC, never the .deb (it asks for a
+  password), never a Linux box whose window has been opened that run
+  unless it is a Pi.
+- *The power-on rule on Linux stays, with three watched minutes first*
+  (`POWER_ON_QUIET_MS`, in the first six, `POWER_ON_WINDOW_MS`), never once
+  anybody has used the box that run, and on a box started hidden only while
+  its window has not been opened (a Pi, `pedalboardBox`, is a power-on box
+  window or not: its window is its touch screen). It does not wait a day:
+  a Pi somebody switches on takes a waiting update after the three
+  minutes (design decision D5), after the pulled check above. EXCEPT THE
+  COPY AN INSTALL NOBODY PRESSED FOR RESTARTED (`restartedByItself`: the
+  marker the install leaves says `byItself`, and only a copy the updater
+  started reads it): on a box that puts in its own, that copy takes a
+  newer release by the power-on route only once it has had its day, or on
+  the owner's own; otherwise it waits for the idle route like any Pi left
+  on (an independent read: it was a fresh power-on box, and could take a
+  release minutes old whose Linux build had not been tried on CI yet).
+- *A Mac and a Windows PC are as they were before 1.92.0* (`startupInstall`):
+  started hidden, a waiting update goes in the moment it turns ready (and
+  at each look for phones), in the first three minutes
+  (`INSTALL_WINDOW_MS`), never once a phone has used it; no complete look,
+  no unit stream. One thing added: a window opened that run is somebody
+  there, so it waits for a quit. (An independent read found the first cut
+  restarting a Mac started at login four to six minutes in, under somebody
+  who had just opened its window.) The pulled check above runs before it
+  too. The unit's /events stream is opened only on Linux, on a box that may
+  put one in by itself (`watchesUnit`); on a Pi with no phone it keeps the
+  device server reading the unit (its scene and meter watch) for as long
+  as the app runs, where nothing did before.
+- *Guards.* `installNow` runs once however many ask (the button, the box,
+  a phone), and one that threw before the install can be asked again. An
+  install that does not take is not tried again in that run or the next
+  (the marker reads stuck). The 20-second safety restart starts the
+  AppImage's new file when the swap took the old one away (`relaunchPath`).
+  And desktop.yml's Linux job has "A Linux build that does not start is
+  held back": when a publishing run's Linux build fails, the release is
+  marked a pre-release, and the run is red. A computer that has not
+  downloaded it never finds it; one that has finds it pulled at the check
+  above. So no computer that gets an answer from GitHub puts a pre-release
+  in by itself; one that gets none (no internet, a GitHub error or a rate
+  limit, as for a Pi at a gig) still does at power-on or a phone's word,
+  and any computer at a quit or Restart to update.
+- *The words.* The Pi's menu says "Update … goes in when nobody is using
+  it"; its window says "Version … is ready. Restart to update, or leave
+  it: it goes in by itself once it has been out for a day and nobody has
+  used this computer for half an hour."; the phone's Updating the computer
+  app page has an entry keyed to that menu line, "It goes in by itself once
+  it has been out for a day and nobody has used the computer for half an
+  hour. To put it in now, tap Restart to update on its screen.";
+  public/raspberry-pi.html has an Updates paragraph, which also says a Pi
+  switched on with an update waiting puts it in after a few minutes with
+  nobody using it (D5: power-on does not wait the day). The window's
+  sentence and the phone's entry describe a computer that is left on and
+  say the day; they are left as they are, and so is the What's new line.
+  No sentence anywhere says the sound keeps playing or how long the
+  restart takes: not seen yet.
+- *THE INDEPENDENT READ (17 November 2026), and what it changed.* Three
+  real faults, all fixed with a test in test/pi-update.mjs seen to fail
+  with its fix taken out: a release pulled after the download still went
+  in (the pulled check); the copy an unattended install restarted could
+  take an unsettled release at its power-on (`restartedByItself`); a Mac or
+  PC started hidden restarted itself four to six minutes after login (the
+  old rule back, the window counted). And the gaps its mutants slipped
+  through, each a test now: start()'s own wiring of the looks
+  (`startWatching`), a look whose note, Wi-Fi or other-programs read comes
+  back null, a Linux PC that is not a Pi, `published` carried to 'ready', a
+  phone's request refused while a Wi-Fi browser or Axiom was seen, and
+  installNow tried again after it threw. Refuted, and left: Update now
+  needing a complete look, and an unreadable /proc/<pid>/fd stranding a Pi
+  (a sandboxed Electron 33 renderer's can be read by the same user).
+- *THE SECOND INDEPENDENT READ (17 November 2026), of the fixes above.*
+  Two real faults, both in the wait the GitHub ask added between deciding
+  and installing, both fixed with tests in test/pi-update.mjs seen to fail
+  with the fix taken out: somebody who arrived while GitHub was asked (a
+  scene changed, the screen touched, a phone seen, a Mac's window opened)
+  still got the restart, and a phone's Update now still installed under a
+  touch made in that time (the verdict and the busy check made again on
+  the answer, by the same route); and the 15-second limit covered only the
+  answer's header, so a 200 whose body never came left the ask pending for
+  the rest of the run, nothing installed by itself again and a phone's
+  request was never answered (header and body now under the one limit).
+  And a gap in the tests: nothing held what a person sees for a pulled
+  release (the menu's quit words, the open window told again, the phones
+  told at once); the pulled test holds all three now. The CI step's
+  sentence and this file's now say "gets an answer from GitHub", since a
+  rate limit or a GitHub error is no answer, and the Pi page says a Pi
+  switched on puts a waiting update in after a few quiet minutes. Refuted,
+  and left as it is: a release found pulled still goes in when a person
+  quits, as any held update always has, and a held download is still the
+  end of that run's updating (the `held` rule in lib/updates.mjs).
+- *NOT SEEN ON A PI YET:* how long from going in to the remote answering;
+  whether electron-updater's AppImage swap and restart work mid-run on his
+  Pis; whether the safety restart ever fires and starts the new file;
+  whether touches on his small screen reach the page under Pi OS's Wayland;
+  that the sound carries on; that an idle unit never sends a scene,
+  changed, param or tuner event by itself (if one does, a Pi never goes
+  quiet, and its log's "is ready; …" line says why it waits); that the
+  device server lets main.js's own /events stream in; that /proc/<pid>/fd
+  of the app's processes is readable; whether Axiom keeps a connection open
+  while it is open; that GitHub's tag answer reaches a Pi and reads as
+  'there' (its log says "… has been pulled from GitHub" or "GitHub could
+  not be asked" if not); and that the restarted copy reads its marker
+  (`byItself`). His first logs settle these.
+- *HIS PIS ON 1.90.63 NEED ONE UPDATE BY HAND*, since that version has none
+  of this and does not even take a waiting update at power-on with its
+  window: on the Pi, Settings → About → Updates → Check for updates, wait
+  for Restart to update, and tap it. Once an update is held the app does
+  not fetch a newer one in the same run, so a Pi holding an older one
+  installs that first and has to be done once more.
+- *Next, PR 2, the phone's half:* Settings → Phone & computer shows each
+  computer's version and, on a Pi with one ready, Update now (the request
+  is `host.update`, `updateAsk` in updates.mjs, already answered by
+  1.92.0, with `pulled` among its refusals), his account first. It writes
+  no What's new line until it opens to everybody.
 
 **The red "Update the computer app" line means the phone needs it.**
 

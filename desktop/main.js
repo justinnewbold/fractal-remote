@@ -24,7 +24,7 @@
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain, powerMonitor, powerSaveBlocker } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const { join, sep, dirname } = require('node:path')
-const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync, watchFile } = require('node:fs')
+const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync, watchFile, readdirSync, readlinkSync } = require('node:fs')
 const { homedir, networkInterfaces } = require('node:os')
 const { performance } = require('node:perf_hooks')
 const net = require('node:net')
@@ -190,6 +190,86 @@ let armAgain = false
 const phoneLog = (line) => console.error('[phone]', line)
 /** Whether this run has already installed an update with nobody there. */
 let installedUnattended = false
+/*
+ * AN UPDATE THAT GOES IN BY ITSELF, ONCE NOBODY HAS USED THIS COMPUTER FOR A
+ * WHILE (since 1.92.0). "I will update the pis but we need to figure out how
+ * to have them auto update" (Justin, 16 November 2026): a Pi left on never
+ * updated at all. The rules are unattendedInstall and selfUpdatingBox in
+ * lib/autostart.mjs; what is kept here is what they are asked with. Every
+ * time is on uptime(), and null is never.
+ */
+/** When the window was last touched (preload.js says so, at most every ten seconds). */
+let windowTouchedAt = null
+/** When the unit last changed a preset, a scene, a setting or the tuner, as its device server said (watchUnit). */
+let unitActiveAt = null
+/** When another program on this computer (Axiom, say) was last seen using the device server (the look, Linux only). */
+let otherLocalAt = null
+/** When a phone's browser on the Wi-Fi was last seen (the look's connections; phoneSeenAt counts the phone's note too). */
+let lanSeenAt = null
+/** When the computer last woke from sleep: a wake starts a fresh half hour. */
+let resumedAt = null
+/** When the unit's events were last (re)joined: nothing was seen while they were not. */
+let eventsSince = null
+/** The first look that could see everything, from which the quiet is counted. */
+let firstLookAt = null
+/** Whether the last look could read every sign (the phone's note, the connections, other programs, the unit's events). */
+let lookComplete = false
+/** Whether the window has been shown this run: a box started with no window stops being one nobody is at. */
+let windowShown = false
+/** Where the AppImage updater put the new file, for the safety restart after an install (relaunchPath). */
+let movedTo = null
+/** An install under way: nothing starts a second (the button, the box itself, a phone). */
+let installing = false
+/** A phone's request as last read (updateAsk), undefined before the first read; and the answer to the last one, for the phones. */
+let askMark
+let asked = null
+/** The account this computer is signed in to, by id, from the last armHost; null when not known. */
+let accountId = null
+/** The board's name (deviceModel in lib/host.mjs), read once at start. */
+let computerModel = ''
+/** The name the phones are told (tellPhones' hostname), read once at start. */
+let phoneName = null
+/** How the last launch's install went (installOutcome in lib/updates.mjs): 'stuck' is never tried again this run. */
+let updateOutcome = null
+/** The last reason logged for not installing, so a look a minute does not say the same thing 1,440 times a day. */
+let lastInstallWhy = null
+/** Write what the phones are told now: set by start() once lib/host.mjs has loaded. */
+let tellNow = async () => {}
+/** This computer's own device server, asked by the app itself (tests stand it in). */
+let askLocal = (url, init) => fetch(url, init)
+/** Whether the unit's events are being heard now. */
+let unitHeard = false
+let unitWatching = false
+/** The unit's events joined again after they dropped (watchUnit), waiting. */
+let unitRetry = null
+let askLook = null
+/*
+ * A RELEASE PULLED AFTER IT WAS DOWNLOADED (heldStanding and heldGoes in
+ * lib/updates.mjs). Before an install nobody pressed for, GitHub is asked
+ * about the held version's own release, at most once in ten minutes
+ * (HELD_LOOK_MS); one found pulled is never put in by itself this run.
+ */
+/** The last ask: { at (uptime), version, standing }. */
+let heldAsk = null
+/** An ask under way, so two routes asking at once ask GitHub once. */
+let heldAsking = null
+/** Versions found pulled this run. */
+const pulledVersions = new Set()
+/** An install nobody pressed for, waiting on that answer. */
+let heldWaiting = false
+/** This run started an install by itself (the idle or power-on route), so the copy it starts is told (the marker's byItself). */
+let installedByItself = false
+/** This copy was started by an install nobody pressed for (unattendedInstall's restartedByItself), from the marker the last run left. */
+let restartedByItself = false
+/** GitHub's API, the app's own way (never the update library's), for the look for updates and the held release. Tests stand it in. */
+let askGitHub = async (url) => {
+  const { net: web } = require('electron')
+  return web.fetch(url, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' })
+}
+/** The held version's own release, in the same repository as LATEST_API_URL. */
+const releaseTagUrl = (version) => (/^\d+\.\d+\.\d+$/.test(String(version ?? '')) ? LATEST_API_URL.replace(/\/latest$/, `/tags/v${version}`) : null)
+/** How long the ask about the held release may take before it counts as no answer. */
+const HELD_ASK_TIMEOUT_MS = 15 * 1000
 /** A look for updates waiting to be tried again, after one that failed. See retryUpdateCheck. */
 let updateRetry = null
 /**
@@ -282,6 +362,28 @@ let updateLine = () => null
  * that.
  */
 let phonesHearLine = () => null
+
+/** Whether this computer puts in its own updates (selfUpdatingBox in lib/autostart.mjs); read afresh, because opening the window changes it. */
+const selfUpdating = () =>
+  Boolean(
+    boot?.selfUpdatingBox({
+      platform: process.platform,
+      env: process.env,
+      model: computerModel,
+      startedHidden: startHidden,
+      windowShown
+    })
+  )
+/** The .deb on Linux: its install asks for a password. */
+const debInstall = () => process.platform === 'linux' && !process.env.APPIMAGE
+/** Whether the ready update was found pulled from GitHub this run: it then goes in only by a person's hand (Restart to update, or a quit). */
+const heldPulled = () => Boolean(update?.version) && pulledVersions.has(update.version)
+/** Whether the ready update here goes in by itself: a computer that takes its own, and a release not pulled. */
+const takesThisOne = () => selfUpdating() && !heldPulled()
+/** How the menu and the window word a ready update here. */
+const lineOptions = () => ({ selfUpdating: takesThisOne(), deb: debInstall() })
+/** How a ready update goes in here, for the window: by itself ('idle'), at the computer with a password, or at a quit. */
+const goesIn = () => (takesThisOne() ? 'idle' : debInstall() ? 'password' : 'quit')
 
 /*
  * LOOKING AGAIN AT THE PHONE REMOTE'S LINK.
@@ -524,13 +626,222 @@ function watchForPhones() {
       const told = awakeRules.phoneNoteChange(phoneNoteMark, note)
       phoneNoteMark = told.mark
       if (seen?.size || told.used) phoneSeenAt = uptime()
+      if (seen?.size) lanSeenAt = uptime()
+      /*
+       * Another program on this computer using the device server (Axiom, in
+       * a browser on the Pi), for the update that goes in by itself. Linux
+       * only: that update runs nowhere else, and only Linux says whose a
+       * connection is.
+       */
+      const others = process.platform === 'linux' ? otherProgramsNow(own) : 0
+      if (others > 0) otherLocalAt = uptime()
+      /* Complete only when every sign could be read: an install is never decided on what could not be seen. */
+      lookComplete = note !== undefined && seen !== null && seen !== undefined && others !== null && unitHeard
+      if (lookComplete && firstLookAt === null) firstLookAt = uptime()
       stayAwakeWhileUsed()
+      /* And only now, at the end of a fresh look, is a ready update put in by itself: never on facts a minute old. */
+      if (update?.kind === 'ready' && updateOutcome !== 'stuck') installIfUnattended()
     } catch (err) {
       console.error('[awake] the look for phones failed:', err?.message || err)
     } finally {
       watchForPhones()
     }
   }, awakeRules.PHONE_LOOK_MS)
+}
+
+/*
+ * How many connections other programs on this computer have open to the
+ * device server (otherLocalClients in lib/awake.mjs), or null when that
+ * cannot be read. The app's own sockets are read before and after the
+ * connections, so one of its own opened or closed in between is still its
+ * own.
+ */
+function otherProgramsNow(own) {
+  try {
+    if (!hostAt?.port) return null
+    let metrics = []
+    try {
+      metrics = app.getAppMetrics?.() || []
+    } catch {
+      metrics = []
+    }
+    const pids = [process.pid, server?.pid, ...metrics.map((m) => m?.pid)].filter((pid) => Number.isInteger(pid) && pid > 0)
+    const inodes = () => awakeRules.ownSocketInodes({ pids, readdir: (path) => readdirSync(path), readlink: (path) => readlinkSync(path) })
+    const before = inodes()
+    let text = ''
+    for (const path of ['/proc/net/tcp', '/proc/net/tcp6']) {
+      try {
+        text += `${readFileSync(path, 'utf8')}\n`
+      } catch {
+        // A computer with no IPv6 has no tcp6.
+      }
+    }
+    const after = inodes()
+    if (!before || !after) return null
+    return awakeRules.otherLocalClients({ tcpText: text, port: hostAt.port, ownInodes: new Set([...before, ...after]), own })
+  } catch {
+    return null
+  }
+}
+
+/*
+ * THE UNIT'S OWN EVENTS, for the update that goes in by itself: a scene, a
+ * preset or a setting changed, or the tuner, is somebody playing, from the
+ * phone, the window or the unit's own footswitches (unitUse in
+ * lib/awake.mjs). One stream from this computer's device server, read line
+ * by line; joined again ten seconds after it drops, through later(), so it
+ * ends with the app. Nothing heard while it was down, so joining again
+ * starts the quiet over.
+ */
+function watchUnit() {
+  if (quitting || unitWatching || !hostAt?.port || !awakeRules) return
+  unitWatching = true
+  ;(async () => {
+    try {
+      const res = await askLocal(`http://localhost:${hostAt.port}/events`, { headers: { Accept: 'text/event-stream' } })
+      if (!res?.ok || !res.body?.getReader) throw new Error(`HTTP ${res?.status}`)
+      unitHeard = true
+      eventsSince = uptime()
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let held = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done || quitting) break
+        held += decoder.decode(value, { stream: true })
+        const lines = held.split('\n')
+        held = lines.pop()
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          let event = null
+          try {
+            event = JSON.parse(line.slice(5).trim())
+          } catch {
+            continue
+          }
+          if (awakeRules.unitUse(event)) unitActiveAt = uptime()
+        }
+      }
+    } catch {
+      // Not up yet, restarting, or gone: tried again below.
+    } finally {
+      unitHeard = false
+      unitWatching = false
+      unitRetry = later(watchUnit, 10 * 1000)
+    }
+  })()
+}
+
+/*
+ * The looks, started once awake.mjs has loaded: the look for phones on every
+ * computer; the unit's own events on a Linux box that may put an update in
+ * by itself (a Pi, or a start with no window), for nothing on a Mac or a
+ * Windows PC reads them (their rule is startupInstall, lib/autostart.mjs),
+ * and the stream keeps the device server reading the unit for as long as it
+ * is open; and a phone's request on every computer (one that cannot take it
+ * says so).
+ */
+function startWatching() {
+  watchForPhones()
+  if (watchesUnit()) watchUnit()
+  watchAsks()
+}
+const watchesUnit = () =>
+  process.platform === 'linux' && (selfUpdating() || startHidden || boot.pedalboardBox({ platform: process.platform, arch: process.arch }))
+
+/* A wake starts a fresh half hour: the computer may have been carried to a gig in between. */
+function noteWakes() {
+  powerMonitor.on('resume', () => {
+    resumedAt = uptime()
+  })
+}
+
+/*
+ * A PHONE ASKING FOR THE UPDATE NOW (a request in the store, HOST_UPDATE_ID,
+ * that updateAsk in lib/updates.mjs answers). Looked for every ten seconds
+ * while an update is ready here and this computer may take one, and once a
+ * minute otherwise, only to keep the mark, so a request written before it
+ * was ready is not taken for a new one. Through later(), so it ends with the
+ * app.
+ */
+function watchAsks() {
+  if (quitting || !awakeRules || !hostAt) return
+  cancel(askLook)
+  const often = update?.kind === 'ready' && selfUpdating() && updateRules
+  askLook = later(async () => {
+    try {
+      await lookAtAsk()
+    } catch (err) {
+      console.error('[updates] the look for a phone asking failed:', err?.message || err)
+    } finally {
+      watchAsks()
+    }
+  }, often ? updateRules.UPDATE_ASK_LOOK_MS : 60 * 1000)
+}
+
+async function lookAtAsk() {
+  if (!updateRules || !hostAt?.port) return
+  const doc = await awakeRules.readConfigDoc({ port: hostAt.port, id: updateRules.HOST_UPDATE_ID, fetch: askLocal })
+  const now = uptime()
+  let said = updateRules.updateAsk({
+    doc,
+    mark: askMark,
+    ownName: phoneName,
+    accountId,
+    update,
+    selfUpdating: selfUpdating(),
+    deb: debInstall(),
+    stuck: updateOutcome === 'stuck',
+    pulled: heldPulled(),
+    busy: updateRules.askBusy({ now, windowTouchedAt, unitActiveAt, lanSeenAt, otherLocalAt })
+  })
+  askMark = said.mark
+  if (!said.act) return
+  /* A person asked, so no answer from GitHub is no reason to wait; a release found pulled is. */
+  if (said.act === 'install') {
+    const standing = await heldStandingNow()
+    /* Somebody can arrive while GitHub is asked: the busy check is made again on what is seen now. */
+    const busyNow = updateRules.askBusy({ now: uptime(), windowTouchedAt, unitActiveAt, lanSeenAt, otherLocalAt })
+    if (!updateRules.heldGoes({ standing, how: 'phone' })) said = { ...said, act: 'refuse', why: 'pulled' }
+    else if (busyNow) said = { ...said, act: 'refuse', why: busyNow === 'screen' ? 'screen' : 'busy' }
+  }
+  const result = said.act === 'install' ? 'installing' : said.why
+  asked = { at: said.at, result, since: now }
+  if (said.act === 'install') installedUnattended = true
+  await tellNow()
+  /* Overwritten at once, so the request does not sit in the store, readable on the Wi-Fi, for longer than one look. */
+  try {
+    await askLocal(`http://localhost:${hostAt.port}/store/config/${encodeURIComponent(updateRules.HOST_UPDATE_ID)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { done: said.at }, origin: 'fractal' })
+    })
+  } catch (err) {
+    console.error('[updates] could not clear the request:', err?.message || err)
+  }
+  if (said.act === 'install') {
+    console.error(`[updates] a phone asked; installing ${update?.version || 'the update'} now`)
+    installNow().catch((err) => console.error('[updates] could not install', err?.message || err))
+  } else {
+    console.error(`[updates] a phone asked; not now (${result})`)
+  }
+}
+
+/** What the phones are told about the update now (updateNote), with the answer to a request for ten minutes. */
+function updateNoteNow() {
+  if (!updateRules) return null
+  const shown = asked && uptime() - asked.since < updateRules.ASKED_SHOWN_MS ? { at: asked.at, result: asked.result } : null
+  return updateRules.updateNote(update, { selfUpdating: selfUpdating(), deb: debInstall(), stuck: updateOutcome === 'stuck', pulled: heldPulled(), asked: shown })
+}
+
+/*
+ * THE WINDOW BEING TOUCHED, which is somebody at the screen: preload.js says
+ * so at most every ten seconds. Only from the window's own page.
+ */
+function listenForTouches() {
+  ipcMain.on('window:touched', (event) => {
+    if (askedByOwnPage(event)) windowTouchedAt = uptime()
+  })
 }
 
 /**
@@ -575,6 +886,8 @@ async function start() {
     shutdown,
     tellPhonesChecked,
     thisComputer,
+    deviceModel,
+    prettyHostname,
     phonesHearLine: hearLine,
     TELL_PHONES_MS,
     waitForServer,
@@ -901,11 +1214,15 @@ async function start() {
    * An Intel copy on Apple silicon (or an x64 copy on an ARM Windows) runs translated, and is the processor's kind, not its own.
    */
   const computerOs = thisComputer({ arch: app.runningUnderARM64Translation ? 'arm64' : process.arch })
+  computerModel = deviceModel()
+  phoneName = prettyHostname()
+  /* And how its update is going (updateNoteNow), so a phone can say it and, later, ask for it. */
   const tell = async () => {
     if (quitting) return
-    told = await tellPhonesChecked({ port, version: app.getVersion(), os: computerOs, log: phoneLog })
+    told = await tellPhonesChecked({ port, version: app.getVersion(), os: computerOs, update: updateNoteNow(), log: phoneLog })
     if (tray) drawTray()
   }
+  tellNow = tell
   /*
    * AND AGAIN, until it is on. armHost asks the account service, and a Pi
    * that boots faster than its wifi hears "signed out" from a service it
@@ -934,6 +1251,8 @@ async function start() {
         const again = boot.phoneRetryDelay(result, uptime() - phoneSince)
         if (again) phoneTimer = later(arm, again)
         if (cameOn) networkIsUp()
+        // Whose computer this is, for a phone's request and the owner's own Pis (lib/updates.mjs).
+        accountId = result?.accountId || null
         if (tray) drawTray()
         return tell()
       })
@@ -963,6 +1282,7 @@ async function start() {
   linkTools = { checkRelay, addresses, lanAddress }
   watchForWake()
   lookEveryMinute()
+  noteWakes()
 
   /*
    * And the computer kept awake while a phone is using it, so a laptop at a
@@ -970,7 +1290,7 @@ async function start() {
    */
   try {
     awakeRules = await import('./lib/awake.mjs')
-    watchForPhones()
+    startWatching()
   } catch (err) {
     console.error('[awake] not available:', err?.message || err)
   }
@@ -1037,6 +1357,8 @@ function showInDock(yes) {
  */
 function openWindow({ hidden = false } = {}) {
   if (!hidden) showInDock(true)
+  // Somebody is at it now: a box started with no window no longer puts its own updates in (selfUpdatingBox).
+  if (!hidden) windowShown = true
   if (win) {
     if (!hidden) {
       win.show()
@@ -1346,7 +1668,7 @@ function buildTray() {
      * down, and the app works regardless.
      */
     { type: 'separator' },
-    ...(updateLine(update) ? [{ label: updateLine(update), enabled: false }] : []),
+    ...(updateLine(update, lineOptions()) ? [{ label: updateLine(update, lineOptions()), enabled: false }] : []),
     {
       label: 'Check for updates…',
       enabled: Boolean(updates) && update?.kind !== 'checking',
@@ -1458,7 +1780,7 @@ function wireUpdateChannel() {
     return { lan: now.lan, mdns: now.mdns }
   })
   answerOwnPage('updates:state', () =>
-    update ? { ...update, line: updateLine(update) } : { kind: 'idle', line: null }
+    update ? { ...update, line: updateLine(update, lineOptions()), goesIn: goesIn() } : { kind: 'idle', line: null }
   )
   answerOwnPage('updates:check', async () => {
     if (!updates) return { ok: false, reason: 'no-updater' }
@@ -1511,8 +1833,20 @@ function wireUpdateChannel() {
  * backstop are the same for both.
  */
 async function installNow() {
+  /* Once. The button pressed twice, the box itself and a phone asking can all arrive together. */
+  if (quitting || installing) return { ok: false, reason: 'already' }
   if (!updates?.install) return { ok: false, reason: 'no-updater' }
   if (update?.kind !== 'ready') return { ok: false, reason: 'nothing-ready' }
+  installing = true
+  try {
+    return await installHeld()
+  } catch (err) {
+    installing = false
+    throw err
+  }
+}
+
+async function installHeld() {
   /*
    * Written before anything else, so that whatever happens next the next
    * launch can tell whether it worked. See installOutcome in lib/updates.mjs.
@@ -1520,7 +1854,7 @@ async function installNow() {
    * again and again: the copy that comes back on the same version reads
    * 'stuck' and does not look for the update again by itself.
    */
-  writeMarker({ version: update.version || null, from: app.getVersion(), at: Date.now() })
+  writeMarker({ version: update.version || null, from: app.getVersion(), at: Date.now(), ...(installedByItself ? { byItself: true } : {}) })
   /*
    * How to come back, decided now: the teardown hides the window first
    * thing, and after it nobody would appear to be looking.
@@ -1545,8 +1879,17 @@ async function installNow() {
    * AppImage is restarted from its file, because the program it runs lives
    * in a folder that goes when this process does.
    */
+  /*
+   * And the AppImage's new file when the old one has gone: the updater
+   * deletes the running file and moves the new one in under the new
+   * version's name, so restarting the old path would start nothing
+   * (relaunchPath in lib/autostart.mjs).
+   */
   setTimeout(() => {
-    if (startHidden || installedUnattended) app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) })
+    if (startHidden || installedUnattended) {
+      const from = process.env.APPIMAGE ? boot.relaunchPath({ appimage: process.env.APPIMAGE, movedTo, exists: existsSync }) : process.execPath
+      app.relaunch({ execPath: from, args: process.argv.slice(1) })
+    }
     app.exit(0)
   }, INSTALL_DEADLINE_MS)
   /*
@@ -1659,6 +2002,7 @@ function healStartAtBoot() {
  * So it is mended here, the moment the updater says where the new one went.
  */
 function followTheAppImage(path) {
+  movedTo = path
   if (!bootEntry()?.on) return
   try {
     writeBootEntry(path)
@@ -1725,11 +2069,42 @@ function shipItLog() {
 }
 
 function publish(state) {
+  const was = update?.kind
   update = state
   if (tray) drawTray()
   if (win && !win.isDestroyed()) {
-    win.webContents.send('updates:state', { ...state, line: updateLine(state) })
+    win.webContents.send('updates:state', { ...state, line: updateLine(state, lineOptions()), goesIn: goesIn() })
   }
+  if (state?.kind !== was) tellNow().catch(() => {})
+}
+
+/* What the updater says, as it says it (wireUpdates' onState). */
+function heardUpdate(state) {
+  const was = update?.kind
+  update = state
+  /*
+   * What to do about it first, and only then the drawing: a menu that
+   * failed to draw once took the retry down with it.
+   *
+   * On Linux the install with nobody there is decided only at the end of a
+   * fresh look (watchForPhones, 1.92.0), never on what the last one saw up
+   * to a minute ago, and the next look comes within the minute. A Mac and a
+   * Windows PC keep their own rule, decided here as it always was, the
+   * moment the update turns ready (startupInstall in lib/autostart.mjs).
+   */
+  if (state.kind === 'ready' && updateOutcome !== 'stuck' && (process.platform === 'darwin' || process.platform === 'win32')) installIfUnattended()
+  if (state.kind === 'trouble' && updateOutcome !== 'stuck') retryUpdateCheck()
+  if (tray) drawTray()
+  /*
+   * And the window, which until now was never told anything. The line is
+   * built here rather than in the page so the menu and the window cannot
+   * drift into saying different things about the same download.
+   */
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('updates:state', { ...state, line: updateLine(state, lineOptions()), goesIn: goesIn() })
+  }
+  /* And the phones, at once when it changes kind (not for every percent). */
+  if (state.kind !== was) tellNow().catch(() => {})
 }
 
 async function beginUpdates() {
@@ -1764,9 +2139,7 @@ async function beginUpdates() {
      * so, with whatever macOS wrote about it, instead of offering the same
      * update again as if nothing had been tried.
      */
-    const marker = readMarker()
-    const outcome = installOutcome({ marker, version: app.getVersion() })
-    if (marker) clearMarker()
+    const { marker, outcome } = readLastInstall(installOutcome)
 
     if (typeof autoUpdater.on === 'function') {
       autoUpdater.on('appimage-filename-updated', (path) => followTheAppImage(path))
@@ -1775,34 +2148,13 @@ async function beginUpdates() {
     updates = wireUpdates({
       updater: autoUpdater,
       native,
-      onState: (state) => {
-        update = state
-        /*
-         * What to do about it first, and only then the drawing: a menu that
-         * failed to draw once took the install-at-power-on down with it.
-         */
-        if (state.kind === 'ready' && outcome !== 'stuck') installIfUnattended()
-        if (state.kind === 'trouble' && outcome !== 'stuck') retryUpdateCheck()
-        if (tray) drawTray()
-        /*
-         * And the window, which until now was never told anything. The line is
-         * built here rather than in the page so the menu and the window cannot
-         * drift into saying different things about the same download.
-         */
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('updates:state', { ...state, line: updateLine(state) })
-        }
-      },
+      onState: heardUpdate,
       log: (err) => console.error('[updates]', err?.message || err),
       // What is on GitHub now, from its API rather than its web pages: see
       // releaseVerdict in lib/updates.mjs.
       running: app.getVersion(),
       lookup: async () => {
-        const { net: web } = require('electron')
-        const res = await web.fetch(LATEST_API_URL, {
-          headers: { Accept: 'application/vnd.github+json' },
-          cache: 'no-store'
-        })
+        const res = await askGitHub(LATEST_API_URL)
         if (!res.ok) throw new Error(`GitHub said ${res.status}`)
         return res.json()
       },
@@ -1841,6 +2193,22 @@ async function beginUpdates() {
   } catch (err) {
     console.error('[updates] not available', err?.message || err)
   }
+}
+
+/*
+ * The note the last run left, read once and cleared: whether its install
+ * took, and whether it was one nobody pressed for (then this copy, started
+ * by it, is no power-on for a release that has not had its day: see
+ * unattendedInstall's restartedByItself). Only a copy the updater started
+ * says so (`relaunched`); somebody switching the box on is a real power-on.
+ */
+function readLastInstall(installOutcome) {
+  const marker = readMarker()
+  const outcome = installOutcome({ marker, version: app.getVersion() })
+  updateOutcome = outcome
+  restartedByItself = relaunched && marker?.byItself === true
+  if (marker) clearMarker()
+  return { marker, outcome }
 }
 
 /*
@@ -1911,34 +2279,130 @@ function updatesAfterWake() {
 }
 
 /*
- * An update ready just after a windowless start is installed there and then.
- *
- * electron-updater installs at a clean quit, and a Pi on a pedalboard never
- * has one: it is unplugged. So the update would wait for a quit that never
- * comes, and the box would stay on its first version for ever. The download
- * from an earlier run is still on disk, though, and makes the update ready
- * within seconds of the next power-on — before anybody is playing, which is
- * the one moment an app restarting itself interrupts nothing. Later than that
- * it waits for a quit, like everywhere else. The rules are in
- * unattendedInstall, lib/autostart.mjs.
+ * A READY UPDATE, PUT IN WITH NOBODY THERE: at power-on, after three
+ * watched minutes of quiet, or on a Pi once nobody has used it for half an
+ * hour (and the release has been out a day, unless this computer is signed
+ * in to the owner's own account). Asked only at the end of a look
+ * (watchForPhones). The rules are unattendedInstall, lib/autostart.mjs;
+ * this hands them what the looks saw.
  */
 function installIfUnattended() {
-  if (installedUnattended || !boot) return
-  const verdict = boot.unattendedInstall({
+  if (installedUnattended || heldWaiting || !boot || !updateRules) return
+  const verdict = unattendedVerdict()
+  if (!verdict.install) return waitsBecause(verdict.why)
+  /*
+   * And the release itself, asked about once more (heldStanding in
+   * lib/updates.mjs): one pulled since it was downloaded never goes in by
+   * itself. Asked only now, when an install would otherwise go.
+   *
+   * The ask can take up to HELD_ASK_TIMEOUT_MS, and somebody can arrive
+   * in that time: a scene changed, the screen touched, a Mac's window
+   * opened, a phone seen. So once the answer is back the verdict is made
+   * again from scratch, on everything read fresh, and the install goes only
+   * if it still says install by the same route (a second independent read,
+   * 17 November 2026). A Mac or a PC whose ask outlasted its three minutes
+   * does not install at that login.
+   */
+  const version = update?.version
+  heldWaiting = true
+  heldStandingNow()
+    .then((standing) => {
+      heldWaiting = false
+      if (installedUnattended || installing || quitting || update?.kind !== 'ready' || update?.version !== version) return
+      const again = unattendedVerdict()
+      if (!again.install) return waitsBecause(again.why)
+      if (again.how !== verdict.how) return waitsBecause('how it would go in changed while GitHub was asked, so it waits for the next look')
+      if (!updateRules.heldGoes({ standing, how: again.how })) {
+        return waitsBecause(standing === 'pulled' ? 'it was pulled from GitHub after it was downloaded, so it never goes in by itself' : 'GitHub could not be asked whether it is still out, so it waits for a later look')
+      }
+      installedUnattended = true
+      installedByItself = true
+      console.error(
+        `[updates] installing ${version || 'the update'} now, ${again.how === 'idle' ? 'nobody has used this computer for half an hour' : 'while nobody is playing'}`
+      )
+      installNow().catch((err) => console.error('[updates] could not install', err?.message || err))
+    })
+    .catch(() => {
+      heldWaiting = false
+    })
+}
+
+/* The rules' verdict on an install nobody pressed for, on everything as it is now (unattendedInstall in lib/autostart.mjs). Made before GitHub is asked, and again once it answers. */
+function unattendedVerdict() {
+  const now = uptime()
+  const people = [phoneSeenAt, windowTouchedAt, unitActiveAt, otherLocalAt]
+  return boot.unattendedInstall({
     hidden: startHidden,
     sinceLaunchMs: uptime() - launchedAt,
     platform: process.platform,
     arch: process.arch,
     env: process.env,
-    phoneSeen: phoneSeenAt !== null
+    selfUpdating: selfUpdating(),
+    quietMs: boot.quietFor({ now, firstLookAt, uses: [...people, resumedAt, eventsSince] }),
+    everUsed: people.some((t) => t !== null),
+    lookComplete,
+    releaseSettled: updateRules.releaseSettled({ published: update?.published, now: Date.now() }),
+    ownerBox: updateRules.isOwnerAccount(accountId),
+    windowShown,
+    restartedByItself
   })
-  if (!verdict.install) {
-    if (startHidden || boot.pedalboardBox({ platform: process.platform, arch: process.arch })) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
-    return
+}
+
+/* Why a ready update waits, said once for each new reason, not once a minute. */
+function waitsBecause(why) {
+  if (why !== lastInstallWhy && (startHidden || selfUpdating() || boot.pedalboardBox({ platform: process.platform, arch: process.arch }))) {
+    console.error(`[updates] ${update?.version || 'An update'} is ready; ${why}.`)
   }
-  installedUnattended = true
-  console.error(`[updates] installing ${update?.version || 'the update'} now, while nobody is playing`)
-  installNow().catch((err) => console.error('[updates] could not install', err?.message || err))
+  lastInstallWhy = why
+}
+
+/*
+ * What GitHub says about the held version's own release now: 'there',
+ * 'pulled' or 'unknown' (heldStanding in lib/updates.mjs). At most once in
+ * HELD_LOOK_MS, whatever the answer; within that, the last answer stands. A
+ * release found pulled is remembered for the run, said once in the log, and
+ * no longer offered to the phones.
+ */
+async function heldStandingNow() {
+  const version = update?.version
+  if (!updateRules || !version) return 'unknown'
+  if (pulledVersions.has(version)) return 'pulled'
+  if (heldAsking) return heldAsking
+  if (!updateRules.heldAskDue({ last: heldAsk, now: uptime() })) return heldAsk?.version === version ? heldAsk.standing : 'unknown'
+  heldAsk = { at: uptime(), version, standing: 'unknown' }
+  const asking = (async () => {
+    let standing = 'unknown'
+    try {
+      const url = releaseTagUrl(version)
+      /* The header and the body under the one limit: a 200 whose body never arrives is no answer, never an ask left pending for the run. */
+      const got = url
+        ? await Promise.race([
+            (async () => {
+              const res = await askGitHub(url)
+              return { status: res?.status, release: res?.status === 200 ? await res.json() : null }
+            })(),
+            pause(HELD_ASK_TIMEOUT_MS).then(() => null)
+          ])
+        : null
+      standing = updateRules.heldStanding({ status: got?.status, release: got?.release ?? null, version })
+    } catch {
+      standing = 'unknown'
+    }
+    heldAsk = { ...heldAsk, standing }
+    if (standing === 'pulled' && !pulledVersions.has(version)) {
+      pulledVersions.add(version)
+      console.error(`[updates] ${version} has been pulled from GitHub (a pre-release, a draft, or gone): it is not put in by itself, and the phones are no longer offered it.`)
+      if (update) publish(update)
+      tellNow().catch(() => {})
+    }
+    return standing
+  })()
+  heldAsking = asking
+  try {
+    return await asking
+  } finally {
+    heldAsking = null
+  }
 }
 
 /*
@@ -2062,6 +2526,7 @@ app.whenReady().then(async () => {
   if (!where) return
   drawTray()
   wireUpdateChannel()
+  listenForTouches()
   await beginUpdates()
   if (!answering) {
     if (startHidden) {

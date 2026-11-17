@@ -3648,7 +3648,14 @@ export function run(test) {
     assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-updates'], 'the phone no longer uses expo-updates; the policy should stop describing its number')
     const updates = JSON.parse(read('mobile/app.json')).expo.updates
     assert.equal(updates.requestHeaders, undefined, 'the phone adds its own headers to the update check, and the policy says it carries only the install’s number')
-    assert.match(read('desktop/main.js'), /web\.fetch\(LATEST_API_URL, \{\s+headers: \{ Accept: 'application\/vnd\.github\+json' \}/, 'the desktop update check sends something new; the policy says it carries no number')
+    /*
+     * Changed on purpose, 17 November 2026 (1.92.0): the desktop asks GitHub
+     * two things now, through one function (askGitHub): the newest release,
+     * and, before an update goes in by itself, the held version's own. Both
+     * send the same, and carry no number.
+     */
+    assert.match(read('desktop/main.js'), /let askGitHub = async \(url\) => \{\s+const \{ net: web \} = require\('electron'\)\s+return web\.fetch\(url, \{ headers: \{ Accept: 'application\/vnd\.github\+json' \}, cache: 'no-store' \}\)\s+\}/, 'the desktop update check sends something new; the policy says it carries no number')
+    assert.equal((read('desktop/main.js').match(/web\.fetch\(/g) || []).length, 1, 'the desktop asks GitHub some other way, which the policy does not describe')
 
     /*
      * DELETING AN ACCOUNT THAT HAS NOT PAID. Since 1.87.1 an account that

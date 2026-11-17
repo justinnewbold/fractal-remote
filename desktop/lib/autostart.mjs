@@ -248,17 +248,57 @@ export function phoneRetryDelay(result, sinceMs = 0) {
 }
 
 /*
- * An update is installed at once only this soon after a windowless start.
+ * AN UPDATE GOES IN BY ITSELF AT TWO MOMENTS, AND ONLY WITH NOBODY THERE.
  *
  * electron-updater installs at a clean quit, and a Pi on a pedalboard is never
  * quit: it is unplugged. So it would stay on the version it was first given,
- * for ever. A download from an earlier run is still on disk, and the next
- * start finds it ready within seconds — that moment, just after power-on and
- * before anybody is playing, is the one safe time for the app to restart
- * itself. After it, a ready update waits for a quit, as everywhere else:
- * never restart mid-set.
+ * for ever. Two moments are safe for the app to restart itself instead:
+ *
+ *   - POWER-ON. A download from an earlier run is still on disk, and the next
+ *     start finds it ready within seconds, before anybody is playing. Since
+ *     1.92.0 it is not put in on the first look but after three minutes of
+ *     watched quiet (POWER_ON_QUIET_MS), so a phone that connects in the first
+ *     minutes is seen first; and only in the first POWER_ON_WINDOW_MS.
+ *   - IDLE, since 1.92.0. "I will update the pis but we need to figure out how
+ *     to have them auto update" (Justin, 16 November 2026): a Pi left on
+ *     never updated at all. Now a Raspberry Pi (or a box started with no
+ *     window whose window nobody has opened) puts a waiting update in once
+ *     nobody has used it for IDLE_INSTALL_MS, and only a release that has
+ *     been out for RELEASE_SETTLE_MS, so a bad one can be pulled before a Pi
+ *     left on takes it. Except a computer signed in to the owner's own
+ *     account, which skips that day: his Pis are the first to meet a bad
+ *     release, a day before anybody else's.
+ *
+ * "Used" is six things, each a way somebody can be playing (main.js watches
+ * them): a phone's note, a phone's browser on the Wi-Fi, the window being
+ * touched, the unit changing preset, scene, settings or tuner, another
+ * program on this computer (Axiom) using the device server, and the computer
+ * waking from sleep.
+ *
+ * A MAC AND A WINDOWS PC KEEP THE RULE THEY HAD BEFORE ALL THIS (1.91.6): a
+ * start with no window puts a waiting update in the moment it turns ready,
+ * in the first three minutes (INSTALL_WINDOW_MS), before anybody is there;
+ * never once a phone has used it or anybody has opened its window that run.
+ * Later than that it waits for a quit. Nothing above is asked of them: they
+ * cannot see another program, and nothing there reads the unit's events.
+ * (An independent read, 17 November 2026: run through the new watched quiet,
+ * a Mac started at login restarted itself four to six minutes in, under
+ * somebody who had just opened its window.)
+ *
+ * And before any of these goes in, the release is asked about once more
+ * (heldGoes in lib/updates.mjs): one pulled after it was downloaded is not
+ * put in by itself.
  */
+/** A Mac's or a Windows PC's start with no window: how soon after launch a waiting update may still go in by itself. */
 export const INSTALL_WINDOW_MS = 3 * 60 * 1000
+/** Equal to AWAKE_FOR_MS (awake.mjs): one meaning of "nobody is here", and about ten times the look's blind spot. */
+export const IDLE_INSTALL_MS = 30 * 60 * 1000
+/** Longer than a phone's two-minute note (TELL_COMPUTER_MS) plus one minute's look. */
+export const POWER_ON_QUIET_MS = 3 * 60 * 1000
+/** On Linux: the first look (about a minute), three minutes of proof, and room for wifi that came up late. It was 3 minutes (INSTALL_WINDOW_MS, which a Mac and a PC keep) until 1.92.0. */
+export const POWER_ON_WINDOW_MS = 6 * 60 * 1000
+/** The idle install only: time to pull a bad release before a Pi left on takes it. */
+export const RELEASE_SETTLE_MS = 24 * 60 * 60 * 1000
 /*
  * And a windowless app, left on for weeks, still looks for one — every six
  * hours now, like every other start (RECHECK_MS in lib/updates.mjs, since
@@ -277,41 +317,168 @@ export const INSTALL_WINDOW_MS = 3 * 60 * 1000
  * for a start with no window. On an ARM board on Linux the window is on a
  * screen on the pedalboard that nobody sits at, so at power-on it is
  * treated as nobody there: a waiting update goes in then, before anybody is
- * playing, window or not, and never once a phone has used it that run. A
+ * playing, window or not, and never once anybody has used it that run. A
  * Mac, a Windows PC and a Linux PC with a window open still wait for a quit
  * (somebody is in front of them). An ARM computer somebody sits at (a Pi 400
- * at a desk) can restart itself in its first three minutes, before any phone
- * has used it: the price of a pedalboard Pi that otherwise never updates.
+ * at a desk) can restart itself in its first minutes, before anybody has
+ * used it: the price of a pedalboard Pi that otherwise never updates.
+ *
+ * It decides the power-on install and the retries only. The idle install
+ * asks selfUpdatingBox, which is narrower.
  */
 export const pedalboardBox = ({ platform = '', arch = '' } = {}) => platform === 'linux' && /^arm/.test(String(arch))
 
 /**
+ * WHETHER THIS COMPUTER PUTS IN ITS OWN UPDATES WHEN NOBODY HAS USED IT FOR A
+ * WHILE (and whether a phone may ask it to, later).
+ *
+ * Only the Linux AppImage, and then:
+ *
+ *   - ANY Raspberry Pi, by its board's own name (/proc/device-tree/model
+ *     starts "Raspberry Pi"), window or not. That includes a Pi 400 or 500
+ *     somebody sits at as a desk computer: it puts its own in once nobody
+ *     has touched the Fractal Remote window, the unit or the rest for half
+ *     an hour, even if they are busy in another program on it. The price of
+ *     a pedalboard Pi that otherwise never updates.
+ *   - any other Linux box running the AppImage that was started with no
+ *     window (start at login on any Linux, x64 or ARM, passes --hidden) and
+ *     whose window nobody has opened this run. Once it is opened, somebody
+ *     is at it, and it stops.
+ *
+ * Never a Mac or a Windows PC, even after an unattended restart marks it
+ * hidden, and never the .deb, whose install asks for a password. An ARM
+ * laptop or a Linux PC with its window open is not one.
+ */
+export function selfUpdatingBox({ platform = '', env = {}, model = '', startedHidden = false, windowShown = false } = {}) {
+  return platform === 'linux' && Boolean(env?.APPIMAGE) && (/^Raspberry Pi/.test(String(model || '')) || (startedHidden && !windowShown))
+}
+
+/**
+ * How long nobody has used this computer: from the latest of the first
+ * complete look and every use, or 0 before the first complete look. All on
+ * main.js's uptime(), a clock that only goes forward.
+ */
+export function quietFor({ now = 0, firstLookAt = null, uses = [] } = {}) {
+  if (firstLookAt === null || firstLookAt === undefined) return 0
+  const last = Math.max(firstLookAt, ...uses.filter((t) => typeof t === 'number' && Number.isFinite(t)))
+  return Math.max(0, now - last)
+}
+
+/**
  * Whether to install a ready update now, with nobody there.
  *
- *   { install: true }
+ *   { install: true, how: 'power-on' | 'idle' }
  *   { install: false, why }
  *
- * Never for the .deb: its update runs through pkexec or sudo, which asks for a
- * password nobody is there to type — and electron-updater waits on it without
- * a deadline, with the device server already stopped. On a Linux box that is
- * the case exactly when there is no AppImage. The AppImage, a Mac and Windows
- * all install without asking anybody anything.
+ * Never for the .deb, on any route: its update runs through pkexec or sudo,
+ * which asks for a password nobody is there to type — and electron-updater
+ * waits on it without a deadline, with the device server already stopped. On
+ * a Linux box that is the case exactly when there is no AppImage. And never
+ * on a look that could not see everything: it waits for the next one.
+ *
+ *   hidden          started with no window (main.js startHidden)
+ *   selfUpdating    selfUpdatingBox, above
+ *   sinceLaunchMs   how long this run has been going
+ *   quietMs         quietFor, above
+ *   everUsed        anybody has used it this run (the phone, the window, the
+ *                   unit or another program; a wake is not a person)
+ *   lookComplete    the last look could read every sign
+ *   releaseSettled  the update has been out for a day (releaseSettled in
+ *                   lib/updates.mjs)
+ *   ownerBox        signed in to the owner's own account: his Pis skip the
+ *                   day's wait, so they meet a bad release first
+ *   windowShown     the window has been opened this run: somebody is at it
+ *   restartedByItself  this copy was started by an install nobody pressed
+ *                   for (the idle or power-on route of the copy before it)
+ *
+ * A MAC AND A WINDOWS PC have their own, older rule (startupInstall below),
+ * asked before anything else here.
+ *
+ * THE COPY AN UNATTENDED INSTALL RESTARTED is not a power-on for a release
+ * that has not had its day. It comes back hidden, and would otherwise be a
+ * fresh power-on box: it looks at once, can find a release minutes old (its
+ * files land before its Linux build has been started on CI), and would put
+ * it in after three quiet minutes, on a Pi nobody is at (an independent
+ * read, 17 November 2026). So on a box that puts in its own, that copy takes
+ * a newer release by the power-on route only once it has been out a day, or
+ * on the owner's own; otherwise it waits for the idle route like any Pi left
+ * on. A real power-on, somebody switching it on, is unchanged.
  */
-export function unattendedInstall({ hidden = false, sinceLaunchMs = 0, platform = '', arch = '', env = {}, phoneSeen = false } = {}) {
-  if (!hidden && !pedalboardBox({ platform, arch })) return { install: false, why: 'somebody is here to choose' }
-  /*
-   * Never once a phone has used this computer since it started: somebody is
-   * playing through it. A download that lands a minute or two after power-on
-   * (a release out since the last one, or wifi that came up late) would
-   * otherwise restart the box mid-song (an independent read, 16 November
-   * 2026). It waits for the next power-on, or a quit.
-   */
-  if (phoneSeen) return { install: false, why: 'a phone is already using it, so it waits for the next start or a quit' }
-  if (sinceLaunchMs > INSTALL_WINDOW_MS) return { install: false, why: 'it installs when the app quits' }
+export function unattendedInstall({
+  hidden = false,
+  platform = '',
+  arch = '',
+  env = {},
+  selfUpdating = false,
+  sinceLaunchMs = 0,
+  quietMs = 0,
+  everUsed = false,
+  lookComplete = false,
+  releaseSettled = false,
+  ownerBox = false,
+  windowShown = false,
+  restartedByItself = false
+} = {}) {
+  if (platform === 'darwin' || platform === 'win32') return startupInstall({ hidden, sinceLaunchMs, everUsed, windowShown })
   if (platform === 'linux' && !env.APPIMAGE) {
     return { install: false, why: 'the .deb asks for a password to install, so it waits for a quit' }
   }
-  return { install: true }
+  if (!lookComplete) return { install: false, why: 'the last look could not see everything, so it waits for the next one' }
+  /* A box started with no window stops being one nobody is at once its window is opened; a Pi's window is its touch screen, and it stays one. */
+  const powerOnBox = (hidden && !windowShown) || pedalboardBox({ platform, arch })
+  const heldForTheDay = restartedByItself && selfUpdating && !releaseSettled && !ownerBox
+  if (powerOnBox && !everUsed && sinceLaunchMs <= POWER_ON_WINDOW_MS && !heldForTheDay) {
+    return quietMs >= POWER_ON_QUIET_MS
+      ? { install: true, how: 'power-on' }
+      : { install: false, why: 'just switched on; watching a few minutes before it goes in' }
+  }
+  if (!selfUpdating) {
+    return { install: false, why: powerOnBox ? 'it installs at the next power-on, or when the app quits' : 'somebody is here to choose' }
+  }
+  if (!releaseSettled && !ownerBox) return { install: false, why: 'it waits a day after a new version comes out' }
+  if (quietMs >= IDLE_INSTALL_MS) return { install: true, how: 'idle' }
+  return { install: false, why: 'somebody used it in the last half hour, so it waits' }
+}
+
+/**
+ * A Mac's or a Windows PC's own rule, as it was before 1.92.0, with one
+ * thing added: a window opened this run is somebody there.
+ *
+ * A start with no window (start at login) puts a waiting update in at once,
+ * in its first INSTALL_WINDOW_MS, decided the moment the update turns ready
+ * and at each look for phones; never once anybody has used it, and never
+ * once its window has been opened. Later than that, and on a start with a
+ * window, it waits for a quit.
+ */
+export function startupInstall({ hidden = false, sinceLaunchMs = 0, everUsed = false, windowShown = false } = {}) {
+  if (!hidden) return { install: false, why: 'somebody is here to choose' }
+  if (windowShown) return { install: false, why: 'somebody opened the window, so it waits for a quit' }
+  if (everUsed) return { install: false, why: 'a phone is already using it, so it waits for the next start or a quit' }
+  if (sinceLaunchMs > INSTALL_WINDOW_MS) return { install: false, why: 'it installs when the app quits' }
+  return { install: true, how: 'power-on' }
+}
+
+/**
+ * Which file the safety restart after an install starts.
+ *
+ * The AppImage updater deletes the running file and moves the new one in
+ * beside it under the new version's name (main.js hears where:
+ * 'appimage-filename-updated'). A restart of the old path then starts
+ * nothing, and a Pi on a pedalboard has no remote until it is unplugged. So:
+ * the old file while it is there, the new one when the old has gone, and the
+ * old path when neither can be found (nothing better is known).
+ */
+export function relaunchPath({ appimage = null, movedTo = null, exists = () => false } = {}) {
+  const there = (path) => {
+    try {
+      return Boolean(path) && Boolean(exists(path))
+    } catch {
+      return false
+    }
+  }
+  if (there(appimage)) return appimage
+  if (there(movedTo)) return movedTo
+  return appimage
 }
 
 /*
@@ -332,7 +499,7 @@ export const UPDATE_RETRY_MS = 30 * 1000
  */
 export function updateRetryDelay({ hidden = false, kind = null, sinceLaunchMs = 0, platform = '', arch = '' } = {}) {
   if ((!hidden && !pedalboardBox({ platform, arch })) || kind !== 'trouble') return null
-  return sinceLaunchMs < INSTALL_WINDOW_MS ? UPDATE_RETRY_MS : null
+  return sinceLaunchMs < POWER_ON_WINDOW_MS ? UPDATE_RETRY_MS : null
 }
 
 /**

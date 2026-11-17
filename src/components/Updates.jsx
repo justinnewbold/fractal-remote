@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { desktopBridge, updateAdvice, updateReady } from '../lib/desktop'
+import { desktopBridge, goesInByItself, idleReadyWords, updateAdvice, updateReady } from '../lib/desktop'
 import { VERSION } from '../lib/version'
 
 /**
@@ -158,11 +158,20 @@ export function UpdateReadyNotice() {
         button and it closes the app for them." That button was already here;
         it just did not say so.
       */}
-      <p>
-        {state.version ? `Version ${state.version} is ready to install.` : 'An update is ready to install.'}{' '}
-        Restart to update &mdash; the app closes and reopens on the new version in a few seconds.
-        Or leave it, and it installs the next time you quit.
-      </p>
+      {/*
+        A Raspberry Pi puts it in by itself once nobody has used it for half
+        an hour (computer app 1.92.0), so it says that instead of a quit it
+        will never have. A Mac, a PC and the .deb keep their words.
+      */}
+      {goesInByItself(state) ? (
+        <p>{idleReadyWords(state)}</p>
+      ) : (
+        <p>
+          {state.version ? `Version ${state.version} is ready to install.` : 'An update is ready to install.'}{' '}
+          Restart to update &mdash; the app closes and reopens on the new version in a few seconds.
+          Or leave it, and it installs the next time you quit.
+        </p>
+      )}
       <div className="history-actions">
         {/*
           The other way in, and the reason it exists.

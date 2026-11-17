@@ -167,7 +167,7 @@
     -->
     <main>
       <h1>Set up a Raspberry Pi for Fractal Remote</h1>
-      <p class="when">Fractal Remote · last updated 10 November 2026</p>
+      <p class="when">Fractal Remote · last updated 17 November 2026</p>
       <p class="lead">
         A Raspberry Pi is a small computer, about the size of a deck of cards. Set up once, it
         sits by your Fractal unit and runs the Fractal Remote app by itself, so your phone
@@ -175,7 +175,7 @@
       </p>
       <p class="dim">
         On this page: <a href="#buy">what to buy</a> · <a href="#setup">setting it up</a> ·
-        <a href="#am4">an AM4 on a Pi 3 or 4</a> · <a href="#trouble">if something goes wrong</a> ·
+        <a href="#am4">an AM4 on a Pi 3 or 4</a> · <a href="#trouble">if something goes wrong</a> · <a href="#updates">updates</a> ·
         <a href="#gigs">for gigs</a> · <a href="#retire">retiring an old Pi</a>
       </p>
 
@@ -249,6 +249,13 @@
         <li><strong>The app can’t find your unit:</strong> use a data cable, not a charge-only one, and switch the unit off and on.</li>
       </ul>
       <p class="dim">More is on the <a href="/support">support page</a>.</p>
+
+      <h2 id="updates">Updates</h2>
+      <!-- Computer app 1.92.0: unattendedInstall in desktop/lib/autostart.mjs.
+           No word here about the sound while it restarts, or how long it
+           takes, until that has been seen on a Pi. A Pi switched on does
+           not wait the day (design decision D5), so the page says so. -->
+      <p>The app keeps itself up to date. A new version goes in by itself once nobody has used the Pi for half an hour: no phone connected, nobody touching its screen, no preset or scene changed on the unit, and no other app on the Pi using it. It waits a day after a new version comes out. When you switch the Pi on with an update waiting, it goes in after a few minutes with nobody using it. The remote drops out while it restarts and comes back by itself.</p>
 
       <h2 id="gigs">For gigs</h2>
       <ul>

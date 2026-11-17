@@ -37,6 +37,29 @@
  */
 const { contextBridge, ipcRenderer } = require('electron')
 
+/*
+ * AND ONE THING SAID THE OTHER WAY: that somebody is touching the window.
+ *
+ * A Raspberry Pi puts a waiting update in by itself once nobody has used it
+ * for half an hour (unattendedInstall in lib/autostart.mjs), and a person
+ * tapping its screen is somebody using it. So a press, a touch, a key or a
+ * scroll anywhere in the window tells the app, at most once every ten
+ * seconds. Passive, and in the capture phase, so nothing the page does can
+ * hide it and nothing here can slow the page down. A window nobody can see is
+ * never touched, so it never says so. Nothing is added to the bridge.
+ */
+const TOUCH_EVERY_MS = 10 * 1000
+let touchedAt = -Infinity
+const touched = () => {
+  const now = performance.now()
+  if (now - touchedAt < TOUCH_EVERY_MS) return
+  touchedAt = now
+  ipcRenderer.send('window:touched')
+}
+for (const type of ['pointerdown', 'touchstart', 'keydown', 'wheel']) {
+  window.addEventListener(type, touched, { passive: true, capture: true })
+}
+
 contextBridge.exposeInMainWorld('fractalDesktop', {
   /** Present at all: how a page knows it is inside the Mac app. */
   isDesktop: true,

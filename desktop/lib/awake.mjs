@@ -229,19 +229,20 @@ export async function phonesUsing({ platform, port, run, read, own = [] } = {}) 
 export const PHONE_NOTE_ID = 'phone.seen'
 
 /**
- * Read the phone's note from the device server on this computer.
+ * Read one document of the device server's store on this computer (its
+ * `config` collection), by name.
  *
  *   the document   — { data, rev, updatedAt, … }, as the store keeps it
- *   null           — there is none: no phone has written one here yet
+ *   null           — there is none
  *   undefined      — the device server could not be asked (not up yet,
  *                    restarting, too slow); nothing is known either way
  *
  * Never throws. `fetch` is handed in, so this is tested without a server.
  */
-export async function readPhoneNote({ port, fetch, timeoutMs = 4000 } = {}) {
-  if (!port || typeof fetch !== 'function') return undefined
+export async function readConfigDoc({ port, id, fetch, timeoutMs = 4000 } = {}) {
+  if (!port || !id || typeof fetch !== 'function') return undefined
   try {
-    const res = await fetch(`http://localhost:${port}/store/config/${encodeURIComponent(PHONE_NOTE_ID)}`, {
+    const res = await fetch(`http://localhost:${port}/store/config/${encodeURIComponent(id)}`, {
       signal: AbortSignal.timeout(timeoutMs)
     })
     if (res?.status === 404) return null
@@ -252,6 +253,9 @@ export async function readPhoneNote({ port, fetch, timeoutMs = 4000 } = {}) {
     return undefined
   }
 }
+
+/** Read the phone's note from the device server on this computer: readConfigDoc, for PHONE_NOTE_ID. */
+export const readPhoneNote = ({ port, fetch, timeoutMs = 4000 } = {}) => readConfigDoc({ port, id: PHONE_NOTE_ID, fetch, timeoutMs })
 
 /**
  * Whether the note changed since the last look, which is a phone saying it is
@@ -292,4 +296,90 @@ export function awakeChange({ holding = false, lastPhoneAt = null, now = 0, forM
   if (recent && !holding) return 'start'
   if (!recent && holding) return 'stop'
   return null
+}
+
+/*
+ * ANOTHER PROGRAM ON THIS COMPUTER USING THE DEVICE SERVER — Axiom, say.
+ *
+ * Axiom runs in a browser on the same Pi, against http://localhost:<port>
+ * (lib/axiom.mjs), so it is this machine talking to itself and phonesUsing
+ * leaves it out on purpose. For the update that goes in by itself
+ * (unattendedInstall in lib/autostart.mjs) it counts: somebody is driving
+ * the unit from it. Read from /proc/net/tcp and tcp6 (Linux only, which is
+ * the only place that update runs): an open connection (state 01) from this
+ * machine (a loopback address, or one of its own) TO the device server's
+ * port, whose socket is not one of this app's own processes'. The window's
+ * page is the app's own (Electron's processes), and so are main.js's own
+ * calls; the device server's side of every connection is on the port, not
+ * to it.
+ *
+ *   a number — how many such connections there are now
+ *   null     — the text could not be read
+ */
+export function otherLocalClients({ tcpText = '', port, ownInodes = new Set(), own = [] } = {}) {
+  if (typeof tcpText !== 'string' || !tcpText.trim() || !port) return null
+  const mine = new Set(own.map(plainAddress))
+  let count = 0
+  for (const raw of tcpText.split('\n')) {
+    const cols = raw.trim().split(/\s+/)
+    if (!/^\d+:$/.test(cols[0] || '')) continue
+    if (cols[3] !== '01') continue
+    const [la] = String(cols[1] || '').split(':')
+    const [ra, rp] = String(cols[2] || '').split(':')
+    if (!la || !ra || !rp) continue
+    if (parseInt(rp, 16) !== port) continue
+    const local = procAddress(la)
+    if (!local || !(isLoopback(local) || mine.has(local))) continue
+    const inode = String(cols[9] || '')
+    if (!/^\d+$/.test(inode) || inode === '0' || ownInodes.has(inode)) continue
+    count++
+  }
+  return count
+}
+
+/**
+ * The sockets this app's own processes hold: every N of a socket:[N] link
+ * under /proc/<pid>/fd, as strings, for the pids given (the app itself, its
+ * device server, and Electron's other processes, the window's among them).
+ *
+ * null when a process's list cannot be read: nothing is known, so the look
+ * is not complete. A single link that has gone between the list and the read
+ * is skipped: that file is closed, and a closed socket is no connection.
+ */
+export function ownSocketInodes({ pids = [], readdir, readlink } = {}) {
+  try {
+    const seen = new Set()
+    for (const pid of pids) {
+      const dir = `/proc/${pid}/fd`
+      for (const fd of readdir(dir)) {
+        let target
+        try {
+          target = String(readlink(`${dir}/${fd}`))
+        } catch {
+          continue
+        }
+        const m = /^socket:\[(\d+)\]$/.exec(target)
+        if (m) seen.add(m[1])
+      }
+    }
+    return seen
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether something the device server says is somebody using the unit.
+ *
+ * A scene picked (from the phone or the unit's own footswitches), a preset or
+ * its grid changed, a knob moved, the tuner: true. What a unit says with
+ * nobody touching it (its meters, its tempo, its processor load, the cable's
+ * traffic, a setting of the server's own, a broadcast) is not: counted, a
+ * unit left on would never be quiet, and nothing would ever go in.
+ */
+export function unitUse(event) {
+  const type = event?.type
+  if (type === 'scene' || type === 'param' || type === 'tuner') return true
+  if (type === 'changed') return event.scope === 'preset' || event.scope === 'grid'
+  return false
 }

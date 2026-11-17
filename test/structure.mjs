@@ -3261,7 +3261,8 @@ export function run(test) {
      * and a menu and a window disagreeing about the same download is worse
      * than either one alone.
      */
-    assert.match(main, /line: updateLine\(state\)/, 'the window builds its own wording')
+    /* Changed on purpose, 17 November 2026 (1.92.0): the line is asked with how this computer puts an update in (a Pi by itself), still built here. */
+    assert.match(main, /line: updateLine\(state, lineOptions\(\)\)/, 'the window builds its own wording')
     assert.ok(
       !/updateLine|Downloading an update/.test(
         readFileSync(new URL('../src/lib/desktop.js', import.meta.url), 'utf8')
