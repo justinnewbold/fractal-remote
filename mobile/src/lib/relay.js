@@ -27,6 +27,7 @@ import { DEFAULT_PROJECT } from './project'
 import { decode } from './decode'
 import { withRetry } from './retry'
 import { notForever } from './notForever'
+import { socketWatch } from './socketWatch'
 import {
   RELAY_GRACE,
   NOT_IN_INBOX,
@@ -168,8 +169,11 @@ function supabase() {
        * the screen locked — is only found out by a missed heartbeat, and the
        * default is one every twenty-five seconds. Ten, so a dead link is
        * noticed inside twenty seconds rather than fifty.
+       *
+       * And the socket's own log is listened to for one thing (socketWatch):
+       * a socket that fails says why in its close, which no channel is told.
        */
-      realtime: { heartbeatIntervalMs: HEARTBEAT_MS },
+      realtime: { heartbeatIntervalMs: HEARTBEAT_MS, logger: socketWatch((words) => logDebug('relay', 'socket closed after an error', words)) },
       auth: {
         storage: AsyncStorage,
         persistSession: true,
