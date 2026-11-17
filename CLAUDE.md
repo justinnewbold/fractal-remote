@@ -1390,9 +1390,14 @@ what the computer sends for the same edit, and a test holds it there.
       connected", every column "fed from row 3"), and through the Pi on
       1.90.63 again (his capture log: 4 blocks, "6 in, 0 not; connected
       from the input to the output", 4.4 s from the tap). Those two bear
-      out why the row was chosen. Not seen on an FM3 or FM9, or on any
-      other row. Do not move it back to row 2 while computer apps older
-      than 1.90.82 are about.
+      out why the row was chosen. And a fourth time, 17 November 2026,
+      through the Pi now on computer app 1.90.90, the first build through
+      one that sends the corrected bytes (the same along this row): a
+      preset he had emptied in the chain editor (seven Removes, each read
+      back empty), 4 blocks, "6 in, 0 not; connected from the input to
+      the output", 3.7 s from the tap, and the log's row names NAM 1.
+      Not seen on an FM3 or FM9, or on any other row. Do not move it back
+      to row 2 while computer apps older than 1.90.82 are about.
     - *The log says the whole row as the unit read it back*
       (`rowAsRead`: "row 3 as read: column 1 Input 1, column 2 Drive 1
       (fed from row 3), …") and whether it read as connected. The card
@@ -2282,14 +2287,26 @@ UNIT YET: his next drag's log is the first check.
   alone; a move saying every row, or no row, had both ends, or asking the
   read after the move; the seventh round's eight again; the button beside
   a refused end heeding only the Output, or only the Input; another row's
-  Input taken for this row's) each failed them too. A change to a pinned
-  piece is a change to that test.
+  Input taken for this row's) each failed them too. The ninth is tests
+  only, for two slips the eighth's review found nothing would catch: a
+  row whose Input and Output only the chain read names (asked without the
+  chain read's words, by the move or by the press, the same failed move
+  was "joined again"), and a move with no joins to keep, which has no grid
+  read to ask (without its guard every AM4 and Axe-Fx II move threw after
+  its writes); its 5 mutants in each copy each failed them. A change to a
+  pinned piece is a change to that test.
 - *Left as they are:* Join the row goes by grid positions, so a layout
   someone made on purpose and then lost its proof (a merge cell's feed) can
   be read as a cut; a move keeps a split's joins with the column, as
   Fractal's grid does, so a block dragged into the split column feeds the
   branch; and the plan joins only the columns it moved (a cut it leaves is
-  said after, not mended by itself). The browser goes by the version of
+  said after, not mended by itself). A move's note keeps saying its row
+  had its Input and Output for as long as it is drawn, so if the Output is
+  then moved to another row OFF the app (the unit's front panel, Axe-Edit)
+  while the note is showing, Join the row from that note answers "Row 3
+  has no Output now, and no sound" over a row that plays through the other
+  row's (the eighth round's review, minor: it takes an edit off the app
+  between the move and the press). The browser goes by the version of
   the computer app that builds its joins (`builtElsewhere`): through the
   relay, or the hosted website open on the computer that runs the app
   (that app's version read from its own host.name, link.js `readMac`), one
@@ -2302,7 +2319,11 @@ UNIT YET: his next drag's log is the first check.
 ONLY. A capture can be sent to the unit from the Developer card since
 1.90.58, and through the computer or the Raspberry Pi since 1.90.59. HIS UNIT HAS KEPT TWO CAPTURES
 SENT FROM THE APP AND DROPPED THREE (14 November 2026, through the Raspberry
-Pi); 1.90.70 sends one it drops again another way. IT GOES TO THE PUBLIC IN
+Pi); 1.90.70 sends one it drops again another way. THROUGH THE PI ON
+COMPUTER APP 1.90.90 IT KEPT TWO OF TWO, EACH ON THE FIRST TRY (17 November
+2026, his log: name byte 0x60 with the file's hash, in 0.5 and 0.6 s, slots
+043 and 044, each named back by the unit and played in NAM 1; the same Pi
+on 1.90.63 had dropped four that afternoon). IT GOES TO THE PUBLIC IN
 THE NEXT STORE VERSION, and no build until he says.**
 
 > "Next I want to add TONE3000 so users can search, preview and download

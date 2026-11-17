@@ -59,6 +59,8 @@
  * From the eighth: a move's note tells Join the row that the row had both
  * before the MOVE, so a move that failed part-way and did not bring the
  * Output (or Input) back is never "joined again" either.
+ * From the ninth (tests only): that holds for a row whose ends only the
+ * chain read names, and a move with no joins to keep has no ends to ask.
  *
  * THE SCREENS ARE NOT RUN. Their calls into the plan are pinned by
  * patterns on the calls, not whole; the preset hold is pinned whole at
@@ -1650,6 +1652,85 @@ export function run(test) {
         assert.equal(r.noEnd, end, where)
         assert.deepEqual(m.joinedWords(r), NO(end), `${where}: a row a failed move left with no ${end} is called joined again`)
       }
+
+      /*
+       * ENDS ONLY THE CHAIN READ NAMES (ids 900 and 901, which the grid read
+       * neither names nor numbers as an Input or Output): whether the row had
+       * both is asked with the chain read's words, by the move and by the
+       * press (the eighth round's review: without them the same failed move
+       * was "joined again").
+       */
+      const slugs = [
+        { effectId: 900, slug: 'input' },
+        { effectId: 46, slug: 'comp' },
+        { effectId: 118, slug: 'drive' },
+        { effectId: 82, slug: 'flanger' },
+        { effectId: 901, slug: 'output' }
+      ]
+      const nameless = () =>
+        dropsOut([
+          { row: R, col: 0, effectId: 900, fromRows: [] },
+          { row: R, col: 1, effectId: 46, fromRows: [R] },
+          { row: R, col: 2, effectId: 118, fromRows: [R] },
+          { row: R, col: 3, effectId: 82, fromRows: [R] },
+          { row: R, col: 4, effectId: 901, fromRows: [R] }
+        ])
+      for (const [end, id, moves] of [
+        ['Output', 901, [{ id: 901, name: 'Output 1', from: 4, to: 3 }, { id: 82, name: 'Flanger 1', from: 3, to: 4 }]],
+        ['Input', 900, [{ id: 900, name: 'Input 1', from: 0, to: 1 }, { id: 46, name: 'Comp 1', from: 1, to: 0 }]]
+      ]) {
+        const u = nameless()
+        const place = u.wire.placeBlock
+        let n = 0
+        u.wire.placeBlock = (r, c, x) => {
+          n += 1
+          if (n === 2 || (n > 2 && x === id)) throw new Error('The link dropped.')
+          return place(r, c, x)
+        }
+        const res = await m.moveBlocks({ row: R, moves, wire: u.wire, rows: 6, cols: 14, blocks: slugs })
+        const said = m.afterMoveSaid({ row: R, res })
+        assert.equal(res.hadEnds, true, `${where}: a row whose ends only the chain read names is not said to have had them`)
+        assert.ok(!u.grid.some((c) => c.row === R && c.effectId === id), `${where}: this case needs row 3 left with no ${end}`)
+        assert.ok(said.note?.joins?.length > 0, `${where}: this case needs Join the row offered`)
+        assert.ok(said.note.joins.every((j) => j.had === true), `${where}: the note’s joins do not say the row had its Input and Output`)
+        const r = await m.joinRow({ row: R, joins: said.note.joins, wire: u.wire, blocks: slugs, rows: 6 })
+        assert.deepEqual(m.joinedWords(r), NO(end), `${where}: a row a failed move left with no ${end}, named only by the chain read, is called joined again`)
+      }
+      /* ... and by the read before the press alone (joins with no mark): both such ends before it, the Output gone after it. */
+      const v = nameless()
+      v.grid.find((c) => c.col === 2).fromRows = []
+      const cable = v.wire.setCable
+      v.wire.setCable = (a, b2, c, on) => {
+        const done = cable(a, b2, c, on)
+        v.wire.clearCell(R, 4)
+        return done
+      }
+      const r2 = await m.joinRow({ row: R, joins: [{ srcRow: R, srcCol: 1, destRow: R }], wire: v.wire, blocks: slugs, rows: 6 })
+      assert.equal(r2.sent, 1, where)
+      assert.deepEqual(r2.still, [], `${where}: this case needs the join asked for there on the read after`)
+      assert.deepEqual(m.joinedWords(r2), NO('Output'), `${where}: the read before the press is asked for the row’s ends without the chain read’s words`)
+    }
+  })
+
+  test('chain move: a move with no joins to keep (an AM4, an Axe-Fx II) has no grid read to ask: it goes, its row is not said to have had an Input and Output, and nothing is thrown or said', async () => {
+    for (const [where, load] of BOTH) {
+      const m = await load()
+      const sent = []
+      const wire = {
+        gridCells: () => [],
+        clearCell: (r, c) => (sent.push(['clear', r, c]), { ok: true }),
+        placeBlock: (r, c, id) => (sent.push(['place', r, c, id]), { ok: true }),
+        setCable: () => ({ ok: true })
+      }
+      const swap = [
+        { id: 118, name: 'Drive 1', from: 2, to: 1 },
+        { id: 46, name: 'Comp 1', from: 1, to: 2 }
+      ]
+      const res = await m.moveBlocks({ row: R, moves: swap, wire, cables: false })
+      assert.equal(sent.length, 4, `${where}: this case needs the move made (two clears, two places)`)
+      assert.equal(res.plan.before, null, `${where}: this case needs a move with no grid read before it`)
+      assert.equal(res.hadEnds, false, where)
+      assert.deepEqual(m.afterMoveSaid({ row: R, res }), { issue: null, note: null, line: null }, where)
     }
   })
 
