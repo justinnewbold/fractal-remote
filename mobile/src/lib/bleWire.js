@@ -77,6 +77,7 @@ import {
   buildTunerPoll,
   channelIndex,
   channelLetter,
+  decode14,
   hzToNote,
   isBeatPush,
   isFractal,
@@ -362,6 +363,21 @@ export const REREAD_MAX_MS = PRESET_SETTLE_MS + 1000
 export const PLAY_HOLD_MAX_MS = 10000
 
 /*
+ * THE UNIT'S OWN BLOCK REPORT (heardReport): a block's settings sent unasked,
+ * the 0x74 head, its 0x75 pages and the 0x76 foot. An FM9 sends it when a
+ * knob is turned on the unit (forgefx-midi setParam.ts, seen with an editor
+ * on USB); whether one goes out of the MIDI jacks to an adapter is what the
+ * log line is for. One that comes while this device's own write is out, or
+ * this soon after one, is taken as the unit saying it took that write, never
+ * as a knob turned on the unit. The log says a report at most this often;
+ * the ones between are counted into the next line.
+ */
+export const REPORT_OWN_MS = 2000
+export const REPORT_SAY_MS = 1000
+/* Where Edit's knobs do not follow the unit (every account but his, and his with the switch shut) a report is said this seldom: its first line is what a customer's log needs, and a few minutes of turning knobs on the unit filled the 400 lines at one a second (an independent read, 16 November 2026). */
+export const REPORT_QUIET_SAY_MS = 30000
+
+/*
  * THE FOOTSWITCH WATCH. A unit says nothing when its own footswitch changes
  * scene or preset (ForgeFX found none over USB), so the phone asks: scene
  * every second, preset every two, tempo every four — about 2% of what 5-pin
@@ -524,6 +540,13 @@ const realClock = {
 
 /* What the stage never shows over Bluetooth: no volume, no looper, no input. */
 const OFF_STAGE = ['input', 'output', 'looper']
+
+/*
+ * The chain's two ends, which the chain answer hands on after all where
+ * they are open to this account (`io`, below): Edit draws them as IN and
+ * OUT, as it does through the computer. Never the looper.
+ */
+const CHAIN_ENDS = ['input', 'output']
 
 const silentTuner = () => ({ type: 'tuner', note: '', octave: undefined, cents: null })
 
@@ -689,8 +712,10 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  * @param {() => boolean} [o.chain]  whether the chain may be read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain; his account until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and every send
  * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; his account until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE), asked at every request and every send
+ * @param {() => boolean} [o.io]  whether the Input and Output blocks are handed on in the chain answer and may be read and written by Edit (lib/sceneLevel; his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE), asked at every request and every send
+ * @param {() => boolean} [o.live]  whether Edit's knobs follow the unit for this account (lib/liveKnobs; his account until lib/features LIVE_KNOBS_FOR_EVERYONE), asked at every request and at every report the unit sends
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -770,8 +795,38 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!ordering) return held
     return held ? [...held, ...ordering] : ordering
   }
+
+  /*
+   * EDIT'S KNOBS FOLLOW THE UNIT (lib/liveKnobs), where Edit is open, on an
+   * FM3, FM9 or Axe-Fx III only (never an AM4: a block read every few
+   * seconds was heard as glitches on one through the computer): open to
+   * this account or not (`live`, lib/bluetooth: his account until
+   * lib/features LIVE_KNOBS_FOR_EVERYONE), asked at every request and every
+   * report. Closed, a read asked to be fresh or to wait for a quiet line is
+   * read as every read of Edit's is, and the unit's own report is written in
+   * the log and nothing more.
+   */
+  const liveOn = () => !am4 && !!g3Edit && editOn() && typeof live === 'function' && live() === true
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
+  /*
+   * THE INPUT AND OUTPUT BLOCKS (lib/sceneLevel), on an FM3, FM9 or Axe-Fx
+   * III, where Edit is open: open to this account or not (`io`,
+   * lib/bluetooth: his account until lib/features
+   * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE), asked at every request and every
+   * send. Open, the chain answer hands them on (gen3Blocks), so Edit draws
+   * IN and OUT and the top bar's speaker finds Output 1, and Edit's reads
+   * and writes of them go as any block's. Closed, the answer leaves them
+   * out as it always did, a read or write of one is refused with nothing
+   * sent, and the way out is held to the unit's list without them
+   * (`editHeld`), so not one frame of Edit's reaches them.
+   */
+  const ioOn = () => editOn() && typeof io === 'function' && io() === true
+  /* An AM4 has no catalog of these (g3Edit) and lists no Input or Output: nothing of its is one. */
+  const ioBlock = (eid) => CHAIN_ENDS.includes(g3Edit?.editBlock(eid)?.slug)
+  const ioClosed = (eid) => ioBlock(eid) && !ioOn()
+  /* What Edit's frames are held to at the way out: the blocks the unit listed, less its Input and Output where they are closed to this account. */
+  const editHeld = () => (ioOn() || !Array.isArray(editPlaced) ? editPlaced : editPlaced.filter((eid) => !ioBlock(eid)))
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
   const readerOn = () => !am4 && !!g3Edit && typeof reader === 'function' && reader() === true
   let readerOpen = null
@@ -806,7 +861,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)))
+    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -845,6 +900,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let current = null
   let closed = false
   let tracing = null
+  /* When the last write of this device's ended (end): a block report this soon after it is that write's (REPORT_OWN_MS). */
+  let wroteEnd = -Infinity
 
   /*
    * PLAY GOES FIRST, AND ITS READS STAY TOGETHER. With Edit beside Play both
@@ -1012,6 +1069,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * answer would be too late to arrive.
    */
   const lateUntil = new Map()
+  /* Edit's whole-block reads given up on before any of their answer came, by block: until when that block's late answer may still come, taken once (heardReport). */
+  const lateReads = new Map()
   let holdTimer = null
   /* Until when an answer given up on part-way may still be coming (see heardBytes). */
   let drainUntil = 0
@@ -1419,6 +1478,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (current !== job) return
       if (job.opts.match || job.opts.collect) {
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
+        /* Only a read with nothing back yet can still have its head to come; one given up part-way has the drain below. */
+        if (g3Edit && job.opts.fn === g3Edit.READ_ALL && !job.back && !job.opts.messages) lateReads.set(decode14(job.out[6], job.out[7]), time.now() + LATE_MS)
         if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.back ? job.opts.ms : firstWait} ms${cameBack(job)}`)
       }
       /* Given up on part-way through: the unit may still be sending the rest of it. */
@@ -1483,6 +1544,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (current !== job) return
     if (job.timer !== undefined) time.clearTimeout(job.timer)
     current = null
+    if (job.priority === PRI.write || job.priority === PRI.editWrite) wroteEnd = time.now()
     if (tracing) {
       const messages = job.opts.messages ? job.out : [job.out]
       tracing.push({ out: messages.map(toHex).join(' | '), back: job.back ? toHex(job.back) : '', ms: time.now() - job.started })
@@ -1878,6 +1940,141 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let tapAt = -Infinity
   const BEAT_TAP_QUIET_MS = 400
 
+  /*
+   * THE UNIT'S OWN BLOCK REPORT, heard with nobody asking: a head (0x74)
+   * naming the block and how many values, its pages (0x75) and a foot
+   * (0x76), the same frames as the answer to Edit's read of a block. Until
+   * 16 November 2026 they fell through every check here and were dropped
+   * without a word, so no log could say whether a unit sends one when a knob
+   * is turned on it ("Changing a parameter on the unit itself doesn't
+   * reflect on the Amp": a customer's FM9 through a WIDI Master).
+   *
+   * Now each is gathered by the collector Edit's read uses
+   * (gen3-edit readAllCollector), and written in the log for every account:
+   * which block, and what moved on it since the app last read it. Nothing is
+   * sent for it. One that comes while a write of this device's is out, or
+   * within REPORT_OWN_MS of one, is that write being taken, said once a
+   * connection and never taken for a knob turned on the unit. Where Edit's
+   * knobs follow the unit (liveOn), the report is kept as the block's read,
+   * its channel to be asked (the small list of what is on), and said to the
+   * screens ('blockReport'), so an open panel shows it with nothing more
+   * sent than that list.
+   */
+  let report = null
+  /* On this connection: reports of the unit's own, reports after a write of this device's, and the lines the log has not said yet. */
+  const reports = { unit: 0, own: 0, unsaid: 0, saidAt: -Infinity, ownSaid: false, lateSaid: false, damagedSaid: false }
+  function heardReport(f, now) {
+    if (!g3Edit) return false
+    const fn = f[5]
+    if (fn !== 0x74 && fn !== 0x75 && fn !== 0x76) return false
+    if (fn === 0x74) {
+      if (f.length < 11) return true
+      /*
+       * A read of the app's own given up on in the last LATE_MS: this head is
+       * its late answer, never the unit reporting a knob (the read's
+       * question is 0x1F, its answer 0x74 to 0x76, so the late window kept
+       * by the question's byte never caught it). Taken as a report, it said
+       * a unit sends reports that does not, and slowed the knobs' reads for
+       * the rest of the connection (an independent read, 16 November 2026).
+       * Its pages are then nobody's, and dropped. KEYED BY THE BLOCK AND
+       * TAKEN ONCE: a head for another block, or a second head for the same
+       * one, is the unit's own report again (a second independent read: the
+       * window by the function alone dropped every report for two seconds).
+       */
+      const lateEid = decode14(f[6], f[7])
+      if ((lateReads.get(lateEid) ?? -Infinity) >= now) {
+        lateReads.delete(lateEid)
+        report = null
+        if (!reports.lateSaid) {
+          reports.lateSaid = true
+          say(`a block’s settings came after the app had given up on its own read of them: taken as that read’s late answer, not a report from the unit (said once a connection)`)
+        }
+        return true
+      }
+      const eid = decode14(f[6], f[7])
+      const collect = g3Edit.readAllCollector(model, eid)
+      /* A head whose checksum does not hold starts nothing: dropped, as every frame of these was. */
+      report = collect(f) === null ? { eid, collect, last: now } : null
+      return true
+    }
+    /* A page or a foot of nobody's, or of a report gone quiet for longer than a read may: dropped. */
+    if (!report) return true
+    if (now - report.last > WAIT.gen3ReadAllGap) {
+      report = null
+      return true
+    }
+    report.last = now
+    const got = report.collect(f)
+    if (got === undefined || got === null) return true
+    const eid = report.eid
+    report = null
+    reportDone(eid, got, now)
+    return true
+  }
+  function reportDone(eid, got, now) {
+    const own = (current !== null && (current.priority === PRI.write || current.priority === PRI.editWrite)) || now - wroteEnd < REPORT_OWN_MS
+    const ed = g3()
+    const b = ed.editBlock(eid)
+    const name = b ? `block ${eid} (${b.name})` : `block ${eid}`
+    if (got.damaged) {
+      const line = `the unit sent ${name}’s settings unasked, and they came damaged: not used`
+      /* The first of a connection said on its own, past the limiter, so a burst of whole reports after it is never all a log shows. */
+      if (!reports.damagedSaid) {
+        reports.damagedSaid = true
+        return say(line)
+      }
+      return sayReport(now, line)
+    }
+    if (own) {
+      reports.own++
+      if (!reports.ownSaid) {
+        reports.ownSaid = true
+        say(`the unit sent ${name}’s settings unasked just after a change sent from the app: taken as the unit taking it, not a knob turned on the unit (said once a connection)`)
+      }
+      return
+    }
+    reports.unit++
+    sayReport(now, `the unit reported a change to ${name}: ${reportWords(eid, got, ed)}`)
+    if (!liveOn()) return
+    /* Its channel is asked when it is read (gen3Params); the one last read is kept for the log's words alone. */
+    const was = editKept.get(eid)
+    editKept.set(eid, { at: now, whole: now, channel: null, said: was ? (Number.isInteger(was.channel) ? was.channel : was.said) : null, bulk: got, stale: new Set() })
+    emit({ type: 'blockReport', eid, at: now })
+  }
+  /* What a report says against the app's last read of the block: the knobs that moved on its channel, where the app has read it. */
+  function reportWords(eid, got, ed) {
+    const values = `${got.values.length} value${got.values.length === 1 ? '' : 's'}`
+    const kept = editKept.get(eid)
+    const ch = kept ? (Number.isInteger(kept.channel) ? kept.channel : kept.said) : null
+    if (!kept || !kept.bulk || !Number.isInteger(ch)) return `${values}; the app has no read of it to set this against (none on this connection since the scene or preset last changed), so what moved is not known`
+    const two = (v) => (typeof v === 'number' && !Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(v))
+    const moved = []
+    try {
+      const before = ed.blockParamsOf(eid, kept.bulk, { channel: ch })
+      const after = ed.blockParamsOf(eid, got, { channel: ch })
+      after.named.forEach((z, i) => {
+        const a = before.named[i]
+        if (a && a.id === z.id && a.value !== z.value) moved.push(`${z.label || z.name} ${two(a.value)} → ${two(z.value)}`)
+      })
+    } catch {
+      /* A report the catalog cannot lay out is said by its count alone. */
+    }
+    if (moved.length) return `${values}, ${moved.slice(0, 4).join(', ')}${moved.length > 4 ? ` and ${moved.length - 4} more` : ''} on channel ${CH[ch] ?? ch}`
+    const raw = got.values.filter((v, i) => v !== kept.bulk.values[i]).length + Math.abs(got.values.length - kept.bulk.values.length)
+    return raw ? `${values}, ${raw} of them not as the app last read them, no knob of channel ${CH[ch] ?? ch} among them` : `${values}, all as the app last read them`
+  }
+  /* A report's line, at most one a REPORT_SAY_MS where the knobs follow the unit, else one a REPORT_QUIET_SAY_MS: the ones between are counted into the next. */
+  function sayReport(now, line) {
+    if (now - reports.saidAt < (liveOn() ? REPORT_SAY_MS : REPORT_QUIET_SAY_MS)) {
+      reports.unsaid++
+      return
+    }
+    const more = reports.unsaid ? ` (and ${reports.unsaid} more since the last line)` : ''
+    reports.unsaid = 0
+    reports.saidAt = now
+    say(line + more)
+  }
+
   /** What the unit said that nobody was waiting for. */
   function unasked(f, now) {
     /*
@@ -1894,6 +2091,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     if (lateFor(f[5]) >= 0) return
     if (am4) return
+    if (heardReport(f, now)) return
     const push = parseTunerPush(f, model)
     if (push) {
       pushes++
@@ -2282,7 +2480,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* outlineChain names by effect id and wants the channel as a letter. */
     const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
     sayStrangers(states)
-    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+    /* And the Input and Output after all, where they are open to this account (ioOn): Edit's chain ends. Play still leaves them out (lib/device stageBlocks). */
+    const ends = ioOn()
+    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug) || (ends && CHAIN_ENDS.includes(b.slug))).map(knobsSaid)
     const order = await gridOrder(list, shown, at)
     return order ? inGridOrder(shown, order) : shown
   }
@@ -4205,16 +4405,43 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * its knobs on that channel, named by the unit's own catalog. Kept a moment
    * as an AM4's are (editKept); a gen-3 block is one register, so a write has
    * it read whole again.
+   *
+   * WHERE EDIT'S KNOBS FOLLOW THE UNIT (liveOn, lib/liveKnobs), two things
+   * more a request may ask, and only then: `fresh`, read from the unit and
+   * never from the copy kept a moment (the panel opening, the app back at
+   * the front, the timer), and `ifIdle`, not sent at all unless the line is
+   * quiet: nothing waiting, nothing on it, nothing Play's still to finish,
+   * no tuner, no capture, a unit that answers (the timer's, which is
+   * answered `skipped` with nothing sent, as the footswitch watch is). And
+   * every read says the channel it was cut at then, so the panel can tell a
+   * channel changed on the unit. Closed, both are read as every read is,
+   * and the answer is what it always was.
    */
-  async function gen3Params(eid) {
+  async function gen3Params(eid, how = null) {
     const e = blockNumber(eid)
     /* The unit's Edit for this request, taken once (g3: with the III's NAM in it or not), so one read is named by one catalog from start to end; the way out asks again at each send. */
     const ed = g3()
     const b = ed.editBlock(e)
-    if (!b) throw badInput(`The app can’t open block ${e} from here yet.`)
+    /* An Input or Output closed to this account (ioClosed) is refused as a block with no knobs is: nothing goes. */
+    if (!b || ioClosed(e)) throw badInput(`The app can’t open block ${e} from here yet.`)
+    const following = liveOn()
+    const fresh = following && how?.fresh === true
+    const ifIdle = following && how?.ifIdle === true
+    if (ifIdle && (current || waiting.length || draining() || captureBusy || tuner.on || checking || quiet() || !answered || editWaits() > 0)) {
+      throw failure('The line is busy: the block is read again in a moment.', 409, { skipped: true })
+    }
     const kept = editKept.get(e)
-    if (kept && !kept.stale.size && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) {
-      return ed.blockParamsOf(e, kept.bulk, { channel: kept.channel })
+    if (!fresh && kept && !kept.stale.size && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) {
+      /* The unit's own report (heardReport) is kept with its channel still to be asked: the small list of what is on, and nothing more. */
+      let channel = kept.channel
+      if (channel === null) {
+        const at = moves
+        channel = (await gen3PlacedHere(e)).channel
+        if (moves === at && editKept.get(e) === kept) kept.channel = channel
+      }
+      const out = ed.blockParamsOf(e, kept.bulk, { channel })
+      if (following) out.channel = CH[channel] ?? null
+      return out
     }
     const started = time.now()
     /* As on an AM4: a scene or preset changed while this was read, and it is answered but not kept (moved). */
@@ -4234,19 +4461,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const out = ed.blockParamsOf(e, got, { channel: st.channel })
     /* And where the channel was cut from: the unit's count, the values that came, how many a channel and where this one starts (gen3-edit sliceOf). A read sliced in the wrong place is a knob that "didn't take" on every channel but A, and the log could not say so. */
     const cut = ed.sliceFor(e, got, { channel: st.channel })
-    say(
+    const line =
       `read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}` +
-        `; the unit said ${got.count} values and sent ${got.values.length}, ${cut.stride} a channel, ${cut.channels} channel${cut.channels === 1 ? '' : 's'}, this one from value ${cut.base}`
-    )
+      `; the unit said ${got.count} values and sent ${got.values.length}, ${cut.stride} a channel, ${cut.channels} channel${cut.channels === 1 ? '' : 's'}, this one from value ${cut.base}`
+    /* The timer's reads (every few seconds while a panel is open) are said once a block a connection: the log keeps 400 lines. What they change, the panel says (lib/liveKnobsHere). */
+    if (!ifIdle) say(line)
+    else if (!timerSaid.has(e)) {
+      timerSaid.add(e)
+      say(`${line}; read again every few seconds while its knobs are open (said once)`)
+    }
+    if (following) out.channel = CH[st.channel] ?? null
     return out
   }
+  /* The blocks whose timer read has been said on this connection (gen3Params). */
+  const timerSaid = new Set()
 
   /* PUT /preset/blocks/<eid>/params/<id> on a gen-3 unit: one knob or switch, the computer's frame for it. */
   async function gen3WriteKnob(eid, id, body) {
     const at = moves
     const e = blockNumber(eid)
     const ed = g3()
-    if (!ed.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
+    if (!ed.editBlock(e) || ioClosed(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = ed.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
     /* The typed way asked of a knob, which a gen-3 knob is never sent (gen3-edit ONE WAY ONLY): nothing goes, and it is answered as not sent rather than refused, so the checked write (lib/device setParamConfirmed) goes no further with it and says what its own check read. */
@@ -4266,6 +4501,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3WriteModel(eid, value) {
     const at = moves
     const e = blockNumber(eid)
+    if (ioClosed(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = g3().modelFrame(model, e, value)
     if (made.refused) throw badInput(made.refused)
     await gen3PlacedHere(e)
@@ -5227,7 +5463,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const editing = opts?.editing === true && editOn()
     if (editing && part[0] === 'preset' && part[1] === 'blocks' && isNum(part[2])) {
       const eid = Number(part[2])
-      if (method === 'GET' && part.length === 4 && part[3] === 'params') return editRoute(() => (am4 ? am4Params(eid) : gen3Params(eid)))
+      if (method === 'GET' && part.length === 4 && part[3] === 'params') return editRoute(() => (am4 ? am4Params(eid) : gen3Params(eid, opts)))
       if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4]) && !(am4 && eid === AM4_BLOCKS.amp && Number(part[4]) === AM4.OUT_BOOST)) {
         return editRoute(() => (am4 ? am4WriteKnob(eid, Number(part[4]), body) : gen3WriteKnob(eid, Number(part[4]), body)))
       }
@@ -5913,6 +6149,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     heardBytes,
     /** How many bytes have come back on this connection, of any kind (bleLink: nothing at all is a connection to make afresh). */
     bytesIn: () => bytesIn,
+    /** How many block reports the unit has sent of its own on this connection, not a write's (heardReport): Edit's timer reads less often once one has come (lib/liveKnobs). */
+    reportsHeard: () => reports.unit,
     /** Gen 3, with nothing heard from the unit picked: each other unit's own detect question, to name the one on this adapter (null when none answers). */
     askAround,
     /** Once closed: whether the AM4's own tuner may have been left open, its 0 owed to the next connection. */

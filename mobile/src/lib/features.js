@@ -490,6 +490,38 @@ export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false
 export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false
 
 /**
+ * THE INPUT AND OUTPUT BLOCKS IN EDIT OVER BLUETOOTH OR THE UNIT'S USB
+ * CABLE, THE VOLUME BUTTON THERE ON OUTPUT 1, AND EACH SCENE'S OWN LEVEL
+ * (lib/sceneLevel; bleWire `io`; components/Volume; screens/Edit).
+ *
+ * A customer with an FM9 over Bluetooth asked for "scenes levels and IN and
+ * OUT blocks" (16 November 2026). Over Bluetooth the wire threw the Input
+ * and Output blocks away, so Edit had no IN or OUT there and the top bar no
+ * volume button; and on every connection a scene's level (the Output
+ * block's Scene 1 to 8 Level, -20 to +20 dB) was read and never drawn.
+ * Open, on an FM3, FM9 or Axe-Fx III where Edit is open over the wire:
+ * Edit draws IN and OUT as the chain's ends, as it does through the
+ * computer; the volume button is there and moves Output 1; the volume
+ * pop-up has a row for the scene the unit is on; and Edit's Output block
+ * has the eight scene levels as typed boxes. Through the computer, the last
+ * three. Play still never shows the Input or the Output.
+ *
+ * NONE OF IT HAS BEEN SEEN ON A UNIT: not an FM9 listing its Input and
+ * Output over Bluetooth, nor how many values its Output block's read
+ * carries, nor a scene level written from the app landing where asked.
+ * Off, it is his account only (lib/bluetooth outputAndSceneLevels): every
+ * other account sees and sends exactly what it did, the wire leaves both
+ * blocks out of its chain answer, and a read or write of either is refused
+ * before it goes and at the way out.
+ *
+ * Opening it to customers is his call once he has moved a scene level
+ * himself over Bluetooth and through the computer: whether that is an
+ * update or waits for a store version whose texts say so (the Bluetooth
+ * page's own list says there is no volume button there).
+ */
+export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = false
+
+/**
  * QUICK BUILD AND STARTER CHAINS (shared/starter-chains.mjs,
  * components/QuickBuild, components/StarterChains): on an empty preset, the
  * blocks tapped in order go into one row and are joined from the Input to
@@ -536,3 +568,28 @@ export const QUICK_BUILD_FOR_EVERYONE = false
  * everyone, its What's new line goes in then, with the time he measured.
  */
 export const COMPUTER_UPDATE_FOR_EVERYONE = false
+
+/**
+ * EDIT'S KNOBS FOLLOW THE UNIT (lib/liveKnobs, the rules; lib/liveKnobsHere,
+ * Edit's block panel, the hold pop-up and the big screen's panel; bleWire
+ * heardReport), on an FM3, an FM9 or an Axe-Fx III, never an AM4 or a VP4.
+ *
+ * "Changing a parameter on the unit itself doesn't reflect on the Amp." (A
+ * customer's FM9 over Bluetooth through a WIDI Master, 16 November 2026.)
+ * Edit read a block's knobs as its panel opened and then only after its own
+ * changes, a scene, a channel or a preset. Now the open block is read again
+ * every few seconds over Bluetooth or the unit's USB cable, as the app comes
+ * back to the front and as the panel opens, and at once when the unit says
+ * itself that a knob moved: in its own block report over Bluetooth or the
+ * cable, or in the news the computer app passes on.
+ *
+ * His account first, as every new thing is: NOBODY HAS WATCHED A KNOB TURNED
+ * ON A UNIT SHOW UP HERE YET, nor listened for whether a read every few
+ * seconds is heard on one. Off, it is his account only (lib/useLiveKnobs for
+ * the screens, lib/bluetooth liveKnobsOverBluetooth for the wire), and every
+ * other account's Edit reads and sends exactly what it did. The unit's own
+ * report is written in the log for every account, which is how a customer's
+ * log says whether their unit sends one. It opens to everyone when he says
+ * so, with its What's new line in that pull request.
+ */
+export const LIVE_KNOBS_FOR_EVERYONE = false

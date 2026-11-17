@@ -9,6 +9,8 @@ import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
 import { noteEdited, useRig } from '../lib/rig'
+import { useOutputAndSceneLevels } from '../lib/bluetooth'
+import { sceneLevelParam, sceneLevelParams, sceneNudged, volumeOutput } from '../lib/sceneLevel'
 import {
   latestWriter,
   NUDGE_SETTLE_MS,
@@ -120,10 +122,26 @@ const noOutput = (present, onError) => {
  */
 const ofSounding = (s) => `${s.deviceSlug}:${s.preset?.number}`
 
+/* The scene the unit is on, from 0 (the rig's own, as the scene tiles have it), and its name. */
+const ofScene = (s) => s.sceneIndex
+const ofSceneNames = (s) => s.sceneNames
+
 export default function Volume({ blocks, open, onClose, onError }) {
-  const output = (blocks || []).find((b) => b.slug === 'output')
+  /*
+   * OUTPUT 1, AND THIS SCENE'S LEVEL, for an account lib/bluetooth
+   * outputAndSceneLevels opens (his, until lib/features
+   * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE): the volume moves Output 1
+   * whatever order the chain lists the Output blocks in, and a row under it
+   * reads and writes the Output block's level for the scene the unit is on
+   * (lib/sceneLevel). Every other account: the first Output block the chain
+   * lists, and no row, exactly as before (volumeOutput).
+   */
+  const levels = useOutputAndSceneLevels()
+  const output = volumeOutput(blocks, levels)
   const eid = idOf(output)
   const sounding = useRig(ofSounding)
+  const sceneIndex = useRig(ofScene)
+  const sceneNames = useRig(ofSceneNames)
 
   const [param, setParamState] = useState(null)
   const [value, setValue] = useState(null)
@@ -147,6 +165,22 @@ export default function Volume({ blocks, open, onClose, onError }) {
     level.current = v
     setValue(v)
   }
+  /*
+   * EVERY SCENE'S LEVEL (lib/sceneLevel), drawn where the switch opens them:
+   * the settings the Output block's read named (`scenes`: the same read as the
+   * main level's, nothing more is asked of the unit), and the level each was
+   * last set to, by that read, a press or the unit's answer, by its setting
+   * (`sceneAt`). That is what a press steps from, as `level` is the main
+   * level's, and it is set only with what is drawn (`showScene`). A scene
+   * changed on the unit only changes which one is drawn: all eight were read.
+   */
+  const [scenes, setScenes] = useState([])
+  const sceneAt = useRef({})
+  const [sceneShown, setSceneShown] = useState({})
+  const showScene = (id, v) => {
+    sceneAt.current = { ...sceneAt.current, [id]: v }
+    setSceneShown(sceneAt.current)
+  }
   const [dragging, setDragging] = useState(false)
   /* Measured, because the thumb's position has to be a fraction of the real
      track rather than of a number typed here. */
@@ -163,8 +197,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
    * said. Never the level itself: that is `level`, above, and why.
    */
   const live = useRef({ param: null, width: 0, eid: null, present: false, onError: null })
+  /* And the same for this scene's row: whether it is open here, every scene's level setting the last read named, and the scene the unit is on. */
+  const sceneLive = useRef({ open: false, scenes: [], index: null })
   useEffect(() => {
     live.current = { param, width, eid, present: !!output, onError }
+    sceneLive.current = { open: levels === true, scenes, index: sceneIndex }
   })
 
   /*
@@ -225,6 +262,15 @@ export default function Volume({ blocks, open, onClose, onError }) {
     settle.current.again = false
     settle.current.eid = null
     settle.current.turn += 1
+    /* And every scene's level with it: another preset's, or another block's. A press on one still waiting is not confirmed (sceneLanding `turn`). */
+    setScenes([])
+    sceneAt.current = {}
+    setSceneShown({})
+    const s = sceneLanding.current
+    for (const id of Object.keys(s.timers)) clearTimeout(s.timers[id])
+    s.timers = {}
+    s.again = {}
+    s.turn += 1
   }, [eid, sounding])
   useEffect(() => {
     if (!open || !Number.isInteger(eid)) return undefined
@@ -249,6 +295,10 @@ export default function Volume({ blocks, open, onClose, onError }) {
          */
         const landing = (settle.current.timer !== null || settle.current.landing) && settle.current.eid === eid
         if (!landing) show(found ? found.value : null)
+        /* Every scene's level out of the same answer (drawn only where the switch opens them, below); one with a press still landing keeps the press's (sceneSettling). */
+        const list = sceneLevelParams(res?.named)
+        setScenes(list)
+        for (const q of list) if (!sceneSettling(q.id)) showScene(q.id, q.value)
       } catch (err) {
         if (!stop) onError?.(err.message)
       } finally {
@@ -431,7 +481,105 @@ export default function Volume({ blocks, open, onClose, onError }) {
     settle.current.timer = setTimeout(settleNow, NUDGE_SETTLE_MS)
   }
 
+  /*
+   * THIS SCENE'S LEVEL: − and +, a whole dB a press (lib/sceneLevel), the
+   * main level's rules. Each scene's level is its own setting, so each has
+   * its own writer (one write on the wire, the newest press next, as the
+   * main level's), and its own careful read-back once the presses on it
+   * stop (NUDGE_SETTLE_MS), one at a time. A press is for the scene the row
+   * names when it is pressed: the setting it writes names that scene, so a
+   * footswitch to another scene after it does not move where it lands.
+   * `turn` is counted up when the level goes (another preset or block, the
+   * reset above), and a press made before is not confirmed after.
+   */
+  const sceneWriters = useRef(null)
+  if (!sceneWriters.current) sceneWriters.current = new Map()
+  const sceneWriter = (id) => {
+    let w = sceneWriters.current.get(id)
+    if (!w) {
+      w = latestWriter(({ out, p, v }) => setParam(out, p.id, v, p))
+      sceneWriters.current.set(id, w)
+    }
+    return w
+  }
+  /* `busy` is, by setting, the turn of the check that is out for it, if one is. */
+  const sceneLanding = useRef({ timers: {}, busy: {}, again: {}, turn: 0 })
+  useEffect(() => () => Object.values(sceneLanding.current.timers).forEach(clearTimeout), [])
+  /*
+   * A press on this setting is still waiting to be confirmed, or being
+   * confirmed, on THIS preset: a read that comes back now does not put its
+   * older level over it. A check still out from the last preset holds back
+   * nothing of this one's (it held the new preset's level off the row).
+   */
+  const sceneSettling = (id) => sceneLanding.current.timers[id] !== undefined || sceneLanding.current.busy[id] === sceneLanding.current.turn
+  const sceneLand = async (p, out, turn) => {
+    const tell = live.current.onError
+    const v = sceneAt.current[p.id]
+    if (typeof v !== 'number') return
+    const failed = await sceneWriter(p.id).settled()
+    if (failed) tell?.(failed.message)
+    if (sceneLanding.current.turn !== turn) return
+    const res = await setParamConfirmed(out, p.id, v, p)
+    noteEdited()
+    /* The level went (another preset, another block), or a newer press is wanted: this one is not said. */
+    if (sceneLanding.current.turn !== turn || sceneAt.current[p.id] !== v) return
+    if (res.ok) return
+    if (res.unverified) {
+      tell?.(`Couldn’t check that scene ${p.index + 1}’s level took: the unit didn’t answer. It may have.`)
+      return
+    }
+    const holding = typeof res.actual === 'number' ? res.actual : null
+    if (holding !== null) showScene(p.id, holding)
+    tell?.(
+      holding === null
+        ? `Scene ${p.index + 1}’s level didn’t take. You asked for ${volumeLabel(v, p)}.`
+        : `Scene ${p.index + 1}’s level didn’t take. You asked for ${volumeLabel(v, p)}; the unit says ${volumeLabel(holding, p)}.`
+    )
+  }
+  const sceneSettle = async (p, out, turn) => {
+    const s = sceneLanding.current
+    clearTimeout(s.timers[p.id])
+    delete s.timers[p.id]
+    if (s.busy[p.id] !== undefined) {
+      s.again[p.id] = { p, out, turn }
+      return
+    }
+    s.busy[p.id] = turn
+    try {
+      await sceneLand(p, out, turn)
+    } catch (err) {
+      live.current.onError?.(err.message)
+    } finally {
+      delete s.busy[p.id]
+      const next = s.again[p.id]
+      delete s.again[p.id]
+      if (next && next.turn === s.turn) sceneSettle(next.p, next.out, next.turn)
+    }
+  }
+  const sceneNudge = (direction) => {
+    const { eid: out } = live.current
+    const { open: here, scenes: list, index } = sceneLive.current
+    /* Only where the switch opens it now (an account signed out with the pop-up open takes it with it), on a scene the unit has said, with a block to write to. */
+    const p = here ? sceneLevelParam(list, index) : null
+    if (!p || !Number.isInteger(out)) return
+    /* Never from a level that is not known, and nothing past either end (sceneNudged). */
+    const next = sceneNudged(sceneAt.current[p.id], p, direction)
+    if (next === null) return
+    showScene(p.id, next)
+    sceneWriter(p.id).send({ out, p, v: next })
+    /* Save is told as the level is sent, as the main level's press does. */
+    noteEdited()
+    const s = sceneLanding.current
+    const turn = s.turn
+    clearTimeout(s.timers[p.id])
+    s.timers[p.id] = setTimeout(() => sceneSettle(p, out, turn), NUDGE_SETTLE_MS)
+  }
+
   const pct = volumePercent(value, param)
+  /* This scene's row: where the switch opens it, once the Output block has been read, on a scene the unit has said whose level the read named. */
+  const sceneParam = levels === true ? sceneLevelParam(scenes, sceneIndex) : null
+  const sceneRow = Number.isInteger(eid) && !reading && !!sceneParam
+  const sceneName = sceneRow ? String(sceneNames?.[sceneParam.index] || '').trim() : ''
   /* Its margin from the phone's own down each side, where it has any (lib/screenShape clearSides: the Duo's strip), not from under it. */
   const sides = clearSides(insets, space.xl)
   const panel = Math.min(width0 - sides.paddingLeft - sides.paddingRight, 460)
@@ -574,6 +722,45 @@ export default function Volume({ blocks, open, onClose, onError }) {
       </View>
             )}
 
+            {/*
+              THIS SCENE'S LEVEL (lib/sceneLevel), under the preset's own, for
+              an account the switch opens: the level of the scene the unit is
+              on, with − and + a whole dB at a time. Presses only: nothing here
+              is dragged, so it needs no room of its own from a scroll view.
+            */}
+            {sceneRow ? (
+              <View style={{ gap: space.xs }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>THIS SCENE</Text>
+                  <Text numberOfLines={1} style={{ flexShrink: 1, color: color.silkFaint, fontSize: font.micro }}>
+                    {sceneName ? `Scene ${sceneParam.index + 1} · ${sceneName}` : `Scene ${sceneParam.index + 1}`}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                  <Press
+                    label="−"
+                    height={TAP}
+                    style={{ width: TAP, borderRadius: TAP / 2 }}
+                    accessibilityLabel={`Scene ${sceneParam.index + 1} level down`}
+                    onPress={() => sceneNudge(-1)}
+                  />
+                  <Text
+                    accessibilityLabel={`Scene ${sceneParam.index + 1} level`}
+                    style={{ flex: 1, textAlign: 'center', color: color.silk, fontSize: font.title, fontFamily: face }}
+                  >
+                    {volumeLabel(sceneShown[sceneParam.id], sceneParam)}
+                  </Text>
+                  <Press
+                    label="+"
+                    height={TAP}
+                    style={{ width: TAP, borderRadius: TAP / 2 }}
+                    accessibilityLabel={`Scene ${sceneParam.index + 1} level up`}
+                    onPress={() => sceneNudge(1)}
+                  />
+                </View>
+              </View>
+            ) : null}
+
             {/* "Make it so the metronome can be turned on and off in the volume
                 section of the app." Outside the level's own reading and no-level
                 notes: a unit with no level to move can still click. */}
@@ -590,7 +777,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
               not inside it, and where it all fits nothing moves.
             */}
             <ScrollView
-              style={{ flexGrow: 0, maxHeight: metronomeRoom(height0, insets) }}
+              style={{ flexGrow: 0, maxHeight: metronomeRoom(height0, insets, sceneRow) }}
               alwaysBounceVertical={false}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
@@ -624,8 +811,10 @@ const KNOB = 28
 const VOLUME_ROW = 44
 const CLOSE_LINE = 16
 const AROUND_METRONOME = 4 * space.xl + 4 * space.lg + VOLUME_ROW + 2 * TAP + CLOSE_LINE
+/* This scene's row, where it is drawn (`scene`): its gap, its heading's line, its gap and its buttons. */
+const SCENE_ROW = space.lg + CLOSE_LINE + space.xs + TAP
 const LEAST_METRONOME = TAP + 2 * space.xl
-const metronomeRoom = (height, insets) => Math.max(LEAST_METRONOME, height - (insets?.top || 0) - (insets?.bottom || 0) - AROUND_METRONOME)
+const metronomeRoom = (height, insets, scene = false) => Math.max(LEAST_METRONOME, height - (insets?.top || 0) - (insets?.bottom || 0) - AROUND_METRONOME - (scene ? SCENE_ROW : 0))
 
 /** What VoiceOver's rotor offers on the slider. */
 const ROTOR = [{ name: 'increment' }, { name: 'decrement' }]

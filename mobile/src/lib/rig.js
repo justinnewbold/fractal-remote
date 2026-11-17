@@ -647,6 +647,24 @@ export function onConfigDoc(fn) {
   return () => configWatchers.delete(fn)
 }
 
+/*
+ * A KNOB MOVED ON THE UNIT, as the computer app or the Bluetooth wire says
+ * it: the computer's {type: 'param', effectId, paramId, norm} for every knob
+ * it sees move (ForgeFX relays them: FM9 and Axe-Fx III reports, its FM3
+ * watch, and every write it makes, this device's included), and the wire's
+ * {type: 'blockReport', eid} for the unit's own block report
+ * (bleWire heardReport). The phone threw the first away. It is told to an
+ * open block panel whose knobs follow the unit (lib/liveKnobsHere, his
+ * account until lib/features LIVE_KNOBS_FOR_EVERYONE), which reads the block
+ * again, and to nothing else: with no panel listening, it goes nowhere, as
+ * it always went.
+ */
+const knobWatchers = new Set()
+export function onKnobNews(fn) {
+  knobWatchers.add(fn)
+  return () => knobWatchers.delete(fn)
+}
+
 /**
  * Everything the unit says while nobody asked.
  *
@@ -660,6 +678,17 @@ export function handleEvent(event) {
   /* The unit's own tempo beat, heard over Bluetooth or the cable: for whoever is keeping this device's beat (lib/beatBus, lib/unitBeat), and nothing else here. */
   if (event.type === 'beat') {
     unitBeatHeard(event.at)
+    return
+  }
+
+  if (event.type === 'param' || event.type === 'blockReport') {
+    for (const fn of [...knobWatchers]) {
+      try {
+        fn(event)
+      } catch {
+        // One panel's listener cannot stop the others hearing it.
+      }
+    }
     return
   }
 

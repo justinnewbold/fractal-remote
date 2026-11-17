@@ -296,10 +296,12 @@ scenes. Still on the list, not started:
 - **A volume for the AM4**, with its four scene levels.
 - Quick wins: a setlist tap sets the song's scene and tempo too; Android's
   back swipe on Play asks first; after a crash, offer once to send the log;
-  the volume slider always moves Output 1; the Windows warnings on the
+  the volume slider always moves Output 1 (built 16 November 2026 for his
+  account, CLAUDE.md "The Output block's levels"); the Windows warnings on the
   download card; help-page sentences no longer true.
 - Bigger: setlists made of songs (own title, same preset twice, a short
-  note); scene volume in the volume pop-up; a Gig lock; "how fast is the
+  note); scene volume in the volume pop-up (built 16 November 2026 for his
+  account, the same); a Gig lock; "how fast is the
   link"; "No sound?" on the phone; the computer saying exactly why it cannot
   see the unit; a weekly backup of every preset; page-turner pedals; iPad
   sideways.

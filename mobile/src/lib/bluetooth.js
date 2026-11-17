@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2550,6 +2550,8 @@ export function openWire() {
     onForeign: (name) => noteBluetooth({ answeredAs: name || null }),
     /* Play's and Edit's blocks in the unit's own order, from its grid (bleWire gridOrder): his account's, until lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE; asked at every request and every send. Not behind Edit's door: it is Play's order. */
     blockOrder: () => blockOrderFromGrid(),
+    /* The Input and Output blocks in the chain answer, and their reads and writes (lib/sceneLevel): his account's, until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, below). */
+    io: () => outputAndSceneLevels(),
     /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
@@ -2561,7 +2563,9 @@ export function openWire() {
     /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
     save: () => saveOverBluetooth(),
     /* The chain read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain): his account's, until lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
-    chain: () => chainOverBluetooth()
+    chain: () => chainOverBluetooth(),
+    /* Edit's knobs follow the unit (lib/liveKnobs): his account's, until lib/features LIVE_KNOBS_FOR_EVERYONE; asked at every request and every report the unit sends. Edit's own door still has to be open (`edit`, above). */
+    live: () => liveKnobsOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2647,3 +2651,35 @@ export const chainOverBluetooth = () => allUnits === true || CHAIN_OVER_BLUETOOT
  * BLOCK_ORDER_FROM_GRID_FOR_EVERYONE. For the wire alone: no screen asks.
  */
 export const blockOrderFromGrid = () => allUnits === true || BLOCK_ORDER_FROM_GRID_FOR_EVERYONE
+
+/**
+ * Whether this account has the Output block's levels (lib/sceneLevel): on
+ * every connection, the volume moving Output 1 and a row for the scene the
+ * unit is on, and the eight scene levels in Edit's Output block; over
+ * Bluetooth or a USB cable, also the Input and Output blocks handed on by
+ * the wire, so Edit draws IN and OUT and the volume button is there. His,
+ * by the sign-in kept on the device, until lib/features
+ * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE. The wire also wants Edit open.
+ */
+export const outputAndSceneLevels = () => allUnits === true || OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE
+
+/** The same, redrawn when it changes: for the volume pop-up, the top bar's speaker and Edit's Output block. */
+export const useOutputAndSceneLevels = () => useBluetoothAdmin() || OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE
+
+/**
+ * Whether the volume button is there over Bluetooth or a USB cable on this
+ * unit, for the Bluetooth page's words: where the wire hands the Output
+ * block on, which is an FM3, FM9 or Axe-Fx III (an AM4 lists no Output
+ * block, and a VP4 has no Edit) with Edit open and the levels open to this
+ * account (bleWire `ioOn`).
+ */
+export const volumeOverBluetooth = (unit = saved.unit) => unit !== 'am4' && editOverBluetooth(unit) && outputAndSceneLevels()
+
+/**
+ * Whether Edit's knobs follow the unit for this account over Bluetooth or a
+ * USB cable (lib/liveKnobs: the unit's own block report kept and said, a
+ * read asked fresh or only on a quiet line): his, by the sign-in kept on the
+ * device, until lib/features LIVE_KNOBS_FOR_EVERYONE. For the wire, which
+ * also wants Edit open on the unit and never follows an AM4.
+ */
+export const liveKnobsOverBluetooth = () => allUnits === true || LIVE_KNOBS_FOR_EVERYONE

@@ -1528,8 +1528,10 @@ what the computer sends for the same edit, and a test holds it there.
     blocks (true for every account but his since 1.90.76: "The chain over
     Bluetooth", below), no modifiers, renaming or copying a channel, a cab chosen with
     the computer on the three gen-3 units, and no looper, volume button,
-    unit metronome click or Footswitches page. Keep that page true
-    whenever one of these is built.
+    unit metronome click or Footswitches page (his account has the volume
+    button on an FM3, FM9 or Axe-Fx III since 16 November 2026, and the
+    line drops it for him there: "The Output block's levels", below). Keep
+    that page true whenever one of these is built.
 - **The switch is one line**: `EDIT_FROM_STORE` in
   mobile/src/lib/ble-rule.js, one entry per unit whose knobs are built,
   null until a store version opens it. To get it out to everyone, set the
@@ -1625,6 +1627,74 @@ what the computer sends for the same edit, and a test holds it there.
     said is damaged, and a channel switch drops the 400 ms list of what is
     in the preset, so the next read is on the new channel. Two checks of
     one block asked together still make two reads.
+- **Edit's knobs follow the unit: built 16 November 2026, HIS ACCOUNT
+  ONLY.** "Changing a parameter on the unit itself doesn't reflect on the
+  Amp" (a customer's FM9 over Bluetooth through a WIDI Master): Edit read a
+  block once as its panel opened. Now, on an FM3, FM9 or Axe-Fx III (never
+  an AM4, never a VP4, never the demo), the open block's knobs in Edit, the
+  hold pop-up and the big screen's panel are read again (the rules are
+  mobile/src/lib/liveKnobs.js, the panel's side lib/liveKnobsHere.js, run
+  by test/live-knobs.mjs): every few seconds over Bluetooth or the unit's
+  cable (the larger of 4 s and five times the last read after it ends; 12 s
+  after two minutes with no touch; 15 s once the unit has sent its own
+  report on that connection), only when nothing else is waiting for the
+  line or on it, and never while a finger is on a knob, a value waits to
+  go, a write is out or for 2.5 s after its check, for 3 s after a Play
+  tap, a scene or a preset, with the tuner open, a capture going or the
+  app away; at once as the app comes back to the front and as a panel
+  opens (never from the five-second copy); when the unit sends its own
+  block report (the 0x74 burst, bleWire heardReport, which nothing heard
+  before); and through a computer when the computer app passes on a knob
+  it saw move ('param', which the phone threw away; rig `onKnobNews`). A
+  read changes only knobs whose value differs, never one still waiting to
+  go, and nothing from a read sent before a write began. The switch is
+  `LIVE_KNOBS_FOR_EVERYONE` in features.js, false (lib/useLiveKnobs for
+  the screens, lib/bluetooth `liveKnobsOverBluetooth` for the wire);
+  closed, Edit reads and sends exactly what it did. THE UNIT'S REPORT IS
+  WRITTEN IN THE LOG FOR EVERY ACCOUNT ("the unit reported a change to
+  block 58 (Amp): …, Gain 1 5 → 6.2 on channel A"), and nothing is sent for
+  it, so a customer's log says whether their unit sends one: its first
+  line in full, the rest folded into a count every 30 s where the knobs do
+  not follow (`REPORT_QUIET_SAY_MS`; every second where they do). An
+  independent read before it went out found four more things, each fixed
+  with a test seen to fail without its fix: the late answer to the app's
+  OWN read of a block (given up after its 1 s) was taken as the unit's
+  report, which would have said an FM3 sends one, and slowed the reads to
+  every 15 s for the connection (a head within the read's late window is
+  that answer now, said once); a value set down that sends nothing (a knob
+  pushed past its end, a level typed past it, a write that failed) held
+  every read for as long as the panel stayed open (Edit `settledAt`);
+  through the computer, a read the computer could not finish (every knob at
+  nought, no ranges, no model: ForgeFX gen3 blockParams' catch) blanked the
+  panel, and is not used now; and a read already out when a finger landed
+  was laid over the knob under it (dropped, and a news or front read owed
+  again for after the finger lifts). A SECOND READ, of those fixes, found
+  three more, fixed the same way: the late window caught the unit's real
+  reports on any block for two seconds after any read gave up (it is the
+  given-up block's own now, and taken once: `lateReads`); the first
+  damaged report of a connection took the log's one line for 30 s, so a
+  log could say only "came damaged" over twenty whole reports (it is said
+  on its own now); and where the knobs follow, a write the unit took and
+  checked jumped back to the old number when the read after it failed
+  (the checked value stands, and is let go of). A THIRD READ, after the
+  work was carried onto that day's main (17 November 2026), found the carry-over
+  word for word and one cost, LEFT: a read the panel's clock sends holds
+  the line like any read of a block, so a Play tap that lands just after
+  one has started waits for it, up to the read's own time (0.3 to 0.7 s on
+  his units; about 0.9 s on a link as slow as 2,000 bytes a second). The
+  tap is still sent: its 1.5 s limit is passed only on a link slower than
+  any measured, and there the panel's own read on opening does the same
+  without this. The clock keeps the line busy a sixth of the time at
+  most. Look at it again before the switch opens to everyone (give the
+  clock's read up for a tap, or stand it back while Play is beside Edit).
+  NOT PROVEN ON
+  A UNIT: whether an FM9 or an Axe-Fx III sends that report out of its MIDI
+  jacks to an adapter (seen only with an editor on USB; READ THAT LINE
+  FIRST in the next log with Edit open while a knob is turned on the unit),
+  and whether a block read every five seconds or so is heard as a glitch on
+  any of the three (the computer app's every-few-seconds reads of all an
+  AM4's blocks were, which is why the AM4 is left out). The browser and the
+  computer's window do not follow yet: that is a computer release.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
   `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
   others: test/ledger.mjs `editProblems` asks each unit on the rows that
@@ -2328,6 +2398,71 @@ UNIT YET: his next drag's log is the first check.
   computer's own window and Wi-Fi page are this release.
 - The browser's half is inside the computer app, so this made a computer
   release; COMPUTER_NEEDED did not move.
+
+**The Output block's levels: IN and OUT in Edit over Bluetooth, the volume
+button there, and each scene's own level. Built 16 November 2026, HIS
+ACCOUNT ONLY, and NONE OF IT HAS BEEN SEEN ON A UNIT.**
+
+> "Scenes levels and IN and OUT blocks" (a customer, an FM9 over Bluetooth
+> through a WIDI Master on an iPhone, 16 November 2026)
+
+Over Bluetooth the wire threw the Input and Output blocks away (bleWire
+`OFF_STAGE`, from when Bluetooth was Play only), so Edit had no IN or OUT
+there and the top bar no volume button; and on every connection a scene's
+level (the Output block's Scene 1 to 8 Level, -20 to +20 dB, ids 18 to 25
+on the FM3, FM9 and Axe-Fx III alike, each by its own catalog) came with
+every read of the block and was never drawn, since Edit keeps every
+"...Level" off its knobs. One switch now, `OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE`
+in features.js, false, asked through lib/bluetooth `outputAndSceneLevels`
+(his account, or the switch) and handed to the wire as `io`, which also
+wants Edit open (bleWire `ioOn`). For his account:
+
+- *Over Bluetooth or a USB cable* (FM3, FM9, Axe-Fx III; an AM4 lists no
+  Output block) the chain answer hands the Input and Output on, so Edit
+  draws them as the chain's ends, as through the computer, and the speaker
+  appears on the top bar. Play still never shows them (`stageBlocks`), and
+  the looper stays out. The Bluetooth page's last line drops "volume
+  button" only where the button is there (lib/editWords
+  `notOverBluetoothLine`, lib/bluetooth `volumeOverBluetooth`).
+- *The volume moves Output 1* (lib/sceneLevel `volumeOutput`: the lowest
+  Output id, 42), whatever order the chain lists them in; the speaker and
+  the pop-up ask the same helper.
+- *The volume pop-up has a THIS SCENE row*: the level of the scene the unit
+  is on, read out of the same Output read (nothing more is asked), − and +
+  a whole dB, written as any knob (setParam, then one checked write once
+  the presses stop, one check at a time). Never under -20 dB or over +20,
+  never stepped from a level not read, a press on one preset never
+  confirmed on another, and a footswitch to another scene shows that
+  scene's own level.
+- *Edit's Output block has SCENE LEVELS*: the eight as typed boxes under
+  its Level (`sceneRowsFor`), held to the floor, written as a knob is. Not
+  in the hold pop-up.
+- *A value that sends nothing is let go of* (an independent read, 16
+  November 2026): a scene's level, or the Level, typed past its end while
+  already there left its value waiting with nothing to send it, and the
+  knobs following the unit stood still behind it (Edit `settledAt`).
+- *Every other account sees and sends exactly what it did*: the wire leaves
+  both blocks out of its answer, a read or write of either is refused
+  before it goes ("The app can't open/change block N from here yet") and
+  again at the way out (`editHeld`), the volume moves the first Output
+  listed, and there is no row. test/bluetooth.mjs, test/volume-drag.mjs and
+  test/mobile.mjs hold it, each rule seen to fail by a mutation.
+
+NOT PROVEN ON A UNIT, and what to read first in his log: whether an FM9
+lists its Input and Output (37 to 40, 42 to 44) in its status answer over
+Bluetooth (if not, Edit gets no IN or OUT and every read of them is refused
+as not in the preset); how many values its Output block's read carries
+(the codec says one set of 26; the read line "the unit said N values"
+settles it); and whether a Scene N Level write lands where asked (set +3.0
+dB from the app and read it on the unit's screen), and whether a level
+written for a scene the unit is not on is the one heard when that scene is
+called. A level changed on the unit itself shows only at the pop-up's next
+open. A change plays and is lost at the next preset change unless the
+preset is saved. OPENING IT TO CUSTOMERS is his call once he has moved a
+scene level himself over Bluetooth and through the computer: by update, or
+in a store version whose texts say so, since the Bluetooth page every
+customer reads says there is no volume button. The browser and the
+computer's window have none of it (a computer release).
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
 ONLY. A capture can be sent to the unit from the Developer card since
@@ -4174,10 +4309,13 @@ the number under them is a box to type into, decibels only, never below
 -20 dB (`LEVEL_FLOOR_DB`, lib/guardrails' own number) and never over the
 level's own top. On the Output block it is the setting called exactly
 "Level", not a row's or a scene's. A level in anything but decibels still
-says read-only. Over Bluetooth the Output block is not in Edit's chain at
-all (bleWire `OFF_STAGE`), so there it reaches the amp's and the other
-blocks' levels, not the preset's own; the speaker button on Play, which
-moves the Output block's Level, is the computer's too.
+says read-only. Over Bluetooth the Output block is in Edit's chain, and
+the speaker is on the top bar, only for an account that
+`OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE` opens (his, on an FM3, FM9 or
+Axe-Fx III with Edit open: "The Output block's levels", below). For every
+other account the wire still leaves it out (bleWire `OFF_STAGE`), so there
+the Level box reaches the amp's and the other blocks' levels, not the
+preset's own, and the speaker is the computer's.
 
 **On a big screen Play's tiles take the whole screen.** "It would be
 better if they looked like square boxes as much as possible" (9 November

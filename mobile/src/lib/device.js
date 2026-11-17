@@ -57,6 +57,8 @@ import { chainFromZero, withGridEdit } from './chainShape'
  * without a deadline is touched: reads, saves and every edit go as before.
  */
 const remoteRequest = (path, options) => {
+  /* When Play was last tapped (lastTapAt): only a press carries a deadline. Nothing else is read from it here. */
+  if (Number.isFinite(options?.deadline)) tappedAt = Date.now()
   const demo = demoDevice()
   if (demo) return demoRequest(demo, path, options)
   if (options?.deadline && linkIsDown()) return Promise.reject(notSentError())
@@ -96,6 +98,16 @@ const tapOverBle = (options, err) =>
 
 /* What the attached unit has refused as unsupported: see shared/unsupported.mjs. */
 const refused = unsupportedMemo()
+
+/*
+ * WHEN PLAY WAS LAST TAPPED: a scene, a preset, an effect's on and off or
+ * its channel, the tempo, the tuner (every request with a deadline). Edit's
+ * knobs that follow the unit read nothing for a moment after one
+ * (lib/liveKnobs LIVE_AFTER_MOVE_MS), so a read is never what a tap waits
+ * behind. Written down, and nothing else done with it.
+ */
+let tappedAt = -Infinity
+export const lastTapAt = () => tappedAt
 
 /*
  * WHETHER THE UNIT IS A VP4, from the last detect: on the computer, or, since
@@ -618,6 +630,26 @@ export async function askUnitBeat() {
 export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`, EDITING))
 
 /*
+ * THE SAME READ, FOR EDIT'S KNOBS THAT FOLLOW THE UNIT (lib/liveKnobs, his
+ * account until lib/features LIVE_KNOBS_FOR_EVERYONE). Over Bluetooth or the
+ * unit's cable the wire reads it from the unit and never from the copy it
+ * keeps a moment (`fresh`), and the timer's (`ifIdle`) only on a quiet line,
+ * answered `skipped` with nothing sent otherwise (bleWire gen3Params); a
+ * read of the unit's own report (`fresh: false`) is answered from that.
+ * Through the computer it is the read above: the relay reads method, body
+ * and deadline and nothing else, and the computer reads the unit each time.
+ */
+const LIVE_READS = Object.freeze({
+  fresh: Object.freeze({ editing: true, fresh: true }),
+  idle: Object.freeze({ editing: true, fresh: true, ifIdle: true }),
+  kept: EDITING
+})
+export const liveBlockParams = async (eid, { fresh = true, ifIdle = false } = {}) =>
+  fixRead(await remoteRequest(`/preset/blocks/${eid}/params`, ifIdle ? LIVE_READS.idle : fresh ? LIVE_READS.fresh : LIVE_READS.kept))
+/** Whether the unit has sent a block report of its own on this Bluetooth or cable connection (bleWire reportsHeard). */
+export const unitReportsHeard = () => (bluetoothWire()?.reportsHeard?.() ?? 0) > 0
+
+/*
  * THE DEVELOPER'S BLOCK READER (lib/gen3-describe, bleWire gen3Describe): a
  * block of the preset the unit is on, read whole and asked to describe its
  * own settings. For a block no catalog names yet (the Axe-Fx III's NAM).
@@ -723,6 +755,8 @@ export const namEmptySlotHere = ({ onProgress } = {}) => captureAsks('/nam/empty
 const captureWatchers = new Set()
 /* How many sends of a capture are waiting or going from this device (the card sends one at a time). */
 let capturesGoing = 0
+/** Whether a capture is being sent from this device now: Edit's knobs that follow the unit read nothing meanwhile (lib/liveKnobs). */
+export const captureGoing = () => capturesGoing > 0
 /** Be told when the app has put a capture on the unit. Returns the way to stop being told. */
 export const onCaptureSent = (fn) => {
   captureWatchers.add(fn)
