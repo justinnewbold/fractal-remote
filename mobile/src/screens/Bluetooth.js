@@ -29,6 +29,7 @@ import {
   connectOwedUntil,
   editOverBluetooth,
   saveOverBluetooth,
+  volumeOverBluetooth,
   findAdapters,
   forgetAdapter,
   forgetAdapterFor,
@@ -62,7 +63,7 @@ import {
   useWaitingForBluetooth
 } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
-import { editingLine, limitsLine } from '../lib/editWords'
+import { editingLine, limitsLine, notOverBluetoothLine } from '../lib/editWords'
 import {
   AMAZON_DISCLOSURE,
   BLUETOOTH_WAYS,
@@ -305,9 +306,8 @@ const DIFFERENT = [
   'The adapter connects to one thing at a time.',
   'On the AM4, scene names take a moment the first time a preset is seen.',
   /* lib/gen3-edit: there is no cab state over Bluetooth, so a cab is not picked there. An AM4's is. */
-  'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.',
-  /* Found by their absence until this line: every one of them is hidden over Bluetooth, not broken. */
-  'No looper, volume button, unit metronome click or Footswitches page.'
+  'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.'
+  /* And last, what is not there at all: lib/editWords notOverBluetoothLine, by whether the volume button is (BluetoothLimits). */
 ]
 
 /* The panel's choices, in the order the panel lists them. */
@@ -1430,6 +1430,8 @@ export function BluetoothLimits() {
   const editOpen = editOverBluetooth(b.unit)
   /* And whether this account saves from the app there (lib/bleSave): his until a store version opens it. */
   const saves = editOpen && saveOverBluetooth()
+  /* And whether the volume button is there, for the list's last line (lib/bluetooth volumeOverBluetooth: his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). */
+  const volume = volumeOverBluetooth(b.unit)
   return (
     <View style={{ gap: space.md }}>
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
@@ -1440,6 +1442,8 @@ export function BluetoothLimits() {
       {[editingLine(editOpen, saves), ...DIFFERENT].map((line) => (
         <Bullet key={line}>{line}</Bullet>
       ))}
+      {/* And last, what is not there over Bluetooth at all (lib/editWords): the volume button left out of it where it is there. */}
+      <Bullet>{notOverBluetoothLine(volume)}</Bullet>
       {/* The unit's own: a block Play does not draw yet, when a unit has one (shared/bluetooth-gear missingBlocksLine: none since 1.90.47, so no line). */}
       {missingBlocksLine(b.unit) ? <Bullet>{missingBlocksLine(b.unit)}</Bullet> : null}
       <Hint>{BLUETOOTH_WAYS}</Hint>

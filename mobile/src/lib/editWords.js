@@ -80,6 +80,20 @@ export const EDITING_LINE_SAVES = 'Moving, adding and removing blocks, modifiers
 /** "What's different from USB", its first line. */
 export const editingLine = (open, saves = false) => (open !== true ? NO_EDITING_LINE : saves === true ? EDITING_LINE_SAVES : EDITING_LINE)
 
+/*
+ * "WHAT'S DIFFERENT FROM USB", ITS LAST LINE: what is not there over
+ * Bluetooth at all. Found by their absence until the line was written:
+ * every one of them is hidden over Bluetooth, not broken. And where the
+ * volume button IS there (`volume`, lib/bluetooth volumeOverBluetooth: the
+ * Output block handed on by the wire, his account until lib/features
+ * OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, on an FM3, FM9 or Axe-Fx III with
+ * Edit open), the line does not say it is missing. Every other account,
+ * and every AM4, reads the first, word for word as before.
+ */
+export const NOT_OVER_BLUETOOTH = 'No looper, volume button, unit metronome click or Footswitches page.'
+export const NOT_OVER_BLUETOOTH_VOLUME = 'No looper, unit metronome click or Footswitches page.'
+export const notOverBluetoothLine = (volume = false) => (volume === true ? NOT_OVER_BLUETOOTH_VOLUME : NOT_OVER_BLUETOOTH)
+
 /**
  * WHETHER EDIT'S ONE-TIME NOTE IS UP over Bluetooth or a USB cable (Edit's
  * BLE_NOTE and lib/cableWords CABLE_EDIT_NOTE, in Edit, the panel beside

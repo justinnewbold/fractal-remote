@@ -585,7 +585,7 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/features.js'), /export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = false/)
     const ble = flat('mobile/src/lib/bluetooth.js')
     assert.match(ble, /export const chainOverBluetooth = \(\) => allUnits === true \|\| CHAIN_OVER_BLUETOOTH_FOR_EVERYONE/)
-    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\) \}\)/)
+    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), \/\*[^*]*\*\/ live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /const chainOn = \(\) => editOn\(\) && typeof chain === 'function' && chain\(\) === true/)
     /* Nothing a player reads says the chain can be changed over Bluetooth: What Bluetooth can't do is as it was. */

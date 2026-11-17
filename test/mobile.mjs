@@ -2806,11 +2806,13 @@ export function run(test) {
      * same thing wearing the sheet.
      */
     const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
+    /* Changed on purpose (lib/sceneLevel): the bar and the pop-up ask one helper which Output block it is, and it is the same block for every account it was before (test/volume-drag.mjs runs it). */
     assert.match(
       bar,
-      /const hasOutput = connected && Number\.isInteger\(idOf\(\(blocks \|\| \[\]\)\.find\(\(b\) => b\?\.slug === 'output'\)\)\)/,
+      /const hasOutput = connected && Number\.isInteger\(idOf\(volumeOutput\(blocks, levels\)\)\)/,
       'the speaker still appears for an Output block the slider cannot write to'
     )
+    assert.match(read('mobile/src/components/Volume.js').replace(/\s+/g, ' '), /const output = volumeOutput\(blocks, levels\) const eid = idOf\(output\)/, 'the pop-up asks which Output block it is another way than the bar')
     assert.match(bar, /import \{ idOf \} from '\.\.\/lib\/device'/, 'the bar reads the id by its own rule rather than the one the slider uses')
 
     /* And the two reasons are told apart rather than both blamed on a read
@@ -2818,6 +2820,91 @@ export function run(test) {
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
     assert.match(vol, /the unit reported an Output block with no id to write to/, 'a block with no id is still reported as a chain still loading')
     assert.match(vol, /'the chain has not been read'/, 'the genuinely-still-loading case lost its words')
+  })
+
+  /*
+   * THE OUTPUT BLOCK'S LEVELS (lib/sceneLevel): the Input and Output in Edit
+   * over Bluetooth or a USB cable, the volume button there on Output 1, and
+   * each scene's own level, behind one switch. A customer with an FM9 over
+   * Bluetooth asked for "scenes levels and IN and OUT blocks" (16 November
+   * 2026). The wire's half runs in test/bluetooth.mjs, the volume pop-up's
+   * in test/volume-drag.mjs; here, the switch and Edit's Output block.
+   */
+  test('the Output block’s levels are his account’s alone, by one switch, asked through lib/bluetooth, and handed to the wire beside Edit’s own door', async () => {
+    const strip = (f) => read(f).replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(read('mobile/src/lib/features.js'), /^export const OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE = false$/m, 'the levels are open to every account before he has moved one on a unit')
+    const features = await import('../mobile/src/lib/features.js')
+    assert.equal(features.OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, false)
+    const ble = strip('mobile/src/lib/bluetooth.js')
+    assert.match(ble, /export const outputAndSceneLevels = \(\) => allUnits === true \|\| OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/)
+    assert.match(ble, /export const useOutputAndSceneLevels = \(\) => useBluetoothAdmin\(\) \|\| OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/)
+    assert.match(ble, /export const volumeOverBluetooth = \(unit = saved\.unit\) => unit !== 'am4' && editOverBluetooth\(unit\) && outputAndSceneLevels\(\)/)
+    assert.match(ble, /onForeign: \(name\) => noteBluetooth\(\{ answeredAs: name \|\| null \}\), blockOrder: \(\) => blockOrderFromGrid\(\), io: \(\) => outputAndSceneLevels\(\), edit: \(\) => editOverBluetooth\(unit\),/, 'the wire is not asked about the levels at every request')
+    assert.equal((ble.match(/OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/g) || []).length, 3, 'the switch is read somewhere else in lib/bluetooth')
+    /* The wire wants Edit open too, and never on an AM4, which lists no Output block. */
+    const wire = strip('mobile/src/lib/bleWire.js')
+    assert.match(wire, /const ioOn = \(\) => editOn\(\) && typeof io === 'function' && io\(\) === true/)
+    assert.match(wire, /gen3Sender\(send, say, model, \(\) => \(editOn\(\) \? editHeld\(\) : null\),/, 'the way out is not held to the blocks without the Input and Output where they are closed')
+    /* Nothing else reads the switch: the screens ask lib/bluetooth. */
+    const readers = []
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (entry === 'node_modules' || entry.startsWith('.')) continue
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.(jsx?|mjs)$/.test(entry) && /OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE/.test(readFileSync(full, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' '))) readers.push(full.split('/mobile/')[1] || full)
+      }
+    }
+    walk(fileURLToPath(new URL('../mobile/src', import.meta.url)))
+    assert.ok(!/OUTPUT_AND_SCENE_LEVELS/.test(read('mobile/App.js')), 'App reads the switch')
+    assert.deepEqual(readers.sort(), ['src/lib/bluetooth.js', 'src/lib/features.js'], 'something but lib/bluetooth reads the switch')
+    /* The browser, the computer and shared/ know nothing of it: a phone-only change, no computer release. */
+    for (const dir of ['src', 'shared', 'desktop']) {
+      const hits = []
+      const look = (d) => {
+        for (const entry of readdirSync(d)) {
+          const full = join(d, entry)
+          if (entry === 'node_modules' || entry.startsWith('.')) continue
+          if (statSync(full).isDirectory()) look(full)
+          else if (/\.(jsx?|mjs|ts)$/.test(entry) && /sceneLevel|OUTPUT_AND_SCENE_LEVELS/.test(readFileSync(full, 'utf8'))) hits.push(full)
+        }
+      }
+      look(fileURLToPath(new URL(`../${dir}`, import.meta.url)))
+      assert.deepEqual(hits, [], `${dir}/ reaches the phone’s scene levels`)
+    }
+  })
+
+  test('Edit’s Output block has every scene’s level as a typed box, never a knob and never under the floor, for an account the levels are open to and in nothing else', async () => {
+    const s = await import('../mobile/src/lib/sceneLevel.js')
+    for (const [unit, path, prefix] of [['fm3', 'fm3-knobs.js', 'FM3'], ['fm9', 'fm9-knobs.js', 'FM9'], ['axefx3', 'axefx3-knobs.js', 'AXE3']]) {
+      const k = await import(`../mobile/src/lib/${path}`)
+      /* The Output block's read as each unit's own catalog names it. */
+      const named = k[`${prefix}_FAMILIES`].OUTPUT.knobs.map(([id, name, min, max]) => ({ id, name, min, max, value: id === 20 ? 3 : 0 }))
+      const rows = s.sceneRowsFor('output', named, true)
+      assert.deepEqual(rows.map((p) => [p.index, p.id, p.name]), Array.from({ length: 8 }, (_, i) => [i, 18 + i, `Scene ${i + 1} Level`]), `${unit}: Edit’s scene levels are not the unit’s eight`)
+      assert.equal(rows[2].value, 3)
+      for (const open of [false, undefined, 1, 'yes']) assert.deepEqual(s.sceneRowsFor('output', named, open), [], `${unit}: the scene levels are drawn for an account they are closed to (${open})`)
+      for (const slug of ['input', 'amp', 'volume', undefined]) assert.deepEqual(s.sceneRowsFor(slug, named, true), [], `${unit}: scene levels drawn in a ${slug} block`)
+      /* Edit's other rules are unchanged: they are still kept off the knobs, and the block's own Level is still the one under them. */
+      const { isSilencingParam } = await import('../mobile/src/lib/guardrails.js')
+      assert.ok(rows.every((p) => isSilencingParam(p.name)), `${unit}: a scene level would be a knob`)
+    }
+    /* Typed: held to the floor and its top, or nothing is sent. */
+    const p = { id: 20, name: 'Scene 3 Level', min: -20, max: 20 }
+    assert.equal(s.sceneFloor(p), -20)
+    assert.equal(s.sceneFloor({ id: 1, name: 'Scene 1 Level', min: -80, max: 20 }), -20, 'a scene level’s floor is under the app’s')
+    assert.equal(s.sceneLevelToSend(p, 3), 3)
+    assert.equal(s.sceneLevelToSend(p, -20), -20)
+    assert.equal(s.sceneLevelToSend(p, 20), 20)
+    for (const v of [-20.5, 20.5, -80, NaN, Infinity, null, undefined, '3']) assert.equal(s.sceneLevelToSend(p, v), null, `${v} would be sent`)
+    assert.equal(s.sceneLevelToSend({ id: 20, name: 'Scene 3 Level', min: 5, max: 5 }, 5), null, 'a level with no range is sent')
+    /* And Edit draws them by that, under the Level, with the knob's own write. */
+    const edit = read('mobile/src/screens/Edit.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(edit, /const levelsOpen = useOutputAndSceneLevels\(\) const sceneOn = useRig\(ofScene\) const sceneRows = sceneRowsFor\(block\.slug, params, levelsOpen && !bare\)/)
+    assert.match(edit, /<ValueBox param=\{\{ \.\.\.p, min: sceneFloor\(p\), unit: p\.unit \|\| 'dB' \}\} value=\{valueOf\(p\)\} onCommit=\{\(v\) => \{ const next = sceneLevelToSend\(p, v\) if \(restoring \|\| next === null\) return setLocal\(\(prev\) => \(\{ \.\.\.prev, \[p\.id\]: next \}\)\) commit\(p, next\) \}\} \/>/, 'a scene level is written another way than a knob, or past the floor')
+    assert.ok(edit.indexOf('{sceneRows.length ? (') > edit.indexOf('{level && !bare ? ('), 'the scene levels are not under the Level')
+    assert.equal((edit.match(/sceneRows\.map\(/g) || []).length, 1)
+    assert.ok(!/<Knob[^>]*sceneRows/.test(edit), 'a scene level is drawn as a knob')
   })
 
   test('the volume writes to the block it has now, and a scene change does not dump the preset', () => {
@@ -3059,6 +3146,81 @@ export function run(test) {
     assert.match(edit, /const chainForEditor = useMemo\(\(\) => ownChainHere\(chainAll\), \[chainAll\]\)/, 'the chain editor is no longer handed the whole chain')
     assert.match(edit, /const modBlocks = useMemo\(\(\) => knownBlocks\(blocks\), \[blocks\]\)/)
     assert.match(edit, /<Modifiers key=\{.*\} blocks=\{modBlocks\} /, 'Modifiers is offered a block the app has no name for')
+  })
+
+  /*
+   * EDIT'S KNOBS THAT FOLLOW THE UNIT (lib/liveKnobs, test/live-knobs.mjs):
+   * the store's part and the device layer's, run. The computer's news of a
+   * knob ('param', which the phone threw away) and the wire's block report
+   * go to a panel that listens, and to nothing else; the reads the panel
+   * makes say so to the wire and nothing more to the computer; a tap is
+   * written down for the panel's 3 s hold.
+   */
+  test('live knobs: the news of a knob reaches a panel that listens and nothing else, and the device layer’s reads and tap time are what the panel needs', async () => {
+    const { rig, device, wire, clock, relay, ble } = await rigOnTheBench({ params: () => ({ slug: 'amp', named: [{ id: 11, name: 'Gain', value: 5 }] }) })
+    const heard = []
+    const off = rig.onKnobNews((e) => heard.push(e))
+    const before = rig.getState().bufferRev
+    rig.handleEvent({ type: 'param', effectId: 58, paramId: 11, norm: 0.6 })
+    rig.handleEvent({ type: 'blockReport', eid: 58, at: 1 })
+    await clock.advance(5000)
+    assert.deepEqual(heard.map((e) => [e.type, e.effectId ?? e.eid]), [['param', 58], ['blockReport', 58]])
+    assert.deepEqual(wire, [], 'news of a knob asked the computer something')
+    assert.equal(rig.getState().bufferRev, before)
+    /* One listener that throws cannot stop the next; and once let go, it hears nothing. */
+    const off2 = rig.onKnobNews(() => {
+      throw new Error('a panel that fails')
+    })
+    rig.handleEvent({ type: 'param', effectId: 62 })
+    assert.equal(heard.length, 3)
+    off()
+    off2()
+    rig.handleEvent({ type: 'param', effectId: 58 })
+    assert.equal(heard.length, 3)
+    /* The reads: through the computer the same request, marked fresh (and on a quiet line for the timer), which the relay never reads. */
+    wire.length = 0
+    relay.handed.length = 0
+    await device.liveBlockParams(58)
+    await device.liveBlockParams(58, { ifIdle: true })
+    await device.liveBlockParams(58, { fresh: false })
+    await device.blockParams(58)
+    assert.deepEqual(wire, Array(4).fill('GET /preset/blocks/58/params'))
+    assert.deepEqual(
+      relay.handed.map(({ line, ...o }) => o),
+      [{ editing: true, fresh: true }, { editing: true, fresh: true, ifIdle: true }, { editing: true }, { editing: true }]
+    )
+    /* Over Bluetooth, to the wire, with the same marks; and the wire's count of the unit's own reports. */
+    const asked = []
+    let reports = 0
+    ble.__wire({ request: async (path, o) => (asked.push([path, o]), { named: [] }), reportsHeard: () => reports })
+    await device.liveBlockParams(58, { ifIdle: true })
+    await device.blockParams(58)
+    assert.deepEqual(asked, [['/preset/blocks/58/params', { editing: true, fresh: true, ifIdle: true }], ['/preset/blocks/58/params', { editing: true }]])
+    assert.equal(device.unitReportsHeard(), false)
+    reports = 1
+    assert.equal(device.unitReportsHeard(), true)
+    ble.__wire(null)
+    assert.equal(device.unitReportsHeard(), false)
+    /* A scene from the unit is still followed as ever. */
+    rig.handleEvent({ type: 'scene', index: 2 })
+    assert.equal(rig.getState().sceneIndex, 2)
+    await clock.advance(5000)
+    /* A tap is written down, when it was pressed; a read is not. */
+    assert.equal(device.lastTapAt(), -Infinity)
+    await device.liveBlockParams(58)
+    assert.equal(device.lastTapAt(), -Infinity)
+    const pressed = clock.now()
+    await rig.writeScene(1)
+    assert.equal(device.lastTapAt(), pressed)
+    /* A capture being sent from this device: going until its answer, whatever it is. */
+    assert.equal(device.captureGoing(), false)
+    const words = new Uint32Array(16384)
+    for (let i = 0; i < 14095; i++) words[i] = (0x41424344 + i * 2654435761) >>> 0
+    words[0] = 0x6e61724f
+    const sending = device.namInstallHere(30, words).catch((err) => err)
+    assert.equal(device.captureGoing(), true)
+    await sending
+    assert.equal(device.captureGoing(), false)
   })
 
   test('the phone keeps a block newer than the app, marked, and Play still leaves it out', async () => {
@@ -16003,7 +16165,8 @@ export function run(test) {
     /* Taken, and the cab reads as something else: said, not only logged. */
     assert.match(cabWrite, /if \(read && !landed\) onError\(cabElsewhere\(read, models\)\)/, 'a cab the unit did not keep is only in the log')
     assert.match(flat, /<Press label="Undo" height=\{44\} onPress=\{takeBack\} \/>/, 'undo does not know about cabs')
-    assert.match(flat, /await applyCab\(null, \{ undoable: false, back: back\.cab \}\)/, 'undo does not put the mode and cab back')
+    /* Inside the panel's own write (lib/liveKnobsHere `during`), so a read of its knobs that follow the unit is not laid over it. */
+    assert.match(flat, /await live\.during\(\(\) => applyCab\(null, \{ undoable: false, back: back\.cab \}\)\)/, 'undo does not put the mode and cab back')
     assert.match(flat, /\.filter\(\(p\) => !offDeck\.has\(p\.id\)\)/, 'the IR numbers are still knobs on the phone')
     assert.match(flat, /block\.slug === 'cab' \? await readCab\(\(\) => cabState\(eid\), p\) : null/, 'a failed cab read is not the old panel')
     assert.match(flat, /if \(!cab \|\| block\.slug !== 'cab'\) return onError\(CAB_UNDO_LOST\)/, 'an undo with no cab state does nothing and says nothing')
@@ -16140,7 +16303,7 @@ export function run(test) {
     assert.match(flat, /listIrBanks\(\)/, 'the phone never reads the IR names')
     assert.match(flat, /irBanks\(cab, irs, \{ named: params \}\)/, 'the phone’s IR banks are not built from the cab state')
     assert.match(flat, /<IrPicker banks=\{irList\} now=\{irHere\} onPick=\{swapIr\} disabled=\{!!restoring\} \/>/, 'the phone’s cab has no IR picker')
-    assert.match(flat, /const swapIr = async \(pick\) => \{ try \{ await applyCab\(pick\)/, 'an IR pick on the phone does not go through the cab pick')
+    assert.match(flat, /const swapIr = async \(pick\) => \{ try \{ await live\.during\(\(\) => applyCab\(pick\)\)/, 'an IR pick on the phone does not go through the cab pick')
     assert.match(cabWrite, /const was = cabWas\(before, models, value\)/, 'the phone’s undo cannot put the bank back')
     const picker = read('mobile/src/components/IrPicker.js')
     assert.match(picker, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how an IR is found')
@@ -16301,9 +16464,9 @@ export function run(test) {
     /* Edit says it in plain words. */
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(flat, /const notChecked = \(p\) => `Couldn’t check that \$\{p\.label \|\| p\.name\} took: the unit didn’t answer\. It may have\.`/)
-    assert.match(flat, /catch \(err\) \{ if \(!res\.unverified\) throw err \}/, 'a read that fails after an unchecked write puts its own words over "Couldn’t check"')
+    assert.match(flat, /catch \(err\) \{ \/\*[^]*?\*\/ if \(!res\.unverified && \(!live\.open \|\| res\.unsent === true\)\) throw err if \(!res\.unverified\) onError\(err\.message\) \}/, 'a read that fails after an unchecked write puts its own words over "Couldn’t check"')
     /* And with nothing read after it, the asked value stands on the knob (an independent read): it jumped back to the old number, and turning it back there sent nothing. */
-    assert.match(flat, /if \(fresh\) \{ setParams\(fresh\?\.named \|\| \[\]\) setEnums\(fresh\?\.enums \|\| \[\]\) \} else \{ \/\*[^]*?\*\/ setParams\(\(prev\) => prev\.map\(\(q\) => \(q\.id === p\.id \? \{ \.\.\.q, value: q\.whole === true && Number\.isFinite\(next\) \? Math\.round\(next\) : next \} : q\)\)\) \}/, 'an unchecked write with no read after it puts the knob back on the old number')
+    assert.match(flat, /if \(fresh\) \{ setParams\(fresh\?\.named \|\| \[\]\) setEnums\(fresh\?\.enums \|\| \[\]\) \} else \{ \/\*[^]*?\*\/ const stands = !res\.ok && !res\.unverified && typeof res\.actual === 'number' \? res\.actual : next setParams\(\(prev\) => prev\.map\(\(q\) => \(q\.id === p\.id \? \{ \.\.\.q, value: q\.whole === true && Number\.isFinite\(stands\) \? Math\.round\(stands\) : stands \} : q\)\)\) \}/, 'an unchecked write with no read after it puts the knob back on the old number')
     assert.match(read('mobile/src/components/Volume.js').replace(/\s+/g, ' '), /if \(res\.unverified\) \{ say\?\.\('Couldn’t check that the volume took: the unit didn’t answer\. It may have\.'\) return \}/)
   })
 

@@ -7065,6 +7065,10 @@ console.log('\nForgot password?: the email’s link opens a page to choose a new
 const { run: passwordReset } = await import('./password-reset.mjs')
 passwordReset(test)
 
+console.log('\nEdit’s knobs follow the unit: the unit’s own report, a read every few seconds, the app back at the front, the computer’s news')
+const { run: liveKnobs } = await import('./live-knobs.mjs')
+liveKnobs(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

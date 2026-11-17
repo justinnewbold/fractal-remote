@@ -1033,6 +1033,8 @@ async function onTheLine(kind, options = {}) {
       chain: options.chain,
       liveGrid: options.liveGrid,
       blockOrder: options.blockOrder,
+      io: options.io,
+      live: options.live,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -1082,6 +1084,9 @@ async function onTheLine(kind, options = {}) {
     line
   }
 }
+
+/* The line, its pretend units and its clock, for test/live-knobs.mjs (Edit's knobs that follow the unit, run against the real wire). */
+export { advance, drive, fakeClock, onTheLine, seeded }
 
 /*
  * THE LINK ON A BENCH: lib/bleLink.js itself, run rather than read. It is
@@ -9361,11 +9366,21 @@ export function run(test) {
       'About 30 feet of range.',
       'The adapter connects to one thing at a time.',
       'On the AM4, scene names take a moment the first time a preset is seen.',
-      'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.',
-      'No looper, volume button, unit metronome click or Footswitches page.'
+      'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.'
     ]) {
       assert.ok(page.includes(`'${line}'`), `the page does not say: ${line}`)
     }
+    /*
+     * And last, what is not there over Bluetooth at all, from lib/editWords
+     * by whether the volume button is there (changed on purpose: lib/sceneLevel,
+     * his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE).
+     * Every other account, and every AM4, reads it word for word as before.
+     */
+    assert.equal(ew.NOT_OVER_BLUETOOTH, 'No looper, volume button, unit metronome click or Footswitches page.')
+    for (const v of [false, undefined, 1, 'yes', null]) assert.equal(ew.notOverBluetoothLine(v), ew.NOT_OVER_BLUETOOTH, 'anything but a yes takes the volume button out of what is missing')
+    assert.equal(ew.notOverBluetoothLine(true), 'No looper, unit metronome click or Footswitches page.')
+    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /\{\[editingLine\(editOpen, saves\), \.\.\.DIFFERENT\]\.map\(\(line\) => \( <Bullet key=\{line\}>\{line\}<\/Bullet> \)\)\} <Bullet>\{notOverBluetoothLine\(volume\)\}<\/Bullet>/, 'what is not there over Bluetooth is not the list’s last line')
+    assert.match(page.replace(/\s+/g, ' '), /const volume = volumeOverBluetooth\(b\.unit\)/)
     /* After the two steps now: "a lot of different buttons to press" put setting it up first. */
     assert.ok(page.indexOf('2 · Connect') < page.indexOf('What’s different from USB'), 'the list is above the steps again')
     /*
@@ -10019,7 +10034,7 @@ export function run(test) {
     /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
     const bar = flat('mobile/src/components/TopBar.js')
     /* useBluetoothUnit since 7 November 2026, for Connect again, which a VP4 is not offered. */
-    assert.match(bar, /import \{ adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
+    assert.match(bar, /import \{ adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack, useOutputAndSceneLevels \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
     /*
      * The word CONNECTED is the pill since 24 October 2026 (Axiom's "Live ●
      * AM4" over "on Raspberry Pi"), and over Bluetooth, in every state of the
@@ -12596,6 +12611,31 @@ export function run(test) {
     const shaped = () => t.frames().filter((f) => nam.namShaped(f, 0x10))
     return { t, u, nam, asks, shaped, record: (name, from, said) => nam.namRecord(A2(name, from), said), text: (name, from, hash) => A2(name, from, hash) }
   }
+
+  /* Edit's knobs that follow the unit (lib/liveKnobs, test/live-knobs.mjs): the timer's read never waits half a minute behind a capture, nor goes in the middle of one. */
+  test('live knobs: while a capture goes to the unit, Edit’s timer read is answered skipped, with nothing sent', async () => {
+    const { t, asks, record } = await capturesLine({ edit: () => true, live: () => true })
+    const found = await asks('/nam/empty')
+    const rec = record('Plexi Dimed 57', 7)
+    const tried = []
+    let mark = 0
+    await asks(`/nam/slots/${found.slot}`, {
+      method: 'POST',
+      body: { words: rec.words },
+      onProgress: (sent) => {
+        if (sent !== 40) return
+        mark = t.frames().length
+        t.wire.request('/preset/blocks/58/params', { editing: true, fresh: true, ifIdle: true }).then(
+          (v) => tried.push(v),
+          (e) => tried.push(e)
+        )
+      }
+    })
+    await advance(t.clock, 1000)
+    assert.equal(tried.length, 1)
+    assert.equal(tried[0].skipped, true, 'the timer read was taken during a capture')
+    assert.ok(!t.frames().slice(mark).some((f) => f[5] === 0x1f), 'a block read went during or after the capture for the timer')
+  })
 
   test('a capture goes to an Axe-Fx III as Axe-Edit sends one: the first empty slot found, 130 messages each taken, and the slot read back', async () => {
     const { t, u, nam, asks, shaped, record } = await capturesLine()
@@ -15830,8 +15870,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -16713,7 +16753,8 @@ export function run(test) {
       for (const m of code(f).matchAll(/(?:refused: |badInput\()(['`])((?:(?!\1).)*)\1/g)) lines.push([f, m[2]])
     }
     const edits = lines.filter(([, l]) => /can’t (?:open|change) block|isn’t one the app can change/.test(l))
-    assert.equal(edits.length, 6, `Edit has another refusal to hold: ${edits.map(([, l]) => l).join(' | ')}`)
+    /* Seven since an Input or Output closed to the account (bleWire ioClosed) is refused a model as any block it cannot change is: the same words. */
+    assert.equal(edits.length, 7, `Edit has another refusal to hold: ${edits.map(([, l]) => l).join(' | ')}`)
     for (const [f, l] of edits) assert.ok(!/bluetooth|usb|cable|adapter/i.test(l), `${f}: an Edit refusal names the connection: ${l}`)
     assert.ok(edits.every(([, l]) => /from here/.test(l)), 'an Edit refusal no longer says where')
   })
@@ -17374,6 +17415,118 @@ export function run(test) {
   const tapOn = (t, path, body) => t.wire.request(path, { method: 'POST', body: JSON.stringify(body), deadline: t.clock.now() + 1500 })
   const editRead = (t, eid = 58) => t.wire.request(`/preset/blocks/${eid}/params`, { editing: true })
   const EDIT_READ_ALL = 0x1f
+
+  /*
+   * THE INPUT AND OUTPUT IN EDIT, AND EACH SCENE'S LEVEL, OVER BLUETOOTH OR
+   * A USB CABLE (bleWire `io`, lib/sceneLevel; his account until
+   * lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). A customer with an
+   * FM9 over Bluetooth asked for "scenes levels and IN and OUT blocks". Each
+   * unit by its own catalog: the scene levels' ids are read out of
+   * FM3_FAMILIES, FM9_FAMILIES and AXE3_FAMILIES, never the FM9's alone.
+   */
+  async function ioLine(unit, options = {}) {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const [path, prefix] = KNOBS_OF[unit]
+    const k = await import(path)
+    const out = k[`${prefix}_FAMILIES`].OUTPUT
+    const inp = k[`${prefix}_FAMILIES`].INPUT
+    const sceneIds = Array.from({ length: 8 }, (_, i) => out.knobs.find((r) => r[1] === `Scene ${i + 1} Level`)?.[0])
+    const levelId = out.knobs.find((r) => r[1] === 'Level')[0]
+    /* The Output block as the codec says it comes, one set of 26 with no channels; scene N at N dB on the unit (-20..+20 along 0..65534). */
+    const values = new Array(out.stride).fill(0)
+    sceneIds.forEach((id, i) => (values[id] = Math.round(((i + 1 + 20) / 40) * 65534)))
+    values[levelId] = Math.round((74 / 100) * 65534)
+    const settings = new Map([
+      [42, { count: out.stride, values }],
+      [37, { count: inp.stride * 4, values: new Array(inp.stride * 4).fill(1000) }]
+    ])
+    const t = await onTheLine(unit, { catalog: catalogFor(unit), edit: () => true, settings, ...options })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    /* Every frame of Edit's (a block read, a knob, a typed write) that went to this block. */
+    const editFramesTo = (eid, from = 0) => t.frames().slice(from).filter((f) => f[0] === 0xf0 && ((f[5] === 0x1f && f[6] === eid) || (f[5] === 0x01 && (f[6] === 0x52 || f[6] === 0x09) && f[8] === eid)))
+    return { t, ask, sceneIds, levelId, editFramesTo, model: t.sx.MODELS[unit] }
+  }
+
+  test('over Bluetooth or a USB cable the Input and Output are Edit’s chain ends, read and written as any block, only where the levels are open: an FM3, an FM9 and an Axe-Fx III, each by its own catalog', async () => {
+    const g3e = await import('../mobile/src/lib/gen3-edit.js')
+    const { sceneLevelParam, sceneLevelParams } = await import('../mobile/src/lib/sceneLevel.js')
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const { t, ask, sceneIds, levelId, editFramesTo, model } = await ioLine(unit, { io: () => true, looper: true })
+      /* Each unit's own catalog names all eight, at 18 to 25, -20 to +20. */
+      assert.deepEqual(sceneIds, [18, 19, 20, 21, 22, 23, 24, 25], `${unit}: the scene levels are not where its catalog puts them`)
+      /* The chain answer: IN first, OUT last, and the looper still left out. */
+      const chain = await t.get('/preset/blocks')
+      assert.equal(chain[0].effectId, 37, `${unit}: the Input is not the chain’s first end`)
+      assert.equal(chain[0].slug, 'input')
+      assert.equal(chain.at(-1).effectId, 42, `${unit}: the Output is not the chain’s last end`)
+      assert.equal(chain.at(-1).slug, 'output')
+      assert.ok(!chain.some((b) => b.effectId === 166 || b.slug === 'looper'), `${unit}: the looper came with them`)
+      assert.ok(chain.every((b) => b.knobs !== false), `${unit}: an end is marked as having no knobs`)
+      /* The Output read: every scene's level by its name, at the level the unit holds. */
+      const read = await ask('/preset/blocks/42/params')
+      const scenes = sceneLevelParams(read.named)
+      assert.deepEqual(scenes.map((p) => [p.index, p.id, p.min, p.max, p.value]), sceneIds.map((id, i) => [i, id, -20, 20, i + 1]), `${unit}: the scene levels read are not the unit’s`)
+      assert.equal(read.named.find((p) => p.id === levelId).value, -6, `${unit}: the Output’s own Level`)
+      /* Scene 3's level written as any knob: its place along its travel, to that setting on that block, this unit's own frame. */
+      const p = sceneLevelParam(read.named, 2)
+      const before = t.frames().length
+      assert.deepEqual(await ask(`/preset/blocks/42/params/${p.id}`, { method: 'PUT', body: JSON.stringify({ value: 0.625, continuous: true }) }), { ok: true })
+      assert.deepEqual(editFramesTo(42, before).filter((f) => f[5] === 0x01).map(hex), [hex(g3e.buildKnob(model, 42, 20, 0.625))], `${unit}: Scene 3 Level did not go as its own knob write`)
+      assert.deepEqual(t.unit.state.edits.at(-1), { eid: 42, pid: 20, sub: 0x52, value: Math.fround(0.625) })
+      assert.equal(sceneLevelParam((await ask('/preset/blocks/42/params')).named, 2).value, 5, `${unit}: Scene 3 Level did not read back at +5 dB`)
+      /* The Input opens too: its knobs, and its model list. */
+      const input = await ask('/preset/blocks/37/params')
+      assert.ok(input.named.some((x) => x.name === 'Threshold'), `${unit}: the Input’s knobs`)
+      assert.equal(editFramesTo(37).filter((f) => f[5] === 0x1f).length, 1)
+    }
+  })
+
+  test('over Bluetooth or a USB cable, where the levels are closed (another account, Edit shut, or a wire made without them) nothing of the Input’s or Output’s is answered or sent, and the chain is what it always was', async () => {
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const plain = await ioLine(unit, { looper: true })
+      const shape = (list) => list.map((b) => `${b.effectId} ${b.slug} ${b.channel} ${b.bypassed} ${b.knobs}`)
+      const always = shape(await plain.t.get('/preset/blocks'))
+      for (const [why, options] of [
+        ['closed to this account', { io: () => false }],
+        ['said with anything but a yes', { io: () => 'yes' }],
+        ['Edit shut', { io: () => true, edit: () => false }]
+      ]) {
+        const { t, ask, editFramesTo } = await ioLine(unit, { looper: true, ...options })
+        const chain = await t.get('/preset/blocks')
+        assert.deepEqual(shape(chain), always, `${unit}, ${why}: the chain answer is not what it always was`)
+        for (const id of [37, 42, 166]) assert.ok(!chain.some((b) => b.effectId === id), `${unit}, ${why}: block ${id} is in the chain`)
+        await assert.rejects(ask('/preset/blocks/42/params'), `${unit}, ${why}: the Output was read`)
+        await assert.rejects(ask('/preset/blocks/37/params'), `${unit}, ${why}: the Input was read`)
+        await assert.rejects(ask('/preset/blocks/42/params/20', { method: 'PUT', body: JSON.stringify({ value: 0.625, continuous: true }) }), `${unit}, ${why}: a scene level was written`)
+        await assert.rejects(ask('/preset/blocks/42/params/12', { method: 'PUT', body: JSON.stringify({ value: 0.7, continuous: true }) }), `${unit}, ${why}: the Output’s Level was written`)
+        await assert.rejects(ask('/preset/blocks/37/type', { method: 'POST', body: JSON.stringify({ value: 1 }) }), `${unit}, ${why}: the Input’s model was written`)
+        assert.deepEqual([...editFramesTo(37), ...editFramesTo(42)].map(hex), [], `${unit}, ${why}: a frame of Edit’s went to the Input or Output`)
+        assert.deepEqual(t.unit.state.edits, [])
+      }
+      /* Closed, the refusal is the words a block with no knobs gets, and every other block is Edit's as before. */
+      const { ask } = await ioLine(unit, { io: () => false })
+      await assert.rejects(ask('/preset/blocks/42/params'), /The app can’t open block 42 from here yet\./)
+      await assert.rejects(ask('/preset/blocks/42/params/20', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), /The app can’t change block 42 from here yet\./)
+      await assert.rejects(ask('/preset/blocks/37/type', { method: 'POST', body: JSON.stringify({ value: 1 }) }), /The app can’t change block 37 from here yet\./)
+    }
+  })
+
+  test('over Bluetooth or a USB cable the way out asks whether the Input and Output are open at every send: shut between a write’s question and its frame, the frame is refused', async () => {
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      let open = true
+      const { t, ask, editFramesTo } = await ioLine(unit, { io: () => open })
+      /* The account goes while the write is asking the unit what is in its preset, after the request was let in. */
+      const hear = t.unit.hear
+      t.unit.hear = (b) => {
+        if (b[0] === 0xf0 && b[5] === 0x13) open = false
+        return hear(b)
+      }
+      await ask('/preset/blocks/42/params/20', { method: 'PUT', body: JSON.stringify({ value: 0.625, continuous: true }) }).catch(() => null)
+      assert.deepEqual(editFramesTo(42).map(hex), [], `${unit}: a scene level went after the levels were shut`)
+      assert.ok(t.logs.some((l) => /^refused to send F0 00 01 74 [0-9A-F]{2} 01 52 00 2A 00 14 00/.test(l)), `${unit}: the way out did not refuse it: ${t.logs.join(' | ')}`)
+      assert.deepEqual(t.unit.state.edits, [])
+    }
+  })
 
   test('over Bluetooth Play goes first: a tap waits only for the exchange on its way, never for Edit’s read waiting behind it, and Play’s own reads go out together, before Edit’s, on the AM4 and every gen-3 unit', async () => {
     const sx = await import(SX)
@@ -24988,7 +25141,7 @@ export function run(test) {
     assert.match(src('mobile/src/lib/features.js'), /^export const BLOCK_ORDER_FROM_GRID_FOR_EVERYONE = false$/m, 'Play’s order from the grid is open to every account before his own log has shown it agreeing')
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(ble, /export const blockOrderFromGrid = \(\) => allUnits === true \|\| BLOCK_ORDER_FROM_GRID_FOR_EVERYONE/)
-    assert.match(ble, /onForeign: \(name\) => noteBluetooth\(\{ answeredAs: name \|\| null \}\), blockOrder: \(\) => blockOrderFromGrid\(\), edit: /)
+    assert.match(ble, /onForeign: \(name\) => noteBluetooth\(\{ answeredAs: name \|\| null \}\), blockOrder: \(\) => blockOrderFromGrid\(\), io: \(\) => outputAndSceneLevels\(\), edit: /)
     assert.equal((ble.match(/BLOCK_ORDER_FROM_GRID_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     const { ADMINS } = await import('../shared/admin.mjs')
     const bench = await bluetoothOnABench()

@@ -46,9 +46,11 @@ const read = (p) => readFileSync(repo(p), 'utf8')
  * put back over a newer one, and for one commit that was exactly the fault.
  */
 const STANDINS = `
-export const H = { slots: [], i: 0, effects: [], log: [], made: 0, window: { width: 390, height: 844 }, rig: { deviceSlug: 'fm3', preset: { number: 12 } } }
-/* The rig's store: which unit, and which preset is on it. */
+export const H = { slots: [], i: 0, effects: [], log: [], made: 0, window: { width: 390, height: 844 }, rig: { deviceSlug: 'fm3', preset: { number: 12 } }, levels: false }
+/* The rig's store: which unit, which preset is on it, and (where a test says) which scene and the scenes' names. */
 export const useRig = (pick) => pick(H.rig)
+/* Whether the Output block's levels are open to this account (lib/bluetooth): his, or the switch. Closed unless a test opens them. */
+export const useOutputAndSceneLevels = () => H.levels === true
 export function useState(init) {
   const k = H.i++
   if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
@@ -85,13 +87,32 @@ export default 'Drawn'
  * asked, and everything sent to it written down in order. A write is
  * written down as it goes out and takes when it lands, \`unit.slow\`
  * milliseconds later (none, unless a test says the wire is slow).
+ *
+ * AND EACH SCENE'S LEVEL where a test gives the unit some (\`unit.scenes\`,
+ * by setting id: the Output block's Scene N Level, as each unit's catalog
+ * has them), read with the block and written down with the setting it went
+ * to: ['write', block, v, id]. The main level's lines are as they always were.
  */
-export const unit = { level: 0, levels: {}, holds: null, slow: 0 }
+export const unit = { level: 0, levels: {}, holds: null, slow: 0, scenes: null, sceneHolds: null, sceneCheckSlow: 0, readFails: false }
 const landed = () => (unit.slow ? new Promise((done) => setTimeout(done, unit.slow)) : null)
 export const idOf = (b) => b?.effectId
-export const blockParams = async (eid) => { H.log.push(['read', eid]); return { named: [{ id: 0, name: 'Level', unit: 'dB', min: -80, max: 20, value: eid in unit.levels ? unit.levels[eid] : unit.level }] } }
-export const setParam = async (block, id, v) => { H.log.push(['write', block, v]); await landed(); unit.level = v }
+const sceneRows = () => (unit.scenes ? Object.entries(unit.scenes).map(([id, value]) => ({ id: Number(id), name: \`Scene \${Number(id) - 17} Level\`, min: -20, max: 20, value })) : [])
+export const blockParams = async (eid) => { H.log.push(['read', eid]); if (unit.readFails) throw new Error('The unit didn’t answer.'); return { named: [{ id: 0, name: 'Level', unit: 'dB', min: -80, max: 20, value: eid in unit.levels ? unit.levels[eid] : unit.level }, ...sceneRows()] } }
+export const setParam = async (block, id, v) => {
+  if (id !== 0) { H.log.push(['write', block, v, id]); await landed(); unit.scenes[id] = v; return }
+  H.log.push(['write', block, v]); await landed(); unit.level = v
+}
 export const setParamConfirmed = async (block, id, v) => {
+  if (id !== 0) {
+    /* A scene level's check takes \`unit.sceneCheckSlow\` ms where a test says so, and says when it is over: ['checked', block, v, id]. */
+    H.log.push(['confirmed', block, v, id])
+    await landed()
+    if (unit.sceneCheckSlow) await new Promise((done) => setTimeout(done, unit.sceneCheckSlow))
+    H.log.push(['checked', block, v, id])
+    if (unit.sceneHolds !== null) return { ok: false, actual: unit.sceneHolds }
+    unit.scenes[id] = v
+    return { ok: true, actual: v }
+  }
   H.log.push(['confirmed', block, v])
   await landed()
   if (unit.holds !== null) return { ok: false, actual: unit.holds }
@@ -135,6 +156,8 @@ async function bench(source = read('mobile/src/components/Volume.js')) {
               if (a.kind === 'entry-point') return undefined
               /* The slider's own rules are the real ones: the writer that coalesces a drag, the step of a press, the label. */
               if (a.path === '../lib/volume') return { path: repo('mobile/src/lib/volume.js') }
+              /* And the scene levels' and the Output's own rules (lib/sceneLevel), the real file too. */
+              if (a.path === '../lib/sceneLevel') return { path: repo('mobile/src/lib/sceneLevel.js') }
               if (a.importer === repo('mobile/src/lib/volume.js')) return { path: repo(`mobile/src/lib/${a.path.replace(/^\.\//, '')}`) }
               if (a.importer.startsWith(repo('mobile/src/lib/'))) return undefined
               return { path: './standins.mjs', external: true }
@@ -351,7 +374,9 @@ export function run(test) {
     /* The sizes round it are the theme’s, so they move with it. */
     const src = read('mobile/src/components/Volume.js')
     assert.match(src, /const AROUND_METRONOME = 4 \* space\.xl \+ 4 \* space\.lg \+ VOLUME_ROW \+ 2 \* TAP \+ CLOSE_LINE\n/)
-    assert.match(src, /style=\{\{ flexGrow: 0, maxHeight: metronomeRoom\(height0, insets\) \}\}/)
+    /* Less this scene's row where it is drawn (lib/sceneLevel; the scene levels' own test runs it). */
+    assert.match(src, /style=\{\{ flexGrow: 0, maxHeight: metronomeRoom\(height0, insets, sceneRow\) \}\}/)
+    assert.match(src, /const SCENE_ROW = space\.lg \+ CLOSE_LINE \+ space\.xs \+ TAP\n/)
   })
 
   test('volume: a press still settling when the Output block changes is dropped with its block, and the new block’s level is shown and stepped from', async () => {
@@ -648,6 +673,294 @@ export function run(test) {
     const src = read('mobile/src/components/Volume.js')
     assert.ok(src.includes(`'${LOADING}'`), 'the still-loading sentence changed: the check below looks for it')
     assert.match(src, /'This preset’s Output block came back without a level this app can move\.'/)
+  })
+
+  /*
+   * THIS SCENE'S LEVEL, AND OUTPUT 1 (lib/sceneLevel), for an account the
+   * levels are open to (lib/bluetooth outputAndSceneLevels: his, until
+   * lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). "Scenes levels" was
+   * a customer's ask (an FM9 over Bluetooth): the Output block's Scene 1 to
+   * 8 Level, at ids 18 to 25, -20 to +20 dB. Run on the real pop-up.
+   */
+  const SCENES = { 18: 1, 19: 2, 20: 3, 21: 4, 22: 5, 23: 6, 24: 7, 25: 8 }
+  const said = (n) => [n?.children].flat(Infinity).filter((x) => typeof x === 'string').join('')
+  async function onAScene(index, { levels = true, scenes = SCENES, names = ['CLEAN', 'CRUNCH', 'LEAD'] } = {}) {
+    const b = await bench()
+    b.H.levels = levels
+    b.H.rig = { deviceSlug: 'fm9', preset: { number: 12 }, sceneIndex: index, sceneNames: names }
+    b.unit.scenes = scenes === null ? null : { ...scenes }
+    await b.open(OUTPUT)
+    return b
+  }
+  const sceneShown = (b, n) => said(b.find((x) => x.props.accessibilityLabel === `Scene ${n} level`))
+
+  test('volume: this scene’s row reads the level of the scene the unit is on out of the same read, writes that scene’s own setting a dB a press, confirms it once the presses stop, and follows a scene change', async () => {
+    const b = await onAScene(2)
+    assert.equal(sceneShown(b, 3), '+3.0 dB', 'the row does not show scene 3’s level as the unit holds it')
+    assert.ok(b.find((n) => said(n) === 'Scene 3 · LEAD'), 'the row does not name the scene')
+    assert.deepEqual(b.H.log.filter((l) => l[0] === 'read'), [['read', 46]], 'the scene’s level asked the unit something more than the one read of the Output block')
+    b.H.log.length = 0
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(sceneShown(b, 3), '+5.0 dB')
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [['write', 46, 4, 20], ['write', 46, 5, 20], ['confirmed', 46, 5, 20]], 'two presses on scene 3 did not go to Scene 3 Level, each at once, and confirmed once on where they ended')
+    /* Told at each press, as the level is sent, and once more as it is confirmed: the main level's own rule. */
+    assert.equal(b.told(), 3, 'Save was not told at each press and at the landing')
+    assert.deepEqual(b.errors, [])
+    /* A footswitch to scene 5: its own level, out of the read already made, and its own setting. */
+    b.H.log.length = 0
+    b.H.rig = { ...b.H.rig, sceneIndex: 4 }
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.button('Scene 3 level up'), null, 'scene 3’s row is still up on scene 5')
+    assert.equal(sceneShown(b, 5), '+5.0 dB', 'scene 5’s level is not shown on scene 5')
+    b.button('Scene 5 level down').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [['write', 46, 4, 22], ['confirmed', 46, 4, 22]], 'a press on scene 5 did not go to Scene 5 Level')
+    assert.deepEqual(b.H.log.filter((l) => l[0] === 'read'), [], 'a scene change read the Output block again')
+    /* And the main level is untouched by all of it. */
+    assert.equal(b.slider().props.accessibilityValue.now, 0)
+    assert.equal(b.unit.level, 0)
+  })
+
+  test('volume: this scene’s row never goes past −20 or +20 dB, never steps from a level it does not know, and never shows for a scene the unit has not said', async () => {
+    /* At the top, + sends nothing; − comes down. At the bottom (the floor), − sends nothing. */
+    const top = await onAScene(2, { scenes: { ...SCENES, 20: 20 } })
+    top.H.log.length = 0
+    top.button('Scene 3 level up').props.onPress()
+    await top.draw({ blocks: OUTPUT, open: true })
+    await top.wait(420)
+    assert.deepEqual(top.sent(), [], 'a press of + at +20 dB was sent')
+    assert.equal(sceneShown(top, 3), '+20.0 dB')
+    top.button('Scene 3 level down').props.onPress()
+    await top.draw({ blocks: OUTPUT, open: true })
+    await top.wait(420)
+    assert.deepEqual(top.sent(), [['write', 46, 19, 20], ['confirmed', 46, 19, 20]])
+    const bottom = await onAScene(2, { scenes: { ...SCENES, 20: -19.7 } })
+    bottom.H.log.length = 0
+    bottom.button('Scene 3 level down').props.onPress()
+    await bottom.draw({ blocks: OUTPUT, open: true })
+    bottom.button('Scene 3 level down').props.onPress()
+    await bottom.draw({ blocks: OUTPUT, open: true })
+    await bottom.wait(420)
+    assert.deepEqual(bottom.sent(), [['write', 46, -20, 20], ['confirmed', 46, -20, 20]], 'a scene level went under the floor, or the press at the floor was sent')
+    /* A level the read did not give as a number: drawn as not known, and no press sends anything. */
+    const unknown = await onAScene(2, { scenes: { ...SCENES, 20: null } })
+    unknown.H.log.length = 0
+    assert.equal(sceneShown(unknown, 3), '—')
+    unknown.button('Scene 3 level up').props.onPress()
+    unknown.button('Scene 3 level down').props.onPress()
+    await unknown.draw({ blocks: OUTPUT, open: true })
+    await unknown.wait(420)
+    assert.deepEqual(unknown.sent(), [], 'a press stepped from a scene level nobody read')
+    assert.equal(unknown.told(), 0)
+    /* No scene said (the unit has not answered which), a scene past the eighth, or a read that names no scene levels: no row at all. */
+    for (const [index, scenes] of [[undefined, SCENES], [-1, SCENES], [8, SCENES], [2, null], [2, { 18: 1 }]]) {
+      const b = await onAScene(index, { scenes })
+      assert.equal(b.find((n) => said(n) === 'THIS SCENE'), null, `a scene row was drawn for scene ${index} with ${JSON.stringify(scenes)}`)
+    }
+  })
+
+  test('volume: a scene level the unit will not hold is said with what it holds and shown, and a press still waiting is not confirmed on another preset', async () => {
+    const b = await onAScene(2)
+    b.unit.sceneHolds = 1.5
+    b.H.log.length = 0
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(b.errors, ['Scene 3’s level didn’t take. You asked for +4.0 dB; the unit says +1.5 dB.'])
+    assert.equal(sceneShown(b, 3), '+1.5 dB', 'the row is left on a level the unit refused')
+    /* A press, then a footswitch to another preset inside the same second: the press is not confirmed there, and the new preset's levels are read. */
+    const moved = await onAScene(2)
+    moved.H.log.length = 0
+    moved.button('Scene 3 level up').props.onPress()
+    await moved.draw({ blocks: OUTPUT, open: true })
+    moved.unit.scenes = { ...SCENES, 20: -6 }
+    moved.H.rig = { ...moved.H.rig, preset: { number: 13 } }
+    await moved.draw({ blocks: OUTPUT, open: true })
+    await moved.draw({ blocks: OUTPUT, open: true })
+    await moved.wait(420)
+    await moved.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(moved.sent(), [['write', 46, 4, 20]], 'a press made on the last preset was confirmed on this one')
+    assert.equal(sceneShown(moved, 3), '−6.0 dB', 'the last preset’s scene level is still shown')
+    assert.equal(moved.told(), 1)
+    assert.deepEqual(moved.errors, [])
+  })
+
+  test('volume: the levels open, the speaker moves Output 1 whatever order the chain lists the Outputs in; closed, the pop-up sees and sends exactly what it always did', async () => {
+    const TWO = [{ slug: 'output', name: 'Output 2', effectId: 43 }, { slug: 'output', name: 'Output 1', effectId: 42 }]
+    /* Open: Output 1, block 42. */
+    const open = await onAScene(2)
+    await open.open(TWO)
+    open.H.log.length = 0
+    open.button('Volume up').props.onPress()
+    open.button('Scene 3 level up').props.onPress()
+    await open.draw({ blocks: TWO, open: true })
+    await open.wait(420)
+    assert.deepEqual(open.sent().filter((l) => l.length === 3), [['write', 42, 1], ['confirmed', 42, 1]], 'the volume did not move Output 1')
+    assert.deepEqual(open.sent().filter((l) => l.length === 4), [['write', 42, 4, 20], ['confirmed', 42, 4, 20]], 'the scene’s level did not go to Output 1')
+    /* Closed, with the unit holding scene levels and a scene said: the first Output listed, no row, and the same reads and writes, line for line, as with no scene levels at all. */
+    const run = async (levels, scenes) => {
+      const b = await onAScene(2, { levels, scenes })
+      await b.open(TWO)
+      b.H.log.length = 0
+      b.button('Volume up').props.onPress()
+      await b.draw({ blocks: TWO, open: true })
+      await b.wait(420)
+      const slider = b.slider()
+      slider.props.onPanResponderGrant()
+      slider.props.onPanResponderMove({}, { dx: 30 })
+      slider.props.onPanResponderRelease()
+      await b.wait(20)
+      await b.draw({ blocks: TWO, open: false })
+      await b.draw({ blocks: TWO, open: true })
+      await b.draw({ blocks: TWO, open: true })
+      return { log: b.H.log.filter((l) => l[0] !== 'edited'), row: b.find((n) => said(n) === 'THIS SCENE'), tree: b }
+    }
+    const closed = await run(false, SCENES)
+    const none = await run(false, null)
+    assert.equal(closed.row, null, 'a scene row is drawn for an account the levels are closed to')
+    assert.deepEqual(closed.log, none.log, 'an account the levels are closed to sees or sends something it did not before')
+    assert.deepEqual(closed.log.filter((l) => l[0] !== 'read').map((l) => l[1]), [43, 43, 43, 43], 'the volume left the first Output the chain lists, for an account the levels are closed to')
+    assert.ok(closed.log.every((l) => l.length === 3 || l[0] === 'read'), 'a scene level went to the unit')
+  })
+
+  test('volume: another preset while a scene press is still going out: its check is not sent to the new preset, and a check already out says nothing there', async () => {
+    /* The write is still on its way when the press's wait runs out, and the preset changes before it lands. */
+    const b = await onAScene(2)
+    b.unit.slow = 600
+    b.H.log.length = 0
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(400)
+    b.H.rig = { ...b.H.rig, preset: { number: 13 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(900)
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(b.sent().filter((l) => l.length === 4), [['write', 46, 4, 20]], 'a press made on the last preset was checked on this one')
+    assert.deepEqual(b.errors, [])
+    /* The check is already out when the preset changes, the unit holds +1.5 for it, and the new preset happens to be at +4 on scene 3. */
+    const out = await onAScene(2)
+    out.unit.sceneCheckSlow = 500
+    out.unit.sceneHolds = 1.5
+    out.H.log.length = 0
+    out.button('Scene 3 level up').props.onPress()
+    await out.draw({ blocks: OUTPUT, open: true })
+    await out.wait(400)
+    out.unit.scenes = { ...SCENES, 20: 4 }
+    out.H.rig = { ...out.H.rig, preset: { number: 13 } }
+    await out.draw({ blocks: OUTPUT, open: true })
+    await out.draw({ blocks: OUTPUT, open: true })
+    await out.wait(700)
+    await out.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(out.errors, [], 'the last preset’s check spoke over the new one')
+    assert.equal(sceneShown(out, 3), '+4.0 dB', 'the last preset’s check put its level on the new preset’s row')
+  })
+
+  test('volume: another preset whose read fails shows none of the last preset’s scene levels, and a press steps from nothing', async () => {
+    const b = await onAScene(2)
+    b.unit.readFails = true
+    b.H.rig = { ...b.H.rig, preset: { number: 13 } }
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.deepEqual(b.errors, ['The unit didn’t answer.'])
+    assert.equal(b.find((n) => said(n) === 'THIS SCENE'), null, 'the last preset’s scene level is drawn on this one')
+    assert.equal(b.button('Scene 3 level up'), null)
+  })
+
+  test('volume: an account signed out with the pop-up open takes this scene’s row with it, and a press already in hand sends nothing', async () => {
+    const b = await onAScene(2)
+    const up = b.button('Scene 3 level up').props.onPress
+    b.H.log.length = 0
+    b.H.levels = false
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.equal(b.find((n) => said(n) === 'THIS SCENE'), null, 'the row is still up for an account the levels are closed to')
+    up()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(420)
+    assert.deepEqual(b.sent(), [], 'a press went for an account the levels are closed to')
+    assert.equal(b.told(), 0)
+  })
+
+  test('volume: a read that comes back while a scene press is still landing does not put the older level over it', async () => {
+    const b = await onAScene(2)
+    /* The write takes a moment to land, and the pop-up is closed and opened inside it: the read asks the unit, which still holds +3. */
+    b.unit.slow = 100
+    b.H.log.length = 0
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: false })
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.draw({ blocks: OUTPUT, open: true })
+    assert.ok(b.H.log.some((l) => l[0] === 'read'), 'the open did not read the block again')
+    assert.equal(sceneShown(b, 3), '+4.0 dB', 'the read put scene 3’s older level over the press')
+    await b.wait(520)
+    assert.deepEqual(b.sent(), [['write', 46, 4, 20], ['confirmed', 46, 4, 20]])
+  })
+
+  test('volume: one scene level’s check at a time, and a check overtaken by a newer press says nothing of its own', async () => {
+    /* A check that takes half a second, and a unit that holds +1.5 whatever is asked. */
+    const b = await onAScene(2)
+    b.unit.sceneCheckSlow = 500
+    b.unit.sceneHolds = 1.5
+    b.H.log.length = 0
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(370)
+    /* The first check is out; a second press, and its own wait runs out while the first is still out. */
+    b.button('Scene 3 level up').props.onPress()
+    await b.draw({ blocks: OUTPUT, open: true })
+    await b.wait(1400)
+    await b.draw({ blocks: OUTPUT, open: true })
+    const checks = b.H.log.filter((l) => l[0] === 'confirmed' || l[0] === 'checked')
+    assert.deepEqual(checks, [['confirmed', 46, 4, 20], ['checked', 46, 4, 20], ['confirmed', 46, 5, 20], ['checked', 46, 5, 20]], 'two checks of scene 3’s level ran at once, or the second never ran')
+    assert.deepEqual(b.errors, ['Scene 3’s level didn’t take. You asked for +5.0 dB; the unit says +1.5 dB.'], 'the check overtaken by the second press spoke, or the second did not')
+    assert.equal(sceneShown(b, 3), '+1.5 dB')
+  })
+
+  test('scene levels, the rules on their own: a press from what is known, a whole dB, the floor and the top; Output 1 by its id', async () => {
+    const s = await import('../mobile/src/lib/sceneLevel.js')
+    const p = { id: 20, name: 'Scene 3 Level', min: -20, max: 20 }
+    assert.equal(s.sceneNudged(3, p, 1), 4)
+    assert.equal(s.sceneNudged(3, p, -1), 2)
+    assert.equal(s.sceneNudged(2.3, p, 1), 3.5, 'a press does not land on the half dB')
+    assert.equal(s.sceneNudged(19.6, p, 1), 20)
+    assert.equal(s.sceneNudged(-19.6, p, -1), -20)
+    for (const [from, d] of [[20, 1], [-20, -1], [null, 1], [undefined, -1], [NaN, 1], ['3', 1], [3, 0], [3, 2], [3, undefined]]) assert.equal(s.sceneNudged(from, p, d), null, `${from} ${d}`)
+    assert.equal(s.sceneNudged(3, { id: 20, name: 'Scene 3 Level', min: 0, max: 0 }, 1), null, 'a level with no range is stepped')
+    assert.equal(s.sceneNudged(3, { name: 'Scene 3 Level', min: -20, max: 20 }, 1), null, 'a level with no setting to write is stepped')
+    /* By its name, the scene the unit says. */
+    const named = [{ id: 12, name: 'Level', min: -80, max: 20 }, ...Array.from({ length: 8 }, (_, i) => ({ id: 18 + i, name: `Scene ${i + 1} Level`, min: -20, max: 20, value: i }))]
+    for (let i = 0; i < 8; i++) assert.equal(s.sceneLevelParam(named, i).id, 18 + i)
+    for (const i of [-1, 8, 2.5, null, undefined, '2']) assert.equal(s.sceneLevelParam(named, i), null, `scene ${i}`)
+    assert.equal(s.sceneLevelParam(null, 2), null)
+    /* Output 1: the lowest id of an Output block that has one, wherever it is listed. */
+    const chain = [{ slug: 'amp', effectId: 58 }, { slug: 'output', effectId: 44 }, { slug: 'output' }, { slug: 'output', effectId: 42 }, { slug: 'output', effectId: 43 }]
+    assert.equal(s.outputOne(chain).effectId, 42)
+    assert.equal(s.outputOne([{ slug: 'output' }, { slug: 'output', effectId: 43 }]).effectId, 43)
+    assert.equal(s.outputOne(null), undefined)
+    assert.equal(s.volumeOutput(chain, true).effectId, 42)
+    /* Closed: the first Output listed, as it always was, id or none. */
+    assert.equal(s.volumeOutput(chain, false).effectId, 44)
+    assert.equal(s.volumeOutput([{ slug: 'output' }, { slug: 'output', effectId: 43 }], false).effectId, undefined)
+    for (const v of [undefined, 1, 'yes']) assert.equal(s.volumeOutput(chain, v).effectId, 44, `${v} opens Output 1`)
+    assert.equal(s.volumeOutput(null, false), undefined)
+  })
+
+  test('volume: the metronome’s room is less this scene’s row where the row is drawn, and only there', async () => {
+    const room = async (levels) => {
+      const b = await onAScene(2, { levels })
+      b.H.window = { width: 390, height: 844 }
+      b.render({ blocks: OUTPUT, open: true })
+      return b.find((n) => n.type === 'ScrollView').props.style.maxHeight
+    }
+    /* The bench's theme has every space 8 and TAP 44: the row is its gap, its heading's line, its gap and its buttons. */
+    assert.equal((await room(false)) - (await room(true)), 8 + 16 + 8 + 44, 'the scene row takes room the metronome’s part still counts as its own')
   })
 
   test('volume: this bench catches the fault when it is put back', async () => {

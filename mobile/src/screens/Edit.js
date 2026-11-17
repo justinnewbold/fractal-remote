@@ -28,7 +28,8 @@ import {
 import { vp4Here } from '../lib/device'
 import { demoUnit, isDemo } from '../lib/demo'
 import { gridReadTakesLong, overBluetooth } from '../lib/bleSwitch'
-import { bluetoothAdmin, useCableNow } from '../lib/bluetooth'
+import { bluetoothAdmin, useCableNow, useOutputAndSceneLevels } from '../lib/bluetooth'
+import { sceneFloor, sceneLevelToSend, sceneRowsFor } from '../lib/sceneLevel'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { editNoteUp } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
@@ -97,6 +98,7 @@ import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
 import { blockSettings, settingsByPage } from '../lib/editSettings'
 import { useEditSettings } from '../lib/useEditSettings'
+import { useLiveKnobsHere } from '../lib/liveKnobsHere'
 import { useCapturePicker } from '../lib/useCapturePicker'
 import { captureNotAsListed } from '../lib/captureList'
 import { chooseCapture } from '../lib/captureListHere'
@@ -917,7 +919,8 @@ export function BlockPanel({
   channels,
   focus,
   onError,
-  onScrollLock,
+  /* The scroll lock from whoever draws the panel: handed on to the knobs through lib/liveKnobsHere (below). */
+  onScrollLock: lockAbove,
   modelUndo,
   onModelUndo,
   restoring,
@@ -1033,11 +1036,46 @@ export function BlockPanel({
   const pickerOn = useCapturePicker()
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
+  /*
+   * ITS KNOBS FOLLOW THE UNIT (lib/liveKnobsHere, the rules in
+   * lib/liveKnobs): his account until lib/features LIVE_KNOBS_FOR_EVERYONE,
+   * on an FM3, FM9 or Axe-Fx III. The block is read again every few seconds
+   * over Bluetooth or the unit's cable, as the app comes back to the front,
+   * and when the unit or the computer says a knob moved; a read changes
+   * only knobs whose value differs and none still waiting to go. So it is
+   * told when a finger is on a knob (`onScrollLock`, the lock handed to the
+   * knobs, which then hands it on), when a write of the panel's own begins
+   * and ends (`live.during`), and the panel's first read is fresh from the
+   * unit. Closed, each of the three is what it was.
+   */
+  const live = useLiveKnobsHere({
+    eid,
+    block,
+    lockAbove,
+    params,
+    enums,
+    type,
+    layout,
+    capture,
+    local,
+    loading,
+    picking,
+    choosing,
+    capturing,
+    rereading,
+    restoring,
+    setParams,
+    setEnums,
+    setType: setType_,
+    setLayout,
+    setCapture
+  })
+  const onScrollLock = live.lock
   /* One checked write per control at a time — see commit. */
   const writes = useRef(null)
   const writeOne = useRef(null)
   if (!writes.current)
-    writes.current = oneWriteAtATime((job) => writeOne.current?.(job), {
+    writes.current = oneWriteAtATime((job) => live.during(() => writeOne.current?.(job)), {
       same: (a, b) => Object.is(a.next, b.next)
     })
   /* The cab this block was on before the last pick, for the eight seconds
@@ -1084,7 +1122,7 @@ export function BlockPanel({
       setLocal({})
       try {
         const [p, t] = await Promise.all([
-          blockParams(eid),
+          live.firstRead(eid),
           /* The pop-up's knobs (`bare`) draw no model, so no list of them is asked for. */
           bare ? [] : blockTypes(block.slug).catch(() => [])
         ])
@@ -1140,6 +1178,19 @@ export function BlockPanel({
   const offDeck = cabHidden(cab)
   const editable = params.filter((p) => !isSilencingParam(p.name)).filter((p) => !offDeck.has(p.id))
   const level = blockLevel(params)
+  /*
+   * AND EVERY SCENE'S LEVEL, IN AN OUTPUT BLOCK (lib/sceneLevel), for an
+   * account the levels are open to (lib/bluetooth outputAndSceneLevels: his,
+   * until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). "Scenes
+   * levels" was a customer's ask. Fractal's editor has them on the Output
+   * block's own Scene Levels page, which comes out empty here (every one is
+   * a level, kept off the knobs), so they are typed under the Level, by the
+   * same rule as it: a box, never a knob, never under the floor, written
+   * as any knob is (commit). Not in the hold pop-up (`bare`).
+   */
+  const levelsOpen = useOutputAndSceneLevels()
+  const sceneOn = useRig(ofScene)
+  const sceneRows = sceneRowsFor(block.slug, params, levelsOpen && !bare)
 
   /* Split into the pages Fractal's editor uses, where the unit says what
      they are — see lib/editPages.js. */
@@ -1319,6 +1370,23 @@ export function BlockPanel({
    * write per control at a time, the newest waiting value next, with the
    * value on the knob let go only once the unit has caught up with it.
    */
+  /*
+   * A value set down that will not go is let go of, if it is still the one
+   * set down. A knob pushed on past its end, or a level typed past it, is
+   * the value the knob already shows, and nothing is sent for it; left
+   * waiting, it held every read of the knobs following the unit
+   * (lib/liveKnobsHere `held`) for as long as the panel stayed open (an
+   * independent read, 16 November 2026). Nothing on screen moves: it is the
+   * value shown.
+   */
+  const settledAt = (id, v) =>
+    setLocal((prev) => {
+      if (prev[id] !== v) return prev
+      const copy = { ...prev }
+      delete copy[id]
+      return copy
+    })
+
   const commit = (p, override) => {
     /* For the length of an Undo the knobs show the new model's values, which
        the unit no longer holds, and a turn there would be pulled back or
@@ -1326,7 +1394,7 @@ export function BlockPanel({
     if (restoring) return
     const next = override !== undefined ? override : local[p.id]
     if (next === undefined) return
-    if (next === p.value && !writes.current.busy(p.id)) return
+    if (next === p.value && !writes.current.busy(p.id)) return settledAt(p.id, next)
     return writes.current.send(p.id, { p, next })
   }
 
@@ -1341,7 +1409,16 @@ export function BlockPanel({
       try {
         fresh = await blockParams(eid)
       } catch (err) {
-        if (!res.unverified) throw err
+        /*
+         * Where the knobs follow the unit, a write the unit took and checked
+         * is not undone by a read after it that failed: the checked value
+         * stands on the knob below and is let go of as every settled one
+         * is, so the next read corrects it (a second independent read, 16
+         * November 2026: it jumped back to the old number, and turning it
+         * back there sent nothing). A write that never went still throws.
+         */
+        if (!res.unverified && (!live.open || res.unsent === true)) throw err
+        if (!res.unverified) onError(err.message)
       }
       if (fresh) {
         setParams(fresh?.named || [])
@@ -1356,7 +1433,8 @@ export function BlockPanel({
          * number stands as the whole number sent (device.js askedAs), never
          * the drag's 10.46.
          */
-        setParams((prev) => prev.map((q) => (q.id === p.id ? { ...q, value: q.whole === true && Number.isFinite(next) ? Math.round(next) : next } : q)))
+        const stands = !res.ok && !res.unverified && typeof res.actual === 'number' ? res.actual : next
+        setParams((prev) => prev.map((q) => (q.id === p.id ? { ...q, value: q.whole === true && Number.isFinite(stands) ? Math.round(stands) : stands } : q)))
       }
       if (!res.ok) onError(res.unverified ? notChecked(p) : didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
@@ -1373,6 +1451,8 @@ export function BlockPanel({
        */
     } catch (err) {
       onError(err.message)
+      /* Where the knobs follow the unit, a value whose write failed is let go of, so the reads go on; anywhere else the knob shows what was asked, as it always has. */
+      if (live.open) settledAt(p.id, next)
     }
   }
 
@@ -1522,7 +1602,7 @@ export function BlockPanel({
     setPicking(false)
     setHunt('')
     try {
-      await applyModel(value)
+      await live.during(() => applyModel(value))
     } catch (err) {
       onError(err.message)
     }
@@ -1531,7 +1611,7 @@ export function BlockPanel({
   /* An IR out of the IR picker: {bank, ir, name}, through the cab pick. */
   const swapIr = async (pick) => {
     try {
-      await applyCab(pick)
+      await live.during(() => applyCab(pick))
     } catch (err) {
       onError(err.message)
     }
@@ -1544,7 +1624,7 @@ export function BlockPanel({
     setUndo(null)
     if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
     try {
-      await applyCab(null, { undoable: false, back: back.cab })
+      await live.during(() => applyCab(null, { undoable: false, back: back.cab }))
     } catch (err) {
       onError(err.message)
     }
@@ -1945,6 +2025,31 @@ export function BlockPanel({
               <Text style={{ color: color.silkFaint, fontSize: font.micro }}>read-only</Text>
             </>
           )}
+        </View>
+      ) : null}
+
+      {sceneRows.length ? (
+        <View style={{ gap: space.sm }}>
+          <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>SCENE LEVELS</Text>
+          {sceneRows.map((p) => (
+            <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <Text style={{ width: 72, color: p.index === sceneOn ? color.live : color.silk, fontSize: font.small }}>{`Scene ${p.index + 1}`}</Text>
+              {/* Typed, never dragged, held between the floor and its top on its way out (sceneLevelToSend); dB where the unit says nothing. */}
+              <View style={{ width: 104 }}>
+                <ValueBox
+                  param={{ ...p, min: sceneFloor(p), unit: p.unit || 'dB' }}
+                  value={valueOf(p)}
+                  onCommit={(v) => {
+                    const next = sceneLevelToSend(p, v)
+                    if (restoring || next === null) return
+                    setLocal((prev) => ({ ...prev, [p.id]: next }))
+                    commit(p, next)
+                  }}
+                />
+              </View>
+              {p.index === sceneOn ? <Text style={{ color: color.silkFaint, fontSize: font.micro }}>this scene</Text> : null}
+            </View>
+          ))}
         </View>
       ) : null}
 

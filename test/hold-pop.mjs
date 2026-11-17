@@ -219,7 +219,9 @@ export function run(test) {
     assert.match(panel, /const namOnUnit = block\.slug === 'nam' && !knobless && !bare\n/)
     /* And the block's list settings (lib/editSettings) are not in the pop-up, which is knobs over channels and nothing else. */
     assert.match(panel, /const settings = settingsOn && !bare && !knobless \? blockSettings\(enums, block\.slug\) : \[\]\n/)
-    assert.equal(panel.match(/\bbare\b/g).length, 8, '`bare` changes something else in Edit’s block view')
+    /* And the Output block's scene levels (lib/sceneLevel), left to Edit as its Level is. */
+    assert.match(panel, /const sceneRows = sceneRowsFor\(block\.slug, params, levelsOpen && !bare\)\n/)
+    assert.equal(panel.match(/\bbare\b/g).length, 9, '`bare` changes something else in Edit’s block view')
     /* The knobs themselves, and the pages, are not behind `bare` at all: the same lines Edit draws. */
     assert.match(panel, /\{pages\.length > 1 \? \(\s+<SideScroll/)
     assert.match(panel, /<Knob\s+param=\{p\}\s+label=\{p\.label \|\| p\.name\}\s+value=\{valueOf\(p\)\}/)

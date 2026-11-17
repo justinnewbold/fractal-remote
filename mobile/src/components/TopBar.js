@@ -17,7 +17,8 @@ import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
-import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack } from '../lib/bluetooth'
+import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow, useNothingBack, useOutputAndSceneLevels } from '../lib/bluetooth'
+import { volumeOutput } from '../lib/sceneLevel'
 import { connectBluetoothAgain } from '../lib/bleLink'
 import { CONNECT_AGAIN, FIX_STEP_BY_STEP, connectAgainSub, notAnAdapter, notAnsweringLine, nothingBackLine } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
@@ -72,6 +73,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
+  /* Output 1 for an account the levels are open to, the first Output block for every other, as the volume pop-up asks it (lib/sceneLevel volumeOutput). */
+  const levels = useOutputAndSceneLevels()
   const [volume, setVolume] = useState(false)
   const [failed, setFailed] = useState(null)
   /* Whether the note under the pill is open: over Bluetooth only, with Turn off Bluetooth in it. */
@@ -288,8 +291,14 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * render from before any chain was read (components/Volume, the note over
    * its landing). The one question asked here is still the right one; it was
    * not what those lines were about.
+   *
+   * AND THE SAME BLOCK AS THE POP-UP, by the same question (lib/sceneLevel
+   * volumeOutput): Output 1 where the levels are open to this account, the
+   * first Output block the chain lists for every other. Over Bluetooth or a
+   * USB cable the wire hands an Output block on only where they are open
+   * (bleWire `io`), so that is the only place the speaker is there.
    */
-  const hasOutput = connected && Number.isInteger(idOf((blocks || []).find((b) => b?.slug === 'output')))
+  const hasOutput = connected && Number.isInteger(idOf(volumeOutput(blocks, levels)))
 
   /*
    * THE ACCOUNT'S PHOTO, beside the pill, or a silhouette where there is
