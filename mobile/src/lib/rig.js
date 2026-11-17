@@ -2839,6 +2839,18 @@ const notThisChain = () => !chainActs(chainViewOf(state))
  */
 const notSwitchable = (id) => !chainSwitches(chainViewOf(state)) || !state.allBlocks.some((b) => sameBlock(b, id))
 
+/**
+ * Whether this preset's own chain, as it is on screen, has a block switched
+ * off: true or false, and null where it cannot say (the chain is another
+ * preset's, or does not hold the block, or the scene's own on and off is
+ * still owed: a status read that missed after a scene change is asked again
+ * a moment later, `sceneRetryTimer`, and until it lands the on and off on
+ * screen is the last scene's). By the rule a switch is sent by
+ * (`notSwitchable`), so where this answers, writeBlockBypass is not refused
+ * for the chain. A read: nothing is sent and nothing is marked as edited.
+ */
+export const blockIsOff = (id) => (notSwitchable(id) || sceneRetryTimer !== null ? null : blockNow(id)?.bypassed === true)
+
 /*
  * A PEDAL SET ON OR OFF: the Apple Watch's pedals (lib/watchBridge comes here
  * by this name, with the state the wrist asked for) and every pedal of Play's

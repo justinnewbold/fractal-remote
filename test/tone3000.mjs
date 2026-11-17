@@ -421,7 +421,7 @@ export function run(test) {
     assert.ok(!/0xf0|0xF0|sysex|buildFrame|frame\(/i.test(code(src)))
   })
 
-  test('tone3000: the card is on a Developer page of its own only, reaches a unit only through the captures’ three calls, and says whose page and whose tone it is', async () => {
+  test('tone3000: the card is on a Developer page of its own only, reaches a unit only through the captures’ three calls and a NAM block’s switch-on, and says whose page and whose tone it is', async () => {
     const card = read('mobile/src/components/Tone3000Test.js')
     const here = read('mobile/src/lib/tone3000Here.js')
     const settings = flat(read('mobile/src/screens/Settings.js'))
@@ -453,8 +453,26 @@ export function run(test) {
       assert.ok(!/from '\.\.?\/(lib\/)?(device|bleWire|bluetooth|rig|link)'/.test(src), 'the TONE3000 piece imports the unit’s code')
     }
     /* The card reaches a unit by the captures' three calls and nothing else of the unit's (test/nam-install.mjs, test/bluetooth.mjs hold what they send). */
-    assert.deepEqual(card.match(/from '\.\.\/lib\/(device|bleWire|bluetooth|rig|link)'/g), ["from '../lib/device'"])
+    assert.deepEqual(card.match(/from '\.\.\/lib\/(device|bleWire|bluetooth|rig|link)(\.m?js)?'/g), ["from '../lib/device'"])
     assert.match(card, /import \{ namEmptySlotHere, namInstallHere, namPickHere \} from '\.\.\/lib\/device'/)
+    /*
+     * And, since 17 November 2026, by one thing more: a NAM block that is off
+     * is switched on so a capture played in it is heard (lib/namOnHere,
+     * test/nam-playing.mjs). By the rig's own switch, the one Edit's block
+     * page uses, and nothing of the wire's. ON ONLY: that file has one way to
+     * the unit, and it cannot switch a block off.
+     */
+    assert.match(card, /import \{ namOffHere, namOnHere \} from '\.\.\/lib\/namOnHere'/)
+    const onHere = read('mobile/src/lib/namOnHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.deepEqual(onHere.match(/^import .*$/gm), ["import { blockIsOff, writeBlockBypass } from './rig'"])
+    assert.deepEqual(onHere.match(/\b(writeBlockBypass|blockIsOff)\([^)]*\)/g), ['blockIsOff(block)', 'writeBlockBypass(block, false)'])
+    assert.deepEqual(onHere.match(/^export const \w+/gm), ['export const namOffHere', 'export const namOnHere'])
+    /* Every file of lib/ the card draws on that could reach a unit is one of those above, or reads only. */
+    const libs = [...card.matchAll(/from '\.\.\/lib\/([\w-]+)'/g)].map((m) => m[1])
+    /* Hyphens in a name and all (device-word, nam-file, nam-install), and an import written with its ending. */
+    for (const name of ['device-word', 'nam-file', 'nam-install', 'namOnHere']) assert.ok(libs.includes(name), `${name} is not among the card's libraries as this check reads them`)
+    const reach = libs.filter((name) => /\bfrom ['"]\.\/(rig|device|bleWire|bluetooth|link)(\.m?js)?['"]/.test(read(`mobile/src/lib/${name}.js`).replace(/\/\*[\s\S]*?\*\//g, '')))
+    assert.deepEqual(reach.sort(), ['captureComputerHere', 'namOnHere', 'namPlayingHere'])
     /* What it reads of the computer, to say one is too old for a capture to be kept (lib/captureComputerHere), it reads off the link and the device's one yes-or-no: nothing sent, nothing asked of the unit. */
     const computerHere = read('mobile/src/lib/captureComputerHere.js').replace(/\/\*[\s\S]*?\*\//g, '')
     assert.deepEqual(computerHere.match(/^import .*$/gm), ["import { capturesThroughComputer } from './device'", "import { linkState, subscribeLink } from './link'", "import { computerTooOld, oldAfterSend } from './captureComputer'"])

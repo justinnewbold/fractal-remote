@@ -28,10 +28,22 @@
  * it pulls up the quick edit screen on top of it have it say tone 3000 ...
  * browse tones preview them and then download them directly and then it'll
  * take them back to that screen" (the same day). There Preview plays in
- * THAT block, Get does the same and hands back to the block's knobs
- * (`onDone`, with what the block said), and a capture already on the unit
- * has Play it in that block and Use it and go back. What each button does
- * is lib/tone3000Words', said for the place it is in. TONE3000's own
+ * THAT block, and Get does the same and hands back to the block's knobs
+ * (`onDone`, with what the block said). EVERY CAPTURE THERE HAS THOSE SAME
+ * TWO BUTTONS, on the unit already or not, since 17 November 2026: one
+ * already there used to trade them for "Play it in NAM 2" and "Use it and
+ * go back", and he asked what the difference from Get was ("Little
+ * confusing. If I click each of those, would it do the same thing?"). It
+ * was the same thing with nothing to send. So there Preview plays it and
+ * Get plays it and goes back, and what is not on the unit yet is sent
+ * first. What each button does is lib/tone3000Words', said for the place it
+ * is in.
+ *
+ * A NAM BLOCK THAT IS OFF IS SWITCHED ON once the unit has named a capture
+ * in it, from every button here that plays one (lib/namPlaying
+ * `switchOnToHear`, lib/namOnHere): a preview in a block that was off made
+ * no sound ("need to make sure that it turns it on automatically to
+ * listen", the same day). TONE3000's own
  * catalog page (Browse TONE3000) is drawn only where lib/tone3000Words
  * `T3K_CATALOG_PAGE` is on, which it is not: that file says why, and what
  * TONE3000's own rule ("Always provide a clear, persistent path to browse
@@ -99,7 +111,7 @@ import { deviceNoun } from '../lib/device-word'
 import { logDebug } from '../lib/debugLog'
 import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
-import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
+import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE } from '../lib/tone3000Words'
 import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
@@ -109,8 +121,9 @@ import { captureOrder, captureToSlot, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import { CAPTURES_KEPT_FROM, tooOldUpTop, tooOldWords, unkeptWords } from '../lib/captureComputer'
 import { oldAfterSendHere, oldComputerHere, watchComputer } from '../lib/captureComputerHere'
-import { heardPick, keptWhile, namPlayButton, pickedLine, playingOn } from '../lib/namPlaying'
+import { CHANGING, heardPick, keptWhile, LEFT_OFF, leftOffAfterMove, namPlayButton, pickedLine, playingOn, saysPlaying, STILL_OFF, SWITCHED_ON, switchOnToHear } from '../lib/namPlaying'
 import { linkedNow, unitNow, usePresetAndScene, watchLinked } from '../lib/namPlayingHere'
+import { namOffHere, namOnHere } from '../lib/namOnHere'
 import Avatar from './Avatar'
 import Note from './Note'
 import Press from './Press'
@@ -575,6 +588,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
     }
     /* Get from a held block plays too (`back`): it is still Get's word that says what it is doing. */
     setTapped(play && !back ? 'play' : 'keep')
+    /* Where the unit is as the button is tapped: the block is switched on at the end only if it is still there (the send can take half a minute). */
+    const tappedAt = unitNow()
     if (goingNow()) {
       /* `wait`, and no line of its own: nothing has become of THIS capture, so it is a plain note and never the "Not on your Axe-Fx III" card. */
       setSend({ id: m.id, line: '', wait: STILL_GOING })
@@ -697,7 +712,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       if (!play) return
       /* Preview goes straight into NAM 1, which is what makes it heard. */
       setBusy(`pick ${playIn}`)
-      const nowPlaying = await point(playIn, slot, m.id)
+      const nowPlaying = await point(playIn, slot, m.id, tappedAt)
       /* Get from a held block: the block is playing it, so the errand is over and the pop-up is its knobs again. Only where the block said so: a pick that failed stays here, with its line. */
       if (back && nowPlaying && alive.current) onDone?.(nowPlaying)
     } catch (err) {
@@ -718,6 +733,35 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
   }
 
   /*
+   * A BLOCK THAT IS OFF IS SWITCHED ON once the unit has named a capture in
+   * it: the pick only chooses the capture, and in a block that was off
+   * nothing was heard (17 November 2026). Only a block the chain on screen
+   * shows as off, and only while the unit is where the TAP was made
+   * (lib/namPlaying switchOnToHear; `tapped` is where it was then): nothing
+   * is sent for one that is on, and one that is off where the unit has
+   * moved to since is left off and said so. Answers what became of it
+   * (SWITCHED_ON, STILL_OFF, LEFT_OFF), or null where there was nothing to
+   * switch. Never throws.
+   */
+  const hear = async (block, tapped) => {
+    const which = `NAM ${NAM_BLOCKS.indexOf(block) + 1}`
+    const where = { off: namOffHere(block), asked: tapped, now: unitNow() }
+    if (leftOffAfterMove(where)) {
+      logDebug('tone3000', `${which} is off where the unit is now, and was left off: the preset or the scene changed after the tap`)
+      return LEFT_OFF
+    }
+    if (!switchOnToHear(where)) return null
+    try {
+      const took = (await namOnHere(block)) === true
+      logDebug('tone3000', took ? `${which} was off: switched on, so the capture is heard` : `${which} was off, and was not switched on`)
+      return took ? SWITCHED_ON : STILL_OFF
+    } catch (err) {
+      logDebug('tone3000', `${which} was off, and was not switched on: ${err?.message || err}`)
+      return STILL_OFF
+    }
+  }
+
+  /*
    * NAM 1 or NAM 2 pointed at a slot, and what the unit said of it, on a
    * line of its own under the send's. Never throws. A unit that names the
    * slot <EMPTY> here has nothing in it, whatever the read after the send
@@ -725,7 +769,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
    * back and the two Play buttons, which could only point at the same empty
    * slot again, go.
    */
-  const point = async (block, slot, id) => {
+  const point = async (block, slot, id, tapped = null) => {
     const n = NAM_BLOCKS.indexOf(block) + 1
     const which = `NAM ${n}`
     const played = (line, more = null) => alive.current && setSend((was) => (was ? { ...was, played: line, ...more } : was))
@@ -744,14 +788,17 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         /* The block is on that slot all the same, empty as it is: the unit named it, and an earlier slot is no longer where the block is. */
         if (block === playIn) onPointed?.(slot)
       } else {
-        const line = pickedLine({ n, name: got.name, before })
-        /* `playing`: this line is the block saying it plays the capture, which the card under the capture carries. */
-        played(line, { playing: true })
         /* The unit has named what the slot holds: it is on the unit, whatever the read after the send did not say. */
         if (isPlaced(id)) place(id, slot, true)
-        /* The block this page is for is on that slot now, by the unit's own word. Said before anything asks whether the page is still up. */
+        /* The block this page is for is on that slot now, by the unit's own word. Said before anything asks whether the page is still up, and before the block is switched on, which can take a moment. */
         if (block === playIn) onPointed?.(slot)
-        /* What the block is playing, for whoever asked: the one answer that means it is. */
+        /* Off, it is switched on, so the capture is heard; the line says which happened. Held to where the unit was at the TAP (`tapped`: a capture sent first can be half a minute getting here), else at the pick. */
+        const on = await hear(block, tapped || asked)
+        const line = pickedLine({ n, name: got.name, before, on })
+        /* `playing`: this line is the block saying it plays the capture, which the card under the capture carries. A block that stayed off is not playing: its line is a note under the card, and its button is not ticked. */
+        if (!saysPlaying(on)) heard({ off: true })
+        played(line, { playing: saysPlaying(on) })
+        /* What the block is on, for whoever asked: the one answer that means the unit named a capture in it. */
         return line
       }
     } catch (err) {
@@ -766,6 +813,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
 
   const useIn = async (block, slot, id, back = false) => {
     if (busy) return
+    /* From a held block these are the capture's own two buttons: the one tapped says so while the pick is out. */
+    setTapped(back ? 'keep' : 'play')
     /* The lines under a capture are the send in hand's: a Play tapped on another capture's line makes that one the one in hand, so what the block says lands under it. No line of its own: the card over it has the slot, and "In slot 035." under "Slot 035" said it twice. */
     setSend((was) => (was?.id === id ? { ...was, wait: '' } : { id, slot, done: true, line: '' }))
     if (goingNow()) {
@@ -944,7 +993,9 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
             /* Fetched, and not a capture the unit can take: the line under it says what it is, and there is nothing to send. */
             const noUse = !!checked[m.id] && !texts.current[m.id]
             const working = busy === m.id || busy === `send ${m.id}`
-            const word = (which, said) => (working && tapped === which ? (busy === m.id ? 'Fetching…' : 'Sending…') : said)
+            /* The block being pointed at this capture: the tapped button of a held block's two says so, as the Developer page's Play buttons do. */
+            const picking = where.held && mine && busy === `pick ${playIn}`
+            const word = (which, said) => (tapped !== which ? said : working ? (busy === m.id ? 'Fetching…' : 'Sending…') : picking ? CHANGING : said)
             return (
               <View key={m.id} style={{ gap: space.xs }}>
                 {/* The name keeps room of its own; at the largest text sizes the two buttons drop under it rather than run off the screen. */}
@@ -952,10 +1003,16 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   <Text numberOfLines={2} style={{ flex: 1, minWidth: 96, color: color.silk, fontSize: font.body, fontWeight: '600' }}>
                     {`${named}${m.size ? ` · ${m.size}` : ''}`}
                   </Text>
-                  {there || noUse ? null : (
+                  {/*
+                    THE SAME TWO BUTTONS ON EVERY CAPTURE OF A HELD BLOCK'S PAGE, on the unit already or not ("what's the difference
+                    between get it and use it and go back? Little confusing", 17 November 2026): one that is there is played where it
+                    is (Preview), or played and the page handed back (Get), with nothing sent again. On the Developer page a capture on
+                    the unit has a Play button for each NAM block under it instead, as it had.
+                  */}
+                  {noUse || (there && !where.held) ? null : (
                     <>
-                      <LineButton icon={playIcon} label={word('play', PREVIEW)} says={previewSays(named, where.n)} disabled={!!busy} onPress={() => sendToUnit(m, null, false, true)} />
-                      <LineButton icon={saveIcon} label={word('keep', GET)} says={getSays(named, where)} lit disabled={!!busy} onPress={() => sendToUnit(m, null, false, where.held, where.held)} />
+                      <LineButton icon={playIcon} label={word('play', PREVIEW)} says={previewSays(named, where.n, there)} disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id) : sendToUnit(m, null, false, true))} />
+                      <LineButton icon={saveIcon} label={word('keep', GET)} says={getSays(named, { ...where, there })} lit disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id, true) : sendToUnit(m, null, false, where.held, where.held))} />
                     </>
                   )}
                 </View>
@@ -968,7 +1025,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   x.card ? <SentCard key={i} tone={x.card} head={x.head} line={x.line} more={x.more} /> : <Note key={i}>{x.note}</Note>
                 )}
                 {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.way, halted.play, halted.back === true)} /> : null}
-                {/* On the unit: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the way back to its knobs with the capture playing. */}
+                {/* On the unit, on the Developer page: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the capture's own two buttons play it there (above). */}
                 {/* Each button says what the unit last said of its block here (lib/namPlaying): "✓ Playing in NAM 1" where the block is on this capture's slot. A tap asks the unit again either way. */}
                 {there && !where.held
                   ? NAM_BLOCKS.map((nam, i) => {
@@ -976,15 +1033,6 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                       return <Press key={nam} label={b.label} sub={b.sub} height={48} disabled={!!busy} onPress={() => useIn(nam, at.slot, m.id)} />
                     })
                   : null}
-                {there && where.held ? (
-                  <>
-                    {(() => {
-                      const b = namPlayButton({ known: playing, now, block: playIn, n: where.n, slot: at.slot, changing: busy === `pick ${playIn}` && mine })
-                      return <Press label={b.label} sub={b.sub} height={48} disabled={!!busy} onPress={() => useIn(playIn, at.slot, m.id)} />
-                    })()}
-                    <Press label={USE_AND_BACK} sub={useAndBackSub(where.n, where.back)} tone="live" height={48} disabled={!!busy} onPress={() => useIn(playIn, at.slot, m.id, true)} />
-                  </>
-                ) : null}
                 {checked[m.id] && (noUse || mine) ? (
                   <Text selectable style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>
                     {checked[m.id]}

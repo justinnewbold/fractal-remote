@@ -578,9 +578,10 @@ export function runPreviewAndGet(test) {
     /* The title with Back beside it, on one line. */
     assert.match(card, /<View style=\{\{ flexDirection: 'row', alignItems: 'center', gap: space\.md \}\}> <Text accessibilityRole="header" numberOfLines=\{2\} style=\{\{[^}]*\}\}> \{tone\.title \|\| 'Untitled tone'\} <\/Text> <Pressable accessibilityRole="button" accessibilityLabel=\{where\.held \? 'Back to the tones' : 'Back to the list'\}/)
     /* A line a capture: its name, then the two buttons, each with a picture AND its word (never a picture alone). */
-    assert.match(card, /<LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{previewSays\(named, where\.n\)\} disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, true\)\} \/>/)
+    /* (`there`: on the unit already, from a held block, where the same two buttons play it with nothing sent. On the Developer page they are not drawn then.) */
+    assert.match(card, /<LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{previewSays\(named, where\.n, there\)\} disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/>/)
     /* Get plays only where the page was opened from a held block (`where.held`, which is false on the Developer page): there it is the end of the errand, test/tone3000-quick.mjs. */
-    assert.match(card, /<LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{getSays\(named, where\)\} lit disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, null, false, where\.held, where\.held\)\} \/>/)
+    assert.match(card, /<LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{getSays\(named, \{ \.\.\.where, there \}\)\} lit disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id, true\) : sendToUnit\(m, null, false, where\.held, where\.held\)\)\} \/>/)
     assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' \? 'captures' : 'knobs' \}/)
     assert.match(card, /export default function Tone3000Test\(\{ block = NAM_BLOCKS\[0\], held = false, onDone = null, onWorking = null, backTo = 'knobs', onPointed = null \}\)/)
     const said = await import('../mobile/src/lib/tone3000Words.js')
@@ -593,14 +594,14 @@ export function runPreviewAndGet(test) {
     assert.match(button, /backgroundColor: lit \? color\.silk :/)
     /* The word on the button that was tapped says what it is doing, and only that one. */
     assert.match(card, /setTapped\(play && !back \? 'play' : 'keep'\)/)
-    assert.match(card, /const word = \(which, said\) => \(working && tapped === which \? \(busy === m\.id \? 'Fetching…' : 'Sending…'\) : said\)/)
+    assert.match(card, /const word = \(which, said\) => \(tapped !== which \? said : working \? \(busy === m\.id \? 'Fetching…' : 'Sending…'\) : picking \? CHANGING : said\)/)
     /* The name keeps room of its own, and at the largest text sizes the buttons drop under it. */
     assert.match(card, /<View style=\{\{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space\.sm \}\}> <Text numberOfLines=\{2\} style=\{\{ flex: 1, minWidth: 96,/)
     assert.match(button, /accessibilityLabel=\{says\}/)
     assert.match(button, /minHeight: TAP/)
     /* What each does. Both put the capture in the unit's first empty slot (the one send); Preview alone then points NAM 1 at it, Get leaves what is playing alone. */
     assert.match(card, /const sendToUnit = async \(m, again = null, way = null, play = true, back = false\) => \{/)
-    assert.match(card, /if \(!play\) return setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id\)/)
+    assert.match(card, /if \(!play\) return setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id, tappedAt\)/)
     assert.match(card, /const \{ slot, went \} = await captureToSlot\(\{ id: m\.id, name: rec\.name, again, find, send,/)
     /* On the Developer page that block is NAM 1: nothing handed in, or a block that is no NAM. */
     assert.match(card, /const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\]/)
@@ -638,7 +639,7 @@ export function runPreviewAndGet(test) {
     assert.match(card, /\{checked\[m\.id\] && \(noUse \|\| mine\) \? \( <Text selectable style=\{\{[^}]*\}\}> \{checked\[m\.id\]\} <\/Text> \) : null\}/)
     /* Once on the unit, which NAM block plays it is one tap, whichever button put it there, and what the block says lands under THAT capture. */
     assert.match(card, /\{there && !where\.held \? NAM_BLOCKS\.map\(\(nam, i\) => \{ const b = namPlayButton\(\{ known: playing, now, block: nam, n: i \+ 1, slot: at\.slot, changing: busy === `pick \$\{nam\}` && mine \}\) return <Press key=\{nam\} label=\{b\.label\} sub=\{b\.sub\} height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(nam, at\.slot, m\.id\)\} \/> \}\) : null\}/)
-    assert.match(card, /const useIn = async \(block, slot, id, back = false\) => \{ if \(busy\) return setSend\(\(was\) => \(was\?\.id === id \? \{ \.\.\.was, wait: '' \} : \{ id, slot, done: true, line: '' \}\)\) if \(goingNow\(\)\) \{ setSend\(\(was\) => \(was \? \{ \.\.\.was, wait: STILL_GOING \} : was\)\) return \}/)
+    assert.match(card, /const useIn = async \(block, slot, id, back = false\) => \{ if \(busy\) return setTapped\(back \? 'keep' : 'play'\) setSend\(\(was\) => \(was\?\.id === id \? \{ \.\.\.was, wait: '' \} : \{ id, slot, done: true, line: '' \}\)\) if \(goingNow\(\)\) \{ setSend\(\(was\) => \(was \? \{ \.\.\.was, wait: STILL_GOING \} : was\)\) return \}/)
     /* A send that stopped part-way belongs to the view: forgotten with the tone, the list and the sign-in, and when that capture is sent again. */
     assert.equal((card.match(/setChecked\(\{\}\) setStopped\(\{\}\)/g) || []).length, 4)
     assert.equal((card.match(/setChecked\(\{\}\)/g) || []).length, 4)
@@ -653,7 +654,7 @@ export function runPreviewAndGet(test) {
     /* No words of the usual kinds say a preview is not kept, in anything this view can show or read aloud. (A list of words: it catches these, not every way of saying it.) */
     /* In both places the page can be: on its own, and from a held NAM block, either one. */
     const places = [{ n: 1, held: false }, { n: 1, held: true }, { n: 2, held: true }]
-    const shown = `${steps} ${words.STEPS_FOOT} ${words.CAPTURES_HEAD} ${places.map((at) => `${said.stepsFor(at).join(' ')} ${said.stepsFoot(at)} ${said.capturesNote(at)} ${said.previewSays('X', at.n)} ${said.getSays('X', at)} ${said.useAndBackSub(at.n)}`).join(' ')}`
+    const shown = `${steps} ${words.STEPS_FOOT} ${words.CAPTURES_HEAD} ${places.map((at) => `${said.stepsFor(at).join(' ')} ${said.stepsFoot(at)} ${said.capturesNote(at)} ${said.previewSays('X', at.n)} ${said.previewSays('X', at.n, true)} ${said.getSays('X', at)} ${said.getSays('X', { ...at, there: true })}`).join(' ')}`
     assert.ok(!/without keeping|try before|temporar|not (be )?kept|isn’t kept|isn't kept|removed after|goes away|quick listen|just listen/i.test(shown), shown)
     assert.equal((shown.match(/puts it on the Axe-Fx III/g) || []).length >= 3, true)
     /* What waits for a preset save is which block plays it, not the capture, which is in its slot already. */

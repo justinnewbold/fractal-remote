@@ -25805,6 +25805,53 @@ export function run(test) {
     assert.equal(asked(BOOST_READ), 0)
   })
 
+  test('phone: whether a block is off is read off this preset’s own chain, sends nothing, and answers only where a switch would be sent', async () => {
+    /* For a capture played in a NAM block that is off (lib/namOnHere, test/nam-playing.mjs): the block is switched on only where this says it is off. */
+    const { rig, clock, asked, wire } = await rigOnTheBench()
+    await clock.advance(0)
+    const sent = wire.length
+    assert.equal(rig.blockIsOff(133), true, 'a drive that is bypassed is not read as off')
+    assert.equal(rig.blockIsOff(58), false, 'an amp that is engaged is read as off')
+    /* A block the chain on screen does not hold, and no block at all: no answer, never "off". */
+    for (const id of [207, 0, -1, undefined, null, '133']) assert.equal(rig.blockIsOff(id), null, String(id))
+    /* A read: nothing asked of the unit, and nothing marked as edited. */
+    assert.equal(wire.length, sent, 'reading whether a block is off asked the unit something')
+    assert.equal(rig.getState().unsaved, null)
+    /* Where it answers, the switch is sent, and it follows what was sent. */
+    assert.equal(await rig.writeBlockBypass(133, false), true)
+    assert.equal(asked('POST /preset/blocks/133/bypass'), 1)
+    assert.equal(rig.blockIsOff(133), false)
+    /* Where it does not, the switch is refused with nothing sent. */
+    assert.equal(await rig.writeBlockBypass(207, false), false)
+    assert.equal(asked('POST /preset/blocks/207/bypass'), 0)
+    /* By the switch's own rule, so the two cannot drift apart; and no answer while a scene's own on and off is still owed. */
+    assert.match(read('mobile/src/lib/rig.js'), /export const blockIsOff = \(id\) => \(notSwitchable\(id\) \|\| sceneRetryTimer !== null \? null : blockNow\(id\)\?\.bypassed === true\)/)
+  })
+
+  test('phone: after a scene change whose status read missed, whether a block is off is not answered until the read asked again has landed', async () => {
+    /* The on and off on screen is the last scene's until then (rig sceneStateSoon): a capture played in that gap must not switch a block on, or say it was off, by the last scene's word. */
+    let miss = false
+    const { rig, clock } = await rigOnTheBench({
+      status() {
+        return miss ? [] : this.blocks.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: b.channel }))
+      }
+    })
+    await clock.advance(0)
+    assert.equal(rig.blockIsOff(133), true)
+    miss = true
+    const went = rig.writeScene(1)
+    await clock.advance(50)
+    await went
+    assert.equal(rig.getState().sceneIndex, 1)
+    assert.equal(rig.blockIsOff(133), null, 'the last scene’s on and off was answered as this scene’s')
+    assert.equal(rig.blockIsOff(58), null)
+    /* The read asked again lands: answered again, by what it said. */
+    miss = false
+    await clock.advance(rig.SCENE_RETRY_MS + 50)
+    assert.equal(rig.blockIsOff(133), true)
+    assert.equal(rig.blockIsOff(58), false)
+  })
+
   test('phone: over Bluetooth an AM4’s boost is never read; the first tap sends Boost on, and a preset loaded again is unknown again', async () => {
     const { rig, clock, asked, relay } = await rigOnTheBench(AM4_BOOST_BENCH({ capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' } }))
     await clock.advance(0)

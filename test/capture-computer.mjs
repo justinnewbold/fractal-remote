@@ -38,7 +38,7 @@ const NOT_KEPT_TODAY = 'The Axe-Fx III took the capture 2 different ways and sti
  * down in H.log.
  */
 const STANDINS = `
-export const H = { slots: [], i: 0, effects: [], log: [], placed: {}, link: { link: 'connected', macName: 'raspberry pi 5', hostVersion: '1.90.63' }, through: true, linkFns: new Set(), installs: [], rig: { preset: { number: 386 }, sceneIndex: 0, bufferRev: 0 }, picks: [], models: [{ id: 748130, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' }] }
+export const H = { slots: [], i: 0, effects: [], log: [], placed: {}, link: { link: 'connected', macName: 'raspberry pi 5', hostVersion: '1.90.63' }, through: true, linkFns: new Set(), installs: [], rig: { preset: { number: 386 }, sceneIndex: 0, bufferRev: 0 }, picks: [], switches: [], models: [{ id: 748130, name: 'FNDR BFSR VB Edge WRM2 CAB FREE' }] }
 export function useState(init) {
   const k = H.i++
   if (!(k in H.slots)) H.slots[k] = { v: typeof init === 'function' ? init() : init }
@@ -91,6 +91,10 @@ export const namPickHere = async (block, slot) => { H.log.push(['pick', block, s
 export const linkState = () => H.link
 /* Where the unit is (lib/rig), as a test sets it: \`H.rig\`. */
 export const useRig = (select) => select(H.rig), getState = () => H.rig
+/* The chain on screen (lib/rig), as a test sets it: \`H.rig.allBlocks\`, each { effectId, bypassed }. A block it does not hold is not known to be on or off. */
+export const blockIsOff = (id) => { const b = (H.rig.allBlocks || []).find((x) => x.effectId === id); return b ? b.bypassed === true : null }
+/* What the unit answers a switch, in turn (\`H.switches\`: false for one it did not take, an Error it throws), else taken, and the chain on screen shows it. */
+export const writeBlockBypass = async (id, bypassed) => { H.log.push(['bypass', id, bypassed]); const next = H.switches.shift(); if (next instanceof Error) throw next; if (next === false) return false; H.rig = { ...H.rig, allBlocks: (H.rig.allBlocks || []).map((x) => (x.effectId === id ? { ...x, bypassed } : x)) }; return true }
 export const subscribeLink = (fn) => { H.linkFns.add(fn); return () => H.linkFns.delete(fn) }
 export default 'Drawn'
 `
@@ -102,6 +106,7 @@ const REAL = {
   '../lib/captureLine': 'mobile/src/lib/captureLine.js',
   '../lib/namPlaying': 'mobile/src/lib/namPlaying.js',
   '../lib/namPlayingHere': 'mobile/src/lib/namPlayingHere.js',
+  '../lib/namOnHere': 'mobile/src/lib/namOnHere.js',
   '../lib/captureSend': 'mobile/src/lib/captureSend.js',
   '../lib/tone3000Words': 'mobile/src/lib/tone3000Words.js',
   '../lib/device-word': 'mobile/src/lib/device-word.js'
@@ -376,12 +381,12 @@ export function run(test) {
     await b.wait(5)
     await b.draw()
     assert.deepEqual(b.sent(), [['pick', 206, 40]])
-    /* From a held block: Play it in that block, and Use it and go back. */
+    /* From a held block: the capture's own Preview and Get, which play it there (test/nam-playing.mjs). */
     const held = await bench()
     held.H.placed[748130] = { slot: 40, sure: true }
     let done = null
     await held.openTone({ block: 207, held: true, onDone: (l) => (done = l) })
-    held.button('Use it and go back').props.onPress()
+    held.button('Get').props.onPress()
     await held.wait(5)
     await held.draw()
     assert.deepEqual(held.sent(), [['pick', 207, 40]])

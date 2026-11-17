@@ -12862,9 +12862,9 @@ export function run(test) {
     /* And never for good: a request that never came back does not close the card until the app is restarted. */
     assert.match(card, /const goingNow = \(\) => atWork !== 0 && Date\.now\(\) - atWork < STILL_GOING_MS/)
     assert.ok(!/if \(atWork\)/.test(card), 'the card asks the mark itself, which never runs out')
-    /* Neither button is drawn for a file that turned out not to be an A2 capture, nor for a capture this view has already put on the unit. */
+    /* Neither button is drawn for a file that turned out not to be an A2 capture, nor, on the Developer page, for a capture this view has already put on the unit (from a held block that one keeps both, to play it: test/nam-playing.mjs). */
     assert.match(card, /const noUse = !!checked\[m\.id\] && !texts\.current\[m\.id\]/)
-    assert.match(bare, /\{there \|\| noUse \? null : \( <> <LineButton/)
+    assert.match(bare, /\{noUse \|\| \(there && !where\.held\) \? null : \( <> <LineButton/)
     /*
      * ON THE UNIT IS A CARD NOBODY CAN MISS. "Need better confirmation that
      * a tone was sent. It doesn't do much after a tone does send
@@ -13052,7 +13052,8 @@ export function run(test) {
     assert.match(bare, /if \(got\.name\) thud\(\) if \(!play\) return/)
     assert.equal((bare.match(/thud\(\)/g) || []).length, 1)
     /* The block's line is the card's only when it is the block saying it plays the capture. */
-    assert.match(bare, /played\(line, \{ playing: true \}\)/)
+    /* (Unless the block was off and could not be switched on: then it is not playing, and its line is a note. test/nam-playing.mjs.) */
+    assert.match(bare, /played\(line, \{ playing: saysPlaying\(on\) \}\)/)
     assert.match(bare, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`, \{ playing: false \}\)/)
     /* A file that reads as A2 and that the packer refuses is not kept either: its one line says why, and it has no buttons. */
     assert.match(bare, /const rec = read\.ok && read\.a2 \? namRecord\(text, \{ name: captureLabel\(m\), fallback: `Capture \$\{m\.id\}` \}\) : null const line = rec && !rec\.ok \? rec\.why : namSaid\(read\)/)

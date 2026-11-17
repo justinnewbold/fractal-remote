@@ -2746,7 +2746,9 @@ the capture on the unit, which is the hard half.
     is forgotten only when the unit names the slot <EMPTY> (and when the
     app is closed: the unit is not asked what it holds when a tone opens).
   - *"✓ Playing in NAM 1" (17 November 2026, his account only, as the
-    whole page is).* A tap on Play it in NAM 1 when NAM 1 already played
+    whole page is; on the Developer page only since later that day, when a
+    held block's page lost its Play button: below).* A tap on Play it in
+    NAM 1 when NAM 1 already played
     that capture looked as if it did nothing. Now, where the unit itself
     has said on this page that a block is on a capture's slot (by Preview,
     Get and play, or Play it in), that block's button under it says "✓
@@ -2803,10 +2805,69 @@ the capture on the unit, which is the hard half.
       **Preview** puts the capture on the unit and plays it in THAT block,
       and the page stays. **Get** does the same and gives the pop-up back
       to the knobs, with what the block said it is playing over them. A
-      capture already on the unit has Play it in NAM 2 and Use it and go
-      back. The page is the Developer page's own (components/Tone3000Test
-      with `block`, `held`, `onDone`); what each button says it does is
+      capture already on the unit keeps the same two buttons (below). The
+      page is the Developer page's own (components/Tone3000Test with
+      `block`, `held`, `onDone`); what each button says it does is
       lib/tone3000Words, for the place it is in.
+    - *THE SAME TWO BUTTONS ON EVERY CAPTURE, AND A BLOCK THAT IS OFF IS
+      SWITCHED ON (17 November 2026).* "On this screen, what's the
+      difference between get it and use it and go back? Little confusing.
+      If I click each of those, would it do the same thing? Also ... if
+      the NAM block is off when you hold it to browse tone 3000, does it
+      turn it on so you can listen to it, or does it leave it off? need to
+      make sure that it turns it on automatically to listen" (with a
+      picture of NAM 2's page: one capture with Preview and Get, and one
+      already on the unit with "✓ Playing in NAM 2" and "Use it and go
+      back" under its card). They did the same thing: a capture already on
+      the unit had traded its two buttons for two of another name. So from
+      a held block, and from the capture list in Edit, EVERY capture has
+      Preview and Get: one already on the unit is played where it is
+      (Preview), or played and the page handed back (Get), with nothing
+      sent again, and the button tapped says "Changing…" while the pick is
+      out. "Use it and go back" and its words are gone. The Developer page
+      is as it was (there Get leaves what is playing alone, so a capture on
+      the unit has a Play button for each NAM block). AND THE BLOCK IS
+      SWITCHED ON: a pick only chooses the capture, so a preview in a block
+      that was off made no sound while the line said "is playing". Now,
+      once the unit has NAMED a capture in the block, a block the chain on
+      screen shows as off is switched on, from every button of the page
+      that plays one, the Developer page's too (lib/namPlaying
+      `switchOnToHear`; lib/namOnHere sends it, by the rig's own switch,
+      the one Edit's block page uses, read by rig `blockIsOff`). The line
+      then says "NAM 2 was off, so it is switched on now, and it is playing
+      …"; where the switch did not land it says the app couldn't switch it
+      on and to switch it on if nothing is heard (claiming nothing of the
+      block's state: an answer that was lost may have landed), as a note
+      under the card and never as "is playing". ONLY THEN: nothing is sent
+      for a block that is on, for one the chain on screen does not hold,
+      after a pick that failed or named an empty slot, or once the preset
+      or the scene has moved since the TAP; and it is on only, for the
+      scene the unit is on (lib/namOnHere cannot switch a block off; a test
+      holds it). The card now reaches a unit by the captures' three calls
+      and that one switch.
+      THREE READERS AND A SKEPTIC EACH WENT THROUGH IT FIRST, and four
+      things were fixed, each with a test seen to fail without it: (1) a
+      capture that is SENT first (half a minute over Bluetooth) was held
+      to where the unit was when the block was pointed, not when the
+      button was tapped, so a scene stepped to during the send had the
+      block switched on in it; the moment is taken at the tap now
+      (`tappedAt`), and a block that is off where the unit has moved to is
+      LEFT off and said so ("… the app left it off, because the scene, the
+      preset or the connection changed after your tap"); (2) the Developer
+      page ticked "✓ Playing in NAM 1" over a block that had stayed off
+      (not ticked now: `saysPlaying`, heardPick's `off`); (3) right after
+      a scene change whose status read missed, the on and off on screen is
+      the last scene's for about 0.6 s, and was answered as this scene's
+      (rig `blockIsOff` answers nothing while that read is owed); (4) the
+      check on what the card can reach skipped files with a hyphen in
+      their name. Left as it is, and known: where both tries at a scene's
+      status read miss, the last scene's on and off stays on screen until
+      the next read, here as on Play's own tiles.
+      NOT SEEN ON A UNIT: his next preview into a block that is off is the
+      check, and its log line is "NAM 2 was off: switched on, so the
+      capture is heard". Not covered: a block switched off at the unit's
+      own front panel since the app last read it still reads as on here,
+      as its tile on Play does.
     - *Get goes back only when the block has NAMED what it is playing.* A
       slot the unit calls empty, a pick it refused and one that never came
       back leave the page up with the reason on it.
@@ -3118,7 +3179,8 @@ the capture on the unit, which is the hard half.
       the same words on that capture's card in place of the one up top.
       Never over Bluetooth, the unit's USB cable or the demo, never on a
       version not said, and playing a capture already on the unit (Play
-      it in NAM 1, Use it and go back, the capture picker) is not a send.
+      it in NAM 1, a held block's Preview and Get on one that is there,
+      the capture picker) is not a send.
       Where the version was not said and the answer had no `nameByte`
       (lib/captureSend `old`), a capture not kept says the same reason
       and remedy in place of the log sentence; every other not-kept case
