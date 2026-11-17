@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "build": "33",
+  "whatsNew": "• Turn your iPhone on its side on Play: scenes on one side, pedals on the other.\n• Save from the app over Bluetooth or USB, with no computer.\n• Quick build: on an empty preset, tap the blocks you want and the app builds the chain.\n• Over Bluetooth, knobs follow the unit, and you get output and scene levels.\n• Axe-Fx III: pick NAM captures, and browse and get new ones from TONE3000.\n• Metronome: choose where it clicks, flash the screen edge, and line it up with your unit.\n• Apple Watch: order its pages, a new Tempo page, and quick edit with the Digital Crown.",
+  "description": [
+    ["Save on the unit when you find a sound you love.", "Tap Save when you find a sound you love, with no computer."]
+  ],
+  "notes": [
+    ["Every screen but Bluetooth works in the demo, Edit included.", "Every screen but Bluetooth and TONE3000 works in the demo, Edit included. If something below is missing, close the app fully and open it again: it finishes updating on first launch."],
+    ["Expo (updates). Bluetooth", "Expo (updates), TONE3000 (captures, only when opened). Bluetooth"]
+  ],
+  "notesNew": "New in 2.0.0:\n• Turn the iPhone on its side on Play: scenes on one half, the chain on the other.\n• With a unit over Bluetooth or USB: Save, Quick build on an empty preset, knobs that follow the unit, output and scene levels.\n• TONE3000 (tone3000.com, a third-party library of amp captures, shown with its permission), Axe-Fx III only: hold a NAM block on Play, tap TONE3000. Sign-in is TONE3000's own page. Once signed in, Settings, My rig, TONE3000 signs out. The demo has no NAM block.\n• Metronome choices in Settings.\n• Apple Watch: page order, a Tempo page, quick edit with the Digital Crown.",
+  "testedOn": "Tested on: iPhone 17 Pro Max, iOS 27.2.1; Apple Watch Ultra 2."
+}

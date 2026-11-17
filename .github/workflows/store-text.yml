@@ -25,6 +25,11 @@ on:
         type: boolean
         default: false
 
+      release:
+        description: A new version's texts (e.g. 2.0.0, from store/app-store/2.0.0.json; makes the version, attaches the build, writes What's New and the review notes; never Add for Review). Empty for the other jobs
+        type: string
+        default: ''
+
 permissions:
   contents: read
 
@@ -48,7 +53,7 @@ jobs:
           grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/asc.p8" || { echo "::error::ASC_KEY_P8 is not a .p8 key"; exit 1; }
 
       - name: The texts as they are, read only
-        if: ${{ inputs.show }}
+        if: ${{ inputs.show && inputs.release == '' }}
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -56,12 +61,21 @@ jobs:
         run: node scripts/store-read.mjs
 
       - name: The promotional text
-        if: ${{ !inputs.show }}
+        if: ${{ !inputs.show && inputs.release == '' }}
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: node scripts/store-text.mjs ${{ inputs.apply && '--apply' || '' }}
+
+      - name: A new version's texts
+        if: ${{ inputs.release != '' }}
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          RELEASE: ${{ inputs.release }}
+        run: node scripts/store-release.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }}
 
       - name: The key is gone
         if: always()
