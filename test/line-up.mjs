@@ -350,19 +350,26 @@ export function run(test) {
      * WatchMetronome whose == is those two: so `.onChange(of: metronome)`
      * would not fire for it either.
      */
-    /* The store copies' Model.swift, and the 2.0.0 build's: main's with the waiting patch put in, as the build was. */
+    /*
+     * The store copies' Model.swift, and the 2.0.0 build's: main's with the
+     * waiting patch put in, as the build was. The check runs the tests a
+     * second time with every waiting patch already in (PENDING_APPLIED):
+     * there the tree's file IS the build's, and the store copies' is that
+     * with the patch taken back out.
+     */
+    const applied = Boolean(process.env.PENDING_APPLIED)
     const built = mkdtempSync(join(tmpdir(), 'line-up-watch-'))
-    let patched
+    let other
     try {
       mkdirSync(join(built, 'mobile/targets/watch'), { recursive: true })
       writeFileSync(join(built, 'mobile/targets/watch/Model.swift'), read('mobile/targets/watch/Model.swift'))
-      execFileSync('git', ['apply', '--include=mobile/targets/watch/Model.swift', repo('docs/pending/watch-page-order.patch')], { cwd: built, stdio: 'pipe' })
-      patched = readFileSync(join(built, 'mobile/targets/watch/Model.swift'), 'utf8')
+      execFileSync('git', ['apply', ...(applied ? ['--reverse'] : []), '--include=mobile/targets/watch/Model.swift', repo('docs/pending/watch-page-order.patch')], { cwd: built, stdio: 'pipe' })
+      other = readFileSync(join(built, 'mobile/targets/watch/Model.swift'), 'utf8')
     } finally {
       rmSync(built, { recursive: true, force: true })
     }
-    assert.notEqual(patched, read('mobile/targets/watch/Model.swift'), 'the patch was not put in')
-    for (const swift of [read('mobile/targets/watch/Model.swift'), patched]) {
+    assert.notEqual(other, read('mobile/targets/watch/Model.swift'), applied ? 'the patch was not taken back out' : 'the patch was not put in')
+    for (const swift of [read('mobile/targets/watch/Model.swift'), other]) {
       assert.match(swift, /struct WatchMetronome: Codable, Equatable \{\s*var on: Bool\s*var bpm: Double\s*\}/)
       assert.match(swift, /try\? JSONDecoder\(\)\.decode\(WatchState\.self, from: data\)/)
       assert.doesNotMatch(swift, /init\(from decoder/, 'a watch reads the picture with its own decoder, which may refuse a key it does not know')
