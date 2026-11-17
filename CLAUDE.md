@@ -249,6 +249,69 @@ the new one. So a test line, with nothing committed for the build:
   join), so the same close is not said twice. READ THAT LINE FIRST in any
   report where the link stays on "joining". NOT SEEN ON A PHONE YET: the
   first report with one is the check.
+- *His iPhone does not turn on its side on the 2.0.0 test build, and it is
+  NOT SETTLED* (17 November 2026: "It's not working on my account on the
+  2.0.0 build", then "It does not turn it all. And I've confirmed that I
+  can turn landscape in other apps on my phone"; an iPhone 17 Pro Max on
+  iOS 27.2.1, TestFlight build 33, his account, on Play). It is the first
+  look at phone-turns on a real phone, one of the five waiting patches the
+  build carries. WHAT IS KNOWN: the package is in the build and the app
+  asks, and the package takes it (his log of 16 November, report 8be38966:
+  "turning: upright" at launch and "turning: turns" a moment later,
+  twice); build 33's own Info.plist, read out of the build file itself
+  that day (the .ipa on expo.dev: 2.0.0 (33), built with Xcode 27.1), is
+  the one a prebuild of the same config and patches makes: it lists
+  upright and the two sides and starts upright, and the package is in its
+  binary; nothing else in the app answers iOS about ways up (no
+  react-native-screens, in that file either: its one "RNSScreen" is the
+  package's own look for it; every pop-up passes all four ways); no crash
+  has been sent from that build through TestFlight. WHAT IS NOT: what iOS
+  was holding after the ask, since the log could not say; there is no log
+  from a run in which he tried to turn it; and whether the phone's own
+  Portrait Orientation Lock was off (he turned other apps, and an app that
+  forces landscape, a full-screen video say, turns with that lock on;
+  which apps was not asked). SINCE 1.92.6 THE LOG SAYS IT, after every ask
+  the phone takes: "[app] turning: after "turns" — the phone holds lock 0,
+  ways 1,3,4, way up 1" (lib/turnScreen `sayTurn`, which only reads; the
+  numbers are the package's own, and the file's note says each). READ THE
+  LAST SUCH LINE FIRST in his next report: "lock 0, ways 1,3,4" on a phone
+  that still does not turn is iOS not acting on what the app told it,
+  which is also exactly how the phone's own Portrait Orientation Lock
+  looks from inside the app, so ASK HIM THAT FIRST, in plain words, if
+  that is the line; "lock 3, ways 1" is the app held upright all the same
+  (something else asked, or the package holds nothing of this app's and
+  fell back to how it starts); "lock 8, ways none" is no key window found
+  when it was asked, so at that moment the app would have answered iOS
+  with no way up (iOS asks again on its own, and may get another answer).
+  The same line is written when the app goes onto its side or back ("the
+  app is on its side now, 956×440"), when a phone on its side measures too
+  narrow (it is upright for the rest of that run after that, by the rule),
+  and when the iPhone comes back to the front. ON A SIMULATOR, free, on
+  GitHub's Macs, THE 2.0.0 BUILD TURNS, ON iOS 27 TOO (17 November 2026;
+  turn-check.yml with mobile/turn-check, on the working branch that day
+  and never merged: the 2.0.0 native side with a small stand-in for the
+  component, which asks as the app does at launch, upright and then
+  "turns", for every account, over the first screen). Built with Xcode
+  26.6 on an iPhone 17 Pro Max with iOS 26.5, the app followed the
+  simulated phone onto its side and back in all four ways it was tried
+  (the app's own order; "turns" alone; with no starting way up in
+  Info.plist; a landscape lock asked outright). Built with Xcode 27.1, the
+  store build's own (mobile/eas.json), on an iPhone 18 Pro Max with iOS
+  27.2, it did the same in those four and in a fifth with expo-updates
+  left on as the store build has it, so started the way a store copy
+  starts: the window went to 956×440 and back each time, reading "lock 0,
+  ways 1,3,4" after "turns". (On that image the Simulator has to be opened
+  by its path, and with no window to click the simulated phone is told
+  which way up it is held: notifyutil on
+  com.apple.backboardd.rawOrientation, 4 and then 1. A round before that
+  proved nothing there, because the simulated phone was never turned.) SO
+  THE BUILD AND ITS SETTINGS ARE NOT WHAT STOPS IT, on that evidence. WHAT
+  IS LEFT, on his phone: the app's real component and screens with his
+  account signed in on Play (the stand-in is not the real rule, and
+  nothing was signed in); iOS on a real phone; or the phone's own Portrait
+  Orientation Lock. His next report says which. A fix in the app's
+  JavaScript is an update; one in the native side is another build pair,
+  and his yes.
 
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with

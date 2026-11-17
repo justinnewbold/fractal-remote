@@ -261,10 +261,10 @@ index 9ff7a559..c84f7907 100644
    @Suppress("DEPRECATION")
 diff --git a/mobile/src/components/PhoneTurns.js b/mobile/src/components/PhoneTurns.js
 new file mode 100644
-index 00000000..c7f35002
+index 00000000..ab8ad327
 --- /dev/null
 +++ b/mobile/src/components/PhoneTurns.js
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,128 @@
 +/*
 + * THE PHONE HELD UPRIGHT, OR LET TURN, AS THE SCREEN CHANGES.
 + *
@@ -291,13 +291,21 @@ index 00000000..c7f35002
 + * MainActivity (Android makes one for some setting changes) starts with
 + * nothing asked, and plugins/withTabletTurns starts it upright; the app's
 + * own screen may still be Play. The iPhone's module does this for itself.
++ *
++ * AND THE LOG SAYS WHAT A PHONE DID (lib/turnScreen `sayTurn`, which adds
++ * what the phone holds; since 17 November 2026, when a phone that had been
++ * asked to turn did not, and the log could not say why). Three moments, on
++ * a phone only, and nothing is asked of the phone at any of them: the app
++ * goes onto its side or back upright; a phone on its side measures too
++ * narrow, which keeps it upright for the rest of the run; and the iPhone
++ * comes back to the front (Android is asked again there, which says it).
 + */
 +import { useEffect, useRef, useState } from 'react'
 +import { AppState, Dimensions, Platform, useWindowDimensions } from 'react-native'
 +import { useSafeAreaInsets } from 'react-native-safe-area-context'
 +
 +import { RELEASE, TURNS, UPRIGHT, fitsSideways, isTablet, sidewaysAcross, tooNarrow, turnStep, turnsWanted } from '../lib/phoneTurns'
-+import { askTurn } from '../lib/turnScreen'
++import { askTurn, sayTurn } from '../lib/turnScreen'
 +
 +/* The app has the phone's whole length when its window is within this many points of the screen's: not a small window beside another app, whose width says nothing about the phone. */
 +const WHOLE_WITHIN = 100
@@ -335,7 +343,8 @@ index 00000000..c7f35002
 +    known.current.across = Math.max(0, long - insets.left - insets.right)
 +  }
 +  if (allowed && !tablet && win.width >= long - WHOLE_WITHIN && tooNarrow({ frame, short: Math.min(width, height) })) known.current.narrow = true
-+  const fits = fitsSideways(known.current.across) && !known.current.narrow
++  const narrow = known.current.narrow
++  const fits = fitsSideways(known.current.across) && !narrow
 +
 +  const wanted = turnsWanted({ tablet, allowed, fits, inApp, onPlay, beside, stageView })
 +  const wants = useRef(wanted)
@@ -351,6 +360,25 @@ index 00000000..c7f35002
 +      if (!took && asked.current === step) asked.current = null
 +    })
 +  }, [wanted])
++  /* For the log alone (the note at the top): which way up the app is drawn, said when it changes; a phone found too narrow on its side; the iPhone back at the front. */
++  const sideways = win.width > win.height
++  const drawn = useRef(null)
++  useEffect(() => {
++    const was = drawn.current
++    drawn.current = sideways
++    if (tablet || was === null || was === sideways) return
++    sayTurn(`the app is ${sideways ? 'on its side' : 'upright'} now, ${Math.round(win.width)}×${Math.round(win.height)}`)
++  }, [sideways, tablet])
++  useEffect(() => {
++    if (narrow) sayTurn(`on its side the app measured ${Math.round(Number(frame?.width) || 0)} across, too narrow to split, so it stays upright from now on`)
++  }, [narrow])
++  useEffect(() => {
++    if (Platform.OS !== 'ios') return undefined
++    const sub = AppState.addEventListener('change', (state) => {
++      if (state === 'active' && (wants.current === UPRIGHT || wants.current === TURNS)) sayTurn(`back at the front, wanting "${wants.current}"`)
++    })
++    return () => sub?.remove?.()
++  }, [])
 +  useEffect(() => {
 +    if (Platform.OS !== 'android') return undefined
 +    const sub = AppState.addEventListener('change', (state) => {
@@ -544,10 +572,10 @@ index 2257da93..90edd35d 100644
  
 diff --git a/mobile/src/lib/turnScreen.js b/mobile/src/lib/turnScreen.js
 new file mode 100644
-index 00000000..5fef3991
+index 00000000..e0fad286
 --- /dev/null
 +++ b/mobile/src/lib/turnScreen.js
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,169 @@
 +/*
 + * ASKING THE PHONE TO STAY UPRIGHT, OR LETTING IT TURN.
 + *
@@ -579,6 +607,57 @@ index 00000000..5fef3991
 + * that holds nothing but names, so what is asked for is PORTRAIT_UP and
 + * DEFAULT by name and never a bare number (test/phone-turns.mjs holds this
 + * file to that).
++ *
++ * AND AFTER EVERY ASK THE PHONE TAKES, THE LOG SAYS WHAT THE PHONE HOLDS
++ * (`sayTurn`, since 17 November 2026). "It does not turn it all." (Justin,
++ * that day, his iPhone 17 Pro Max on iOS 27 with the 2.0.0 test build, on
++ * Play): his log of the day before had "turning: turns" and nothing more,
++ * which says the app asked and the package took it, and not what iOS was
++ * then told. So the package is asked straight back, in its own numbers,
++ * and the answer is written beside what was asked. It only reads, and
++ * nothing is done with the answer.
++ *
++ * The three numbers are asked for together, and the package answers them
++ * back to back, so no other ask of the package comes between them. A turn
++ * of the phone itself still can, and on Android so can the app's own
++ * hold-upright, so way up may be a moment newer than lock and ways. The
++ * line is taken just after the ask it names, and a later ask may already
++ * be in it (at launch "upright" and "turns" come a moment apart): the LAST
++ * line is the one that says what the phone was left holding.
++ *
++ *   lock     the package's name for every way up the app allows now.
++ *            On the iPhone that is what the app's window answers iOS when
++ *            it asks: 0 every way but upside down, 3 upright only, 8 none
++ *            of the package's names (WITH "ways none": when the phone was
++ *            asked, the app had no key window, so at that moment it would
++ *            have answered iOS with no way up; iOS asks again on its own,
++ *            and may get another answer then), 9 not known.
++ *            On Android it is the screen's setting in the package's names:
++ *            0 nothing asked, 3 upright, 8 the phone's own choice (the
++ *            package has no name for it).
++ *   ways     the same, one by one: 1 upright, 2 upside down, 3 and 4 the
++ *            two sides. On Android it is one number, the screen's own
++ *            setting (2 the phone's choice, 1 upright, -1 nothing asked).
++ *   way up   the way up the package has on record (1 to 4 as above, 0 not
++ *            known). On Android that is read from the screen as it is
++ *            asked. On the iPhone it is the package's own note: read from
++ *            the window once at launch (0 if there was no window yet),
++ *            then set by each turn its screen sees (0 when it cannot tell
++ *            which way), and, by any ask made while it is 0, to the way
++ *            that ask allows (upright, for "upright" and "turns"). It is
++ *            not looked up when asked, so "way up 1" does not prove the
++ *            app is drawn upright; the component's own line for a turn
++ *            (the app is on its side now, with the window's size) does.
++ *
++ * After "turns" a healthy iPhone says "lock 0, ways 1,3,4", and a healthy
++ * Android phone "lock 8, ways 2". On an iPhone, "lock 3, ways 1" after
++ * "turns" is the app held upright all the same: by something else that
++ * asked, or because the package holds nothing of this app's and has fallen
++ * back to how the app starts. "lock 8, ways none" is no key window found at
++ * the moment of asking. And "lock 0, ways 1,3,4" on a phone that still does
++ * not turn is iOS not acting on what it was told, which is also exactly how
++ * the phone's own Portrait Orientation Lock looks from in here: the app
++ * cannot see that lock.
 + */
 +import { requireOptionalNativeModule } from 'expo'
 +import { OrientationLock } from 'expo-screen-orientation/build/ScreenOrientation.types'
@@ -618,10 +697,52 @@ index 00000000..5fef3991
 +    else if (step === TURNS && Platform.OS === 'android') await so.lockPlatformAsync(ANDROID_USER)
 +    else await so.lockAsync(OrientationLock.DEFAULT)
 +    logDebug('app', `turning: ${step}`)
++    sayTurn(`after "${step}"`)
 +    return true
 +  } catch (e) {
 +    logDebug('app', `turning: the phone would not take "${step}"`, String(e?.message || e))
 +    return false
++  }
++}
++
++/**
++ * What the phone holds now, in the package's own numbers ("lock 0, ways
++ * 1,3,4, way up 1"), or null in a copy built without the package. The three
++ * are asked for TOGETHER, before any has answered: the package answers in
++ * the order it is asked, so nothing asked of the phone meanwhile can come
++ * between them. A turn of the phone itself (and on Android the app's own
++ * hold-upright) still can, so way up may be a moment newer than lock and
++ * ways. Each has its own guard, so one that fails says so in its place and
++ * the others are still read. Never throws.
++ */
++export async function turnHeld() {
++  const so = orientation()
++  if (!so) return null
++  const read = async (name) => {
++    try {
++      if (typeof so[name] !== 'function') return 'not in this copy'
++      const got = await so[name]()
++      if (Array.isArray(got)) return got.length ? got.join(',') : 'none'
++      return String(got)
++    } catch (e) {
++      return `not said (${String(e?.message || e)})`
++    }
++  }
++  const [lock, ways, up] = await Promise.all([read('getOrientationLockAsync'), read('getPlatformOrientationLockAsync'), read('getOrientationAsync')])
++  return `lock ${lock}, ways ${ways}, way up ${up}`
++}
++
++/**
++ * One line in the log: what has just happened (`what`), and what the phone
++ * holds now. Nothing is asked of the phone but to say. Never throws, and
++ * says nothing in a copy built without the package (which has said so once).
++ */
++export async function sayTurn(what) {
++  try {
++    const held = await turnHeld()
++    if (held) logDebug('app', `turning: ${what}`, `the phone holds ${held}`)
++  } catch {
++    /* A line in the log is never worth the screen's own work. */
 +  }
 +}
 diff --git a/mobile/src/lib/twoSides.js b/mobile/src/lib/twoSides.js
@@ -721,10 +842,10 @@ index 8fd12e5e..46178658 100644
      assert.match(rule, /windowManager\.maximumWindowMetrics\.bounds/, 'from Android 11 the rule does not read the whole screen')
 diff --git a/test/phone-turns.mjs b/test/phone-turns.mjs
 new file mode 100644
-index 00000000..256ff31b
+index 00000000..250509d9
 --- /dev/null
 +++ b/test/phone-turns.mjs
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,512 @@
 +/**
 + * Which way up a phone may be held: upright everywhere, and on either side
 + * on Play, for an account the sideways layout is open to.
@@ -778,10 +899,10 @@ index 00000000..256ff31b
 + * lib/turnScreen, run against stand-ins: its four imports are taken out and
 + * handed in, so what it asks the phone for is seen and nothing is turned.
 + * `native` is the package's native part (null: a copy built without it),
-+ * `os` the phone. Answers the file's own exports, what was asked and what
-+ * was logged.
++ * `os` the phone, and `logThrows` a log that fails as it is written to.
++ * Answers the file's own exports, what was asked and what was logged.
 + */
-+async function talker({ native, os = 'ios', throwsOnFind = false } = {}, r) {
++async function talker({ native, os = 'ios', throwsOnFind = false, logThrows = false } = {}, r) {
 +  const src = read('mobile/src/lib/turnScreen.js')
 +  const imports = src.match(/^import [^\n]+$/gm)
 +  assert.deepEqual(
@@ -805,7 +926,10 @@ index 00000000..256ff31b
 +    },
 +    OrientationLock: { DEFAULT: 0, PORTRAIT_UP: 3 },
 +    Platform: { OS: os },
-+    logDebug: (source, message, detail) => log.push({ source, message, detail }),
++    logDebug: (source, message, detail) => {
++      log.push({ source, message, detail })
++      if (logThrows) throw new Error('the log is full')
++    },
 +    RELEASE: r.RELEASE,
 +    TURNS: r.TURNS,
 +    UPRIGHT: r.UPRIGHT
@@ -815,15 +939,33 @@ index 00000000..256ff31b
 +  return { ...made, log, finds }
 +}
 +
-+/** A stand-in for the package's native part, which writes down what it is asked. */
-+function phone({ refuses = false } = {}) {
++/**
++ * A stand-in for the package's native part, which writes down what it is
++ * asked. `holds` is what it answers when asked what it holds (lock, ways,
++ * up); one given as an Error is thrown, and one left out is a function the
++ * stand-in does not have (a package without it).
++ */
++function phone({ refuses = false, holds = { lock: 0, ways: [1, 3, 4], up: 1 } } = {}) {
 +  const asked = []
++  const read = []
 +  const take = (what) => async (value) => {
 +    asked.push([what, value])
 +    if (refuses) throw new Error('the phone said no')
 +  }
-+  return { asked, lockAsync: take('lockAsync'), lockPlatformAsync: take('lockPlatformAsync') }
++  const say = (what, answer) => async () => {
++    read.push(what)
++    if (answer instanceof Error) throw answer
++    return answer
++  }
++  const made = { asked, read, lockAsync: take('lockAsync'), lockPlatformAsync: take('lockPlatformAsync') }
++  if ('lock' in holds) made.getOrientationLockAsync = say('getOrientationLockAsync', holds.lock)
++  if ('ways' in holds) made.getPlatformOrientationLockAsync = say('getPlatformOrientationLockAsync', holds.ways)
++  if ('up' in holds) made.getOrientationAsync = say('getOrientationAsync', holds.up)
++  return made
 +}
++
++/** Long enough for a line that is written after an ask, without being waited for, to be in the log. */
++const written = () => new Promise((done) => setTimeout(done, 5))
 +
 +/* The phones and tablets the rule is asked about: the whole screen in points, upright, with what each keeps clear over and under it there. */
 +const IPHONES = [
@@ -1056,6 +1198,100 @@ index 00000000..256ff31b
 +    }
 +  })
 +
++  test('phone turns: after an ask the phone takes, the log says what the phone holds, in the package’s own numbers, and nothing more is asked of it', async () => {
++    const r = await rule()
++    const lines = (t) => t.log.map((l) => (l.detail === undefined ? l.message : `${l.message} — ${l.detail}`))
++    /* An iPhone that took "turns" and allows it: the ask's own line first, then what it holds. */
++    const well = phone()
++    const onWell = await talker({ native: well, os: 'ios' }, r)
++    assert.equal(await onWell.askTurn(r.TURNS), true)
++    await written()
++    assert.deepEqual(lines(onWell), ['turning: turns', 'turning: after "turns" — the phone holds lock 0, ways 1,3,4, way up 1'])
++    /* It read, three things, each once, and asked for nothing: the one lock is still the only thing it was told. */
++    assert.deepEqual(well.read, ['getOrientationLockAsync', 'getPlatformOrientationLockAsync', 'getOrientationAsync'])
++    assert.deepEqual(well.asked, [['lockAsync', 0]])
++    /* The ask does not wait for the line: it has answered before the phone has said what it holds. */
++    const slow = phone()
++    let let_go
++    slow.getOrientationLockAsync = () => new Promise((done) => (let_go = () => done(0)))
++    const onSlow = await talker({ native: slow, os: 'ios' }, r)
++    assert.equal(await onSlow.askTurn(r.UPRIGHT), true)
++    assert.deepEqual(lines(onSlow), ['turning: upright'])
++    let_go()
++    await written()
++    assert.deepEqual(lines(onSlow), ['turning: upright', 'turning: after "upright" — the phone holds lock 0, ways 1,3,4, way up 1'])
++    /*
++     * The three are asked for together, before the first has answered: the
++     * package answers in the order it is asked, so asked one after another
++     * a later ask could come between them, and the line would be a lock
++     * from before it beside ways from after it.
++     */
++    const queued = phone()
++    let answer
++    queued.getOrientationLockAsync = () => {
++      queued.read.push('getOrientationLockAsync')
++      return new Promise((done) => (answer = () => done(3)))
++    }
++    const onQueued = await talker({ native: queued, os: 'ios' }, r)
++    const holding = onQueued.turnHeld()
++    await written()
++    assert.deepEqual(queued.read, ['getOrientationLockAsync', 'getPlatformOrientationLockAsync', 'getOrientationAsync'], 'the second is asked only once the first has answered')
++    answer()
++    assert.equal(await holding, 'lock 3, ways 1,3,4, way up 1')
++    /* Held upright all the same after "turns", and no key window found: each is said as the phone says it, an empty list as "none". */
++    const held = await talker({ native: phone({ holds: { lock: 3, ways: [1], up: 1 } }), os: 'ios' }, r)
++    await held.askTurn(r.TURNS)
++    await written()
++    assert.equal(lines(held)[1], 'turning: after "turns" — the phone holds lock 3, ways 1, way up 1')
++    const blind = await talker({ native: phone({ holds: { lock: 8, ways: [], up: 0 } }), os: 'ios' }, r)
++    await blind.askTurn(r.TURNS)
++    await written()
++    assert.equal(lines(blind)[1], 'turning: after "turns" — the phone holds lock 8, ways none, way up 0')
++    /* Android answers one number for the ways (the screen's own setting), and it is written as it came. */
++    const droid = await talker({ native: phone({ holds: { lock: 8, ways: 2, up: 1 } }), os: 'android' }, r)
++    await droid.askTurn(r.TURNS)
++    await written()
++    assert.equal(lines(droid)[1], 'turning: after "turns" — the phone holds lock 8, ways 2, way up 1')
++    /* One of the three that fails, or that this package does not have, says so in its own place, and the other two are still read. */
++    const part = await talker({ native: phone({ holds: { lock: new Error('no window'), up: 4 } }), os: 'ios' }, r)
++    await part.askTurn(r.TURNS)
++    await written()
++    assert.equal(lines(part)[1], 'turning: after "turns" — the phone holds lock not said (no window), ways not in this copy, way up 4')
++    /* The last of the three has its own guard too: failing, it says so in its place and does not take the line with it. */
++    const lost = await talker({ native: phone({ holds: { lock: 0, ways: [1, 3, 4], up: new Error('no screen') } }), os: 'ios' }, r)
++    await lost.askTurn(r.TURNS)
++    await written()
++    assert.equal(lines(lost)[1], 'turning: after "turns" — the phone holds lock 0, ways 1,3,4, way up not said (no screen)')
++    /* A phone that refused is not asked what it holds: its one line already says why. */
++    const no = phone({ refuses: true })
++    const refused = await talker({ native: no, os: 'ios' }, r)
++    assert.equal(await refused.askTurn(r.TURNS), false)
++    await written()
++    assert.equal(refused.log.length, 1)
++    assert.deepEqual(no.read, [])
++    /* Said for another moment (the component's three), it is the same line with that moment's words, and it changes nothing either. */
++    const other = phone({ holds: { lock: 0, ways: [1, 3, 4], up: 4 } })
++    const onOther = await talker({ native: other, os: 'ios' }, r)
++    assert.equal(await onOther.sayTurn('the app is on its side now, 956×440'), undefined)
++    assert.deepEqual(lines(onOther), ['turning: the app is on its side now, 956×440 — the phone holds lock 0, ways 1,3,4, way up 4'])
++    assert.deepEqual(other.asked, [])
++    assert.equal(await onOther.turnHeld(), 'lock 0, ways 1,3,4, way up 4')
++    /* A log that fails as it is written to is not the caller's trouble: the line is tried, and nothing comes back but done. */
++    const full = await talker({ native: phone(), os: 'ios', logThrows: true }, r)
++    assert.equal(await full.sayTurn('back at the front'), undefined)
++    assert.equal(full.log.length, 1)
++    /* A copy built without the package says so once, as ever, and never a line about what it holds; and nothing here throws. */
++    for (const missing of [{ native: null }, { native: {} }, { native: null, throwsOnFind: true }]) {
++      const none = await talker(missing, r)
++      assert.equal(await none.turnHeld(), null)
++      assert.equal(await none.sayTurn('back at the front'), undefined)
++      await none.askTurn(r.TURNS)
++      await written()
++      assert.equal(none.log.length, 1)
++      assert.match(none.log[0].message, /no screen orientation module/)
++    }
++  })
++
 +  test('phone turns: the config lets an iPhone turn to either side and starts it upright, an iPad keeps its four ways, and the app applies the rule over every screen', async () => {
 +    const app = JSON.parse(read('mobile/app.json')).expo
 +    const pkg = JSON.parse(read('mobile/package.json'))
@@ -1097,6 +1333,21 @@ index 00000000..256ff31b
 +    assert.match(part, /tooNarrow\(\{ frame, short: Math\.min\(width, height\) \}\)/, 'the frame is not measured against the screen’s short side, so the keyboard up could read as a small phone')
 +    /* Android alone is asked again when the app comes back to the front, and never on a tablet (the rule's null). */
 +    assert.match(part, /if \(Platform\.OS !== 'android'\) return undefined const sub = AppState\.addEventListener\('change', \(state\) => \{ const now = wants\.current if \(state !== 'active' \|\| \(now !== UPRIGHT && now !== TURNS\)\) return/)
++    /*
++     * For the log alone, three moments on a phone, each said through
++     * lib/turnScreen's sayTurn, which asks the phone for nothing: the app
++     * goes onto its side or back (never the first look, never a tablet), a
++     * phone measured too narrow on its side, and the iPhone back at the
++     * front. The phone is still asked from the two places it was, and only
++     * those.
++     */
++    assert.match(read('mobile/src/components/PhoneTurns.js'), /^import \{ askTurn, sayTurn \} from '\.\.\/lib\/turnScreen'$/m)
++    assert.match(part, /const sideways = win\.width > win\.height const drawn = useRef\(null\) useEffect\(\(\) => \{ const was = drawn\.current drawn\.current = sideways if \(tablet \|\| was === null \|\| was === sideways\) return sayTurn\(`the app is \$\{sideways \? 'on its side' : 'upright'\} now, \$\{Math\.round\(win\.width\)\}×\$\{Math\.round\(win\.height\)\}`\) \}, \[sideways, tablet\]\)/)
++    assert.match(part, /const narrow = known\.current\.narrow const fits = fitsSideways\(known\.current\.across\) && !narrow/)
++    assert.match(part, /useEffect\(\(\) => \{ if \(narrow\) sayTurn\(`on its side the app measured \$\{Math\.round\(Number\(frame\?\.width\) \|\| 0\)\} across, too narrow to split, so it stays upright from now on`\) \}, \[narrow\]\)/)
++    assert.match(part, /if \(Platform\.OS !== 'ios'\) return undefined const sub = AppState\.addEventListener\('change', \(state\) => \{ if \(state === 'active' && \(wants\.current === UPRIGHT \|\| wants\.current === TURNS\)\) sayTurn\(`back at the front, wanting "\$\{wants\.current\}"`\) \}\) return \(\) => sub\?\.remove\?\.\(\) \}, \[\]\)/)
++    assert.equal(part.split('askTurn(').length - 1, 2, 'the phone is asked from somewhere new')
++    assert.equal(part.split('sayTurn(').length - 1, 3)
 +    /* It draws nothing, and reaches the phone only through lib/turnScreen. */
 +    assert.match(part, /return null \} ?$/)
 +    assert.doesNotMatch(part, /expo-screen-orientation|requireOptionalNativeModule|<View|<Text/)
