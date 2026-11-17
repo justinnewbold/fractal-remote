@@ -13,7 +13,6 @@ import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
-import { markLoud } from './audioMode'
 import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
 import { BEAT_LOCK_FOR_EVERYONE, METRONOME_FLASH_CHOICE_FOR_EVERYONE, METRONOME_LINE_UP_FOR_EVERYONE } from './features'
 import { BEAT_LOCK, beatLockOn, heldOnWith, inStepWith, moveFor, sameTempo, slewPart } from './beatLock'
@@ -690,8 +689,6 @@ let releaseTimer = null
 function prepareClick() {
   if (!preparing) {
     preparing = (async () => {
-      /* Said first, so the preset wheel's click never sets the quiet mode back over this one (lib/audioMode). */
-      markLoud()
       await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {})
       players = IOS
         ? [createAudioPlayer(clickSound, { keepAudioSessionActive: true }), createAudioPlayer(clickSound, { keepAudioSessionActive: true })]

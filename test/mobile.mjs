@@ -204,8 +204,6 @@ async function clickOnTheBench(os = 'ios') {
     `,
     'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
     'device-word.js': read('mobile/src/lib/device-word.js'),
-    /* Who has set how the device plays sound (the metronome marks it, the preset wheel's click reads it): as it is. */
-    'audioMode.js': read('mobile/src/lib/audioMode.js'),
     /* The flash as a choice: its rules as they are, and its switch off, as it is for every account but his. */
     'edgeFlash.js': read('mobile/src/lib/edgeFlash.js'),
     'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\nexport const BEAT_LOCK_FOR_EVERYONE = false\nexport const METRONOME_LINE_UP_FOR_EVERYONE = false\n',
@@ -6310,7 +6308,7 @@ export function run(test) {
     assert.match(src, /\{jumps\.length && !hunting \?/, 'the jumps stay up over search results they cannot jump through')
     /* They scroll, never load: a tap on 300 mid-set must not change the sound. */
     /* Up to the row, which is drawn after it and is what does load a preset. */
-    const jump = src.slice(src.indexOf('const jumpTo = (n) =>'), src.indexOf('const rowOf = (n, tall = false) =>'))
+    const jump = src.slice(src.indexOf('const jumpTo = (n) =>'), src.indexOf('const rowOf = (n) =>'))
     assert.ok(jump.length > 100 && jump.length < 2000, 'the jump is not where this looks for it')
     assert.match(jump, /scrollToIndex/, 'a jump does not move the list')
     assert.ok(!/load|choose|select|setPreset/i.test(jump.replace(/\/\*[\s\S]*?\*\//g, '')), 'a jump loads a preset')

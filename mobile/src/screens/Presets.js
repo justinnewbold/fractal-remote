@@ -13,11 +13,7 @@ import { marksFor, toggleFavourite } from '../lib/lists'
 import { addTo, createList, listsFor, sourceFor, updateList } from '../lib/lists'
 import { ADDED_MS, ADD_WORDS, COLOUR_AFTER_MS, addChoices, addedSays, landedIn } from '../lib/addToSetlist'
 import { useAddToSetlist } from '../lib/useAddToSetlist'
-import { sync, useStored } from '../lib/store'
-/* All presets as a wheel, where Settings has chosen it (lib/presetWheel): the same rows, drawn by components/PresetWheel. */
-import { wheelFeel, wheelSetting } from '../lib/presetWheel'
-import { usePresetWheelOffered } from '../lib/usePresetWheel'
-import PresetWheel from '../components/PresetWheel'
+import { useStored } from '../lib/store'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
 import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
@@ -96,14 +92,13 @@ const STRIDE = ROW + GAP
  * "Added to …", and the colour is the sheet's last row. Closed to an
  * account, the hold is the colour tag and nothing else, as above.
  *
- * AND AS A WHEEL, where Settings → Tiles & scenes → Preset list says so
- * (lib/presetWheel, his account until features PRESET_WHEEL_FOR_EVERYONE):
- * a ring to run a thumb round, a bar that moves one preset a notch with a
- * click, and a middle button that loads the preset under the bar.
- * Everything a row does is what it does in the list (the same press, hold
- * and star, said in rowOf for both); only how it is drawn and moved through
- * is the wheel's (components/PresetWheel). The list is the list it always
- * was.
+ * THE LIST IS THE ONE WAY THROUGH THE PRESETS. For six days in November
+ * 2026 there was a click wheel beside it, on his account only, as a choice
+ * in Settings. He took it out: "Except for the scroll wheel for presets, I
+ * wanna just get rid of that altogether. That still doesn't work better on
+ * the new build. So let's just keep the original way that we've been
+ * scrolling to select presets" (Justin, 17 November 2026). Nothing of it is
+ * left here; the list was never changed for it.
  */
 export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
@@ -141,13 +136,6 @@ export default function Presets({ onBack, stay = false }) {
   /* Re-renders when a star is pressed — here or on the setlist sheet. */
   useStored()
   const favourites = marksFor(device).favourites
-
-  /* The wheel in place of the list: offered to this account, and chosen on this device. Read on every render, so the choice made in Settings is the list's the next time it draws. */
-  const wheelOffered = usePresetWheelOffered()
-  const wheelKept = wheelSetting(sync)
-  const wheel = wheelOffered && wheelKept.on
-  /* What the screen asks of the wheel: go to a row, go to the top (components/PresetWheel). */
-  const wheelRef = useRef(null)
 
   const [query, setQuery] = useState('')
   /* The preset whose colour tag the colour sheet is open on, or null. */
@@ -249,18 +237,8 @@ export default function Presets({ onBack, stay = false }) {
   const seen = useCallback(({ viewableItems }) => {
     wantOnly(viewableItems.map((v) => v.item).filter((n) => typeof n === 'number'))
   }, [])
-  /*
-   * The wheel's own asking, by the rows around its middle once it rests
-   * (PresetWheel `onAround`): the list's "what is on screen" goes by where
-   * rows are laid out, and the wheel draws its small rows closer than that.
-   */
-  /* The list's own measure of "on screen". Made here, not where the list is drawn: the list is not drawn while the wheel is. */
+  /* The list's own measure of "on screen". */
   const viewability = useRef({ itemVisiblePercentThreshold: 10 }).current
-  const shownNow = useRef(shown)
-  shownNow.current = shown
-  const around = useCallback((indexes) => {
-    wantOnly(indexes.map((i) => shownNow.current[i]).filter((n) => typeof n === 'number'))
-  }, [])
 
   /*
    * Open on the preset you are playing, in the middle of the screen.
@@ -309,12 +287,6 @@ export default function Presets({ onBack, stay = false }) {
   useEffect(() => {
     if (!hunting && !searchedBefore.current) return
     const id = requestAnimationFrame(() => {
-      /* The wheel's two moves are its own: the first match in the middle, or the preset being played. */
-      if (wheel) {
-        if (hunting) wheelRef.current?.toTop()
-        else if (slots && Number.isInteger(preset?.number)) wheelRef.current?.toRow(Math.min(preset.number, slots - 1))
-        return
-      }
       try {
         if (hunting) list.current?.scrollToOffset({ offset: 0, animated: false })
         else if (slots && Number.isInteger(preset?.number)) {
@@ -353,11 +325,6 @@ export default function Presets({ onBack, stay = false }) {
    */
   const jumpLabels = jumps.map(String)
   const jumpTo = (n) => {
-    /* On the wheel the stop lands in the middle, where the eye is. */
-    if (wheel) {
-      wheelRef.current?.toRow(Math.min(n, (slots || 1) - 1), true)
-      return
-    }
     try {
       list.current?.scrollToIndex({ index: Math.min(n, (slots || 1) - 1), viewPosition: 0, animated: true })
     } catch {
@@ -365,17 +332,8 @@ export default function Presets({ onBack, stay = false }) {
     }
   }
 
-  /*
-   * ONE PRESET'S ROW, for the list and for the wheel.
-   *
-   * THE LIST'S ROW IS WORD FOR WORD WHAT IT WAS BEFORE THERE WAS A WHEEL:
-   * "let's make sure we don't touch the other ones" (Justin, 11 November
-   * 2026). For the wheel (`tall`) it answers what the same preset's row
-   * says and does, and components/PresetWheel draws it (WheelPreset) and
-   * hands its press to the wheel's middle button: the same words, press,
-   * hold and star; test/preset-wheel.mjs holds the two to each other.
-   */
-  const rowOf = (n, tall = false) => {
+  /* One preset's row. */
+  const rowOf = (n) => {
     const name = nameHere(n)
     const here = n === preset?.number
     const starred = favourites.includes(n)
@@ -383,25 +341,6 @@ export default function Presets({ onBack, stay = false }) {
     /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
     const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
     const target = presetTarget(n, { words })
-    if (tall) {
-      return {
-        label: typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`,
-        sub: here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing),
-        here,
-        /* Its colour tag, a short bar before the name: the colour the list's bar is. */
-        bar: tagEdge(tag)?.borderLeftColor || null,
-        starred,
-        starLabel: `${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`,
-        hint: addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined,
-        /* The list's own press, word for word: not awaited, and beside Play the wheel stays open after a pick. The wheel's middle button is this too. */
-        onPress: () => {
-          loadPreset(n)
-          if (!stay) onBack?.()
-        },
-        onLongPress: addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined,
-        onStar: () => toggleFavourite(device, n)
-      }
-    }
     return (
       <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
         {/*
@@ -450,10 +389,9 @@ export default function Presets({ onBack, stay = false }) {
         />
       </View>
     )
-        
   }
 
-  /* What the list says with no rows, and the line at its end: the wheel's too. */
+  /* What the list says with no rows, and the line at its end. */
   const emptyRows =
     /* Nothing under the update note: there is nothing to wait for (vp4Old). */
     vp4Old ? null : slots ? (
@@ -589,47 +527,32 @@ export default function Presets({ onBack, stay = false }) {
         </View>
       ) : null}
 
-      {wheel ? (
-        /* The click wheel (lib/presetWheel), opened with its bar on the preset being played: nothing loads until its middle button or a row is pressed. */
-        <PresetWheel
-          listRef={wheelRef}
-          data={shown}
-          row={(n) => rowOf(n, true)}
-          startAt={!hunting && slots && Number.isInteger(preset?.number) ? Math.min(preset.number, slots - 1) : 0}
-          clicks={wheelKept.clicks}
-          feel={wheelFeel(wheelKept)}
-          onAround={around}
-          empty={emptyRows}
-          footer={lastLine}
-        />
-      ) : (
-        <FlatList
-          ref={list}
-          data={shown}
-          keyExtractor={(n) => String(n)}
-          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
-          initialNumToRender={20}
-          windowSize={5}
-          onViewableItemsChanged={seen}
-          viewabilityConfig={viewability}
-          /* Fixed rows, so the list can be told to go to one without having drawn
-             the ones before it. See ROW. */
-          getItemLayout={(_, i) => ({ length: STRIDE, offset: STRIDE * i, index: i })}
-          initialScrollIndex={
-            !hunting && slots && Number.isInteger(preset?.number)
-              ? Math.min(preset.number, slots - 1)
-              : undefined
-          }
-          onScrollToIndexFailed={() => {
-            /* Only reachable while the list is still measuring. The centring
-               effect has already run by then; the list simply stays where it is,
-               which is the top — the behaviour this replaced. */
-          }}
-          renderItem={({ item: n }) => rowOf(n)}
-          ListEmptyComponent={emptyRows}
-          ListFooterComponent={lastLine}
-        />
-      )}
+      <FlatList
+        ref={list}
+        data={shown}
+        keyExtractor={(n) => String(n)}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
+        initialNumToRender={20}
+        windowSize={5}
+        onViewableItemsChanged={seen}
+        viewabilityConfig={viewability}
+        /* Fixed rows, so the list can be told to go to one without having drawn
+           the ones before it. See ROW. */
+        getItemLayout={(_, i) => ({ length: STRIDE, offset: STRIDE * i, index: i })}
+        initialScrollIndex={
+          !hunting && slots && Number.isInteger(preset?.number)
+            ? Math.min(preset.number, slots - 1)
+            : undefined
+        }
+        onScrollToIndexFailed={() => {
+          /* Only reachable while the list is still measuring. The centring
+             effect has already run by then; the list simply stays where it is,
+             which is the top — the behaviour this replaced. */
+        }}
+        renderItem={({ item: n }) => rowOf(n)}
+        ListEmptyComponent={emptyRows}
+        ListFooterComponent={lastLine}
+      />
 
       {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
       <ColourSheet target={painting} onClose={() => setPainting(null)} />
