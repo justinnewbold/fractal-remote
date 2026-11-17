@@ -96,6 +96,9 @@ export const watchHasTempo = () => knows.includes('tempo')
 /** Whether the watch has said a pedal held on it opens quick edit (its hello's `quick`): the picture's `quickEdit` and `quick` are for that watch only (lib/watchQuickEdit). */
 export const watchKnowsQuick = () => knows.includes('quick')
 
+/** Whether the watch has said it taps on the phone's beat (watch-link WHERE THE BEATS FALL): no watch out today does. */
+export const watchKnowsBeat = () => knows.includes('beat')
+
 /** What goes in the picture: the order and the hidden pages, for a watch that has said it does this; null, and neither field, for any other. */
 export const pagesToSend = () => (watchOrdersPages() ? { pages: order, hidden } : null)
 

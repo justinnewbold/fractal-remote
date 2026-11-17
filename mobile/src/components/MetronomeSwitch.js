@@ -6,7 +6,7 @@ import Note from './Note'
 import Press from './Press'
 import { setEdgeFlash, setMetronome, setMetronomeSound, useEdgeFlash, useInStep, useMetronome, useUnitHeardOn } from '../lib/metronome'
 import { PLACES, beatMs, clicks, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
-import { EDGE_WORDS, SOUND_WORDS, deviceSounds, soundChoices, soundLine, soundLit } from '../lib/edgeFlash'
+import { EDGE_WORDS, SOUND_WORDS, deviceSounds, offLine, soundChoices, soundLine, soundLit } from '../lib/edgeFlash'
 import { useRig } from '../lib/rig'
 import { useDemo } from '../lib/demo'
 import { useBluetoothOn } from '../lib/bluetooth'
@@ -98,9 +98,16 @@ export default function MetronomeSwitch({ compact = false, lines }) {
     const answer = await setMetronome({ on: !setting.on }, slug, clickHere)
     if (answer?.ok === false && !answer?.unsupported) setSaid(TOLD)
   }
+  /*
+   * A PICK HERE STARTS IT (report 8be38966): Off, the device, Unit or Both
+   * pressed with the metronome off switches it on in the same change as
+   * the pick (lib/metronome setMetronomeSound `start`), Off included, which
+   * is the light with no sound. Never the flash's switch, which is a light
+   * and nothing else, and never a pick on Settings → Metronome.
+   */
   const pickSound = async (key) => {
     setSaid(null)
-    const answer = await setMetronomeSound(key, slug, clickHere)
+    const answer = await setMetronomeSound(key, slug, clickHere, { start: true })
     if (answer?.ok === false && !answer?.unsupported) setSaid(TOLD)
   }
 
@@ -108,11 +115,13 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   const sounds = soundChoices(places)
   const lit = soundLit({ quiet: choice.quiet, places, lit: (key) => placeLit(setting, key, unitCan.can) })
   const place = PLACES.find((p) => placeLit(setting, p.key, true))
-  /* Said for an account offered the choices wherever it is drawn, the tempo box too: with the sound Off, "clicks out loud" would not be so. */
+  /* Said for an account offered the choices wherever it is drawn, the tempo box too: with the sound Off, "clicks out loud" would not be so. And while it is off, that first (offLine): the row read as running with nothing running. */
   const where = choice.offered
-    ? choice.quiet || unitCan.can
-      ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, demo, noun: deviceNoun(), inStep })
-      : unitCan.why
+    ? !setting.on
+      ? offLine({ lit, edge: choice.on, row: choices, noun: deviceNoun() })
+      : choice.quiet || unitCan.can
+        ? soundLine({ quiet: choice.quiet, edge: choice.on, where: place?.key, note: place?.note || '', unit: unitCan.can, demo, noun: deviceNoun(), inStep })
+        : unitCan.why
     : unitCan.can
       ? place?.note || ''
       : unitCan.why

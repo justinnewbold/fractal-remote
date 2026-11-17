@@ -41,6 +41,11 @@ const IPHONES = {
  * 55.4 on an Air), so 44 would cut its corners off again. The phones that
  * really are 375 × 812 have a status bar of 44 (X, XS, 11 Pro) or 50 (12 and
  * 13 mini); anything else at that size is a bigger phone, zoomed.
+ *
+ * Turned on its side the status bar is gone (the top inset is 0) and the
+ * notch's inset is on the left and right instead, so the inset on the
+ * notch's side is the larger of the three: an X on its side is an X still,
+ * not a big phone zoomed.
  */
 const NATIVE_375 = [44, 50]
 const ZOOMED = 58
@@ -56,21 +61,32 @@ const IPAD = 22
  *
  *   os      'ios' | 'android'
  *   width, height   the window in points (the same as the screen on a phone)
- *   top, bottom     the safe-area insets. The bottom one is the home
- *           indicator: 34 on a Face ID iPhone, 20 on a rounded iPad, and 0 on
- *           every iPhone and iPad with a home button, whose glass is square.
+ *   top, bottom, left, right   the safe-area insets. The bottom one is the
+ *           home indicator: 34 on a Face ID iPhone (21 on its side), 20 on a
+ *           rounded iPad, and 0 on every iPhone and iPad with a home button,
+ *           whose glass is square. Left and right are the notch's on its side.
  *   pad     whether this is an iPad (Platform.isPad)
  */
-export function cornerRadius({ os, width, height, top = 0, bottom = 0, pad = false } = {}) {
+export const cornerRadius = (screen = {}) => glassCorner(screen).radius
+
+/**
+ * The same, and whether it is MEASURED: a value iOS itself reports for that
+ * size (the iPhone table). Every other is a guess that already errs round
+ * (Android's, ZOOMED, NEWER_IPHONE, IPAD), and beatFrame rounds only a
+ * measured one further.
+ */
+export function glassCorner({ os, width, height, top = 0, bottom = 0, left = 0, right = 0, pad = false } = {}) {
   const w = Math.round(Math.min(width || 0, height || 0))
   const h = Math.round(Math.max(width || 0, height || 0))
-  if (!w || !h) return 0
+  const guess = (radius) => ({ radius, measured: false })
+  if (!w || !h) return guess(0)
   if (os === 'ios') {
-    if (!(bottom > 0)) return 0
-    if (pad) return IPAD
+    if (!(bottom > 0)) return guess(0)
+    if (pad) return guess(IPAD)
     const size = `${w}x${h}`
-    if (size === '375x812' && !NATIVE_375.includes(Math.round(top))) return ZOOMED
-    return IPHONES[size] ?? NEWER_IPHONE
+    /* The notch's side: the top in portrait, the left or right on its side. */
+    if (size === '375x812' && !NATIVE_375.includes(Math.round(Math.max(top, left, right)))) return guess(ZOOMED)
+    return size in IPHONES ? { radius: IPHONES[size], measured: true } : guess(NEWER_IPHONE)
   }
   if (os === 'android') {
     /*
@@ -81,7 +97,50 @@ export function cornerRadius({ os, width, height, top = 0, bottom = 0, pad = fal
      * square corners it is only a soft corner on the flash. Capped, so a
      * tablet or an unfolded phone is not given a curve its glass lacks.
      */
-    return Math.min(60, Math.ceil(w * 0.13))
+    return guess(Math.min(60, Math.ceil(w * 0.13)))
   }
-  return 0
+  return guess(0)
+}
+
+/*
+ * THE BEAT'S FRAME, IN FROM THE EDGE AND ROUNDER THAN THE GLASS.
+ *
+ * "Also the light on the phone cuts off on the corners" (Justin, 16
+ * November 2026, his iPhone 17 Pro Max: 440 × 956, 62 in the table). The
+ * frame was drawn to the very edge with the glass's own curve, so its
+ * outside edge WAS the glass's edge: in theory all of it on the screen, in
+ * fact nothing to spare. The last pixel of a curve is the one the display's
+ * own mask shades off, and a glass even a little rounder than the table
+ * says (nobody can ask the phone, above) takes the corner of the line
+ * with it.
+ *
+ * So it is drawn BEAT_INSET points in from every edge, and BEAT_ROUNDER
+ * times as round as the glass where the glass's value is MEASURED (the
+ * iPhone table, glassCorner). A guess already errs round (Android's, Display
+ * Zoom's, an unlisted iPhone's, an iPad's), and rounding it again swung the
+ * frame's corners 12 to 16 points inside the screen's while its sides sat 2
+ * in (an independent read: a Pixel 8 Pro, an X on its side); so there the
+ * frame takes the guess as it is, moved in by the inset. Both only take it
+ * further in: a corner the
+ * glass's own shape moved in by the inset sits inside the glass by at least
+ * the inset everywhere, and a rounder corner of the same kind cuts more off
+ * at every point. With both, the 4-point line (BEAT_LINE) sits wholly
+ * inside the visible curve on every size listed above, by at least
+ * BEAT_CLEAR points, a measured one stays inside a glass a fifth rounder
+ * than the table says (ERRS ROUND, again), and its corner is no more than
+ * BEAT_CORNER points inside the screen's. Worked out on Apple's continuous curve and
+ * on a plain circle (Android, which draws no continuous curve), every size,
+ * in test/line-up.mjs; the price is a sliver of dark in each corner, a few
+ * points wide at most.
+ */
+export const BEAT_INSET = 2
+export const BEAT_LINE = 4
+export const BEAT_ROUNDER = 1.15
+export const BEAT_CLEAR = 1.5
+export const BEAT_CORNER = 8
+
+/** Where the beat's frame is drawn on a screen: `{ inset, radius, line }`, in points. A square screen gets a square frame, in from its edges all the same. */
+export function beatFrame(screen = {}) {
+  const glass = glassCorner(screen)
+  return { inset: BEAT_INSET, radius: glass.radius > 0 ? Math.ceil(glass.radius * (glass.measured ? BEAT_ROUNDER : 1)) : 0, line: BEAT_LINE }
 }

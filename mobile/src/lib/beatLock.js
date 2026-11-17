@@ -77,6 +77,46 @@ export const BEAT_LOCK = Object.freeze({
    * device keeping a tempo a little off the unit's; two seconds can.
    */
   sureAfterMs: 2000,
+  /*
+   * Tap along only where the unit's beat comes at this device's own tempo:
+   * the computer's gap between the unit's beats (a median of its last few,
+   * timed on a clock that never steps, to a tenth of a millisecond) is a
+   * whole number of this device's beats to within this. That gap is good to
+   * about a millisecond: each gap is two arrivals read off the USB port,
+   * and the median of up to eight drops the late ones. Twice that leaves
+   * room for its error. Around 120 BPM it is also narrow enough to close a
+   * tempo that is off: 120.5 against 120 is 2.1 ms a beat, 121 against 120
+   * is 4.1, and a device that far off drifts across a wide window between
+   * two answers while still seeming held on it (an independent read found
+   * a run there saved 50 to 110 ms where 30 was right). A sure belief
+   * alone cannot tell, through a road 100 ms there and back. From about
+   * 174 BPM up it is not: a whole BPM is less than 2 ms a beat there (200
+   * against 201 is 1.5 ms, 250 against 249 is 1.0), so sameTempoBpm,
+   * below, is asked beside it. Nothing but Tap along goes by this.
+   */
+  sameTempoMs: 2,
+  /*
+   * And the tempo the computer's gap says (60000 × n / gap, n the whole
+   * number of this device's beats that fits it) within less than this many
+   * BPM of the device's own (60000 / beat). Half, because the unit's tempo
+   * and the device's are both whole BPM as the app reads them: a whole-BPM
+   * miss is 1.0 apart, a match 0, and the computer's gap is a measurement,
+   * so the line goes halfway. What it costs: at 250 BPM half a BPM is
+   * under half a millisecond of gap, so a noisy gap can close Tap along
+   * for an ask on a tempo that does match. That is the safe way to be
+   * wrong: closed until a gap that fits comes, never a wrong nudge saved.
+   */
+  sameTempoBpm: 0.5,
+  /*
+   * An answer with a count and no age is 'finding': the computer has heard
+   * beats and only just forgotten where they fall. But it keeps its count
+   * across a tempo tapped and a reconnect, so a unit whose Send Realtime
+   * Sysex was switched off after beats were heard answers so for as long as
+   * the computer runs. After this long of such answers, from the first of
+   * them, it is 'none' again and the page says to switch it on. A unit that
+   * sends one beat a bar at 30 BPM gives an age within eight seconds.
+   */
+  findingMs: 10000,
   /* How long after the last window the device's beat still counts as on the unit's. */
   heldMs: 20000,
   /* A computer app with no such answer is not asked again for this long. */
@@ -119,21 +159,25 @@ export function beatsApart(gap, beat) {
  * always holds it, however lopsided the road, and is as narrow as the round
  * trip was quick.
  *
- * Answers `{ window: { mid, half, at } }`, or `{ why }` when it says
- * nothing: 'none' (no beat heard), 'tempo' (they come at another tempo than
+ * Answers `{ window: { mid, half, at, gap } }` (`gap` the computer's own
+ * time between the unit's beats, which Tap along goes by: heldOnWith), or
+ * `{ why }` when it says nothing: 'none' (no beat ever heard: Send
+ * Realtime Sysex is most likely off), 'finding' (beats have been heard, but
+ * the computer has only just forgotten where they fall: after a tempo
+ * tapped from the app, or a new connection), 'tempo' (they come at another tempo than
  * the device is keeping), 'stale' (the beats stopped), 'slow' (the round
  * trip took too much of a beat), 'bad' (not an answer at all).
  */
 export function windowFromAnswer(answer, asked, answered, beat) {
   if (!answer || answer.ok !== true || !(beat > 0) || !Number.isFinite(asked) || !Number.isFinite(answered) || answered < asked) return { why: 'bad' }
   const { age, gap } = answer
-  if (age === null || age === undefined || gap === null || gap === undefined) return { why: 'none' }
+  if (age === null || age === undefined || gap === null || gap === undefined) return { why: answer.count > 0 ? 'finding' : 'none' }
   if (!Number.isFinite(age) || age < 0 || !Number.isFinite(gap)) return { why: 'bad' }
   if (!beatsApart(gap, beat)) return { why: 'tempo' }
   if (age > gap * 1.5) return { why: 'stale' }
   const half = (answered - asked) / 2 + BEAT_LOCK.slackMs
   if (half > beat * BEAT_LOCK.widestOfBeat) return { why: 'slow' }
-  return { window: { mid: (asked + answered) / 2 - age, half, at: answered } }
+  return { window: { mid: (asked + answered) / 2 - age, half, at: answered, gap } }
 }
 
 /** A beat this device heard itself, over Bluetooth or the cable, as a window: `at` is this device's clock when it came. */
@@ -216,6 +260,43 @@ export function slewPart(left, beat) {
 export const inStepWith = (window, left = 0) => Boolean(window) && window.sure === true && window.half <= BEAT_LOCK.inStepMs && Math.abs(left) <= BEAT_LOCK.inStepMs
 
 /**
+ * Whether the unit's beats, `gap` apart as the computer timed them, come at
+ * this device's tempo of `beat` ms: a whole number of its beats (one, or a
+ * bar's) to within sameTempoMs, AND the tempo that gap says within
+ * sameTempoBpm of the device's. Both are needed: the milliseconds close a
+ * part of a BPM off at slow tempos, the BPM a whole one off at fast ones.
+ * False with no gap to go by.
+ */
+export function sameTempo(gap, beat) {
+  if (!(gap > 0) || !(beat > 0)) return false
+  const n = Math.round(gap / beat)
+  return (
+    n >= 1 &&
+    n <= BEAT_LOCK.beatsApart &&
+    Math.abs(gap - n * beat) <= BEAT_LOCK.sameTempoMs &&
+    Math.abs((60000 * n) / gap - 60000 / beat) < BEAT_LOCK.sameTempoBpm
+  )
+}
+
+/**
+ * Whether the device's beat, of `beat` ms, is HELD ON the unit's: a sure
+ * belief (as inStepWith), the move onto it made, however wide the window,
+ * and the unit's beat at this device's tempo by the computer's own gap
+ * (sameTempo). A sure belief does not show that on a wide window: a device
+ * a beat a few milliseconds off still lands inside the next one. A window
+ * with no gap (one this device heard itself, over Bluetooth or the cable:
+ * windowFromWire) is never held on; Tap along is not offered there anyway. Through
+ * a computer over the internet the window is rarely within inStepMs, so
+ * the words never say "In step" there, but the device's beat is moved onto
+ * the window's middle all the same and stays there across a stop and a
+ * start: as near the unit's as the road can place it, off only by how
+ * lopsided the road is, which is what a line-up by ear is for. Tap along
+ * goes by this (lib/lineUp tapAlongHere), never the words.
+ */
+export const heldOnWith = (window, left = 0, beat = 0) =>
+  Boolean(window) && window.sure === true && Math.abs(left) <= BEAT_LOCK.inStepMs && sameTempo(window.gap, beat)
+
+/**
  * Whether what came back from GET /tempo/beat is its answer at all. A
  * computer app from before it existed answers with its web page (it sends
  * the page for any address it does not know), never an error.
@@ -226,6 +307,7 @@ export const isBeatAnswer = (answer) => Boolean(answer) && typeof answer === 'ob
 export const whyWords = (why) =>
   ({
     none: 'the unit has sent no beat (Send Realtime Sysex may be off on it: Setup → MIDI/Remote)',
+    finding: 'the computer has only just started hearing the unit’s beat again',
     tempo: 'the unit’s beats come at another tempo than this device is keeping',
     stale: 'the unit’s beats have stopped',
     slow: 'the answer took too long to say where in the beat',

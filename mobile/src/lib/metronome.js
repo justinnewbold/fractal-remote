@@ -15,9 +15,10 @@ import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
 import { EDGE_KEY, QUIET_KEY, deviceSounds, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep, quietKept, quietToKeep, soundPicked } from './edgeFlash'
-import { BEAT_LOCK_FOR_EVERYONE, METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
-import { BEAT_LOCK, beatLockOn, inStepWith, moveFor, slewPart } from './beatLock'
+import { BEAT_LOCK_FOR_EVERYONE, METRONOME_FLASH_CHOICE_FOR_EVERYONE, METRONOME_LINE_UP_FOR_EVERYONE } from './features'
+import { BEAT_LOCK, beatLockOn, heldOnWith, inStepWith, moveFor, sameTempo, slewPart } from './beatLock'
 import { followUnitBeat } from './unitBeat'
+import { LINE_UP_KEYS, TAP_ALONG, lineUpKept, lineUpNudge, lineUpOpen, lineUpTimes, lineUpToKeep, lineUpWords, offBeat, samePhase, tapAlong } from './lineUp'
 
 /**
  * THE METRONOME SETTING, and the two things it drives.
@@ -340,13 +341,25 @@ function setQuiet(on) {
  * device. A place lets go of Off, and is written only where the unit's click
  * can be switched; where it cannot, the place kept is left as it is.
  */
-export async function setMetronomeSound(key, slug, here = {}) {
+export async function setMetronomeSound(key, slug, here = {}, { start = false } = {}) {
   const picked = soundPicked(key, { can: unitClick(slug, here).can })
   setQuiet(picked.quiet)
   if (picked.edge) setEdgeFlash(true)
-  if (!picked.where) return { ok: true }
+  /*
+   * AND, FROM THE VOLUME POP-UP, A PICK STARTS IT (`start`). "The light
+   * only runs while the metronome itself is switched on" (report 8be38966,
+   * 16 November 2026): Phone, Unit, Both and the flash were pressed with the
+   * metronome off, and nothing flashed. So a pick in the pop-up's row while
+   * it is off switches it on, Off included (Off is the light with no
+   * sound), in the SAME change as the place: the unit is written once, and
+   * the re-ask after a refusal (`untold`, which wants `where` in the patch)
+   * still works. Settings → Metronome passes no `start`: a pick there is
+   * kept for when it is switched on.
+   */
+  const patch = { ...(picked.where ? { where: picked.where } : null), ...(start === true && !setting.on ? { on: true } : null) }
+  if (!Object.keys(patch).length) return { ok: true }
   /* Past setMetronome, which would let go of the Off just set. */
-  return change({ where: picked.where }, slug, here)
+  return change(patch, slug, here)
 }
 
 /** The choices, and whether whoever is signed in here is offered them: `{ offered, on, quiet }`. `on` is the flash; `quiet` is no sound, false for an account not offered it. */
@@ -369,6 +382,160 @@ export function useEdgeFlash() {
     () => quiet
   )
   return { offered, on, quiet: offered && silenced }
+}
+
+/*
+ * LINING UP THE LIGHT AND THE CLICK (lib/lineUp has the why): three nudges
+ * kept on the device, the light, the device's own click and the Apple
+ * Watch's tap, none until somebody moves one, and applied only for an
+ * account the line-up is offered to. The watch's is kept and sent to a
+ * watch that knows it, and drawn nowhere yet.
+ */
+const LINE_UP_PARTS = ['light', 'click', 'watch']
+const LINE_UP_NAMES = { light: 'the light', click: 'the click', watch: 'the watch' }
+let lined = { light: 0, click: 0, watch: 0 }
+for (const part of LINE_UP_PARTS) {
+  AsyncStorage.getItem(LINE_UP_KEYS[part])
+    .then((raw) => {
+      const kept = lineUpKept(raw)
+      if (kept === lined[part]) return
+      lined = { ...lined, [part]: kept }
+      announce()
+    })
+    .catch(() => {})
+}
+export const lineUpNow = () => lined
+
+/**
+ * Move one nudge or more (`{ light, click, watch }`, milliseconds), and say
+ * in the log, once, what changed: "the light 20 ms later". `why` is said
+ * with it (Tap along's measure). Nothing is written to the unit.
+ */
+export function setLineUp(patch = {}, why = '') {
+  const next = { ...lined }
+  for (const part of LINE_UP_PARTS) if (patch && part in patch) next[part] = lineUpNudge(patch[part])
+  const moved = LINE_UP_PARTS.filter((part) => next[part] !== lined[part])
+  if (!moved.length) return false
+  lined = next
+  announce()
+  for (const part of moved) AsyncStorage.setItem(LINE_UP_KEYS[part], lineUpToKeep(next[part])).catch(() => {})
+  logDebug('metronome', `line up: ${moved.map((part) => `${LINE_UP_NAMES[part]} ${lineUpWords(next[part]).toLowerCase()}`).join(', ')}${why ? ` (${why})` : ''}`)
+  return true
+}
+
+/** One press of Earlier or Later: `part` moved `by` from where it is now, not from where the screen last drew it. */
+export const nudgeLineUp = (part, by) => setLineUp({ [part]: (lined[part] ?? 0) + by })
+
+/** The nudges, and whether whoever is signed in here is offered them: `{ offered, light, click, watch }`. */
+export function useLineUp() {
+  const offered = lineUpOpen({ admin: useBluetoothAdmin(), everyone: METRONOME_LINE_UP_FOR_EVERYONE })
+  const now = useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => lined,
+    () => lined
+  )
+  return { offered, ...now }
+}
+
+/*
+ * THE DEVICE'S OWN BEAT, WHILE IT KEEPS ONE (usePhoneClick), for Tap along
+ * and for the Apple Watch.
+ *
+ * `ownBeat` is the beat as it is played now: its count (startedAt), how far
+ * apart (beat) and how long after each the beat is heard or seen with
+ * nothing nudged (offset: the click's lead with a sound, nothing in
+ * silence). Tap along holds every tap against it (offOwnBeat).
+ *
+ * `beatShown` is what the watch is told (lib/watchBridge, the contract is
+ * there): one moment the device's light lands, as lined up, and the tempo
+ * it is counted at. It is set when the beat starts and changed ONLY when
+ * that moment moves: a nudge, Flash timing, a tempo, or a move onto the
+ * unit's beat (where the beat is HEADING, not each little step of the way
+ * there). Never every beat, so the watch is not woken every beat.
+ */
+let ownBeat = null
+let beatShown = null
+const beatShownWatchers = new Set()
+const showBeat = (next) => {
+  if (beatShown === next) return
+  beatShown = next
+  for (const fn of beatShownWatchers) fn()
+}
+/** The device's beat for the watch: `{ at, bpm, nudge }`, or null while it keeps none. */
+export const phoneBeat = () => beatShown
+/** Told whenever phoneBeat() changes. */
+export function onPhoneBeatMoved(fn) {
+  beatShownWatchers.add(fn)
+  return () => beatShownWatchers.delete(fn)
+}
+/** How far a moment is from the device's own nearest beat as it is heard or seen with nothing nudged (lib/lineUp offBeat), or null while it keeps none. */
+export const offOwnBeat = (t) => (ownBeat ? offBeat(t, ownBeat.startedAt + ownBeat.offset, ownBeat.beat) : null)
+
+/*
+ * TAP ALONG (lib/lineUp tapAlong): the player taps a pad on every click
+ * heard from the unit, each tap held against the device's own beat as it
+ * lands, and Done sets both nudges to what the taps say, or nothing if they
+ * are too uneven to go by. Here, not in the screen, so the bench can run it
+ * on the real beat.
+ */
+let tapping = { open: false, offsets: [], said: null }
+const tapWatchers = new Set()
+const tapSay = (next) => {
+  tapping = next
+  for (const fn of tapWatchers) fn()
+}
+export const tapAlongNow = () => tapping
+export function useTapAlong() {
+  return useSyncExternalStore(
+    (fn) => {
+      tapWatchers.add(fn)
+      return () => tapWatchers.delete(fn)
+    },
+    () => tapping,
+    () => tapping
+  )
+}
+export function startTapAlong() {
+  tapSay({ open: true, offsets: [], said: null })
+}
+export function cancelTapAlong() {
+  tapSay({ open: false, offsets: [], said: null })
+}
+/**
+ * One tap, at `t` (now): held against the device's beat as it is now. Done
+ * by itself at TAP_ALONG.most.
+ *
+ * And `held`: whether every tap so far came while this device's beat was
+ * held on the unit's (heldOn, below), and on the same beat as the first tap's (the
+ * lock moved it nowhere, nothing started it again elsewhere). One that did
+ * not, and the run sets nothing (finishTapAlong): the taps were measured
+ * against more than one beat, or one that starts wherever it happens to
+ * (lib/lineUp tapAlongHere has why).
+ */
+export function tapAlongTap(t = Date.now()) {
+  if (!tapping.open) return null
+  const off = offOwnBeat(t)
+  if (off === null) return null
+  const now = { at: ownBeat.startedAt + ownBeat.offset, beat: ownBeat.beat }
+  const first = tapping.first || now
+  const held = tapping.held !== false && heldOn && first.beat === now.beat && samePhase(first.at, now.at, now.beat)
+  tapSay({ ...tapping, offsets: [...tapping.offsets, off], first, held })
+  return tapping.offsets.length >= TAP_ALONG.most ? finishTapAlong() : null
+}
+/** What the taps come to (lib/lineUp tapAlong), and, if steady, both nudges set to it. Said once in the log either way. */
+export function finishTapAlong() {
+  if (!tapping.open) return null
+  /* A run whose beat moved, or was not held on the unit's, sets nothing, however steady. */
+  const result = tapping.held === false ? { ...tapAlong(tapping.offsets), steady: false, ms: null, why: 'moved' } : tapAlong(tapping.offsets)
+  const measure = `tapped along: ${result.taps} taps, ${result.kept} kept${result.spread === null ? '' : `, spread ${Math.round(result.spread)} ms`}`
+  if (result.steady) {
+    if (!setLineUp({ light: result.ms, click: result.ms }, measure)) logDebug('metronome', `line up: unchanged, ${lineUpWords(result.ms).toLowerCase()} (${measure})`)
+  } else logDebug('metronome', `line up: nothing changed, ${result.why === 'moved' ? 'the beat moved or left the unit’s while tapping' : result.why === 'far' ? 'too far' : result.why === 'few' ? 'too few taps' : 'too uneven'} (${measure})`)
+  tapSay({ open: false, offsets: [], said: result })
+  return result
 }
 
 /*
@@ -401,6 +568,56 @@ export function useInStep() {
     () => inStep,
     () => inStep
   )
+}
+
+/*
+ * WHETHER THIS DEVICE'S BEAT IS HELD ON THE UNIT'S (lib/beatLock
+ * heldOnWith): a sure belief about the unit's beat and the move onto it
+ * made, however wide the window, with the unit's beats at this device's
+ * own tempo by the computer's gap (sameTempo). Let go of the same way as in step, twenty
+ * seconds after the unit's beat was last heard. Through a computer over the
+ * internet this is so where in step never is (the window is wider than
+ * inStepMs), and it is what Tap along goes by (lib/lineUp tapAlongHere):
+ * the device's beat sits on the unit's as nearly as the road places it.
+ *
+ * And `beatWhy`: why there is nothing to go on, as the beat follower last
+ * learned it (lib/unitBeat onWhy: 'old', 'none', 'finding', 'tempo',
+ * 'stale', 'slow', 'failed', 'bad'), null while it is still finding the
+ * beat or has it, 'tempo' too where a window came whose gap is not this
+ * device's tempo (align, below), and
+ * 'off' where the device is not following the unit's beat at all. Tap
+ * along's closed line says it (lib/lineUp tapAlongClosedWords).
+ */
+let heldOn = false
+let heldOnTimer = null
+let beatWhy = null
+const heldWatchers = new Set()
+const heldSay = () => {
+  for (const fn of heldWatchers) fn()
+}
+function noteHeldOn(on, until = null) {
+  clearTimeout(heldOnTimer)
+  const left = on ? (Number.isFinite(until) ? until - Date.now() : BEAT_LOCK.heldMs) : 0
+  if (on && left <= 0) on = false
+  heldOnTimer = on ? setTimeout(() => noteHeldOn(false), left) : null
+  if (heldOn === on) return
+  heldOn = on
+  heldSay()
+}
+function noteBeatWhy(why) {
+  if (beatWhy === why) return
+  beatWhy = why
+  heldSay()
+}
+const heldWatch = (fn) => {
+  heldWatchers.add(fn)
+  return () => heldWatchers.delete(fn)
+}
+export function useBeatHeld() {
+  return useSyncExternalStore(heldWatch, () => heldOn, () => heldOn)
+}
+export function useBeatWhy() {
+  return useSyncExternalStore(heldWatch, () => beatWhy, () => beatWhy)
 }
 
 /*
@@ -626,50 +843,92 @@ export function usePhoneClick(bpm, onBeat) {
    * keeping time alone has nothing to line up with. Never in the demo.
    */
   const follow = beatLockOn({ admin: useBluetoothAdmin(), everyone: BEAT_LOCK_FOR_EVERYONE }) && clicks(s).unit && Boolean(unitMetronome(slug)) && !isDemo()
+  /* The light and the click lined up by hand or by Tap along (lib/lineUp): only for an account it is offered to. */
+  const lining = lineUpOpen({ admin: useBluetoothAdmin(), everyone: METRONOME_LINE_UP_FOR_EVERYONE })
   useEffect(() => {
     if (!on || !beat) return undefined
     let startedAt = 0
     let timer = null
     let alive = true
     let n = 0
-    /* When the last click was asked for, and where the unit's beat is believed to be (lib/beatLock): null for neither yet. */
+    /* When the last beat's code ran, and where the unit's beat is believed to be (lib/beatLock): null for neither yet. */
     let clicked = null
     let unitAt = null
     /* How much of a move onto the unit's beat is still to be made, a little each beat (lib/beatLock slewPart). */
     let left = 0
     /* Whether the beats here have something to be counted from yet: the sound is made ready first. */
     let started = false
-    /* The flashes and taps still to come, cleared when the click stops: none lands after it. */
+    /* The clicks, flashes and taps still to come, cleared when the beat stops: none lands after it. */
     const later = new Set()
     const lags = []
-    const step = () => {
-      if (!alive) return
-      const asked = Date.now()
-      clicked = asked
-      const sounding = sound ? click() : null
-      if (sound && n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge), asked)
-      /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. In silence there is no sound to wait for. */
-      const t = setTimeout(
-        () => {
-          later.delete(t)
-          if (!alive) return
-          if (sound) tick()
-          if (flash) onBeat?.()
-          for (const fn of beatWatchers) fn()
-        },
-        sound ? flashLead(Platform.OS, nudge) : 0
-      )
+    /* How long after a beat's own moment its click is heard, or with no sound nothing: read each time, so Flash timing moves it at once. */
+    const lead = () => (sound ? flashLead(Platform.OS, nudge) : 0)
+    /* When the click, the tap and the light come on a beat, the nudges read each time too (lib/lineUp lineUpTimes). With none, exactly as before. */
+    const times = () => lineUpTimes({ sound, lead: lead(), light: lining ? lined.light : 0, click: lining ? lined.click : 0 })
+    /*
+     * Run at once where the moment is here, past, or less than a millisecond
+     * off, else when it comes: a beat moved by nothing is run in the same
+     * breath, as it always was. Date.now() is whole milliseconds and a beat
+     * seldom is (130 BPM is 461.538 ms), so a step that runs in the beat's
+     * own millisecond sees a fraction still to wait; a timer for that
+     * fraction fires on the next screen frame, a frame late.
+     */
+    const soon = (at, fn) => {
+      const wait = at - Date.now()
+      if (wait < 1) return fn()
+      const t = setTimeout(() => {
+        later.delete(t)
+        if (alive) fn()
+      }, wait)
       later.add(t)
-      let due = nextBeat(startedAt, Date.now(), beat)
+      return undefined
+    }
+    /* For the watch, the moment the light lands, as lined up, changed only when that moment moves (beatShown, above). */
+    const shown = (at) => {
+      const lands = at + left + times().lightAt
+      const watch = lining ? lined.watch : 0
+      if (beatShown && beatShown.beat === beat && beatShown.nudge === watch && samePhase(beatShown.at, lands, beat)) return
+      showBeat({ at: Math.round(lands), bpm: Math.round((60000 / beat) * 1000) / 1000, nudge: watch, beat })
+    }
+    /* Book the beat whose own moment is `at`: its code runs `early` before, so a nudge earlier is never booked in the past. */
+    const book = (at) => {
+      timer = setTimeout(() => step(at), Math.max(0, at - times().early - Date.now()))
+    }
+    const step = (at) => {
+      if (!alive) return
+      clicked = Date.now()
+      const when = times()
+      shown(at)
+      if (sound) {
+        soon(at + when.clickAt, () => {
+          const asked = Date.now()
+          const sounding = click()
+          if (n++ >= 2) probeLag(sounding, lags, lead(), asked)
+        })
+        /* The tap is with the click, as it is heard: see FLASH_LEAD. */
+        soon(at + when.tapAt, () => tick())
+      }
+      /* The light waits for the sound too, and in silence there is none to wait for. */
+      soon(at + when.lightAt, () => {
+        if (flash) onBeat?.()
+        for (const fn of beatWatchers) fn()
+      })
+      /* The next beat after this one, or after now where this one's code ran late. */
+      let due = nextBeat(startedAt, Math.max(at, Date.now() + when.early), beat)
       /* Part of a move onto the unit's beat: the next beat a little early or late, never dropped or doubled. */
       const part = slewPart(left, beat)
       if (part) {
         startedAt += part
         due += part
         left -= part
-        if (!left) noteInStep(inStepWith(unitAt), unitAt.at + BEAT_LOCK.heldMs)
+        if (!left) {
+          noteInStep(inStepWith(unitAt), unitAt.at + BEAT_LOCK.heldMs)
+          noteHeldOn(heldOnWith(unitAt, 0, beat), unitAt.at + BEAT_LOCK.heldMs)
+        }
       }
-      timer = setTimeout(step, Math.max(0, due - Date.now()))
+      /* The beat as it is played from here on, for Tap along to hold a tap against. */
+      ownBeat = { startedAt, beat, offset: lead() }
+      book(due)
     }
     if (sound) {
       clearTimeout(releaseTimer)
@@ -681,28 +940,36 @@ export function usePhoneClick(bpm, onBeat) {
      * silence the light, on the unit's beat. Before the first click it is
      * moved at once and the first beat booked on it; after, a little each
      * beat (step). "In step" only where the unit's beat is known closely
-     * and the device's is that near it (lib/beatLock inStepWith).
+     * and the device's is that near it (lib/beatLock inStepWith). The
+     * nudges are on top of this: lined up by ear, never by the unit.
      */
     const align = () => {
       if (!alive || !started || !unitAt) return
-      const by = moveFor(startedAt, unitAt, beat, sound ? flashLead(Platform.OS, nudge) : 0)
+      const by = moveFor(startedAt, unitAt, beat, lead())
       if (clicked === null) {
         startedAt += by
         left = 0
         clearTimeout(timer)
-        /* The first beat on it at or after now: now itself where nothing had to move. */
-        const now = Date.now()
-        timer = setTimeout(step, Math.max(0, startedAt + Math.ceil((now - startedAt) / beat) * beat - now))
+        /* The first beat on it whose code can still run on time: now itself where nothing had to move. */
+        const now = Date.now() + times().early
+        book(startedAt + Math.ceil((now - startedAt) / beat) * beat)
       } else left = by
       noteInStep(inStepWith(unitAt, left), unitAt.at + BEAT_LOCK.heldMs)
+      noteHeldOn(heldOnWith(unitAt, left, beat), unitAt.at + BEAT_LOCK.heldMs)
+      /* A window whose own gap says the unit keeps another tempo than this device's: Tap along waits, and says why (lib/lineUp tapAlongClosedWords). */
+      if (Number.isFinite(unitAt.gap) && !sameTempo(unitAt.gap, beat)) noteBeatWhy('tempo')
       if (by) logDebug('metronome', `this device’s beat goes ${Math.abs(Math.round(by))} ms ${by > 0 ? 'later' : 'earlier'}, onto the unit’s (known to within ${Math.round(unitAt.half)} ms)${clicked === null ? '' : ', a little each beat'}`)
     }
+    noteBeatWhy(follow ? null : 'off')
     const unfollow = follow
       ? followUnitBeat({
           beat,
           onWindow: (window) => {
             unitAt = window
             align()
+          },
+          onWhy: (why) => {
+            if (alive) noteBeatWhy(why)
           }
         })
       : null
@@ -710,22 +977,30 @@ export function usePhoneClick(bpm, onBeat) {
     /* The sound is made ready only where there is one: a beat kept in silence opens no audio. */
     ;(sound ? prepareClick() : Promise.resolve()).finally(() => {
       if (!alive) return
-      startedAt = Date.now()
+      /* Its first beat now, or a nudge's worth later where something is nudged earlier, so nothing is booked in the past. */
+      startedAt = Date.now() + times().early
       started = true
       /* The unit's beat already known: the first beat here is the next one on it, not this moment. Else now, as ever. */
       if (unitAt) align()
-      if (timer === null) step()
+      /* In this same breath, as it always was: its code is due now. */
+      if (timer === null) step(startedAt)
     })
     return () => {
       alive = false
       unfollow?.()
-      if (follow) noteInStep(false)
+      if (follow) {
+        noteInStep(false)
+        noteHeldOn(false)
+      }
+      noteBeatWhy(null)
       clearTimeout(timer)
       for (const t of later) clearTimeout(t)
       later.clear()
       setClicking(false)
+      ownBeat = null
+      showBeat(null)
       if (sound) releaseLater()
     }
-  }, [on, sound, flash, beat, onBeat, follow])
+  }, [on, sound, flash, beat, onBeat, follow, lining])
   return running
 }

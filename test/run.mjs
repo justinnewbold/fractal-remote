@@ -6952,6 +6952,10 @@ console.log('\nthe metronome’s sound and flash in the volume pop-up, drawn and
 const { run: metronomeChoices } = await import('./metronome-choices.mjs')
 metronomeChoices(test)
 
+console.log('\nthe metronome lined up: the light and the click nudged or tapped along, the frame inside the glass, where the beats fall for the watch')
+const { run: lineUp } = await import('./line-up.mjs')
+lineUp(test)
+
 console.log('\nthe device’s beat on the unit’s own beat: the rules and the follower, run, his account only')
 const { run: beatLock } = await import('./beat-lock.mjs')
 beatLock(test)

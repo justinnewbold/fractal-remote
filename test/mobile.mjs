@@ -120,7 +120,7 @@ async function clickOnTheBench(os = 'ios') {
     'storage.js': 'export const kept = []\nexport default { getItem: async (k) => { await globalThis.__clickDiskGate; return globalThis.__clickDisk?.[k] ?? null }, setItem: async (k, v) => { kept.push([k, v]) } }\n',
     /* Players that write down what they are told, by which one. */
     'audio.js': `
-      import { now } from './clock.js'
+      import { exact as now } from './clock.js'
       export const made = []
       export const calls = []
       const say = (what) => calls.push(what + ' @' + now())
@@ -167,15 +167,22 @@ async function clickOnTheBench(os = 'ios') {
     /* Whose account it is, for what is offered to his alone (the flash as a choice): nobody's, unless a test says so. */
     'bluetooth.js': 'export const useBluetoothOn = () => globalThis.__clickBluetooth === true\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
     'demo.js': 'export const isDemo = () => false\n',
-    'feedback.js': 'export let ticks = 0\nexport const tick = () => { ticks++ }\n',
+    /* The tap felt with the click: counted, and when (lining up moves it with the click). */
+    'feedback.js': "import { now } from './clock.js'\nexport let ticks = 0\nexport const times = []\nexport const tick = () => { ticks++; times.push(now()) }\n",
     'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
     'unsupported.js': 'export const isUnsupported = (err) => err?.unsupported === true\n',
-    /* A clock the test turns, so "asked again a second later" costs nothing to run. */
+    /*
+     * A clock the test turns, so "asked again a second later" costs nothing
+     * to run. What the code reads as Date.now() is whole milliseconds, as a
+     * phone's is, where a test says so (globalThis.__clickWholeMs); the
+     * players write down the moment as it really is (exact).
+     */
     'clock.js': `
       let t = 0
       let seq = 0
       const timers = new Map()
-      export const now = () => t
+      export const now = () => (globalThis.__clickWholeMs ? Math.floor(t) : t)
+      export const exact = () => t
       export const pending = () => timers.size
       export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
       export function clearTimeout(id) { timers.delete(id) }
@@ -201,7 +208,9 @@ async function clickOnTheBench(os = 'ios') {
     'audioMode.js': read('mobile/src/lib/audioMode.js'),
     /* The flash as a choice: its rules as they are, and its switch off, as it is for every account but his. */
     'edgeFlash.js': read('mobile/src/lib/edgeFlash.js'),
-    'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\nexport const BEAT_LOCK_FOR_EVERYONE = false\n',
+    'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\nexport const BEAT_LOCK_FOR_EVERYONE = false\nexport const METRONOME_LINE_UP_FOR_EVERYONE = false\n',
+    /* Lining up the light and the click (lib/lineUp): its rules as they are, its switch off, as it is for every account but his. */
+    'lineUp.js': read('mobile/src/lib/lineUp.js'),
     /* The device's beat on the unit's (lib/beatLock): the rules, the hand-off and the follower as they are, on the bench's clock. */
     'beatLock.js': read('mobile/src/lib/beatLock.js'),
     'beatBus.js': read('mobile/src/lib/beatBus.js'),
@@ -7058,12 +7067,22 @@ export function run(test) {
       while (unitEnd.beatAsks.length < 5) await clock.advance(100)
       const lastHeard = unitEnd.beatAsks[4]
       assert.equal(click.useInStep(), false, 'in step with the light still on its way')
+      /* Held on the unit's beat goes the same way (what Tap along goes by): not with a move still to make, though the belief has just turned sure. */
+      assert.equal(click.useBeatHeld(), false, 'held on the unit’s beat with the light still on its way')
       /* The unit stops sending its beat. */
       unit.beating = false
-      await clock.advance(lastHeard + 14000 - clock.now())
+      /* The moment the slide finishes, held, with no answer to say so: the last one came seconds before. */
+      let slid = null
+      while (clock.now() < lastHeard + 14000) {
+        await clock.advance(100)
+        if (slid === null && click.useBeatHeld()) slid = clock.now()
+      }
+      assert.ok(slid !== null && slid - lastHeard > 1000, `not held once the light got there (${slid === null ? 'never' : `${slid - lastHeard} ms after the last answer`})`)
+      assert.equal(click.useBeatHeld(), true)
       assert.equal(click.useInStep(), true, 'not in step once the light got there')
       await clock.advance(lastHeard + 20100 - clock.now())
       assert.equal(click.useInStep(), false, 'still said to be in step twenty seconds after the unit’s last beat was heard')
+      assert.equal(click.useBeatHeld(), false, 'still held on the unit’s beat twenty seconds after its last beat was heard (counted from the slide’s end, not the last answer)')
       stop()
     } finally {
       noBeatGlobals()
@@ -7524,6 +7543,1102 @@ export function run(test) {
       assert.equal(click.metronome().where, 'phone')
     } finally {
       globalThis.__clickAdmin = false
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the metronome off: a sound picked in the volume pop-up starts it in the same change, the unit written once and asked again after a refusal; the flash’s switch and a pick on Settings start nothing', async () => {
+    /*
+     * Report 8be38966 (16 November 2026): with the metronome off, Phone,
+     * Unit, Both and the flash were pressed in the pop-up, and nothing
+     * flashed. A pick there starts it now (MetronomeSwitch hands `start`),
+     * in ONE change with the place, Off included.
+     */
+    const { dir, click, unitEnd, clock, audio, settle } = await clickOnTheBench('ios')
+    try {
+      globalThis.__clickAdmin = true
+      unitEnd.__answer(1)
+      /* A pick on Settings → Metronome: kept, nothing started, nothing written. */
+      await click.setMetronomeSound('both', 'fm3', {})
+      await settle()
+      assert.deepEqual(click.metronome(), { on: false, where: 'both', watch: false }, 'a pick on Settings started the metronome')
+      assert.deepEqual(unitEnd.writes, [])
+      /* The flash's switch: a light, never the metronome, never the unit. */
+      click.setEdgeFlash(false)
+      click.setEdgeFlash(true)
+      assert.equal(click.metronome().on, false, 'the flash’s switch started the metronome')
+      assert.equal(click.usePhoneClick(120, () => {}), false, 'something keeps time with the metronome off')
+      /* The pop-up: Unit picked with it off starts it, in one change, the unit written once. */
+      let said = await click.setMetronomeSound('unit', 'fm3', {}, { start: true })
+      await clock.advance(0)
+      await settle()
+      assert.deepEqual(said, { ok: true })
+      assert.deepEqual(click.metronome(), { on: true, where: 'unit', watch: false }, 'a pick in the pop-up does not start the metronome')
+      assert.deepEqual(unitEnd.writes, ['fm3 on'], 'the unit is written more than once for one pick, or not at all')
+      /* And the light runs. */
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true, 'nothing keeps time after the pick started it')
+      const stop = globalThis.__clickEffect()
+      await clock.advance(1100)
+      stop()
+      assert.ok(flashes.length >= 2, 'the light does not run after the pick started it')
+      /* Pressed again while it runs: nothing more is written. */
+      await click.setMetronomeSound('unit', 'fm3', {}, { start: true })
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on'])
+      /* Off, picked with it off: the light with no sound, and nothing written to a unit that is not clicking. */
+      await click.setMetronome({ on: false }, 'fm3')
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off'])
+      await click.setMetronomeSound('none', 'fm3', {}, { start: true })
+      await settle()
+      assert.deepEqual(click.metronome(), { on: true, where: 'phone', watch: false }, 'Off in the pop-up does not start the light')
+      assert.equal(click.useEdgeFlash().quiet, true)
+      assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off'], 'Off wrote to a unit that was not clicking')
+      const lit = []
+      assert.equal(click.usePhoneClick(120, () => lit.push(clock.now())), true)
+      const played = audio.calls.length
+      const stopLit = globalThis.__clickEffect()
+      await clock.advance(1100)
+      stopLit()
+      assert.ok(lit.length >= 2, 'Off from the pop-up does not light the edge')
+      assert.ok(!audio.calls.slice(played).some((c) => c.startsWith('play')), 'Off made a sound')
+      /* A unit that refused: the same pick pressed again asks it again, and once it has taken it, no more. */
+      await click.setMetronome({ on: false }, 'fm3')
+      await settle()
+      globalThis.__clickRefuse = true
+      said = await click.setMetronomeSound('unit', 'fm3', {}, { start: true })
+      await settle()
+      assert.equal(said.ok, false)
+      assert.equal(unitEnd.writes.at(-1), 'fm3 on refused')
+      globalThis.__clickRefuse = false
+      await click.setMetronomeSound('unit', 'fm3', {}, { start: true })
+      await settle()
+      assert.equal(unitEnd.writes.at(-1), 'fm3 on', 'a unit that refused is not asked again by the same pick')
+      const n = unitEnd.writes.length
+      await click.setMetronomeSound('unit', 'fm3', {}, { start: true })
+      await settle()
+      assert.equal(unitEnd.writes.length, n, 'a unit that took it is written again')
+    } finally {
+      globalThis.__clickAdmin = false
+      delete globalThis.__clickRefuse
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  /*
+   * LINED UP (lib/lineUp): on the click bench, every click, tap and light
+   * held against the device's own beat (offOwnBeat) as it lands. `run`
+   * starts the beat, lets it go `ms`, and gives each event's distance from
+   * the beat it belongs to.
+   */
+  const lineUpRun = async ({ click, clock, audio, feedback }, ms = 1600, during = null) => {
+    const lights = []
+    const from = audio.calls.length
+    const tapsFrom = feedback.times.length
+    assert.equal(click.usePhoneClick(120, () => lights.push(click.offOwnBeat(clock.now()))), true)
+    const stop = globalThis.__clickEffect()
+    await clock.advance(0)
+    if (during) await during()
+    await clock.advance(ms)
+    const plays = audio.calls.slice(from).filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+    const out = { lights, plays: plays.map((t) => click.offOwnBeat(t)), at: plays, taps: feedback.times.slice(tapsFrom).map((t) => click.offOwnBeat(t)) }
+    stop()
+    await clock.advance(2500)
+    return out
+  }
+  const all = (list, value, what) => {
+    assert.ok(list.length >= 2, `too few ${what} to tell`)
+    for (const v of list) assert.ok(Math.abs(v - value) < 1e-6, `${what}: ${JSON.stringify(list)}, not all ${value}`)
+  }
+
+  test('the light and the click lined up: each nudge moves exactly its own, read on the next beat with nothing restarted, an earlier one run early, nothing written to the unit, said once in the log, and none of it for another account', async () => {
+    const b = await clickOnTheBench('ios')
+    const { dir, click, unitEnd, clock, log, settle } = b
+    try {
+      await click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      const writes = [...unitEnd.writes]
+      globalThis.__clickAdmin = true
+      /* Nothing moved: the click asked for 40 ms before the beat is heard, the tap and the light on it, as before. */
+      let r = await lineUpRun(b)
+      all(r.plays, -40, 'clicks')
+      all(r.taps, 0, 'taps')
+      all(r.lights, 0, 'lights')
+      /* The light later: the light alone moves. One line in the log. */
+      const lines = () => log.said.filter((l) => /line up:/.test(l))
+      assert.equal(click.setLineUp({ light: 30 }), true)
+      assert.equal(lines().length, 1)
+      assert.equal(lines()[0], 'metronome line up: the light 30 ms later', 'the log does not say exactly what moved')
+      assert.equal(click.setLineUp({ light: 30 }), false, 'the same nudge again is a change')
+      assert.equal(lines().length, 1, 'a nudge that moved nothing is in the log')
+      r = await lineUpRun(b)
+      all(r.plays, -40, 'clicks')
+      all(r.taps, 0, 'taps')
+      all(r.lights, 30, 'lights')
+      /* The click earlier: the click and its tap move, the light does not, and the beat's code runs early so the click is never late. */
+      click.setLineUp({ light: 0, click: -50 })
+      assert.equal(lines().at(-1), 'metronome line up: the light not moved, the click 50 ms earlier', 'the log does not say exactly what moved')
+      assert.equal(lines().length, 2, 'two nudges changed together are not one line')
+      r = await lineUpRun(b)
+      all(r.plays, -90, 'clicks')
+      all(r.taps, -50, 'taps')
+      all(r.lights, 0, 'lights')
+      for (let i = 1; i < r.at.length; i++) assert.equal(r.at[i] - r.at[i - 1], 500, 'a beat dropped or doubled')
+      /* Far earlier than the click's own lead: the click 200 ms early, the light 200 ms early, never booked in the past. */
+      click.setLineUp({ light: -200, click: -200 })
+      r = await lineUpRun(b)
+      all(r.plays, -240, 'clicks')
+      all(r.lights, -200, 'lights')
+      /* Moved while it runs: from the next beat, on the same beats, nothing restarted. */
+      click.setLineUp({ light: 0, click: 0 })
+      r = await lineUpRun(b, 2600, async () => {
+        await clock.advance(1100)
+        click.setLineUp({ light: 20 })
+      })
+      assert.deepEqual(r.lights.slice(0, 3), [0, 0, 0])
+      assert.ok(r.lights.slice(3).length >= 2 && r.lights.slice(3).every((v) => v === 20), `the light did not move from the next beat: ${JSON.stringify(r.lights)}`)
+      for (let i = 1; i < r.at.length; i++) assert.equal(r.at[i] - r.at[i - 1], 500, 'a nudge restarted the beat')
+      /* Never the unit: nothing written for any of it. */
+      assert.deepEqual(unitEnd.writes, writes, 'a nudge wrote to the unit')
+      /* Another account: kept on the device, applied nowhere. */
+      click.setLineUp({ light: 60, click: -60 })
+      globalThis.__clickAdmin = false
+      r = await lineUpRun(b)
+      all(r.plays, -40, 'clicks')
+      all(r.taps, 0, 'taps')
+      all(r.lights, 0, 'lights')
+    } finally {
+      globalThis.__clickAdmin = false
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  /* The unit's beat from a computer that answers where it falls (lib/unitBeat), and `here`, Tap along's own rule asked with what the real beat says. */
+  const tapAlongBench = async () => {
+    const b = await clickOnTheBench('ios')
+    const { tapAlongHere, tapAlongClosedWords, tapAlongWords } = await import(pathToFileURL(join(b.dir, 'lineUp.js')).href)
+    b.unitEnd.__answer(1)
+    globalThis.__clickAdmin = true
+    await b.click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+    await b.clock.advance(0)
+    await b.settle()
+    globalThis.__clickBeatRoad = 'computer'
+    const here = () => tapAlongHere({ on: true, where: 'unit', can: true, quiet: false, running: b.click.usePhoneClicking(), held: b.click.useBeatHeld(), why: b.click.useBeatWhy(), noun: 'phone' })
+    const lines = () => b.log.said.filter((l) => /line up:/.test(l))
+    /* Taps `off` ms after each of the unit's next `n` beats (or, with no unit, after the device's own), the unit's every `unit.period` ms (500 where it says none). */
+    const tapRun = async (n, off, unit = null) => {
+      const from = unit ? unit.phase : b.clock.now() - b.click.offOwnBeat(b.clock.now())
+      const p = unit?.period ?? 500
+      const k0 = Math.ceil((b.clock.now() - from) / p) + 1
+      const offs = typeof off === 'number' ? Array(n).fill(off) : off
+      let done = null
+      for (let i = 0; i < offs.length; i++) {
+        await b.clock.advance(from + (k0 + i) * p + offs[i] - b.clock.now())
+        done = b.click.tapAlongTap()
+      }
+      return done
+    }
+    /* Waits, a beat at a time, for the device's beat to be held on the unit's (or not), up to `most` ms. */
+    const until = async (held, most = 30000) => {
+      for (let waited = 0; b.click.useBeatHeld() !== held; waited += 500) {
+        assert.ok(waited < most, `held on the unit’s beat did not become ${held} in ${most} ms`)
+        await b.clock.advance(500)
+      }
+    }
+    return { ...b, here, lines, tapRun, until, tapAlongClosedWords, tapAlongWords }
+  }
+
+  test('tap along on the real beat, in step with the unit’s: taps on the unit’s click, one of them late, set both nudges to the middle of them, and the light still lands on the unit’s click after the beat starts again; uneven taps set nothing; each is said once in the log', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, lines, tapRun, until } = b
+    try {
+      const unit = { phase: clock.now() + 137, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      /* Not open, or no beat kept: a tap is nothing. */
+      assert.equal(click.tapAlongTap(clock.now()), null)
+      click.startTapAlong()
+      assert.equal(click.tapAlongTap(clock.now()), null, 'a tap was held against a beat the device is not keeping')
+      assert.deepEqual(click.tapAlongNow().offsets, [])
+      click.cancelTapAlong()
+      const lights = []
+      assert.equal(click.usePhoneClick(120, () => lights.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(1000)
+      assert.equal(here().offered, false, 'Tap along is offered before this device’s beat is on the unit’s')
+      await until(true)
+      assert.deepEqual(here(), { offered: true, why: null })
+      /* The unit's click as heard: 30 ms after its beat. One tap far out. */
+      click.startTapAlong()
+      assert.equal(await tapRun(10, [30, 33, 26, 32, 160, 28, 34, 27, 31, 30], unit), null)
+      assert.equal(click.tapAlongNow().offsets.length, 10)
+      const result = click.finishTapAlong()
+      assert.equal(result.steady, true)
+      assert.equal(result.ms, 30)
+      assert.equal(result.dropped, 1)
+      assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 }, 'Tap along did not set both nudges, or set the watch’s')
+      assert.equal(click.tapAlongNow().open, false)
+      assert.equal(click.tapAlongNow().said, result)
+      assert.equal(lines().length, 1)
+      assert.match(lines()[0], /line up: the light 30 ms later, the click 30 ms later \(tapped along: 10 taps, 9 kept, spread \d+ ms\)/)
+      /* The beat stopped and started again (a tempo, a sound, the flash switch), at another moment: once on the unit's beat again, the light lands on the unit's click as tapped, every beat. */
+      stop()
+      await clock.advance(2730)
+      lights.length = 0
+      assert.equal(click.usePhoneClick(120, () => lights.push(clock.now())), true)
+      const stop2 = globalThis.__clickEffect()
+      await until(true)
+      await clock.advance(3000)
+      const after = lights.slice(-6)
+      assert.equal(after.length, 6)
+      for (const t of after) assert.ok(Math.abs(offBeat(t, unit) - 30) <= 1, `after the beat started again the light lands ${offBeat(t, unit).toFixed(1)} ms from the unit’s beat, not on its click 30 ms after it`)
+      /* Uneven: nothing set, and said so. */
+      click.startTapAlong()
+      await tapRun(10, [-50, 40, -10, 55, -45, 20, 0, -30, 45, -55], unit)
+      const uneven = click.finishTapAlong()
+      assert.equal(uneven.steady, false)
+      assert.equal(uneven.why, 'uneven')
+      assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 }, 'uneven taps changed the nudges')
+      assert.equal(lines().length, 2)
+      assert.match(lines()[1], /line up: nothing changed, too uneven \(tapped along: 10 taps/)
+      /* At sixteen it is done by itself. */
+      click.startTapAlong()
+      const done = await tapRun(16, 30, unit)
+      assert.equal(done?.steady, true, 'sixteen taps did not finish it')
+      assert.equal(done.ms, 30)
+      assert.equal(click.tapAlongNow().open, false)
+      stop2()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  /* A computer that answers where the unit's beat falls, `there` ms there and `back` ms back, steady. */
+  const roadComputer = (clock, unit, there, back) => async () => {
+    const asked = clock.now()
+    await new Promise((r) => clock.setTimeout(r, there))
+    const period = unit.period ?? 500
+    const since = (((clock.now() - unit.phase) % period) + period) % period
+    await new Promise((r) => clock.setTimeout(r, back))
+    return { answer: unit.beating ? { ok: true, count: 9, age: since, gap: period } : { ok: true, count: 0, age: null, gap: null }, asked, answered: clock.now() }
+  }
+
+  test('tap along through a computer about 100 ms away, there and back: never in step, but held on the unit’s beat, so it is offered, a run sets the nudge, and after a stop and a start the light lands where the nudge puts it against the unit’s beat as the road places it', async () => {
+    /*
+     * "Tap along through a computer is almost never offered" (an
+     * independent read, 17 November 2026): it waited for "in step", the
+     * unit's beat known to within 20 ms, which a road slower than about 20
+     * ms there and back never gives. The device's beat is on the window's
+     * middle all the same, off only by how lopsided the road is, and that
+     * is what the taps measure.
+     */
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, lines, tapRun, until, tapAlongClosedWords } = b
+    try {
+      /* 60 there, 40 back: the window's middle is 10 ms before the unit's beat, and never narrower than 60 each side. */
+      const unit = { phase: clock.now() + 30, beating: true }
+      globalThis.__clickBeatAsk = roadComputer(clock, unit, 60, 40)
+      const lights = []
+      const t0 = clock.now()
+      assert.equal(click.usePhoneClick(120, () => lights.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(400)
+      assert.equal(click.useBeatHeld(), false)
+      assert.equal(click.useBeatWhy(), null)
+      assert.deepEqual(here(), { offered: false, why: 'Still finding where the unit’s beat falls, so Tap along waits.' }, 'the first moment, before two answers agree')
+      assert.equal(here().why, tapAlongClosedWords(null))
+      /* Two answers a few hundred milliseconds apart agree, and the beat is moved onto them within a beat; but no answer two seconds after has agreed yet, so it is not sure, and not offered. */
+      while (clock.now() - t0 < 2300) {
+        await clock.advance(100)
+        assert.equal(here().offered, false, `offered ${clock.now() - t0} ms in, on two answers that only agree with each other`)
+      }
+      await until(true)
+      assert.deepEqual(here(), { offered: true, why: null }, 'not offered with the device’s beat held on the unit’s')
+      await clock.advance(8000)
+      assert.equal(click.useInStep(), false, 'said to be in step on a window 60 ms wide each side')
+      assert.equal(click.useBeatHeld(), true)
+      assert.ok(!lights.slice(-4).some((t) => Math.abs(offBeat(t, unit) + 10) > 2), `the light is not on the window’s middle: ${lights.slice(-4).map((t) => offBeat(t, unit))}`)
+      /* The unit's click heard 30 ms after its beat: 40 after this device's. */
+      click.startTapAlong()
+      await tapRun(10, 30, unit)
+      assert.equal(click.useInStep(), false)
+      const result = click.finishTapAlong()
+      assert.equal(result.steady, true, `a run held on the unit’s beat set nothing: ${JSON.stringify(result)}`)
+      assert.equal(result.ms, 40)
+      assert.deepEqual(click.lineUpNow(), { light: 40, click: 40, watch: 0 })
+      assert.match(lines().at(-1), /line up: the light 40 ms later, the click 40 ms later/)
+      /* Stopped and started again at another moment: once held again, the light lands on the unit's click as tapped, every beat. */
+      stop()
+      await clock.advance(2730)
+      lights.length = 0
+      assert.equal(click.usePhoneClick(120, () => lights.push(clock.now())), true)
+      const stop2 = globalThis.__clickEffect()
+      await until(true)
+      await clock.advance(3000)
+      const after = lights.slice(-6)
+      assert.equal(after.length, 6)
+      for (const t of after) assert.ok(Math.abs(offBeat(t, unit) - 30) <= 2, `after the beat started again the light lands ${offBeat(t, unit).toFixed(1)} ms from the unit’s beat, not on its click 30 ms after it`)
+      assert.equal(click.useInStep(), false)
+      stop2()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along only at the unit’s own tempo: through a computer about 100 ms away, a device at 121 or 120.5 against the unit’s 120 is never offered it, the page says the tempo line, and a run saves nothing; at 120 on both, and at 97.4 on both, it is offered and a run saves the right nudge', async () => {
+    /*
+     * "Tap along is offered, and a run saves a wrong nudge, while the device
+     * keeps a tempo slightly off the unit's" (an independent read, 17
+     * November 2026): a window 50 ms wide each side still overlaps the next
+     * one from a device drifting 4 ms a beat, so the belief turned sure, and
+     * a run of taps between two answers saved 50 to 110 ms where 30 was
+     * right. The computer's own gap between the unit's beats is the test.
+     */
+    const tempoLine = 'The unit’s beat is at another tempo than this phone’s, so Tap along waits until they match.'
+    for (const bpm of [121, 120.5]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here, lines, tapRun } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+        assert.equal(click.usePhoneClick(bpm, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        for (let t = 0; t < 60000; t += 250) {
+          await clock.advance(250)
+          assert.equal(here().offered, false, `Tap along offered ${t} ms in, with this device at ${bpm} against the unit’s 120`)
+          assert.equal(click.useBeatHeld(), false, `held on the unit’s beat at ${bpm} against 120`)
+        }
+        assert.equal(click.useBeatWhy(), 'tempo', `the closed cause at ${bpm} against 120`)
+        assert.deepEqual(here(), { offered: false, why: tempoLine })
+        /* A run all the same, timed right after an answer: nothing saved. */
+        const asks = b.unitEnd.beatAsks.length
+        while (b.unitEnd.beatAsks.length === asks) await clock.advance(50)
+        await clock.advance(150)
+        click.startTapAlong()
+        await tapRun(8, 30, unit)
+        const result = click.finishTapAlong()
+        assert.equal(result.steady, false, `a run at ${bpm} against 120 saved ${result.ms} ms`)
+        assert.equal(result.why, 'moved')
+        assert.deepEqual(click.lineUpNow(), { light: 0, click: 0, watch: 0 }, `a run at ${bpm} against 120 set a nudge`)
+        assert.match(lines().at(-1), /line up: nothing changed, the beat moved or left the unit’s while tapping/)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    for (const bpm of [120, 97.4]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here, tapRun, until } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true, period: 60000 / bpm }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+        assert.equal(click.usePhoneClick(bpm, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        await until(true)
+        assert.deepEqual(here(), { offered: true, why: null }, `not offered at ${bpm} on both`)
+        assert.equal(click.useBeatWhy(), null)
+        click.startTapAlong()
+        await tapRun(8, 30, unit)
+        const result = click.finishTapAlong()
+        assert.equal(result.steady, true, `a run at ${bpm} on both set nothing: ${JSON.stringify(result)}`)
+        assert.equal(result.ms, 30, `a run at ${bpm} on both saved ${result.ms} ms, not 30`)
+        assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 })
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('tap along only at the unit’s own tempo at fast tempos too: through a computer about 100 ms away, a device a whole BPM off a unit at 200, 175 or 250 is never offered it, the page says the tempo line all through, and a run saves nothing; at 200 on both and 250 on both it is offered and a run saves the right nudge', async () => {
+    /*
+     * "At fast tempos a device one whole BPM off the unit still gets Tap
+     * along" (an independent read, 17 November 2026): from about 174 BPM up a
+     * whole BPM is less than 2 ms a beat, and a run saved 50 to 80 ms where
+     * 30 was right. The tempo the gap says is held to the device's in BPM.
+     */
+    const tempoLine = 'The unit’s beat is at another tempo than this phone’s, so Tap along waits until they match.'
+    for (const [unitBpm, bpm] of [[200, 201], [200, 199], [175, 176], [250, 249]]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here, lines, tapRun } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true, period: 60000 / unitBpm }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+        assert.equal(click.usePhoneClick(bpm, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        let told = false
+        for (let t = 0; t < 60000; t += 250) {
+          await clock.advance(250)
+          assert.equal(here().offered, false, `Tap along offered ${t} ms in, with this device at ${bpm} against the unit’s ${unitBpm}`)
+          assert.equal(click.useBeatHeld(), false, `held on the unit’s beat at ${bpm} against ${unitBpm}`)
+          if (click.useBeatWhy() === 'tempo') told = true
+          else assert.equal(told, false, `the tempo line gave way to ${JSON.stringify(click.useBeatWhy())} ${t} ms in, at ${bpm} against ${unitBpm}`)
+        }
+        assert.equal(click.useBeatWhy(), 'tempo', `the closed cause at ${bpm} against ${unitBpm}`)
+        assert.deepEqual(here(), { offered: false, why: tempoLine })
+        const asks = b.unitEnd.beatAsks.length
+        while (b.unitEnd.beatAsks.length === asks) await clock.advance(50)
+        await clock.advance(150)
+        click.startTapAlong()
+        await tapRun(8, 30, unit)
+        const result = click.finishTapAlong()
+        assert.equal(result.steady, false, `a run at ${bpm} against ${unitBpm} saved ${result.ms} ms`)
+        assert.equal(result.why, 'moved')
+        assert.deepEqual(click.lineUpNow(), { light: 0, click: 0, watch: 0 }, `a run at ${bpm} against ${unitBpm} set a nudge`)
+        assert.match(lines().at(-1), /line up: nothing changed, the beat moved or left the unit’s while tapping/)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    for (const bpm of [200, 250]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here, tapRun, until } = b
+      try {
+        /* 18 ms after this moment, not 30: from 30 the move onto the unit's beat at 250 is cut short by a window that leaves 6 ms of it, under the 8 not worth moving (BEAT_LOCK.ignoreMs), and the taps then come to 36, a nudge of 40. */
+        const unit = { phase: clock.now() + 18, beating: true, period: 60000 / bpm }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+        assert.equal(click.usePhoneClick(bpm, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        await until(true)
+        assert.deepEqual(here(), { offered: true, why: null }, `not offered at ${bpm} on both`)
+        click.startTapAlong()
+        await tapRun(8, 30, unit)
+        const result = click.finishTapAlong()
+        assert.equal(result.steady, true, `a run at ${bpm} on both set nothing: ${JSON.stringify(result)}`)
+        assert.equal(result.ms, 30, `a run at ${bpm} on both saved ${result.ms} ms, not 30`)
+        assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 })
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('tap along’s tempo line stays while the device is at another tempo: sampled every 250 ms for a minute, at 121 and at 119 against the unit’s 120, once the cause is the tempo it never flips to still finding, though the drifting beat makes windows disagree', async () => {
+    for (const [bpm, there] of [[121, 50], [119, 30]]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, there, there)
+        assert.equal(click.usePhoneClick(bpm, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        let told = false
+        for (let t = 0; t < 60000; t += 250) {
+          await clock.advance(250)
+          if (click.useBeatWhy() === 'tempo') told = true
+          else assert.equal(told, false, `the tempo line gave way to ${JSON.stringify(click.useBeatWhy())} ${t} ms in, at ${bpm} against 120`)
+        }
+        assert.equal(told, true)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('tap along closes when the unit’s tempo moves after the beat is held: held at 120 on both, then the unit at 121 or 120.5 with its beat carried on, and from the next answer on Tap along is not offered, the beat is not held, and the line is the tempo one; and a first answer at another tempo gives way to the next at this device’s', async () => {
+    /* An independent read, 17 November 2026: nothing changed the unit's tempo after the hold, so a belief keeping the old gap passed every test. */
+    const tempoLine = 'The unit’s beat is at another tempo than this phone’s, so Tap along waits until they match.'
+    for (const bpm of [121, 120.5]) {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here, until } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true, period: 500 }
+        globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+        assert.equal(click.usePhoneClick(120, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        await until(true)
+        assert.deepEqual(here(), { offered: true, why: null })
+        await clock.advance(3000)
+        assert.deepEqual(here(), { offered: true, why: null })
+        /* The unit's tempo moves: its last beat stays where it fell, the next ones come at the new tempo. */
+        const changed = clock.now()
+        unit.phase += Math.floor((changed - unit.phase) / 500) * 500
+        unit.period = 60000 / bpm
+        for (let t = 250; t <= 30000; t += 250) {
+          await clock.advance(250)
+          if (t < 6500) continue
+          assert.equal(here().offered, false, `Tap along still offered ${t} ms after the unit moved to ${bpm}`)
+          assert.equal(click.useBeatHeld(), false, `still held ${t} ms after the unit moved to ${bpm}`)
+        }
+        assert.equal(click.useBeatWhy(), 'tempo')
+        assert.deepEqual(here(), { offered: false, why: tempoLine })
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    /*
+     * And the other way, before anything is believed: the first answer at
+     * 121, the unit then at this device's 120 with its beat carried on. The
+     * second answer agrees with the first, and what is believed takes the
+     * NEWEST answer's gap, so the tempo line goes with it.
+     */
+    const b = await tapAlongBench()
+    const { dir, click, clock } = b
+    try {
+      const unit = { phase: clock.now() + 30, beating: true, period: 60000 / 121 }
+      globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      while (b.unitEnd.beatAsks.length < 1) await clock.advance(10)
+      await clock.advance(120)
+      assert.equal(click.useBeatWhy(), 'tempo', 'the first answer, at 121 against this device’s 120')
+      unit.phase += Math.floor((clock.now() - unit.phase) / unit.period) * unit.period
+      unit.period = 500
+      while (b.unitEnd.beatAsks.length < 2) await clock.advance(10)
+      await clock.advance(120)
+      assert.equal(click.useBeatWhy(), null, 'the tempo line stood over a belief whose newest answer is at this device’s tempo')
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along with a unit that sends one beat a bar: the computer’s gap is four of the device’s beats at 120, so it is offered, the tempo line is never shown on the way, and a run saves the right nudge', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, tapRun } = b
+    try {
+      const unit = { phase: clock.now() + 30, beating: true, period: 2000 }
+      globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      for (let waited = 0; !click.useBeatHeld(); waited += 250) {
+        assert.ok(waited < 30000, 'never held on a unit that sends one beat a bar')
+        await clock.advance(250)
+        assert.notEqual(click.useBeatWhy(), 'tempo', `the tempo line shown ${waited} ms in, on a unit at this device’s tempo that sends one beat a bar`)
+      }
+      assert.deepEqual(here(), { offered: true, why: null })
+      click.startTapAlong()
+      await tapRun(8, 30, unit)
+      const result = click.finishTapAlong()
+      assert.equal(result.steady, true, `a run on a unit that sends one beat a bar set nothing: ${JSON.stringify(result)}`)
+      assert.equal(result.ms, 30)
+      assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 })
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along’s closed line after a tempo tapped from the app, or a new connection: the computer has heard beats and only just forgotten where they fall, so it says still finding, never to switch Send Realtime Sysex on', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, tapAlongClosedWords } = b
+    try {
+      /* An answer with a count and no age or gap yet. */
+      globalThis.__clickBeatAsk = async () => ({ answer: { ok: true, count: 40, age: null, gap: null }, asked: clock.now(), answered: clock.now() })
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      for (let i = 0; i < 6; i++) {
+        await clock.advance(250)
+        assert.notEqual(click.useBeatWhy(), 'none', 'a unit that has sent beats was said to send none')
+        assert.doesNotMatch(here().why, /Send Realtime Sysex/, `told to switch on what is on: ${here().why}`)
+      }
+      assert.equal(click.useBeatWhy(), 'finding')
+      assert.deepEqual(here(), { offered: false, why: 'Still finding where the unit’s beat falls, so Tap along waits.' })
+      assert.equal(here().why, tapAlongClosedWords(null))
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along’s closed line when the computer keeps a count and never an age: still finding for under ten seconds, then the Send Realtime Sysex line, since a unit switched off after beats were heard answers so for as long as the computer runs; and no cause once an age comes', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, until } = b
+    try {
+      const unit = { phase: clock.now() + 30, beating: true }
+      const road = roadComputer(clock, unit, 20, 20)
+      let ages = false
+      globalThis.__clickBeatAsk = async () => (ages ? road() : { answer: { ok: true, count: 40, age: null, gap: null }, asked: clock.now(), answered: clock.now() })
+      const t0 = clock.now()
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      while (clock.now() - t0 < 9500) {
+        await clock.advance(250)
+        assert.equal(click.useBeatWhy(), 'finding', `${clock.now() - t0} ms in`)
+      }
+      await clock.advance(5000)
+      assert.equal(click.useBeatWhy(), 'none', 'still finding after ten seconds of answers with a count and no age')
+      assert.deepEqual(here(), { offered: false, why: 'Switch Send Realtime Sysex on at the unit to tap along: Setup → MIDI/Remote.' })
+      ages = true
+      await until(true)
+      assert.equal(click.useBeatWhy(), null)
+      assert.deepEqual(here(), { offered: true, why: null })
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along’s ten seconds of still finding start over: an answer with an age ends them, so a second forget long after the first says still finding again; and answers from a unit that has never sent a beat do not start them, so the first answer with a count says still finding too', async () => {
+    /*
+     * An independent read, 17 November 2026: nothing tried what starts the
+     * ten seconds over. With the reset taken out, or the clock started by an
+     * answer with no count, a player whose Send Realtime Sysex is ON was told
+     * to switch it on, and every test passed.
+     */
+    const forgotten = (clock, count) => ({ answer: { ok: true, count, age: null, gap: null }, asked: clock.now(), answered: clock.now() })
+    /* (a) A count and no age for a second; beats again until held, and a minute more; then a count and no age again. */
+    {
+      const b = await tapAlongBench()
+      const { dir, click, clock, until } = b
+      try {
+        const unit = { phase: clock.now() + 30, beating: true }
+        const road = roadComputer(clock, unit, 20, 20)
+        let forgot = true
+        let since = null
+        globalThis.__clickBeatAsk = async () => {
+          if (!forgot) return road()
+          since = since ?? clock.now()
+          return forgotten(clock, 40)
+        }
+        assert.equal(click.usePhoneClick(120, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(1000)
+        assert.equal(click.useBeatWhy(), 'finding')
+        forgot = false
+        await until(true)
+        await clock.advance(60000)
+        assert.equal(click.useBeatHeld(), true)
+        forgot = true
+        since = null
+        for (let waited = 0; since === null || clock.now() - since < 9500; waited += 250) {
+          assert.ok(waited < 20000, 'the computer was never asked again')
+          await clock.advance(250)
+          assert.notEqual(click.useBeatWhy(), 'none', `told to switch Send Realtime Sysex on ${since === null ? 'before the second forget was answered' : `${clock.now() - since} ms after the second forget`}, a minute after beats were heard`)
+        }
+        assert.equal(click.useBeatWhy(), 'finding')
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    /* (b) A unit that has never sent a beat, for longer than the ten seconds; then Send Realtime Sysex is switched on, and the computer has a count before it has an age. */
+    {
+      const b = await tapAlongBench()
+      const { dir, click, clock, here } = b
+      try {
+        let count = 0
+        let since = null
+        globalThis.__clickBeatAsk = async () => {
+          if (count > 0) since = since ?? clock.now()
+          return forgotten(clock, count)
+        }
+        assert.equal(click.usePhoneClick(120, () => {}), true)
+        const stop = globalThis.__clickEffect()
+        await clock.advance(13000)
+        assert.equal(click.useBeatWhy(), 'none')
+        assert.match(here().why, /Send Realtime Sysex/)
+        count = 3
+        for (let waited = 0; since === null || clock.now() - since < 9500; waited += 250) {
+          assert.ok(waited < 20000, 'the computer was never asked again')
+          await clock.advance(250)
+          if (since !== null) assert.equal(click.useBeatWhy(), 'finding', `${clock.now() - since} ms after the computer first had a count: still told to switch on what has just been switched on`)
+        }
+        assert.doesNotMatch(here().why, /Send Realtime Sysex/)
+        stop()
+      } finally {
+        noBeatGlobals()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test('the log says once when Tap along starts waiting for the tempo, with what the computer measured and what this device keeps, and once when the tempos match again', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, until } = b
+    try {
+      const waits = () => b.log.said.filter((l) => /tap along waits:/.test(l))
+      const again = () => b.log.said.filter((l) => /tap along: the unit’s beats are at this device’s tempo again/.test(l))
+      const unit = { phase: clock.now() + 30, beating: true, period: 60000 / 121 }
+      globalThis.__clickBeatAsk = roadComputer(clock, unit, 50, 50)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(60000)
+      assert.equal(click.useBeatWhy(), 'tempo')
+      assert.equal(waits().length, 1, `said ${waits().length} times in a minute at another tempo, not once`)
+      assert.match(waits()[0], /tap along waits: the computer measures the unit’s beats 495\.9 ms apart, and 1 of this device’s come to 500\.0 ms/)
+      assert.equal(again().length, 0)
+      /* The unit comes to this device's tempo, its last beat where it fell. */
+      unit.phase += Math.floor((clock.now() - unit.phase) / unit.period) * unit.period
+      unit.period = 500
+      await until(true)
+      assert.equal(again().length, 1)
+      assert.match(again()[0], /at this device’s tempo again \(500\.0 ms apart as the computer measures them\)/)
+      await clock.advance(30000)
+      assert.equal(waits().length, 1)
+      assert.equal(again().length, 1, 'said again with every answer at the same tempo')
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along’s closed line when the computer stops answering about the beat: once the hold has run out it says so, and a window coming again clears it', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, until, tapAlongClosedWords } = b
+    try {
+      const unit = { phase: clock.now() + 91, beating: true }
+      const answers = beatComputer(clock, unit)
+      let broken = null
+      globalThis.__clickBeatAsk = async () => {
+        if (broken) throw broken
+        return answers()
+      }
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      await until(true)
+      /* The question starts failing: not a 404 or 501 (an older computer app), but a server error, and then the road gone. */
+      broken = Object.assign(new Error('server error'), { status: 500 })
+      await until(false, 25000)
+      assert.equal(click.useBeatWhy(), 'failed')
+      assert.equal(here().why, tapAlongClosedWords('failed'))
+      assert.deepEqual(here(), { offered: false, why: 'The computer isn’t answering about the unit’s beat, so Tap along waits.' })
+      broken = new Error('Network request failed')
+      await clock.advance(6500)
+      assert.equal(click.useBeatWhy(), 'failed')
+      /* It answers again: the cause goes with the first window, and Tap along comes back. */
+      broken = null
+      await until(true)
+      assert.equal(click.useBeatWhy(), null)
+      assert.deepEqual(here(), { offered: true, why: null })
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along’s closed line says the cause that is so: a unit sending no beat, a road too slow to place it, beats stopped; never “update the computer app” to one that answers', async () => {
+    const b = await tapAlongBench()
+    const { dir, click, clock, here, until, tapAlongClosedWords } = b
+    try {
+      const shown = []
+      const look = () => {
+        const h = here()
+        if (h.why) shown.push(h.why)
+        return h
+      }
+      /* The unit sends no beat. */
+      const unit = { phase: clock.now() + 91, beating: false }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      let stop = globalThis.__clickEffect()
+      for (let i = 0; i < 12; i++) {
+        await clock.advance(500)
+        look()
+      }
+      assert.equal(click.useBeatWhy(), 'none')
+      assert.deepEqual(look(), { offered: false, why: 'Switch Send Realtime Sysex on at the unit to tap along: Setup → MIDI/Remote.' })
+      /* It starts sending: held, offered, and the follower has no cause left to give. */
+      unit.beating = true
+      await until(true)
+      assert.equal(look().offered, true)
+      assert.equal(click.useBeatWhy(), null)
+      stop()
+      /* The unit's last beat heard long ago: its beats have stopped. */
+      globalThis.__clickBeatAsk = async () => ({ answer: { ok: true, count: 9, age: 30000, gap: 500 }, asked: clock.now(), answered: clock.now() })
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      stop = globalThis.__clickEffect()
+      await clock.advance(3000)
+      look()
+      assert.equal(click.useBeatWhy(), 'stale')
+      assert.equal(look().why, tapAlongClosedWords('stale'))
+      assert.equal(look().why, 'The unit has stopped sending its beat, so there is nothing to tap along to.')
+      stop()
+      /* A road 300 ms there and back: too slow to say where in the beat. */
+      unit.beating = true
+      globalThis.__clickBeatAsk = roadComputer(clock, unit, 150, 150)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      stop = globalThis.__clickEffect()
+      for (let i = 0; i < 20; i++) {
+        await clock.advance(500)
+        look()
+      }
+      assert.equal(click.useBeatWhy(), 'slow')
+      assert.equal(look().why, 'The connection to the computer is too slow to place the unit’s beat, so Tap along can’t be used.')
+      stop()
+      /* Every line shown to a computer that answers: none of them sends him to update it. */
+      assert.ok(shown.length > 20)
+      for (const w of shown) assert.doesNotMatch(w, /[Uu]pdate the computer app/, `told to update a computer app that answers: ${w}`)
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('tap along sets nothing off the unit’s beat: through a computer app too old to say where it falls it is not offered, and a run there saves nothing; a run during which the beat leaves the unit’s, or the lock moves it, saves nothing either; each says so', async () => {
+    /*
+     * "Tap along saves the gap between two unlinked clocks as a lasting
+     * nudge unless the beat lock is in step" (an independent read, 17
+     * November 2026): his Pi's computer app, 1.90.63, has no beat answer,
+     * and the device's beat starts wherever it happens to each time.
+     */
+    const b = await tapAlongBench()
+    const { dir, click, clock, disk, here, lines, tapRun, until, tapAlongClosedWords, tapAlongWords } = b
+    try {
+      /* The old computer app: its web page for an answer. */
+      globalThis.__clickBeatAsk = async () => ({ answer: '<!doctype html><title>Fractal Remote</title>', asked: clock.now(), answered: clock.now() })
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      let stop = globalThis.__clickEffect()
+      await clock.advance(10000)
+      assert.ok(b.log.said.some((l) => /this computer app does not say when the beat falls yet/.test(l)))
+      assert.equal(click.useBeatHeld(), false)
+      assert.equal(click.useBeatWhy(), 'old')
+      assert.deepEqual(here(), { offered: false, why: tapAlongClosedWords('old') })
+      assert.equal(here().why, 'Update the computer app to tap along: this one doesn’t say where the unit’s beat falls.')
+      /* And a run all the same (the page draws no pad; the rule holds here too): steady taps 170 ms after the device's beat set nothing. */
+      click.startTapAlong()
+      await tapRun(10, 170)
+      let result = click.finishTapAlong()
+      assert.equal(result.steady, false)
+      assert.equal(result.why, 'moved')
+      assert.equal(result.ms, null)
+      assert.deepEqual(click.lineUpNow(), { light: 0, click: 0, watch: 0 }, 'a run off the unit’s beat set a nudge')
+      assert.ok(!disk.kept.some(([k]) => /lineUp/.test(k)), 'a run off the unit’s beat was kept on the device')
+      assert.match(lines().at(-1), /line up: nothing changed, the beat moved or left the unit’s while tapping \(tapped along: 10 taps/)
+      assert.equal(tapAlongWords(result, 'phone'), 'This phone’s beat moved or lost the unit’s while you tapped, so nothing was set. Tap along again.')
+      stop()
+      await clock.advance(2500)
+
+      /* A computer that answers: in step. Then the unit stops sending its beat partway through a run: nothing set. */
+      const unit = { phase: clock.now() + 211, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      stop = globalThis.__clickEffect()
+      await until(true)
+      click.startTapAlong()
+      await tapRun(4, 30, unit)
+      unit.beating = false
+      await until(false)
+      await tapRun(6, 30, unit)
+      result = click.finishTapAlong()
+      assert.equal(result.why, 'moved', 'a run that lost the unit’s beat partway set something')
+      assert.deepEqual(click.lineUpNow(), { light: 0, click: 0, watch: 0 })
+
+      /* In step again; then the unit's beat moves partway through a run, and the lock moves this device's onto it: in step before and after, and still nothing set. */
+      unit.beating = true
+      await until(true)
+      click.startTapAlong()
+      await tapRun(4, 30, unit)
+      unit.phase += 240
+      await until(false)
+      await until(true)
+      await tapRun(6, 30, unit)
+      result = click.finishTapAlong()
+      assert.equal(result.why, 'moved', 'a run across a move of the beat set something')
+      assert.deepEqual(click.lineUpNow(), { light: 0, click: 0, watch: 0 })
+      assert.ok(!disk.kept.some(([k]) => /lineUp/.test(k)))
+      /* And one in step all the way through sets it. */
+      click.startTapAlong()
+      await tapRun(10, 30, unit)
+      assert.equal(click.finishTapAlong().ms, 30)
+      assert.deepEqual(click.lineUpNow(), { light: 30, click: 30, watch: 0 })
+      stop()
+    } finally {
+      noBeatGlobals()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the line-up’s Earlier and Later move a nudge on from where it is, every move is kept on the device, and the next launch reads it back', async () => {
+    const b = await clickOnTheBench('ios')
+    try {
+      globalThis.__clickAdmin = true
+      await b.settle()
+      b.click.nudgeLineUp('light', 10)
+      b.click.nudgeLineUp('light', 10)
+      b.click.nudgeLineUp('click', -10)
+      assert.deepEqual(b.click.lineUpNow(), { light: 20, click: -10, watch: 0 }, 'Earlier or Later set a nudge to one step instead of moving it one on')
+      b.click.setLineUp({ light: 30, click: -20 })
+      await b.settle()
+      assert.deepEqual(
+        b.disk.kept.filter(([k]) => /lineUp/.test(k)),
+        [
+          ['fractal.metronome.lineUp.light', '10'],
+          ['fractal.metronome.lineUp.light', '20'],
+          ['fractal.metronome.lineUp.click', '-10'],
+          ['fractal.metronome.lineUp.light', '30'],
+          ['fractal.metronome.lineUp.click', '-20']
+        ],
+        'a nudge is not kept on the device'
+      )
+    } finally {
+      globalThis.__clickAdmin = false
+      rmSync(b.dir, { recursive: true, force: true })
+    }
+    /* The next launch: what was kept is read back, and what was not is none. */
+    globalThis.__clickDisk = { 'fractal.metronome.lineUp.light': '30' }
+    const c = await clickOnTheBench('ios')
+    try {
+      await c.settle()
+      assert.deepEqual(c.click.lineUpNow(), { light: 30, click: 0, watch: 0 }, 'a kept nudge is not read back at launch')
+    } finally {
+      delete globalThis.__clickDisk
+      rmSync(c.dir, { recursive: true, force: true })
+    }
+  })
+
+  test('where the phone’s beats fall, for the watch, at a tempo that is not a whole number: counted at it to a thousandth, not rounded to the nearest whole', async () => {
+    const b = await clickOnTheBench('ios')
+    try {
+      await b.click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      await b.clock.advance(0)
+      await b.settle()
+      assert.equal(b.click.usePhoneClick(97.4, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      await b.clock.advance(0)
+      assert.equal(b.click.phoneBeat().bpm, 97.4, 'a watch counting at a rounded tempo drifts off the phone’s beats')
+      stop()
+    } finally {
+      rmSync(b.dir, { recursive: true, force: true })
+    }
+  })
+
+  test('with nothing nudged, a beat whose moment falls between two whole milliseconds clicks in the beat’s own step, as it always did, not on a timer for the fraction left (a screen frame late on a phone)', async () => {
+    /*
+     * Date.now() is whole milliseconds and a beat at 130 BPM is 461.538 ms.
+     * A step run in the beat's own millisecond sees a fraction still to
+     * wait; a timer for it fires on the phone's next screen frame. Here the
+     * bench's Date.now() is whole milliseconds, and the players say when
+     * they were really told to play.
+     */
+    const b = await clickOnTheBench('ios')
+    globalThis.__clickWholeMs = true
+    try {
+      await b.click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      await b.clock.advance(0)
+      await b.settle()
+      const from = b.audio.calls.length
+      assert.equal(b.click.usePhoneClick(130, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      await b.clock.advance(0)
+      await b.clock.advance(4000)
+      const plays = b.audio.calls.slice(from).filter((c) => c.startsWith('play')).map((c) => Number(c.split('@')[1]))
+      assert.ok(plays.length >= 8, `only ${plays.length} clicks`)
+      /*
+       * Each beat's step is booked from a whole-millisecond clock, so it runs
+       * the last step's fraction of a millisecond after the beat's moment, as
+       * it always has (a phone's timer is booked from its own now, which is
+       * not whole). The click is played IN that step: so each click is its
+       * beat's moment plus the fraction the last one was played at, and no
+       * timer stands between.
+       */
+      const beat = 60000 / 130
+      assert.equal(plays[0] % 1, 0)
+      for (let i = 1; i < plays.length; i++) {
+        const step = plays[0] + i * beat + (plays[i - 1] % 1)
+        assert.ok(Math.abs(plays[i] - step) < 1e-6, `click ${i} played ${(plays[i] - step).toFixed(3)} ms after its beat’s step, on a timer of its own`)
+      }
+      stop()
+    } finally {
+      delete globalThis.__clickWholeMs
+      rmSync(b.dir, { recursive: true, force: true })
+    }
+  })
+
+  test('where the phone’s beats fall, for the watch: set when the beat starts, the same beat after beat, moved by a nudge, Flash timing or the watch’s own, gone when it stops, and onto the unit’s beat once a move, not each step', async () => {
+    const b = await clickOnTheBench('ios')
+    const { dir, click, unitEnd, clock, settle } = b
+    const moved = []
+    const off = click.onPhoneBeatMoved(() => moved.push(click.phoneBeat()))
+    try {
+      globalThis.__clickAdmin = true
+      await click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      assert.equal(click.phoneBeat(), null)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(0)
+      assert.equal(moved.length, 1, 'no beat for the watch when it starts')
+      const first = click.phoneBeat()
+      assert.deepEqual(Object.keys(first).sort(), ['at', 'beat', 'bpm', 'nudge'])
+      assert.equal(first.bpm, 120)
+      assert.equal(first.nudge, 0)
+      assert.ok(Math.abs(click.offOwnBeat(first.at)) <= 0.5, 'the moment given is not where the light lands')
+      /* Beat after beat: nothing new for the watch. */
+      await clock.advance(5000)
+      assert.equal(moved.length, 1, 'the watch is told something every beat')
+      assert.equal(click.phoneBeat(), first)
+      const { offBeat } = await import(pathToFileURL(join(dir, 'lineUp.js')).href)
+      /* Flash timing moves where the light lands: once. */
+      click.setFlashTiming(60)
+      await clock.advance(1500)
+      assert.equal(moved.length, 2)
+      assert.equal(offBeat(click.phoneBeat().at, first.at, 500), 60)
+      click.setFlashTiming(0)
+      await clock.advance(1500)
+      assert.equal(moved.length, 3)
+      /* The light's nudge: once. */
+      click.setLineUp({ light: 30 })
+      await clock.advance(1500)
+      assert.equal(moved.length, 4)
+      assert.equal(offBeat(click.phoneBeat().at, first.at, 500), 30)
+      /* The watch's own nudge: in it, the moment the same. */
+      click.setLineUp({ watch: 20 })
+      await clock.advance(1500)
+      assert.equal(moved.length, 5)
+      assert.equal(click.phoneBeat().nudge, 20)
+      assert.equal(offBeat(click.phoneBeat().at, first.at, 500), 30)
+      await clock.advance(5000)
+      assert.equal(moved.length, 5, 'the watch is told something every beat')
+      /* Stopped: gone. */
+      stop()
+      assert.equal(click.phoneBeat(), null)
+      assert.equal(moved.length, 6)
+      /* For another account: no nudge of its own in it, and none of the light's. */
+      globalThis.__clickAdmin = false
+      click.usePhoneClick(120, () => {})
+      const stop2 = globalThis.__clickEffect()
+      await clock.advance(0)
+      assert.equal(click.phoneBeat().nudge, 0)
+      assert.ok(Math.abs(click.offOwnBeat(click.phoneBeat().at) - 0) <= 0.5)
+      stop2()
+      await clock.advance(2500)
+      click.setLineUp({ light: 0, watch: 0 })
+
+      /* Onto the unit's beat: where it is heading, once a move, not each little step of the way. */
+      unitEnd.__answer(1)
+      await click.setMetronome({ where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      globalThis.__clickAdmin = true
+      globalThis.__clickBeatRoad = 'computer'
+      const unit = { phase: clock.now() + 402, beating: true }
+      globalThis.__clickBeatAsk = beatComputer(clock, unit)
+      assert.equal(click.usePhoneClick(120, () => {}), true)
+      const stop3 = globalThis.__clickEffect()
+      await clock.advance(6800)
+      assert.ok(Math.abs(offBeat(click.phoneBeat().at, unit.phase, 500)) <= 1, 'the moment given is not on the unit’s beat')
+      const before = moved.length
+      unit.phase += 240
+      await clock.advance(9000)
+      const told = moved.length - before
+      assert.ok(told >= 1 && told <= 2, `the watch was told ${told} times for one move of ${240} ms, made over several beats`)
+      assert.ok(Math.abs(offBeat(click.phoneBeat().at, unit.phase, 500)) <= 1, 'the moment given is not on the unit’s moved beat')
+      stop3()
+    } finally {
+      off()
+      noBeatGlobals()
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -8156,7 +9271,8 @@ export function run(test) {
       rmSync(dir, { recursive: true, force: true })
     }
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /if \(sound\) tick\(\) if \(flash\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/, 'the light, the flash and the tap are not on the same beat')
+    /* The green dot and the flash on one beat: the same moment, the light's (lib/lineUp lineUpTimes), which with nothing nudged is the tap's too (run in test/line-up.mjs). */
+    assert.match(metronome, /soon\(at \+ when\.lightAt, \(\) => \{ if \(flash\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\) \}\)/, 'the light, the flash and the tap are not on the same beat')
   })
 
   test('the browser flashes on the beep as it is heard, and takes back beeps not yet heard when it stops', () => {
@@ -8256,8 +9372,18 @@ export function run(test) {
      * corners behind the screen's curve.
      */
     const beat = read('mobile/src/components/MetronomeBeat.js')
-    assert.match(beat, /borderRadius: round/, 'the beat’s frame is square again, and its corners are cut off by the screen')
-    assert.match(beat, /const round = cornerRadius\(\{ os: Platform\.OS, width, height, top, bottom, pad: Platform\.isPad \}\)/)
+    assert.match(beat, /borderRadius: frame\.radius/, 'the beat’s frame is square again, and its corners are cut off by the screen')
+    /* In from the edge and rounder than the glass (lib/screenCorners beatFrame): the geometry is worked out in test/line-up.mjs. */
+    /* The notch's inset on its side as well as on top, so an X on its side is not read as a big phone zoomed. */
+    assert.match(beat, /const frame = beatFrame\(\{ os: Platform\.OS, width, height, top, bottom, left, right, pad: Platform\.isPad \}\)/)
+    assert.match(beat, /\{ top: frame\.inset, right: frame\.inset, bottom: frame\.inset, left: frame\.inset \}/, 'the frame is drawn to the very edge again')
+    assert.match(beat, /borderWidth: frame\.line/)
+    /* The whole of the frame's style, end to end: the inset, then the line, its radius as beatFrame gives it, and nothing after either to undo them. */
+    assert.match(
+      beat.replace(/\s+/g, ' '),
+      /style=\{\[ StyleSheet\.absoluteFill, \{ top: frame\.inset, right: frame\.inset, bottom: frame\.inset, left: frame\.inset \}, \{ borderWidth: frame\.line, borderRadius: frame\.radius, borderCurve: 'continuous', borderColor: color\.ok, opacity: glow, zIndex: BEAT_Z \} \]\}/,
+      'the beat’s frame is not drawn as beatFrame gives it'
+    )
     assert.match(beat, /borderCurve: 'continuous'/, 'the frame bends later than the iPhone’s glass does, and its corners are clipped')
     const { cornerRadius } = await import('../mobile/src/lib/screenCorners.js')
     /* His iPhone 17 Pro Max, and its family. */
@@ -8305,7 +9431,7 @@ export function run(test) {
     const hook = lib.slice(lib.indexOf('export function usePhoneClick'))
     assert.match(hook, /const running = Boolean\(on && beat\)/, 'the phone is kept awake on something other than the click running')
     assert.match(hook, /if \(!on \|\| !beat\) return undefined/, 'the click and the keep-awake no longer start on the same thing')
-    assert.match(hook, /\}, \[on, sound, flash, beat, onBeat, follow\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
+    assert.match(hook, /\}, \[on, sound, flash, beat, onBeat, follow, lining\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
 
     /* No new package: the one the Play screen already uses, so nothing native moves. */
     assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-keep-awake'], 'expo-keep-awake is gone from the phone')

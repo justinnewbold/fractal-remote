@@ -111,6 +111,17 @@ export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: '
 export const WATCH_KNOWS = ['pages', 'tempo', 'stay', 'here', 'quick']
 
 /*
+ * AND WHAT NO WATCH BUILD SAYS YET, which the phone already listens for.
+ *   `beat`   it reads the picture's `metronome.beat` (WHERE THE BEATS FALL,
+ *            below) and taps on the phone's beat, not on a clock of its own.
+ * No watch out today says it, the 2.0.0 test build's included (its hello is
+ * WATCH_KNOWS word for word), so no picture to any of them carries it. The
+ * next watch build says it in its hello, and then it moves into WATCH_KNOWS
+ * with that build's patch.
+ */
+export const WATCH_KNOWS_NEXT = ['beat']
+
+/*
  * THE CHECK-IN. A request from the watch wakes the iPhone app with the phone
  * locked, and the phone holds itself awake for 25 seconds after it
  * (FractalWatchModule WAKE_SECONDS) and then sleeps. From then on the
@@ -319,7 +330,7 @@ export function watchPageHid(order, hidden, name, hide) {
 }
 
 /** What a hello's `knows` comes to: the things this phone knows of, and nothing else; [] for a watch that says none. */
-export const watchKnows = (list) => (Array.isArray(list) ? WATCH_KNOWS.filter((k) => list.includes(k)) : [])
+export const watchKnows = (list) => (Array.isArray(list) ? [...WATCH_KNOWS, ...WATCH_KNOWS_NEXT].filter((k) => list.includes(k)) : [])
 
 const int = (n) => Number.isInteger(n)
 const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
@@ -500,6 +511,8 @@ export function watchState({
   /* Whether a held pedal offers quick edit, and the open sheet's knobs (QUICK EDIT ON THE WRIST), for a watch that has said it knows how; none (null) for any other, and then neither field is sent at all. */
   quickEdit = null,
   quick = null,
+  /* Where the phone's beats fall (WHERE THE BEATS FALL, below), for a watch that has said it knows `beat`; none (null) for any other, and then the metronome is field for field what it was. */
+  beat = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
@@ -553,8 +566,8 @@ export function watchState({
       cents,
       inTune: !!note && Math.abs(cents) <= WATCH_IN_TUNE_CENTS
     },
-    /* Tap on every beat, at this tempo — or not. See shared/metronome.mjs. */
-    metronome: metronomeForWatch(metronome),
+    /* Tap on every beat, at this tempo — or not. See shared/metronome.mjs. And where the phone's beats fall, to a watch that knows it. */
+    metronome: metronomeForWatch(metronome, beat),
     /* The Tempo page (tempoForWatch, above), only where the caller gives
        one, which is only to a watch that has said it has that page. */
     ...(tempo === null || tempo === undefined ? null : { tempo: tempoForWatch(tempo) }),
@@ -577,11 +590,61 @@ export function watchState({
   }
 }
 
-/** The metronome's word to the watch: on only with a tempo anybody would play to. */
-function metronomeForWatch(m) {
+/** The metronome's word to the watch: on only with a tempo anybody would play to; and where the phone's beats fall, only while it is on. */
+function metronomeForWatch(m, beat = null) {
   const bpm = Number(m?.bpm)
   const on = m?.on === true && Number.isFinite(bpm) && bpm >= 20 && bpm <= 400
-  return { on, bpm: on ? Math.round(bpm * 10) / 10 : 0 }
+  const said = { on, bpm: on ? Math.round(bpm * 10) / 10 : 0 }
+  const falls = on ? beatForWatch(beat) : null
+  return falls ? { ...said, beat: falls } : said
+}
+
+/*
+ * WHERE THE BEATS FALL (16 November 2026): "the watch is not in sync with
+ * the phone with the flashes and the taps and the sound." The watch has
+ * tapped on a clock of its own, started whenever the picture said on, so it
+ * is wherever in the beat that was. The phone now says where its own beats
+ * fall, for the next watch build to tap on them. THE CONTRACT:
+ *
+ *   metronome.beat = { at, bpm, nudge }
+ *
+ *   at     ONE MOMENT A BEAT OF THE PHONE'S LANDS: when its light lights,
+ *          as lined up (lib/lineUp: the light's nudge is in it, so after
+ *          Tap along it is the unit's click as heard), or would with the
+ *          flash switched off. Milliseconds since 1 January 1970 UTC on the
+ *          PHONE'S clock (Date.now()), whole. Any one of its beats, past or
+ *          to come: the others are at + k × 60000 / bpm, for every whole k.
+ *          The watch's clock is set from the iPhone's but is not the same
+ *          clock to the millisecond; the nudge is where a watch is lined up.
+ *   bpm    the tempo those beats are counted at, to a thousandth: the
+ *          phone's own (60000 / bpm ms apart), which may differ in the
+ *          tenths from `metronome.bpm`, which is rounded for the Tempo page.
+ *   nudge  the watch's own nudge, in ms, -200 to 200 in steps of 10: tap
+ *          this much later (+) or earlier (-) than `at`. Kept on the phone
+ *          (lib/metronome setLineUp `watch`); 0 until somebody moves it.
+ *
+ * SENT ONLY: to a watch whose hello says it knows `beat` (WATCH_KNOWS_NEXT,
+ * above; lib/watchBridge leaves it out for every other, and the picture is
+ * then field for field what it was), only while `metronome.on`, and only
+ * while the phone keeps a beat of its own (its light or its click running:
+ * lib/metronome usePhoneClick). Absent, the watch keeps its own clock, as
+ * every watch does today. And CHANGED ONLY WHEN IT MOVES: the beat
+ * starting, a new tempo, a nudge, Flash timing, or the phone's beat moved
+ * onto the unit's (where it is heading, not each step there): never every
+ * beat, so the watch is not woken on every beat. `at` stays the same moment
+ * between changes, however long ago that beat was.
+ */
+export function beatForWatch(beat) {
+  if (!beat || typeof beat !== 'object') return null
+  const at = Number(beat.at)
+  const bpm = Number(beat.bpm)
+  const nudge = Number(beat.nudge ?? 0)
+  if (!Number.isFinite(at) || at <= 0 || !Number.isFinite(bpm) || bpm < 20 || bpm > 400) return null
+  return {
+    at: Math.round(at),
+    bpm: Math.round(bpm * 1000) / 1000,
+    nudge: Number.isFinite(nudge) ? Math.max(-200, Math.min(200, Math.round(nudge / 10) * 10)) || 0 : 0
+  }
 }
 
 /**

@@ -91,12 +91,15 @@ export function run(test) {
     const metronome = flat(read('mobile/src/lib/metronome.js'))
     const click = metronome.slice(metronome.indexOf('export function usePhoneClick('))
     assert.match(click, /const choice = useEdgeFlash\(\) const sound = deviceSounds\(\{ clicks: clicks\(s, can, heardOn\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\) const \{ flash, silent \} = edgeBeat\(\{ offered: choice\.offered, edge: choice\.on, metronomeOn: s\.on, deviceClicks: sound \}\) const on = sound \|\| silent/)
-    /* The sound only where the device clicks. */
-    assert.match(click, /const sounding = sound \? click\(\) : null/)
+    /* The sound only where the device clicks, and the tap with it; the light only where it is to flash. */
+    assert.match(click, /if \(sound\) \{ soon\(at \+ when\.clickAt, \(\) => \{ const asked = Date\.now\(\) const sounding = click\(\)/)
     assert.equal(click.match(/\bclick\(\)/g)?.length, 1, 'something else plays the click')
-    /* The tap only with the sound; the light only where it is to flash; and nothing waited for where there is no sound. */
-    assert.match(click, /if \(sound\) tick\(\) if \(flash\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/)
-    assert.match(click, /sound \? flashLead\(Platform\.OS, nudge\) : 0/)
+    assert.match(click, /soon\(at \+ when\.tapAt, \(\) => tick\(\)\) \}/)
+    assert.equal(click.match(/\btick\(\)/g)?.length, 1, 'something else taps')
+    assert.match(click, /soon\(at \+ when\.lightAt, \(\) => \{ if \(flash\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\) \}\)/)
+    /* Nothing waited for where there is no sound: the lead is the click's, and lib/lineUp lineUpTimes gives no click and no tap without one (run in test/line-up.mjs). */
+    assert.match(click, /const lead = \(\) => \(sound \? flashLead\(Platform\.OS, nudge\) : 0\)/)
+    assert.match(click, /const times = \(\) => lineUpTimes\(\{ sound, lead: lead\(\), light: lining \? lined\.light : 0, click: lining \? lined\.click : 0 \}\)/)
     /* No audio is opened, or let go, for a beat kept in silence. */
     assert.match(click, /\(sound \? prepareClick\(\) : Promise\.resolve\(\)\)\.finally\(/)
     assert.match(click, /if \(sound\) releaseLater\(\)/)
@@ -258,14 +261,21 @@ export function run(test) {
     /* The flash’s own switch under it, the one Settings draws. */
     assert.match(sw, /<Press label=\{choice\.on \? EDGE_WORDS\.on : EDGE_WORDS\.off\} tone="live" on=\{choice\.on\} height=\{TAP\} onPress=\{\(\) => setEdgeFlash\(!choice\.on\)\} \/> <\/> \) : null\}/)
     /* A pick goes through the one picker, with the same "here" the switch writes the unit with. */
-    assert.match(sw, /const answer = await setMetronomeSound\(key, slug, clickHere\)/)
+    /* And in the pop-up a pick starts the metronome (report 8be38966); on Settings, below, it does not. */
+    assert.match(sw, /const answer = await setMetronomeSound\(key, slug, clickHere, \{ start: true \}\)/)
     assert.equal(sw.match(/setMetronomeSound\(/g).length, 1)
     /* The line under them is the rule’s, for an account offered the choice; every other account reads what it always read. */
-    assert.match(sw, /const where = choice\.offered \? choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, demo, noun: deviceNoun\(\), inStep \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
+    assert.match(sw, /const where = choice\.offered \? !setting\.on \? offLine\(\{ lit, edge: choice\.on, row: choices, noun: deviceNoun\(\) \}\) : choice\.quiet \|\| unitCan\.can \? soundLine\(\{ quiet: choice\.quiet, edge: choice\.on, where: place\?\.key, note: place\?\.note \|\| '', unit: unitCan\.can, demo, noun: deviceNoun\(\), inStep \}\) : unitCan\.why : unitCan\.can \? place\?\.note \|\| '' : unitCan\.why/)
     /* Never "nothing to click to" with the sound picked Off. */
     assert.match(sw, /const sounding = deviceSounds\(\{ clicks: clicks\(setting, unitCan\.can, heard\)\.phone, offered: choice\.offered, quiet: choice\.quiet \}\)/)
 
     const settings = flat(read('mobile/src/screens/Settings.js'))
+    /* Under the switch while off, for an account offered the sound as a choice only: a pick on this page starts nothing, where the volume pop-up's starts it. Never to another account (their pop-up has no sound row), never while it runs. */
+    assert.match(
+      settings,
+      /onPress=\{\(\) => changeClick\(\{ on: !clickSetting\.on \}\)\} \/> \{ \} \{edgeChoice\.offered && !clickSetting\.on \? \( <Text[^>]*>\{`\$\{SOUND_WORDS\.offSettings\}\.`\}<\/Text> \) : null\} <Section>Where it clicks<\/Section>/,
+      'the off line under the Settings switch is shown to another account, shown while running, or gone'
+    )
     /* Settings: No sound first, only where it is offered; the places not lit under it; every press through the same picker. */
     assert.match(
       settings,
@@ -290,7 +300,7 @@ export function run(test) {
     /* The picker: quiet first, then the light, then the place through the setting’s own road to the unit (past setMetronome, which lets go of Off for any place picked). */
     assert.match(
       metronome,
-      /export async function setMetronomeSound\(key, slug, here = \{\}\) \{ const picked = soundPicked\(key, \{ can: unitClick\(slug, here\)\.can \}\) setQuiet\(picked\.quiet\) if \(picked\.edge\) setEdgeFlash\(true\) if \(!picked\.where\) return \{ ok: true \} return change\(\{ where: picked\.where \}, slug, here\) \}/
+      /export async function setMetronomeSound\(key, slug, here = \{\}, \{ start = false \} = \{\}\) \{ const picked = soundPicked\(key, \{ can: unitClick\(slug, here\)\.can \}\) setQuiet\(picked\.quiet\) if \(picked\.edge\) setEdgeFlash\(true\) const patch = \{ \.\.\.\(picked\.where \? \{ where: picked\.where \} : null\), \.\.\.\(start === true && !setting\.on \? \{ on: true \} : null\) \} if \(!Object\.keys\(patch\)\.length\) return \{ ok: true \} return change\(patch, slug, here\) \}/
     )
     assert.match(metronome, /export async function setMetronome\(patch, slug, here = \{\}\) \{ if \(patch && 'where' in patch\) setQuiet\(false\) return change\(patch, slug, here\) \}/, 'a place picked through the setting’s own door does not let go of Off')
     /* The tempo box keeps to its switch and its one block of words. */

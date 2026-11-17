@@ -1042,8 +1042,8 @@ async function watchOnABench() {
     'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []',
       /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
       'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false', 'tunerStaysToSend = () => null', 'watchChecksIn = () => false',
-      /* lib/metronome's two for the Tempo page, which that watch never asks for. */
-      'setWatchTap = () => {}', 'useMetronome = () => ({})',
+      /* lib/metronome's two for the Tempo page, which that watch never asks for; and where the phone's beats fall, which that watch is never sent. */
+      'setWatchTap = () => {}', 'useMetronome = () => ({})', 'phoneBeat = () => null', 'onPhoneBeatMoved = () => () => {}', 'watchKnowsBeat = () => false',
       /* lib/watchQuickEdit, for a watch that has not said it knows quick edit: nothing sent, nothing kept, nothing asked. */
       'onQuickChange = () => {}', 'quickAsked = () => {}', 'quickFollows = () => {}', 'quickHeard = () => {}', 'quickToSend = () => null']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",

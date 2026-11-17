@@ -77,6 +77,7 @@ import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
 import WatchPageOrder from '../components/WatchPageOrder'
 import WatchTunerStays from '../components/WatchTunerStays'
+import LineUp from '../components/LineUp'
 import { useWatchPages } from '../lib/watchPages'
 import { appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
@@ -1867,6 +1868,10 @@ export default function Settings({
               height={TAP}
               onPress={() => changeClick({ on: !clickSetting.on })}
             />
+            {/* Off, for an account offered the sound as a choice: a pick on this page is kept and starts nothing, where the volume pop-up's starts it (lib/edgeFlash offLine). Said, so the two are not mistaken for each other. */}
+            {edgeChoice.offered && !clickSetting.on ? (
+              <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{`${SOUND_WORDS.offSettings}.`}</Text>
+            ) : null}
             <Section>Where it clicks</Section>
             {/*
               NO SOUND, for an account offered it as a choice (lib/edgeFlash):
@@ -1958,6 +1963,13 @@ export default function Settings({
                 {flashTiming !== 0 ? <Press label="Back to standard" onPress={() => setFlashTiming(0)} /> : null}
               </>
             ) : null}
+            {/*
+              LINE UP THE LIGHT AND CLICK (lib/lineUp). "Will you make sure
+              everything's in sync properly somehow or have a way for a user
+              to calibrate". Two nudges and Tap along, for an account it is
+              offered to; it draws nothing for any other.
+            */}
+            <LineUp setting={clickSetting} can={unitCan.can} quiet={edgeChoice.quiet} />
             {/* "Same with the watch, metronome that can beep on the watch."
                 Its own switch: the wrist keeps time whichever end clicks. */}
             {Platform.OS === 'ios' && deviceKind() !== 'ipad' && watchSupported() ? (

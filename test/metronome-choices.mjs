@@ -176,7 +176,7 @@ export function run(test) {
     for (const s of d.sounds) await s.props.onPress()
     assert.deepEqual(
       b.world.asked.filter((a) => a[0] === 'setMetronomeSound'),
-      ['none', 'unit', 'phone', 'both'].map((key) => ['setMetronomeSound', key, 'fm3', { bluetooth: false, demo: false }]),
+      ['none', 'unit', 'phone', 'both'].map((key) => ['setMetronomeSound', key, 'fm3', { bluetooth: false, demo: false }, { start: true }]),
       'a press on the row does not pick that sound, on this unit, through the computer'
     )
     assert.ok(!b.world.asked.some((a) => a[0] === 'setMetronome'), 'a pick wrote the setting past the picker')
@@ -235,7 +235,7 @@ export function run(test) {
     assert.deepEqual(d.sounds.map((s) => s.props.label), ['Off', 'Phone'])
     assert.deepEqual(d.lit, ['Phone'], 'nothing is lit over Bluetooth with Unit kept, though the device is what clicks')
     await d.sounds[0].props.onPress()
-    assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'none', 'fm3', { bluetooth: true, demo: false }])
+    assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'none', 'fm3', { bluetooth: true, demo: false }, { start: true }])
     assert.ok(d.words.some((w) => /^Over Bluetooth/.test(w)), 'why the unit is not offered is no longer said')
     /*
      * Off over Bluetooth silences the device and nothing else: the app
@@ -255,7 +255,7 @@ export function run(test) {
     Object.assign(b.world, { demo: true })
     d = b.draw()
     await d.sounds[1].props.onPress()
-    assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'phone', 'fm3', { bluetooth: false, demo: true }])
+    assert.deepEqual(b.world.asked.at(-1), ['setMetronomeSound', 'phone', 'fm3', { bluetooth: false, demo: true }, { start: true }])
     /* And Off there is plain No sound: the demo's unit makes none to warn about. */
     Object.assign(b.world, { setting: { on: true, where: 'phone', watch: false }, choice: { offered: true, on: true, quiet: true } })
     assert.ok(b.draw().words.includes('No sound. The edge of the screen lights on every beat.'))
@@ -263,6 +263,64 @@ export function run(test) {
     /* An AM4 through the computer: the same two. */
     Object.assign(b.world, { demo: false, bluetooth: false, slug: 'am4' })
     assert.deepEqual(b.draw().sounds.map((s) => s.props.label), ['Off', 'Phone'])
+  })
+
+  test('metronome choices: with the metronome off, a sound picked in the pop-up starts it, Off included; the flash’s switch never does; and the line says it is off and what starting gives', async () => {
+    /*
+     * Report 8be38966 (16 November 2026): Phone, Unit, Both and the flash
+     * pressed with the metronome off, under a line that read as if it were
+     * running, and nothing flashed.
+     */
+    const b = await bench()
+    Object.assign(b.world, { setting: { on: false, where: 'unit', watch: false }, choice: { offered: true, on: true, quiet: false } })
+    let d = b.draw()
+    assert.ok(d.words.includes('The metronome is off. Tap a sound to start it. As set now, the unit clicks, with a flash.'), `the line under the row: ${JSON.stringify(d.words)}`)
+    assert.ok(!d.words.some((w) => /^Clicks through|keeps time with it|tempo, not its exact beat/.test(w)), 'the line still reads as if it were running')
+    /* Every pick starts it, Off among them: one call each, with `start`. */
+    for (const s of d.sounds) await s.props.onPress()
+    assert.deepEqual(
+      b.world.asked.filter((a) => a[0] === 'setMetronomeSound').map((a) => [a[1], a[4]]),
+      ['none', 'unit', 'phone', 'both'].map((key) => [key, { start: true }]),
+      'a pick in the pop-up does not start the metronome'
+    )
+    assert.ok(!b.world.asked.some((a) => a[0] === 'setMetronome'), 'a pick started the metronome by a second write, past the picker')
+    /* The flash's switch is a light, and nothing else: it starts nothing and asks nothing of the unit. */
+    b.world.asked.length = 0
+    d.button('Flash the edge of the screen: on').props.onPress()
+    assert.deepEqual(b.world.asked, [['setEdgeFlash', false]], 'the flash’s switch did more than switch the flash')
+    /* What starting gives, as things are set. */
+    const line = (setting, choice, props) => {
+      Object.assign(b.world, { setting: { watch: false, ...setting }, choice: { offered: true, ...choice } })
+      return b.draw(props).words.filter((w) => /^The metronome is off\./.test(w))
+    }
+    assert.deepEqual(line({ on: false, where: 'phone' }, { on: true, quiet: true }), ['The metronome is off. Tap a sound to start it. As set now, the edge flashes, with no sound.'])
+    assert.deepEqual(line({ on: false, where: 'phone' }, { on: false, quiet: true }), ['The metronome is off. Tap a sound to start it. As set now, nothing keeps time: no sound, no flash.'])
+    assert.deepEqual(line({ on: false, where: 'phone' }, { on: false, quiet: false }), ['The metronome is off. Tap a sound to start it. As set now, the phone clicks, with no flash.'])
+    assert.deepEqual(line({ on: false, where: 'both' }, { on: true, quiet: false }), ['The metronome is off. Tap a sound to start it. As set now, the unit and the phone click, with a flash.'])
+    /* Over Bluetooth the device is what is lit, and what starts. */
+    b.world.bluetooth = true
+    assert.deepEqual(line({ on: false, where: 'unit' }, { on: true, quiet: false }), ['The metronome is off. Tap a sound to start it. As set now, the phone clicks, with a flash.'])
+    b.world.bluetooth = false
+    /* In the tempo box, and on a window too short for the row, there is no row to tap: the button above, in two lines at most. */
+    for (const props of [{ compact: true, lines: 2 }, {}]) {
+      if (!props.compact) b.world.height = 599
+      for (const where of ['unit', 'phone', 'both']) {
+        for (const quiet of [true, false]) {
+          for (const on of [true, false]) {
+            const said = line({ on: false, where }, { on, quiet }, props)
+            assert.equal(said.length, 1, JSON.stringify(said))
+            assert.match(said[0], /^The metronome is off\. Tap above to start: /)
+            assert.ok(said[0].length <= 88, `${said[0].length} characters, more than two lines in the tempo box: ${said[0]}`)
+          }
+        }
+      }
+      b.world.height = 844
+    }
+    /* Running, it says what it does, as before. */
+    assert.ok(!line({ on: true, where: 'unit' }, { on: true, quiet: false }).length)
+    /* And every other account reads what it always read. */
+    Object.assign(b.world, { setting: { on: false, where: 'unit', watch: false }, choice: { offered: false, on: true, quiet: false } })
+    assert.ok(b.draw().words.includes('Clicks through the unit’s own outputs.'), 'another account’s line changed')
   })
 
   test('metronome choices: every other account, the tempo box and a window too short for them see the switch and its line, as they were', async () => {

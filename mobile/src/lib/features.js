@@ -224,6 +224,19 @@ export const PRESET_WHEEL_FOR_EVERYONE = false
 export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false
 
 /**
+ * LINING UP THE LIGHT AND THE CLICK (lib/lineUp): on Settings → Metronome,
+ * two nudges kept on the device, the light and the device's own click, each
+ * Earlier or Later, and Tap along, which sets both from taps on the unit's
+ * click. "Will you make sure everything's in sync properly somehow or have a
+ * way for a user to calibrate" (Justin, 16 November 2026). Built on his
+ * account first, as every new thing is. Off, it is drawn for his account
+ * only, and for every other account the nudges are neither drawn nor
+ * applied, whatever the device has kept. It opens to everyone when he says
+ * so, with its What's new line in that pull request.
+ */
+export const METRONOME_LINE_UP_FOR_EVERYONE = false
+
+/**
  * QUICK EDIT ON THE APPLE WATCH (lib/watchQuick, lib/watchQuickEdit): a
  * pedal held on the watch opens its channels with a list of the block's
  * knobs under them, and the Digital Crown turns the one picked.
