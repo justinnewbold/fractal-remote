@@ -202,6 +202,16 @@ the new one. So a test line, with nothing committed for the build:
   more updates (an independent read, before the 2.0.0 pair). Wanted all
   the same, it is another build: his yes, the new values written into
   next-store.json on purpose in that pull request, the build right after.
+- *The number the app shows on a test copy is the update's*, 1.92.x, not
+  2.0.0: he asked for that ("dont change the build number to 2.0.0 on the
+  updartes currently going"), and then asked about it (17 November 2026:
+  "even though I've downloaded the 2.0.0 build on iPhone, it still says
+  1.92.5. Is that what it should say?"). Yes. 2.0.0 is the build's number,
+  which TestFlight and Google Play show for it, and a report's head says
+  it as "store copy: 2.0.0". The app's own number becomes the store
+  build's, or past it, with the release-day pull request. On an iPhone a
+  phone turning on its side on Play is itself a sign of the 2.0.0 copy:
+  the 1.90.0 one has no package to turn it.
 - *Google's own test machines sent a report from the 2.0.0 Android build,
   and it is NOT SETTLED* (report a345130c, 16 November 2026, 20:37 UTC: a
   OnePlus 8 Pro on Android 11, its message nothing but the sign-in's
@@ -249,69 +259,121 @@ the new one. So a test line, with nothing committed for the build:
   join), so the same close is not said twice. READ THAT LINE FIRST in any
   report where the link stays on "joining". NOT SEEN ON A PHONE YET: the
   first report with one is the check.
-- *His iPhone does not turn on its side on the 2.0.0 test build, and it is
-  NOT SETTLED* (17 November 2026: "It's not working on my account on the
-  2.0.0 build", then "It does not turn it all. And I've confirmed that I
-  can turn landscape in other apps on my phone"; an iPhone 17 Pro Max on
-  iOS 27.2.1, TestFlight build 33, his account, on Play). It is the first
-  look at phone-turns on a real phone, one of the five waiting patches the
-  build carries. WHAT IS KNOWN: the package is in the build and the app
-  asks, and the package takes it (his log of 16 November, report 8be38966:
-  "turning: upright" at launch and "turning: turns" a moment later,
-  twice); build 33's own Info.plist, read out of the build file itself
-  that day (the .ipa on expo.dev: 2.0.0 (33), built with Xcode 27.1), is
-  the one a prebuild of the same config and patches makes: it lists
-  upright and the two sides and starts upright, and the package is in its
-  binary; nothing else in the app answers iOS about ways up (no
-  react-native-screens, in that file either: its one "RNSScreen" is the
-  package's own look for it; every pop-up passes all four ways); no crash
-  has been sent from that build through TestFlight. WHAT IS NOT: what iOS
-  was holding after the ask, since the log could not say; there is no log
-  from a run in which he tried to turn it; and whether the phone's own
-  Portrait Orientation Lock was off (he turned other apps, and an app that
-  forces landscape, a full-screen video say, turns with that lock on;
-  which apps was not asked). SINCE 1.92.6 THE LOG SAYS IT, after every ask
-  the phone takes: "[app] turning: after "turns" — the phone holds lock 0,
-  ways 1,3,4, way up 1" (lib/turnScreen `sayTurn`, which only reads; the
-  numbers are the package's own, and the file's note says each). READ THE
-  LAST SUCH LINE FIRST in his next report: "lock 0, ways 1,3,4" on a phone
-  that still does not turn is iOS not acting on what the app told it,
-  which is also exactly how the phone's own Portrait Orientation Lock
-  looks from inside the app, so ASK HIM THAT FIRST, in plain words, if
-  that is the line; "lock 3, ways 1" is the app held upright all the same
-  (something else asked, or the package holds nothing of this app's and
-  fell back to how it starts); "lock 8, ways none" is no key window found
-  when it was asked, so at that moment the app would have answered iOS
-  with no way up (iOS asks again on its own, and may get another answer).
-  The same line is written when the app goes onto its side or back ("the
-  app is on its side now, 956×440"), when a phone on its side measures too
-  narrow (it is upright for the rest of that run after that, by the rule),
-  and when the iPhone comes back to the front. ON A SIMULATOR, free, on
-  GitHub's Macs, THE 2.0.0 BUILD TURNS, ON iOS 27 TOO (17 November 2026;
-  turn-check.yml with mobile/turn-check, on the working branch that day
-  and never merged: the 2.0.0 native side with a small stand-in for the
-  component, which asks as the app does at launch, upright and then
-  "turns", for every account, over the first screen). Built with Xcode
-  26.6 on an iPhone 17 Pro Max with iOS 26.5, the app followed the
-  simulated phone onto its side and back in all four ways it was tried
-  (the app's own order; "turns" alone; with no starting way up in
-  Info.plist; a landscape lock asked outright). Built with Xcode 27.1, the
-  store build's own (mobile/eas.json), on an iPhone 18 Pro Max with iOS
-  27.2, it did the same in those four and in a fifth with expo-updates
-  left on as the store build has it, so started the way a store copy
-  starts: the window went to 956×440 and back each time, reading "lock 0,
-  ways 1,3,4" after "turns". (On that image the Simulator has to be opened
-  by its path, and with no window to click the simulated phone is told
-  which way up it is held: notifyutil on
-  com.apple.backboardd.rawOrientation, 4 and then 1. A round before that
-  proved nothing there, because the simulated phone was never turned.) SO
-  THE BUILD AND ITS SETTINGS ARE NOT WHAT STOPS IT, on that evidence. WHAT
-  IS LEFT, on his phone: the app's real component and screens with his
-  account signed in on Play (the stand-in is not the real rule, and
-  nothing was signed in); iOS on a real phone; or the phone's own Portrait
-  Orientation Lock. His next report says which. A fix in the app's
-  JavaScript is an update; one in the native side is another build pair,
-  and his yes.
+- *His iPhone would not turn on its side on the 2.0.0 test build, then did
+  the same day, and WHY IS NOT SETTLED* (17 November 2026: "It's not
+  working on my account on the 2.0.0 build", then "It does not turn it
+  all. And I've confirmed that I can turn landscape in other apps on my
+  phone"; an iPhone 17 Pro Max on iOS 27.2.1, TestFlight build 33, his
+  account, on Play). It is the first look at phone-turns on a real phone,
+  one of the five waiting patches the build carries. LATER THAT DAY IT
+  TURNED: "OK, I just tried the landscape view again and now it's
+  working." The app said 1.92.5 on that phone then, so 1.92.6's line
+  (below) had not reached it, and 1.92.6 only reads: nothing sent for this
+  made it turn. He had just been asked whether the phone's own Portrait
+  Orientation Lock was on, and did not say; which update the phone was on
+  when it would not turn was not said either. So there is no log from a
+  try that failed and none from the one that worked, and what follows is
+  what was known and tried while it would not. AND THE SIDEWAYS LAYOUT HAS
+  NOW BEEN SEEN ON A REAL iPHONE: minutes later he sent a picture of Play
+  on its side ("That's on 1.92.6"; the same phone, his Axe-Fx III through
+  the Raspberry Pi): the eight scenes on the left in two rows of four, the
+  chain on the right, twelve blocks in three rows of four, the top bar
+  over both and the five buttons under them, and both ends kept clear of
+  the island. The scenes' two rows end about two thirds of the way down,
+  with nothing under them, where the chain's three rows fill the height:
+  that is how the layout draws square tiles, he has not said anything of
+  it, and he was offered taller scenes. Seen once, on Play alone, with
+  nothing open beside it; not yet with a tool beside Play, in Stage view,
+  or on Android. IF IT STICKS UPRIGHT AGAIN, the report he sends then has
+  the line, and that line is the first thing to read. WHAT IS KNOWN: the
+  package is in the build and the app asks, and the package takes it (his
+  log of 16 November, report 8be38966: "turning: upright" at launch and
+  "turning: turns" a moment later, twice); build 33's own Info.plist, read
+  out of the build file itself that day (the .ipa on expo.dev: 2.0.0 (33),
+  built with Xcode 27.1), is the one a prebuild of the same config and
+  patches makes: it lists upright and the two sides and starts upright,
+  and the package is in its binary; nothing else in the app answers iOS
+  about ways up (no react-native-screens, in that file either: its one
+  "RNSScreen" is the package's own look for it; every pop-up passes all
+  four ways); no crash has been sent from that build through TestFlight.
+  WHAT IS NOT: what iOS was holding after the ask, since the log could not
+  say; there is no log from a run in which he tried to turn it; and
+  whether the phone's own Portrait Orientation Lock was off (he turned
+  other apps, and an app that forces landscape, a full-screen video say,
+  turns with that lock on; which apps was not asked). SINCE 1.92.6 THE LOG
+  SAYS IT, after every ask the phone takes: "[app] turning: after "turns"
+  — the phone holds lock 0, ways 1,3,4, way up 1" (lib/turnScreen
+  `sayTurn`, which only reads; the numbers are the package's own, and the
+  file's note says each). READ THE LAST SUCH LINE FIRST in his next
+  report: "lock 0, ways 1,3,4" on a phone that still does not turn is iOS
+  not acting on what the app told it, which is also exactly how the
+  phone's own Portrait Orientation Lock looks from inside the app, so ASK
+  HIM THAT FIRST, in plain words, if that is the line; "lock 3, ways 1" is
+  the app held upright all the same (something else asked, or the package
+  holds nothing of this app's and fell back to how it starts); "lock 8,
+  ways none" is no key window found when it was asked, so at that moment
+  the app would have answered iOS with no way up (iOS asks again on its
+  own, and may get another answer). The same line is written when the app
+  goes onto its side or back ("the app is on its side now, 956×440"), when
+  a phone on its side measures too narrow (it is upright for the rest of
+  that run after that, by the rule), and when the iPhone comes back to the
+  front. ON A SIMULATOR, free, on GitHub's Macs, THE 2.0.0 BUILD TURNS, ON
+  iOS 27 TOO (17 November 2026; .github/workflows/turn-check.yml with
+  mobile/turn-check, kept in the repository since 1.92.7 and started by
+  hand from Actions, or by a push to the working branch that changes its
+  files: the next store version's native side with a small stand-in for
+  the component, put in PhoneTurns.js's place in the runner's copy only,
+  which asks as the app does at launch, upright and then "turns", for
+  every account, over the first screen). Built with Xcode 26.6 on an
+  iPhone 17 Pro Max with iOS 26.5, the app followed the simulated phone
+  onto its side and back in all four ways it was tried (the app's own
+  order; "turns" alone; with no starting way up in Info.plist; a landscape
+  lock asked outright). Built with Xcode 27.1, the store build's own
+  (mobile/eas.json), on an iPhone 18 Pro Max with iOS 27.2, it did the
+  same in those four and in a fifth with expo-updates left on as the store
+  build has it, so started the way a store copy starts: the window went to
+  956×440 and back each time, reading "lock 0, ways 1,3,4" after "turns".
+  (On that image the Simulator has to be opened by its path, and with no
+  window to click the simulated phone is told which way up it is held:
+  notifyutil on com.apple.backboardd.rawOrientation, 4 and then 1. A round
+  before that proved nothing there, because the simulated phone was never
+  turned.) A FOURTH ROUND THE SAME DAY, on that Xcode 27.1 build and
+  simulator, tried what a phone in use does and the first three never did.
+  ONE, THE APP RESTARTING ITSELF FOR A NEW VERSION, as lib/updates
+  applyNow does (expo-updates reloadAsync), with upright the last thing
+  asked before it and, as a control, with "turns". His log of 16 November
+  reads as one (his second run began 16 s after the first one's last line,
+  with 38 ms between "upright" and "turns" where the run before it had 1.3
+  s; the log itself does not say how either began). The package keeps one
+  mask for each module, allows only what every mask allows, and lets go of
+  a module's mask when the module is destroyed, so an upright that
+  outlived a restart would have held the app upright whatever was asked
+  after. IT DOES NOT OUTLIVE IT: the second run read "lock 3, ways 1"
+  before it had asked anything and after "upright", "lock 0, ways 1,3,4"
+  after "turns", and followed the simulated phone onto its side and back.
+  TWO, LEAVING THE APP AND COMING BACK (another app opened over it, then
+  the app brought to the front again). In the background the package holds
+  nothing of the app's and read "lock 3, ways 1", which is how the app
+  starts; back at the front it read "lock 0, ways 1,3,4" by itself, with
+  nothing asked, and where the phone was upright it turned again. That
+  round ran five ways (the app's own order with expo-updates off and on,
+  the two restarts, and a restart by expo's own reload with expo-updates
+  off, whose first seconds were not in the kept log), and every one
+  turned; after coming back four turned again, and in the fifth (the app's
+  own order, expo-updates off) the simulator's own command to turn the
+  phone back had timed out, so the app left on its side and came back on
+  its side, still 956×440 and "lock 0, ways 1,3,4". SO NEITHER THE BUILD
+  AND ITS SETTINGS, NOR A RESTART, NOR A TRIP AWAY FROM THE APP IS WHAT
+  STOPS IT, on a simulator. So in his log a "back at the front" line on
+  Play should read "lock 0, ways 1,3,4"; "lock 3, ways 1" there would mean
+  his phone's package did not ask again by itself as a simulator's does,
+  and the fix is to ask again from the app when it comes back, as
+  components/PhoneTurns already does on Android: an update. WHAT IS LEFT,
+  on his phone: the app's real component and screens with his account
+  signed in on Play (the stand-in is not the real rule, and nothing was
+  signed in); iOS on a real phone; or the phone's own Portrait Orientation
+  Lock. His next report says which. A fix in the app's JavaScript is an
+  update; one in the native side is another build pair, and his yes.
 
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with
@@ -2684,7 +2746,9 @@ the capture on the unit, which is the hard half.
     is forgotten only when the unit names the slot <EMPTY> (and when the
     app is closed: the unit is not asked what it holds when a tone opens).
   - *"✓ Playing in NAM 1" (17 November 2026, his account only, as the
-    whole page is).* A tap on Play it in NAM 1 when NAM 1 already played
+    whole page is; on the Developer page only since later that day, when a
+    held block's page lost its Play button: below).* A tap on Play it in
+    NAM 1 when NAM 1 already played
     that capture looked as if it did nothing. Now, where the unit itself
     has said on this page that a block is on a capture's slot (by Preview,
     Get and play, or Play it in), that block's button under it says "✓
@@ -2741,10 +2805,69 @@ the capture on the unit, which is the hard half.
       **Preview** puts the capture on the unit and plays it in THAT block,
       and the page stays. **Get** does the same and gives the pop-up back
       to the knobs, with what the block said it is playing over them. A
-      capture already on the unit has Play it in NAM 2 and Use it and go
-      back. The page is the Developer page's own (components/Tone3000Test
-      with `block`, `held`, `onDone`); what each button says it does is
+      capture already on the unit keeps the same two buttons (below). The
+      page is the Developer page's own (components/Tone3000Test with
+      `block`, `held`, `onDone`); what each button says it does is
       lib/tone3000Words, for the place it is in.
+    - *THE SAME TWO BUTTONS ON EVERY CAPTURE, AND A BLOCK THAT IS OFF IS
+      SWITCHED ON (17 November 2026).* "On this screen, what's the
+      difference between get it and use it and go back? Little confusing.
+      If I click each of those, would it do the same thing? Also ... if
+      the NAM block is off when you hold it to browse tone 3000, does it
+      turn it on so you can listen to it, or does it leave it off? need to
+      make sure that it turns it on automatically to listen" (with a
+      picture of NAM 2's page: one capture with Preview and Get, and one
+      already on the unit with "✓ Playing in NAM 2" and "Use it and go
+      back" under its card). They did the same thing: a capture already on
+      the unit had traded its two buttons for two of another name. So from
+      a held block, and from the capture list in Edit, EVERY capture has
+      Preview and Get: one already on the unit is played where it is
+      (Preview), or played and the page handed back (Get), with nothing
+      sent again, and the button tapped says "Changing…" while the pick is
+      out. "Use it and go back" and its words are gone. The Developer page
+      is as it was (there Get leaves what is playing alone, so a capture on
+      the unit has a Play button for each NAM block). AND THE BLOCK IS
+      SWITCHED ON: a pick only chooses the capture, so a preview in a block
+      that was off made no sound while the line said "is playing". Now,
+      once the unit has NAMED a capture in the block, a block the chain on
+      screen shows as off is switched on, from every button of the page
+      that plays one, the Developer page's too (lib/namPlaying
+      `switchOnToHear`; lib/namOnHere sends it, by the rig's own switch,
+      the one Edit's block page uses, read by rig `blockIsOff`). The line
+      then says "NAM 2 was off, so it is switched on now, and it is playing
+      …"; where the switch did not land it says the app couldn't switch it
+      on and to switch it on if nothing is heard (claiming nothing of the
+      block's state: an answer that was lost may have landed), as a note
+      under the card and never as "is playing". ONLY THEN: nothing is sent
+      for a block that is on, for one the chain on screen does not hold,
+      after a pick that failed or named an empty slot, or once the preset
+      or the scene has moved since the TAP; and it is on only, for the
+      scene the unit is on (lib/namOnHere cannot switch a block off; a test
+      holds it). The card now reaches a unit by the captures' three calls
+      and that one switch.
+      THREE READERS AND A SKEPTIC EACH WENT THROUGH IT FIRST, and four
+      things were fixed, each with a test seen to fail without it: (1) a
+      capture that is SENT first (half a minute over Bluetooth) was held
+      to where the unit was when the block was pointed, not when the
+      button was tapped, so a scene stepped to during the send had the
+      block switched on in it; the moment is taken at the tap now
+      (`tappedAt`), and a block that is off where the unit has moved to is
+      LEFT off and said so ("… the app left it off, because the scene, the
+      preset or the connection changed after your tap"); (2) the Developer
+      page ticked "✓ Playing in NAM 1" over a block that had stayed off
+      (not ticked now: `saysPlaying`, heardPick's `off`); (3) right after
+      a scene change whose status read missed, the on and off on screen is
+      the last scene's for about 0.6 s, and was answered as this scene's
+      (rig `blockIsOff` answers nothing while that read is owed); (4) the
+      check on what the card can reach skipped files with a hyphen in
+      their name. Left as it is, and known: where both tries at a scene's
+      status read miss, the last scene's on and off stays on screen until
+      the next read, here as on Play's own tiles.
+      NOT SEEN ON A UNIT: his next preview into a block that is off is the
+      check, and its log line is "NAM 2 was off: switched on, so the
+      capture is heard". Not covered: a block switched off at the unit's
+      own front panel since the app last read it still reads as on here,
+      as its tile on Play does.
     - *Get goes back only when the block has NAMED what it is playing.* A
       slot the unit calls empty, a pick it refused and one that never came
       back leave the page up with the reason on it.
@@ -3056,7 +3179,8 @@ the capture on the unit, which is the hard half.
       the same words on that capture's card in place of the one up top.
       Never over Bluetooth, the unit's USB cable or the demo, never on a
       version not said, and playing a capture already on the unit (Play
-      it in NAM 1, Use it and go back, the capture picker) is not a send.
+      it in NAM 1, a held block's Preview and Get on one that is there,
+      the capture picker) is not a send.
       Where the version was not said and the answer had no `nameByte`
       (lib/captureSend `old`), a capture not kept says the same reason
       and remedy in place of the log sentence; every other not-kept case
@@ -4238,126 +4362,32 @@ beat and the device makes no sound and no tap, and opens no audio.
     the beat lock it needs is `BEAT_LOCK_FOR_EVERYONE`, which has to open
     first or with it, or Tap along is offered to nobody else.
 
-**All presets as a wheel, a choice beside the list: built 11 November
-2026, HIS ACCOUNT ONLY.**
+**The preset wheel is gone (17 November 2026). All presets is the list,
+and only the list.**
 
-> "One thing I was thinking on the iPhone app is when they're scrolling
-> through the presets. It makes like a clicking and a vibration kind of
-> like the old iPod wheels did and maybe make some a little bigger and
-> smaller as you're scrolling through them ... to kinda highlight the
-> prominent one in the middle." Then, shown three pictures: "Can we do
-> preset scrolling option a as a setting? So we can have both the original
-> and that one." (11 November 2026)
+> "Except for the scroll wheel for presets, I wanna just get rid of that
+> altogether. That still doesn't work better on the new build. So let's
+> just keep the original way that we've been scrolling to select presets"
+> (Justin, 17 November 2026, on release day for 2.0.0)
 
-So the list is untouched, and the wheel is a choice: Settings → Play screen
-→ Tiles & scenes → Preset list (List or Wheel, and while Wheel is chosen a
-tick box, Click and tap as the wheel turns). Kept on the device
-(`fractal.presetWheel`), the list until somebody chooses.
-
-- **The switch** is `PRESET_WHEEL_FOR_EVERYONE` in
-  mobile/src/lib/features.js, false: the choice is drawn for his account
-  only, and every other account's All presets is the list whatever the
-  device has kept. It opens when he says so, with its What's new line in
-  that pull request (it has none yet).
-- **It is a click wheel that glides, the fourth version (12 November
-  2026).** The first two were a scrolling list that clicked, and both felt
-  wrong on his phone: first "very clunky doesn't match up with the clicks
-  properly ... remove the boxes around the outside edge of the presets as
-  well and make the size of the preset names a little smaller", then,
-  after the rows were made to follow the thumb, "it still needs. Research
-  how the iPod touch used to scroll through the songs, but I wanna make it
-  like a wheel right now it doesn't feel like a touch wheel.. and the
-  haptics and the sound still are not matching up properly so when you
-  scroll fast, it doesn't click at the right time when it slows down or at
-  all sometimes". Shown a ring to spin (A) and a drum to drag (B): "let's
-  do number A". The third was that ring, moving a bar one whole row a
-  notch, with nothing coasting: on time, but stiff. "It just still needs a
-  lot of work do some more research. Let's figure out how to get it
-  smoother and maybe like momentum where if I flicked it, it would go fast
-  if I went slow, it go slow, kinda like that kind of like an original
-  iPod would."
-  - *The rule that survives all four:* THE APP MOVES THE LIST ITSELF. A
-    list the system scrolls coasts on its own, and the app can only watch
-    it and click after the fact. Here where the list is is the app's own
-    number, and the one function that sets it (components/PresetWheel
-    `put`) fires the click and the tap the moment a new preset comes under
-    the bar, whether a thumb or a coast moved it. DO NOT GO BACK TO A
-    SCROLLING LIST, OR HAND THE MOVE TO AN ANIMATION, WITH CLICKS ON TOP:
-    a test fails on either.
-  - *What the music player did* (its maker's patents on accelerated
-    scrolling, and the open firmware written for it): a slow turn is one
-    item a notch; past a turning speed the same turn is worth more, the
-    faster the more, up to a most; a pause puts it back to one.
-  - *What it is* (components/PresetWheel.js): a ring under a short list
-    that slides under a fixed light bar. Turned slowly, 15 degrees is one
-    preset and the list moves with the thumb, part of a row for part of a
-    notch. Turned faster than two thirds of a turn a second, the same turn
-    is worth more, rising smoothly with the speed (`wheelGain`), held to
-    what the list is long enough to want and to 240 presets a second.
-    Lifting a thumb that is still turning lets the list coast from the
-    speed it had, slow like a wheel with a little friction, and stop
-    exactly on a row (`wheelCoast`); lifting one that had stopped settles
-    on the nearest row. The rows can be dragged and flicked the same way.
-    A thumb landing on the ring or the rows stops a coast. The list is
-    never settled under a thumb that has only paused (a slow, careful
-    thumb would lose the part of a notch it had turned). The middle
-    button, Load, loads the preset under the bar by that row's own press;
-    a row can be tapped too.
-  - *Why it is smooth:* the rows are one strip slid by one number, set
-    straight from the move, and are drawn again only every few rows
-    (`WHEEL_REDRAW`), never for each preset that passes. The bar is fixed;
-    the same strip is drawn inside it in dark ink, so a name turns dark as
-    it slides in. Names are one size (18) under the bar and round it, or a
-    name half in the bar would be two sizes at once.
-  - *No boxes:* a preset is its name, slot and star on one line; the one
-    being played is amber and says "Playing". Drawn in the plain colours,
-    never the glass, so Classic is the same.
-  - *The click* (lib/wheelClick.js) is ready before it is needed: on an
-    iPhone four players take turns, each rewound two clicks ahead of its
-    turn, and the device's sound is kept awake while a wheel is on screen.
-    At most about thirty a second: a thumb looking for a preset hears
-    every one, and a spin or a coast is a purr that thins into single
-    clicks as it slows. Android's tap is its own dial tick.
-  - *The list is not touched.* Its row in screens/Presets is word for word
-    what it was before there was a wheel ("let's make sure we don't touch
-    the other ones"); for the wheel, `rowOf(n, true)` answers what the
-    same preset says and does (a test counts each of them twice). Never
-    bend the list's row to share code with the wheel's.
-- **NOTHING LOADS UNTIL LOAD OR A ROW IS PRESSED.** The bar is where the
-  eye is, never what the unit plays.
-- **The arithmetic** is mobile/src/lib/presetWheel.js (imports nothing):
-  what a turn is worth at the speed it is made (`wheelFlow`), the coast
-  and where it lands, which preset is under the bar, and how the room is
-  shared between ring and rows.
-- **The click** is the system's picker tap and the metronome's click
-  played quietly: silent in silent mode, over a backing track rather than
-  stopping it. The metronome's own out-loud mode is never set back by it
-  (lib/audioMode.js).
-- **Sound, tap or both, and a flying line (12 November 2026).** Asked
-  which part was worst: "it's mostly the sound not matching. But it also
-  lags quite a bit too if you scroll really fast, it doesn't keep up..
-  maybe there's an option we can add also that we're just the sound. Is
-  there instead of the haptic feedback or vice versa?" So while the wheel
-  clicks, Settings offers Sound and tap, Sound only, Tap only (the
-  setting's `feel`; `wheelFeel` says which halves a click is made of, and
-  no sound is loaded for a wheel that only taps). And past 40 presets a
-  second the rows are put away and one line says the slot the list is
-  passing, big, with its name under it (`wheelFlying`, `WheelFlying`):
-  drawing the rows again was the slowest thing the wheel did, every frame,
-  for names nobody could read. They come back once when it slows under
-  18, rests, or a thumb stops dead.
-- **What an update cannot do:** the tap and the click are asked for
-  through Expo's own haptics and sound, which answer a few hundredths of
-  a second after they are asked. Making them land dead on the row needs a
-  small native piece (the system's tap made ready ahead of time, and a
-  sound played from memory), which is a build. Offered to him for the
-  next build list; not built.
-- **None of the four has run on a device here.** How far a notch is, how
-  soon and how hard the speed-up comes in, how long a flick carries and
-  the ring's size are his to say; they are single numbers in
-  lib/presetWheel.js (`WHEEL_NOTCH_DEG`, `WHEEL_EASY_DEG_S`,
-  `WHEEL_GAIN_MOST`, `WHEEL_ROWS_MOST`, `WHEEL_DRAG`, `WHEEL_GRIP`,
-  `wheelLayout`).
+From 11 to 17 November 2026 there was a click wheel beside the list, a
+choice in Settings → Play screen → Tiles & scenes, on his account only
+(#864 to #870: a ring to run a thumb round, a bar that moved one preset a
+notch with a click and a tap, a middle button that loaded it; four
+versions in two days, the last one gliding and coasting). No customer ever
+saw it, so it has no line in What's new. It is taken out whole: its switch
+(`PRESET_WHEEL_FOR_EVERYONE`), its component and rules
+(components/PresetWheel, lib/presetWheel, lib/usePresetWheel,
+lib/wheelClick), its rows in Settings, its test file, and lib/audioMode,
+which existed only so its click and the metronome's did not undo each
+other's sound mode. The list's own row was never bent for it ("let's make
+sure we don't touch the other ones", 11 November), and screens/Presets.js
+keeps the small tidy it brought (one `rowOf`, `emptyRows`, `lastLine`).
+The device may still hold `fractal.presetWheel` from his own tries: nothing
+reads it. The metronome's two click sounds (mobile/assets/click.wav,
+click-pad.wav) were the wheel's too and stay, being the metronome's first.
+Do not offer the wheel again; if he asks for another way through the
+presets, start from what he says then, not from this.
 
 **Amp & pedal names is its own button on the front of Settings, right
 under the profile, at both ends** (12 November 2026): "Let's move the amp

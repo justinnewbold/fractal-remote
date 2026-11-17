@@ -61,8 +61,6 @@ import {
 } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
-import { WHEEL_FEELS, WHEEL_WORDS, saveWheel, wheelSetting } from '../lib/presetWheel'
-import { usePresetWheelOffered } from '../lib/usePresetWheel'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
@@ -2364,9 +2362,6 @@ function TileSize({ onScrollLock }) {
   const fit = loadFit(sync, true)
   const icons = loadIcons(sync)
   const layout = loadSceneLayout(sync)
-  /* The preset wheel's choice (lib/presetWheel), for an account it is offered to. */
-  const wheelOffered = usePresetWheelOffered()
-  const wheel = wheelSetting(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
     <View style={{ gap: space.md }}>
@@ -2433,36 +2428,6 @@ function TileSize({ onScrollLock }) {
         />
       ))}
       {layout === 'mine' ? <ArrangeScenes onScrollLock={onScrollLock} /> : null}
-      {/*
-        THE PRESET LIST, OR THE WHEEL (lib/presetWheel). "Can we do preset
-        scrolling option a as a setting? So we can have both the original
-        and that one." One of two, so two radio rows; the click's tick box
-        is drawn only while the wheel is the one chosen. Only for an account
-        the wheel is offered to: for every other there is nothing here.
-      */}
-      {wheelOffered ? (
-        <>
-          <Section>{WHEEL_WORDS.section}</Section>
-          <Choice role="radio" on={!wheel.on} label={WHEEL_WORDS.list} sub={WHEEL_WORDS.listSub} onPress={() => saveWheel({ on: false }, sync)} />
-          <Choice role="radio" on={wheel.on} label={WHEEL_WORDS.wheel} sub={WHEEL_WORDS.wheelSub} onPress={() => saveWheel({ on: true }, sync)} />
-          {wheel.on ? (
-            <Choice on={wheel.clicks} label={WHEEL_WORDS.clicks} sub={WHEEL_WORDS.clicksSub} onPress={() => saveWheel({ clicks: !wheel.clicks }, sync)} />
-          ) : null}
-          {/* Which halves of the click: the sound, the tap, or both. "Maybe there's an option ... just the sound ... instead of the haptic feedback or vice versa." Only while it clicks at all. */}
-          {wheel.on && wheel.clicks
-            ? WHEEL_FEELS.map((feel) => (
-                <Choice
-                  key={feel}
-                  role="radio"
-                  on={wheel.feel === feel}
-                  label={WHEEL_WORDS.feels[feel]}
-                  sub={feel === 'tap' ? WHEEL_WORDS.feelSub : undefined}
-                  onPress={() => saveWheel({ feel }, sync)}
-                />
-              ))
-            : null}
-        </>
-      ) : null}
     </View>
   )
 }

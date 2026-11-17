@@ -120,11 +120,11 @@ export function run(test) {
     /* Never a block that is not a NAM, whatever is handed in; and "held" needs a way back to mean anything. */
     assert.match(card, /const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\]/)
     assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' \? 'captures' : 'knobs' \}/)
-    /* Preview: the one send, then the held block pointed at it. It stays on the page. */
-    assert.match(card, /onPress=\{\(\) => sendToUnit\(m, null, false, true\)\} \/>/)
-    assert.match(card, /setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id\)/)
+    /* Preview: the one send, then the held block pointed at it. It stays on the page. One already on the unit (`there`) is pointed at with nothing sent. */
+    assert.match(card, /onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/>/)
+    assert.match(card, /setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id, tappedAt\)/)
     /* Get, from a held block: the same, and then back, but only where the block answered with what it is playing. */
-    assert.match(card, /onPress=\{\(\) => sendToUnit\(m, null, false, where\.held, where\.held\)\} \/>/)
+    assert.match(card, /onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id, true\) : sendToUnit\(m, null, false, where\.held, where\.held\)\)\} \/>/)
     assert.match(card, /if \(back && nowPlaying && alive\.current\) onDone\?\.\(nowPlaying\)/)
     assert.equal((card.match(/if \(back && nowPlaying && alive\.current\) onDone\?\.\(nowPlaying\)/g) || []).length, 2)
     assert.equal((card.match(/onDone\?\.\(/g) || []).length, 2, 'the pop-up is handed back from somewhere else')
@@ -134,17 +134,25 @@ export function run(test) {
      * that never came back all answer nothing, so the page stays up with
      * the reason on it rather than going back to knobs over nothing.
      */
-    const point = card.slice(card.indexOf('const point = async (block, slot, id) => {'), card.indexOf('const useIn = async'))
+    const point = card.slice(card.indexOf('const point = async (block, slot, id, tapped = null) => {'), card.indexOf('const useIn = async'))
     assert.deepEqual(point.match(/return [^ ]+/g), ['return line', 'return null'])
     assert.match(point, /if \(got\.name === NAM_EMPTY\) \{ played\(/)
-    assert.match(point, /\} else \{ const line = pickedLine\(\{ n, name: got\.name, before \}\) played\(line, \{ playing: true \}\)/)
+    /* The block is told where it is before it is switched on (which can take a moment), and the line says what became of a block that was off (test/nam-playing.mjs). */
+    assert.match(point, /\} else \{ if \(isPlaced\(id\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) const on = await hear\(block, tapped \|\| asked\) const line = pickedLine\(\{ n, name: got\.name, before, on \}\) if \(!saysPlaying\(on\)\) heard\(\{ off: true \}\) played\(line, \{ playing: saysPlaying\(on\) \}\) return line \}/)
     const answered = point.indexOf('return line')
     assert.ok(answered > 0 && answered < point.indexOf('} catch (err) {'), 'only a pick the unit answered returns a line')
     /* A send that stopped part-way and is sent again is still the button it was: a Get from a held block still goes back. */
     assert.match(card, /\[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \}/)
     assert.match(card, /sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)/)
-    /* A capture already on the unit, there: hear it in that block, or take it and go back. Not the other block's button, which is not what was held. */
-    assert.match(card, /\{there && where\.held \? \( <> \{\(\(\) => \{ const b = namPlayButton\(\{ known: playing, now, block: playIn, n: where\.n, slot: at\.slot, changing: busy === `pick \$\{playIn\}` && mine \}\) return <Press label=\{b\.label\} sub=\{b\.sub\} height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id\)\} \/> \}\)\(\)\} <Press label=\{USE_AND_BACK\} sub=\{useAndBackSub\(where\.n, where\.back\)\} tone="live" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id, true\)\} \/> <\/> \) : null\}/)
+    /*
+     * A capture already on the unit, there, keeps the same two buttons as one that is not ("what's the difference between get it
+     * and use it and go back? Little confusing", 17 November 2026): Preview plays it in that block, Get plays it and goes back.
+     * No button of another name, and never the other block's, which is not what was held. On the Developer page the two give way
+     * to a Play button for each block, as they did.
+     */
+    assert.match(card, /\{noUse \|\| \(there && !where\.held\) \? null : \( <> <LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{previewSays\(named, where\.n, there\)\} disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/> <LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{getSays\(named, \{ \.\.\.where, there \}\)\} lit disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id, true\) : sendToUnit\(m, null, false, where\.held, where\.held\)\)\} \/> <\/> \)\}/)
+    assert.doesNotMatch(card, /there && where\.held|USE_AND_BACK|useAndBackSub/)
+    assert.equal((card.match(/useIn\(/g) || []).length, 3, 'a capture on the unit is played from some other button')
     /* The Developer page is handed nothing, so it is what it was: NAM 1, Get leaves what is playing alone, and nothing goes back anywhere. */
     assert.match(flat(code(read('mobile/src/screens/Settings.js'))), /\{head\('TONE3000', 'back'\)\} <Tone3000Test \/>/)
   })
@@ -156,26 +164,36 @@ export function run(test) {
     assert.equal(w.T3K_QUICK, 'TONE3000')
     assert.equal(w.quickSub(2), 'Browse captures, preview them, and get one for NAM 2')
     assert.equal(w.backToKnobs(2), '‹ Back to NAM 2’s knobs')
-    assert.equal(w.USE_AND_BACK, 'Use it and go back')
-    assert.equal(w.useAndBackSub(1), 'Plays it in NAM 1 and returns to its knobs')
-    /* From a held block: Preview plays there; Get does the same and goes back. Both keep the capture on the unit, and say so. */
-    /* "Once NAM 2 is playing it": a Get whose send or pick fails stays on the page with the reason, and the words allow for it. */
-    assert.equal(w.capturesNote({ n: 2, held: true }), 'Preview puts the capture in an empty slot on the unit and plays it in NAM 2. Get does the same and, once NAM 2 is playing it, takes you back to its knobs. Either way it stays on the unit.')
+    /* The two buttons a capture already on the unit used to have there are gone, words and all (17 November 2026): it keeps Preview and Get. */
+    assert.equal(w.USE_AND_BACK, undefined)
+    assert.equal(w.useAndBackSub, undefined)
+    /* From a held block: Preview plays there; Get does the same and goes back. Both keep the capture on the unit, and say so. One plain sentence each, over the captures. */
+    assert.equal(w.capturesNote({ n: 2, held: true }), 'Preview plays a capture in NAM 2, so you hear it through your own rig. Get does the same and takes you back to its knobs. Either way the capture goes on the unit and stays there. If NAM 2 is switched off in the scene you are on, it is switched on so you hear it.')
     assert.equal(w.getSays('Plexi', { n: 2, held: true }), 'Get Plexi: puts it on the Axe-Fx III, plays it in NAM 2 and goes back to its knobs')
     assert.equal(w.previewSays('Plexi', 2), 'Preview Plexi: puts it on the Axe-Fx III and plays it in NAM 2')
+    /* On the unit already (`there`): read aloud as what the button does then, which is nothing put there a second time. */
+    assert.equal(w.previewSays('Plexi', 2, true), 'Preview Plexi: plays it in NAM 2')
+    assert.equal(w.getSays('Plexi', { n: 2, held: true, there: true }), 'Get Plexi: plays it in NAM 2 and goes back to its knobs')
+    assert.equal(w.getSays('Plexi', { n: 2, held: true, there: false }), w.getSays('Plexi', { n: 2, held: true }))
+    assert.equal(w.previewSays('Plexi', 2, false), w.previewSays('Plexi', 2))
+    /* The steps keep "once NAM 2 is playing it": a Get whose send or pick fails stays on the page with the reason, and the words allow for it. */
     assert.match(w.stepsFor({ n: 2, held: true })[1], /Preview puts it on the Axe-Fx III and plays it in NAM 2, so you hear it through your own rig\. Get does the same and, once NAM 2 is playing it, takes you back to its knobs\.$/)
-    assert.equal(w.stepsFoot({ n: 2, held: true }), 'Which capture NAM 2 plays is not saved until you save the preset, and a capture already on the unit is never written over.')
+    /* And the last step says what happens to a capture already there, and to a block that is off, in the scene the unit is on. */
+    assert.equal(w.stepsFor({ n: 2, held: true }).at(-1), 'A capture already on the unit is not sent again: Preview and Get play it where it is. If NAM 2 is switched off in the scene you are on, it is switched on so you hear the capture.')
+    assert.equal(w.stepsFor().at(-1), 'A NAM block that is switched off in the scene you are on is switched on when a capture is played in it, so you hear it.')
+    assert.equal(w.stepsFoot({ n: 2, held: true }), 'Which capture NAM 2 plays, and its being switched on, are not saved until you save the preset. A capture already on the unit is never written over.')
     /* On its own page they are what they were: NAM 1, and Get leaves what is playing alone. */
     assert.equal(w.capturesNote(), 'Preview and Get both put the capture in an empty slot on the unit, and it stays there. Preview also plays it in NAM 1.')
     assert.match(w.stepsFor()[1], /Get puts it on the unit and leaves what you are playing alone\.$/)
     assert.match(w.stepsFoot(), /^For Preview, the preset you are on needs NAM 1 in it/)
-    /* Three steps: the fourth named TONE3000's own page, which is not offered (T3K_CATALOG_PAGE). No step names a button the page does not have. */
-    assert.equal(w.stepsFor().length, 3)
+    /* Four steps, the last what happens to a block that is off; a fifth named TONE3000's own page, which is not offered (T3K_CATALOG_PAGE). No step names a button the page does not have. */
+    assert.equal(w.stepsFor().length, 4)
+    assert.equal(w.stepsFor({ n: 1, held: true }).length, 4)
     assert.equal(w.T3K_CATALOG_PAGE, false)
     for (const at of [{}, { n: 2, held: true }, { n: 1, held: true, back: 'captures' }]) assert.ok(!/Browse TONE3000/.test(w.stepsFor(at).join(' ')))
     /* A held block's page never names the block that was not held, and never says the preset needs a block: it was opened from one. */
     for (const n of [1, 2]) {
-      const said = [...w.stepsFor({ n, held: true }), w.stepsFoot({ n, held: true }), w.capturesNote({ n, held: true }), w.getSays('X', { n, held: true }), w.previewSays('X', n), w.quickSub(n), w.backToKnobs(n), w.useAndBackSub(n)].join(' ')
+      const said = [...w.stepsFor({ n, held: true }), w.stepsFoot({ n, held: true }), w.capturesNote({ n, held: true }), w.getSays('X', { n, held: true }), w.getSays('X', { n, held: true, there: true }), w.previewSays('X', n), w.previewSays('X', n, true), w.quickSub(n), w.backToKnobs(n)].join(' ')
       assert.ok(!said.includes(`NAM ${n === 1 ? 2 : 1}`), said)
       assert.ok(!/needs NAM/.test(said), said)
       /* Plain words, and the house rules for them. */
@@ -209,8 +227,8 @@ export function run(test) {
      */
     assert.match(picker, /const pointed = useRef\(null\) const left = useRef\(true\) const changed = useRef\(onChanged\) changed\.current = onChanged const browse = \(\) => \{ pointed\.current = null left\.current = false setBrowsing\(true\) \} const leave = \(\) => \{ left\.current = true changed\.current\?\.\(pointed\.current\) \}/)
     assert.equal((picker.match(/onChanged/g) || []).length, 3, 'Edit is told from somewhere that does not go through the newest onChanged')
-    /* And the page says it: by the unit's own word, for the block it is drawn for, before anything asks whether the page is still up. */
-    assert.match(card, /if \(isPlaced\(id\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) return line/)
+    /* And the page says it: by the unit's own word, for the block it is drawn for, before anything asks whether the page is still up, and before the block is switched on, which is another message and can take a moment. */
+    assert.match(card, /if \(isPlaced\(id\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) const on = await hear\(block, tapped \|\| asked\)/)
     /* An empty slot is said too (the block is on it), and a pick that failed says none: it may have landed, so the slot said before it is not vouched for any more. */
     assert.match(card, /unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`, \{ playing: false \}\) if \(block === playIn\) onPointed\?\.\(null\) \} return null/)
@@ -242,16 +260,15 @@ export function run(test) {
     const w = await words()
     assert.equal(w.BACK_TO_CAPTURES, '‹ Back to the captures on the unit')
     const at = { n: 1, held: true, back: 'captures' }
-    assert.equal(w.capturesNote(at), 'Preview puts the capture in an empty slot on the unit and plays it in NAM 1. Get does the same and, once NAM 1 is playing it, takes you back to the captures on the unit. Either way it stays on the unit.')
+    assert.equal(w.capturesNote(at), 'Preview plays a capture in NAM 1, so you hear it through your own rig. Get does the same and takes you back to the captures on the unit. Either way the capture goes on the unit and stays there. If NAM 1 is switched off in the scene you are on, it is switched on so you hear it.')
     assert.equal(w.getSays('Plexi', at), 'Get Plexi: puts it on the Axe-Fx III, plays it in NAM 1 and goes back to the captures on the unit')
-    assert.equal(w.useAndBackSub(1, 'captures'), 'Plays it in NAM 1 and returns to the captures on the unit')
+    assert.equal(w.getSays('Plexi', { ...at, there: true }), 'Get Plexi: plays it in NAM 1 and goes back to the captures on the unit')
     assert.match(w.stepsFor(at)[1], /Get does the same and, once NAM 1 is playing it, takes you back to the captures on the unit\.$/)
-    const said = [...w.stepsFor(at), w.stepsFoot(at), w.capturesNote(at), w.getSays('X', at), w.useAndBackSub(1, 'captures'), w.BACK_TO_CAPTURES].join(' ')
+    const said = [...w.stepsFor(at), w.stepsFoot(at), w.capturesNote(at), w.getSays('X', at), w.getSays('X', { ...at, there: true }), w.BACK_TO_CAPTURES].join(' ')
     assert.ok(!/knobs/.test(said), said)
     assert.ok(!/\b(Safari|Chrome|beta|soon|coming|official|this phone|this device)\b/i.test(said), said)
     assert.ok(!/without keeping|try before|temporar|not (be )?kept|isn’t kept|isn't kept|removed after|goes away|quick listen|just listen/i.test(said), said)
     /* From the knobs they are what they were. */
-    assert.equal(w.useAndBackSub(2), 'Plays it in NAM 2 and returns to its knobs')
     assert.equal(w.getSays('Plexi', { n: 2, held: true, back: 'anything else' }), 'Get Plexi: puts it on the Axe-Fx III, plays it in NAM 2 and goes back to its knobs')
     /* The sheet's own note while the page is up says what it is, in the picker's own plain words. */
     assert.match(picker, /note=\{browsing && library\.offered \? 'Captures from TONE3000\. One you preview or get plays on the channel this block is on\.' : newest \? 'The captures on the unit, newest first\. The one picked plays on the channel this block is on\.' : 'The captures on the unit\. The one picked plays on the channel this block is on\.'\}/)

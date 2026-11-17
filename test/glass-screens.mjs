@@ -135,8 +135,8 @@ export function run(test) {
     /* Every row a bar can go down, so a tagged row and an untagged one are the same shape and glass; flat, as a long list is. */
     assert.match(row, / bar flat style=\{tagEdge\(tag\)\}/, 'a preset row takes its shape from whether it has a tag, or casts a drop in a long list')
     assert.match(row, /grow height=\{ROW\}/, 'the preset row is not ROW tall')
-    /* The list draws the row as it is; the preset wheel's is another (test/preset-wheel.mjs). */
-    assert.match(all, /renderItem=\{\(\{ item: n \}\) => rowOf\(n\)\}/, 'the list draws the wheel\'s row')
+    /* The list draws the row as it is. */
+    assert.match(all, /renderItem=\{\(\{ item: n \}\) => rowOf\(n\)\}/, 'the list does not draw its own row')
     assert.match(src, /const ROW = TAP/)
     assert.match(src, /const STRIDE = ROW \+ GAP/)
     assert.match(src, /marginBottom: GAP/)

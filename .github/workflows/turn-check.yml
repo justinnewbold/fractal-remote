@@ -1,0 +1,167 @@
+# Does the next store version's iPhone app turn on its side? A check on
+# GitHub's Macs: free (a public repository), no Expo build, nothing published.
+#
+# It builds the native side of the build that is waiting in docs/pending (as
+# mobile.yml's "Build the next store version" does), puts a small stand-in in
+# place of components/PhoneTurns.js IN THE RUNNER'S COPY ONLY
+# (mobile/turn-check/tweak.mjs: it asks the phone as the app does at launch,
+# upright and then "turns", for every account and over the first screen, writes
+# every ask and every size change to the system log, and draws the window's
+# size on screen), builds a Release app for a simulated iPhone with the
+# JavaScript inside it, turns the simulated phone, and says for each way tried
+#   TURNED: yes  or  TURNED: no
+# and, after leaving the app and coming back,
+#   AFTER LEAVING THE APP AND COMING BACK: turned  or  DID NOT TURN
+# (mobile/turn-check/run-sim.sh, which has how a simulated phone with no window
+# is turned). The stand-in is never in the app: nothing in mobile/src or
+# App.js imports it.
+#
+# Why it exists: "It does not turn it all." (Justin, 17 November 2026, his
+# iPhone 17 Pro Max on iOS 27 with the 2.0.0 test build; it turned later the
+# same day, and why was never found). CLAUDE.md, "His iPhone would not turn
+# on its side", has what four rounds of this showed.
+#
+# The ways:
+#   default          the app's own order: upright, then "turns" a second later
+#   never-upright    "turns" only, never upright first
+#   no-initial       as default, with no EXDefaultScreenOrientationMask (the
+#                    plugin's initialOrientation dropped before prebuild)
+#   force-landscape  as default, then a landscape-only lock 15 s in, which
+#                    needs no turning of the simulated phone: whether the app
+#                    CAN be landscape at all
+#   with-updates     as default, with expo-updates left on as the store build
+#                    has it, so the app starts the way a phone's copy does
+#   reload-upright   the app restarts itself as it does for a new version
+#                    (lib/updates applyNow: expo-updates reloadAsync) with
+#                    upright the last thing asked; expo-updates on
+#   reload-turns     the same with "turns" the last thing asked: the control
+#   reload-plain     as reload-upright, expo-updates off, expo's own reload
+#
+# Started by hand (Actions, turn-check, Run workflow, with the ways to try),
+# and by a push to the working branch that changes these files.
+name: turn-check
+
+on:
+  push:
+    branches: [claude/fractal-remote-continue-ljfqcd]
+    paths:
+      - 'mobile/turn-check/**'
+      - '.github/workflows/turn-check.yml'
+  workflow_dispatch:
+    inputs:
+      variants:
+        description: 'The ways to try, as a JSON list of names from the top of the file'
+        required: false
+        default: '["default","with-updates","reload-upright","reload-turns","reload-plain"]'
+
+concurrency:
+  group: turn-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  turn:
+    name: turn (${{ matrix.variant }})
+    # The store build is made with Xcode 27.1 (mobile/eas.json pins
+    # macos-tahoe-26.6-xcode-27.1), and what UIKit does for an app depends on
+    # the SDK it was built with. So this is duo.yml's image and its Xcode,
+    # and an iOS 27 simulator. When eas.json's image moves, move this with it.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(github.event.inputs.variants || '["default","with-updates","reload-upright","reload-turns","reload-plain"]') }}
+    env:
+      VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The image defaults to Xcode 27.0 (duo.yml).
+      - name: Xcode 27.1
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s /Applications/Xcode_27.1.app
+
+      - name: Which Xcode, which simulators
+        continue-on-error: true
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i iphone || true
+          xcrun simctl list devices available | grep -i iphone || true
+
+      # Exactly what mobile.yml's build job does with "Build the next store
+      # version" ticked, so the native project is that build's. With nothing
+      # waiting in docs/pending the script has nothing to put in, and
+      # tweak.mjs then stops with why (there is no PhoneTurns.js to stand in
+      # for until phone-turns is in main).
+      - name: The next store version's native work (every patch in docs/pending)
+        run: bash scripts/apply-pending.sh
+
+      # After the patches, which add packages (expo-screen-orientation among
+      # them) to mobile/package.json and its lock, as mobile.yml does.
+      - name: Install
+        working-directory: mobile
+        run: npm ci
+
+      - name: The experiment's JavaScript (this runner's copy only)
+        run: |
+          node mobile/turn-check/tweak.mjs "$VARIANT"
+          git --no-pager diff --stat
+          git --no-pager diff mobile/app.json
+
+      - name: The iPhone project, generated as EAS generates it
+        working-directory: mobile
+        run: npx expo prebuild -p ios --no-install
+
+      - name: What the generated project says about turning
+        continue-on-error: true
+        working-directory: mobile/ios
+        run: |
+          set +e
+          echo "== Info.plist orientation keys (before the build)"
+          plutil -p FractalRemote/Info.plist | grep -i -A5 orientation
+          echo "== The app delegate and the scene delegate"
+          ls FractalRemote
+          for f in FractalRemote/AppDelegate.swift FractalRemote/SceneDelegate.swift; do [ -f "$f" ] && { echo "--- $f"; cat "$f"; }; done
+          echo "== Scene manifest"
+          plutil -extract UIApplicationSceneManifest json -o - FractalRemote/Info.plist; echo
+
+      - name: Pods
+        working-directory: mobile/ios
+        run: pod install
+
+      # Release: the JavaScript is bundled into the app, so no Metro, and the
+      # build is the shape of a store build (unsigned, for the simulator).
+      - name: Build a Release app for the simulator
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
+          tail -n 20 build.log
+          find build/Build/Products -maxdepth 2 -name '*.app'
+
+      - name: Turn the simulated iPhone
+        run: bash mobile/turn-check/run-sim.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turn-check-${{ matrix.variant }}
+          path: |
+            mobile/turn-check/out
+            mobile/ios/build.log
+          if-no-files-found: ignore
+          retention-days: 7
