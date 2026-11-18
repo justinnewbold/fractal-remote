@@ -651,3 +651,67 @@ export const COMPUTER_UPDATE_FOR_EVERYONE = true
  * read's own time).
  */
 export const LIVE_KNOBS_FOR_EVERYONE = true
+
+/**
+ * AN FM9'S OR AN AXE-FX III'S TUNER OVER BLUETOOTH OR A USB CABLE ASKS THE
+ * UNIT, the computer app's own way, when Fractal's switch brings no readings
+ * (bleWire `asksOn`, gen3TunerOn).
+ *
+ * "I want to enable all of the items currently available to computer bridge
+ * users to Bluetooth like chain editing and live tuner on phone and Apple
+ * Watch." (Justin, 18 November 2026.) Through a computer those two units'
+ * tuner needs nothing set on the unit. Over Bluetooth it showed a needle
+ * only with Send Realtime Sysex on (Setup → MIDI/Remote), which is off on a
+ * unit as it comes. Open, a switch that brings nothing in 1.2 s is followed
+ * by the tuner page and the frequency question, the two messages the
+ * computer app sends every gen-3 unit and this wire already sends an FM3.
+ * The watch's tuner is the phone's, so it follows.
+ *
+ * His account first, as every new thing is: NOT SEEN ON A UNIT over its
+ * MIDI jacks. Off, it is his account only (lib/bluetooth
+ * tunerAsksOverBluetooth) and every other account's tuner sends the switch
+ * alone, as before.
+ */
+export const TUNER_ASKS_FOR_EVERYONE = false
+
+/**
+ * THE CHAIN EDITOR OVER BLUETOOTH OR A USB CABLE: one block moved, added or
+ * removed in a chain that has blocks, rows and splits, and Undo, on an AM4,
+ * FM3, FM9 or Axe-Fx III (bleWire gen3PlacedBlocks, lib/device
+ * wantPlacedChain, Edit's chainTools).
+ *
+ * "I want to enable all of the items currently available to computer bridge
+ * users to Bluetooth like chain editing" (Justin, 18 November 2026). The
+ * messages that place a block and join a cable went out with Quick build
+ * (CHAIN_OVER_BLUETOOTH_FOR_EVERYONE); what the editor lacked was every
+ * block's place, which Play's read over Bluetooth does not carry. The wire
+ * now answers them from the preset read whole, while the editor is open.
+ * Slow down an adapter from a gen-3 unit (half a minute from an Axe-Fx III
+ * over a WIDI Master, after every change), a moment on the unit's USB cable
+ * or an AM4, and the editor says so.
+ *
+ * His account first: NO BLOCK HAS BEEN MOVED, ADDED OR REMOVED THIS WAY ON A
+ * UNIT. Off, it is his account only (lib/bluetooth
+ * chainEditorOverBluetooth) and every other account's Edit says what it
+ * said. It also wants the chain itself open (CHAIN_OVER_BLUETOOTH_FOR_EVERYONE).
+ */
+export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * EDIT'S SMALLER TOOLS OVER BLUETOOTH OR A USB CABLE: Rename preset and
+ * scenes (lib/bleNames, bleWire writePresetName and writeSceneName), with
+ * Copy a scene onto another under it, and Copy channel under a block's
+ * knobs, on an AM4, FM3, FM9 or Axe-Fx III.
+ *
+ * "I want to enable all of the items currently available to computer bridge
+ * users to Bluetooth" (Justin, 18 November 2026). The names are the
+ * computer app's own messages, byte for byte, into the edit buffer; the two
+ * copies are reads and writes Edit and Play already make there (a channel
+ * switched, a block read, a knob, a model, a scene).
+ *
+ * His account first: NO NAME HAS BEEN WRITTEN AND NO CHANNEL COPIED THIS WAY
+ * ON A UNIT. Off, it is his account only (lib/bluetooth
+ * editToolsOverBluetooth) and every other account's Edit offers neither
+ * over Bluetooth, as before.
+ */
+export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = false

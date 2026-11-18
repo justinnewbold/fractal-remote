@@ -379,7 +379,13 @@ export async function currentPreset() {
  * ones a screen wants is that screen's business; see `stageBlocks`.
  */
 export async function presetBlocks() {
-  const read = await remoteRequest('/preset/blocks')
+  const ask = placedAsk()
+  let read
+  try {
+    read = await remoteRequest('/preset/blocks', ask)
+  } finally {
+    if (ask) tellPlaced(null)
+  }
   if (!Array.isArray(read)) return []
   /* AN AM4'S SLOTS COUNT FROM ONE in this read, through the computer and over Bluetooth alike; put back to zero here, as the browser does (lib/chainShape chainFromZero). */
   const list = chainFromZero(read, chainCaps, { demo: !!demoDevice(), vp4: onVp4 })
@@ -403,6 +409,46 @@ export async function presetBlocks() {
   sayNewBlocks(out)
   return out
 }
+
+/*
+ * THE CHAIN WITH EVERY BLOCK'S PLACE, OVER BLUETOOTH OR A USB CABLE, WHILE
+ * THE CHAIN EDITOR IS OPEN.
+ *
+ * Through the computer the chain always comes with each block's row, column
+ * and joins. On the device's own wire Play's read is a small status answer
+ * with no places, and the places are the preset read whole: half a minute
+ * down an adapter from an Axe-Fx III. So the wire is asked for them only
+ * while somebody has the chain editor open (Edit says so here), and only
+ * the wire: the computer and the demo are asked exactly as before, since
+ * the option never leaves the device.
+ *
+ * `onPlacedProgress(fn)` is told how far that slow read has got ({ got, of },
+ * or null when one ends), for the editor's own line.
+ */
+let placedChain = false
+const placedHears = new Set()
+const tellPlaced = (p) => {
+  for (const fn of [...placedHears]) {
+    try {
+      fn(p)
+    } catch {
+      /* A screen's own line; it can never stop a read. */
+    }
+  }
+}
+export const wantPlacedChain = (on) => {
+  placedChain = on === true
+}
+export const placedChainWanted = () => placedChain
+export const onPlacedProgress = (fn) => {
+  if (typeof fn !== 'function') return () => {}
+  placedHears.add(fn)
+  return () => placedHears.delete(fn)
+}
+/* What the chain read is asked with: nothing, or, on the device's own wire with the editor open, the places (and Edit's mark, which the wire wants on anything of Edit's). */
+const placedAsk = () => (placedChain && !demoDevice() && !onVp4 && bluetoothWire() ? { ...EDITING, placed: true, onProgress: tellPlaced } : undefined)
+/* The same for the grid: kept as long as the placed chain is (bleWire PLACED_FRESH_MS), so the editor's own look at the joins straight after the chain read is not a second half minute. */
+const keptAsk = () => (placedChain && !demoDevice() && !onVp4 && bluetoothWire() ? { kept: true } : {})
 
 /*
  * THE NAMER. Whoever knows the unit's own blocks hands one in
@@ -1277,8 +1323,32 @@ export const blockCatalog = async () => {
  * The unit answers `ok:false` to writes that landed. See `doubtfulWrite`: that
  * answer is reported and never acted on.
  */
-export const placeBlock = (row, col, blockId) =>
-  put('/preset/grid/cell', { ...toWireCell(row, col), blockId })
+export const placeBlock = async (row, col, blockId) => {
+  await chainReadFirst()
+  return put('/preset/grid/cell', { ...toWireCell(row, col), blockId })
+}
+
+/*
+ * OVER BLUETOOTH, WITH THE CHAIN EDITOR OPEN, THE GRID IS READ BEFORE A
+ * WRITE THAT WOULD BE REFUSED FOR WANT OF IT. The wire takes a place or a
+ * cable only for the chain as it was read since the last scene or preset
+ * change (bleWire chainSeen). Quick build and a move read the grid first
+ * themselves; the editor's Add and Remove, written for the computer, which
+ * has no such rule, do not, and a scene tapped since the chain was read (or
+ * an AM4, whose chain read is not its grid read) had every Add answered
+ * "Try it again", for good. The layout is the same after a scene change,
+ * so the read vouches for what is on screen; the wire's own checks still
+ * stand behind it. Nothing through the computer or in the demo.
+ */
+async function chainReadFirst() {
+  const wire = placedChain && !demoDevice() && !onVp4 ? bluetoothWire() : null
+  if (!wire || typeof wire.chainRead !== 'function' || wire.chainRead()) return
+  try {
+    await remoteRequest('/preset/grid', { kept: true, onProgress: tellPlaced })
+  } finally {
+    tellPlaced(null)
+  }
+}
 
 export const clearCell = (row, col) => placeBlock(row, col, 0)
 
@@ -1297,7 +1367,8 @@ export const clearCell = (row, col) => placeBlock(row, col, 0)
  * never told: that read takes half a second.
  */
 export async function gridCells({ onProgress } = {}) {
-  const res = await remoteRequest('/preset/grid', typeof onProgress === 'function' ? { onProgress } : undefined)
+  const kept = keptAsk()
+  const res = await remoteRequest('/preset/grid', typeof onProgress === 'function' ? { ...kept, onProgress } : kept.kept ? kept : undefined)
   return Array.isArray(res?.cells) ? res.cells : []
 }
 
@@ -1305,10 +1376,12 @@ export async function gridCells({ onProgress } = {}) {
 export const setCable = (srcRow, srcCol, destRow, connect = true) =>
   told(
     `cable row ${srcRow + 1} column ${srcCol + 1} → row ${destRow + 1}${connect ? '' : ' cut'}`,
-    post('/preset/grid/cable', {
-      ...toWireCable(srcRow, srcCol, destRow),
-      connect
-    })
+    chainReadFirst().then(() =>
+      post('/preset/grid/cable', {
+        ...toWireCable(srcRow, srcCol, destRow),
+        connect
+      })
+    )
   )
 
 /**
@@ -1363,8 +1436,8 @@ export const bindModifier = (slot, targetEffectId, targetParam, source) =>
   )
 
 /** Name the preset, and name a scene. Both land in the edit buffer only. */
-export const setPresetName = (name) => told(`preset name “${name}”`, post('/preset/name', { name }))
-export const setSceneName = (index, name) => told(`scene ${index + 1} name “${name}”`, post('/scene/name', { index, name }))
+export const setPresetName = (name) => told(`preset name “${name}”`, post('/preset/name', { name }, EDITING))
+export const setSceneName = (index, name) => told(`scene ${index + 1} name “${name}”`, post('/scene/name', { index, name }, EDITING))
 
 /**
  * Write one knob and do not wait to be told it landed.

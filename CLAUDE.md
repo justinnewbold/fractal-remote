@@ -2514,6 +2514,151 @@ answer lost Play's tiles wait about one and a half to four seconds; and a
 lost question of another kind ahead costs its own wait (about 0.7 s for a
 scene or tempo read), with the order kept.
 
+**The computer's tools over Bluetooth: started 18 November 2026 (2.0.5),
+HIS ACCOUNT ONLY, AND NONE OF IT HAS BEEN SEEN ON A UNIT.**
+
+> "I want to enable all of the items currently available to computer bridge
+> users to Bluetooth like chain editing and live tuner on phone and Apple
+> Watch." (18 November 2026)
+
+What the computer did and Bluetooth (or the unit's USB cable into the
+phone) did not, that day: the chain editor, modifiers, Rename, Copy
+channel, a cab picked on a gen-3 unit, the looper, the unit's own metronome
+click, the Footswitches page, an AM4's volume button, and a tuner on an FM9
+or Axe-Fx III that needs nothing set on the unit. Brought over in passes.
+Each piece has its own switch in mobile/src/lib/features.js, false, so it
+is his account's until he says, as every new thing is, and it is new for
+customers: a copy's review notes have to describe it, or it is keyed to a
+store version (the rule under *Everything that was his account's is open*).
+The watch is the phone's: whatever the phone can do with the unit, the
+watch's pages do through it, and nothing here needed the watch's own code.
+
+THE FIRST PASS, three switches:
+
+- **The tuner asks the unit** (`TUNER_ASKS_FOR_EVERYONE`; bleWire `asksOn`,
+  gen3TunerOn; the wire's `tunerAsks`). The tuner was already there over
+  Bluetooth on the phone and the watch. But on an FM9 or an Axe-Fx III it
+  sent Fractal's switch alone, whose readings come only with Send Realtime
+  Sysex on at the unit (off as a unit comes), where the computer app opens
+  the tuner page and asks for the frequency on every gen-3 unit (ForgeFX
+  registryCore #setTuner, #pollTuner) and needs no setting. Open: a switch
+  that brings no reading in 1.2 s is followed by those two messages, which
+  this wire already sent an FM3, and the next open on that connection goes
+  straight to them (`pushQuiet`). Close sends the switch off and the page
+  closed, each only if it went. Closed, the switch alone, as before; an FM3
+  and an AM4 are untouched. The same bytes the computer sends over USB;
+  never seen down a MIDI jack on those two units.
+- **The chain editor** (`CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE`, which
+  also wants `CHAIN_OVER_BLUETOOTH_FOR_EVERYONE`; the wire's `chainEditor`,
+  capabilities `chainEditor`). The editor is the one Edit always had: it
+  reaches a unit through lib/device and never asks which wire is under it,
+  and the messages that place a block and join a cable went out with Quick
+  build. What it lacked was every block's place.
+  - *The read.* While the editor is open (Edit's `chainOnWire`, lib/device
+    `wantPlacedChain`), the chain is asked for with `{ editing, placed }`
+    and the wire answers it as the computer answers GET /preset/blocks
+    (bleWire `gen3PlacedBlocks`): the grid's cells less its bare wires, each
+    with its row, column and `fromRows`, and its on and off and channel
+    from the status read. THE PLACES ARE THE PRESET READ WHOLE, never the
+    live read, so it is as slow as that read: half a minute from an Axe-Fx
+    III over a WIDI Master, after every change. The editor says so
+    (components/ChainReading, lib/chainOnWire: a turning circle, how far
+    the read has got, "about half a minute to a minute"). A moment on the
+    unit's USB cable. An AM4's own read has its slots already and is not
+    touched.
+  - *Kept fifteen seconds* (`PLACED_FRESH_MS`, the computer's own figure
+    for its copy), only for a read that asks (`placed`, or `kept` on GET
+    /preset/grid, which lib/device sends only with the editor open), and
+    let go of at any write to the chain and any scene or preset change.
+    Every other grid read is the moment's copy, as before (a mutant that
+    kept it for everybody fails two tests).
+  - *Drawn only from a chain with every block's place*
+    (lib/chainOnWire `placedReady`): until the read lands the editor's
+    place holds the reading line, or The chain couldn't be read with Try
+    again. A block drawn in the wrong space is a block written over.
+  - *The looper* comes in that read marked `noControls`, so its cell is
+    held and Play draws no looper tile for it (its buttons are not sent
+    over Bluetooth yet). The looper-at-the-end button is not drawn there.
+    Modifiers do not ride in with the editor (`modsHere` wants a computer).
+  - A whole drag was run through shared/chain-move's own plan against the
+    wire and a pretend FM3 and Axe-Fx III (test/bluetooth.mjs): the blocks
+    land, the row is joined again, and nothing but the grid's own messages
+    went. ON A UNIT, NOTHING: his first Add, Remove and drag are the check,
+    on each of the AM4, the FM3 and the Axe-Fx III. Row 2, 5 and 6 cables
+    on a six-row unit are still the packing nobody has seen join.
+- **Rename, and Copy channel** (`EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE`;
+  the wire's `editTools`, capabilities `namesWritable` and `channelCopy`).
+  Rename preset and scenes is the computer's own two messages into the
+  edit buffer (mobile/src/lib/bleNames.js, held to the pinned codec's
+  frames: on a gen-3 unit function 0x01, 28 00 for the preset and 2B 00
+  for a scene; on an AM4 action 0x0C at CE 01, the preset's with the
+  location the AM4 has just said it is on). The codec calls the gen-3 pair
+  decoded from Axe-Edit III and hardware-unverified; the computer app has
+  sent them to customers' units since rename was built. A name is cleaned
+  as the computer cleans it (printable ASCII, 32 places). The way out
+  passes a name only as the one being written, byte for byte; a refusal is
+  THROWN, because the rename screen believes a write it is not told failed;
+  a name asked before a scene or preset change is never sent after it.
+  Copy channel is un-hidden where the wire says so: it is reads and writes
+  Edit already made there. Copy a scene onto another, under Rename, is
+  Play's own messages.
+- **The words** follow what is here (lib/editWords `noChainLine`,
+  `editingLine`, `limitsLine`, each handed `{ editor, tools }`): with
+  neither, word for word as every customer reads them.
+
+WHAT AN INDEPENDENT READ FOUND before it went out, all fixed, each with a
+test (test/bluetooth.mjs, under "WHAT AN INDEPENDENT READ FOUND"):
+
+- *An Add in the editor was refused for good after a scene change, and on
+  an AM4 always.* The wire takes a place or a cable only for the chain as
+  read since the last scene or preset change (`chainSeen`); the editor's
+  Add, written for the computer, reads no grid first, and an AM4's chain
+  read is not its grid read. lib/device `chainReadFirst` reads the grid
+  before a place or a cable where the wire says it has not been read
+  (`chainRead()`), only over the wire with the editor open.
+- *A name could land on the wrong preset.* A gen-3 name frame names no
+  preset, and a footswitch step says nothing: the unit is now asked which
+  preset it is on before every name, as a save asks (`nameHere`); on
+  another, the move is counted and nothing is sent; one that will not say
+  is sent nothing. An AM4 the same, by its location.
+- *The editor's read could pair one preset's places with another's on and
+  off* (a grid kept up to fifteen seconds, then a footswitch). The unit is
+  asked which preset it is on after the status read, every time, and every
+  block the status read lists has to be on the grid, or nothing is drawn
+  and the copy is let go of. A block on the grid the status read does not
+  list is still handed on, its on and off not known (an FM9 may not list
+  its Input and Output).
+- *Two names asked together refused each other* at the way out: one at a
+  time now (`inNames`).
+- *"The chain couldn't be read" flashed up* while the read with the places
+  was still out, when a read without them was already on its way: waited
+  through (Edit `readPlaced`, twice at most). And the editor never draws
+  from places left on the chain by an earlier visit (`placedRead`).
+- *The chain kept its places, and a looper nobody can drive, after the
+  editor closed*: Play's own read is made again as it closes.
+- *The tuner fell back to asking with the switch picked by hand* in the
+  testing tools: Auto's alone now.
+
+It ruled out the one that mattered most: no message the wire sent before
+has a name's shape (gen-3 subs in use are none of 28 or 2B; an AM4's
+writes at CE 01 are never action 0C), so the new guard refuses nothing
+that went before. THE PRETEND AM4 IN THE TESTS FREEZES ON ANY MESSAGE NOT
+ON ITS LIST, as the real one once did; the name message was added to what
+it knows, with the eighteen-byte answer the codec has from AM4-Edit.
+
+STILL THE COMPUTER'S, in the order they would be built: modifiers, a gen-3
+cab picker (the IR names are the codec's tables, which the phone does not
+carry), the looper's buttons, the unit's own click (one typed write
+at block 1, but the metronome's rules ask "is this Bluetooth?" in five
+places and every one would have to learn the difference), the Footswitches
+page, and an AM4's volume. A VP4 gets none of it: its wire sends no SysEx.
+
+TO OPEN ANY OF THESE TO EVERYONE: its switch to true, its What's new line,
+Bluetooth → What Bluetooth can't do read again, and the review notes (or a
+store version) saying so. Apple's 2.0.0 was prepared and not submitted when
+this was written; if it is still not in review when he says open, the
+2.0.0 notes can carry it.
+
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**
 

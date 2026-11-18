@@ -4,6 +4,25 @@ For the next session. CLAUDE.md holds the rules; this is where things
 stood when the last session ended. No Expo build was started in it: the
 2.0.0 pair (iOS build 33, Android version code 17) was already built.
 
+## The session after this was written (18 November 2026, later)
+
+He asked for everything the computer does to work over Bluetooth, "like
+chain editing and live tuner on phone and Apple Watch". #938 was already
+merged. The first pass went in as 2.0.5, three switches in
+mobile/src/lib/features.js, ALL FALSE (his account only), none seen on a
+unit: `TUNER_ASKS_FOR_EVERYONE` (an FM9's or Axe-Fx III's tuner asks the
+unit when its switch brings nothing), `CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE`
+(move, add, remove a block; slow over an adapter, and it says so) and
+`EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE` (Rename, Copy channel). CLAUDE.md,
+*The computer's tools over Bluetooth*, has all of it and what is left:
+modifiers, a gen-3 cab picker, the looper's buttons, the unit's own click,
+the Footswitches page, an AM4's volume. The working branch for it was
+claude/intelligent-keller-854qlw. No build: the fingerprint did not move.
+
+To check frames against the codec the computer app carries: check out
+forgefx-midi at the commit in desktop/forgefx.lock.json, `npm ci`, then
+`npx tsc -p .`, and import from its dist/ in a scratch script.
+
 ## Shipped (all merged to main unless it says open)
 
 - #934 (2.0.0): release day. The five waiting patches into main, the

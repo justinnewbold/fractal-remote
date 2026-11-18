@@ -629,7 +629,7 @@ export function run(test) {
     /* What the panel leaves out: the name's row with Color, Copy channel, and Engaged. */
     const view = edit.slice(edit.indexOf('export function BlockPanel({'), edit.indexOf('function BlockColour('))
     assert.match(view, /\{panel \|\| tidy \? null : \(\s*<View[\s\S]*?\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}\s*<\/View>\s*\)\}/)
-    assert.match(view, /\{!panel && channels\?\.length > 1 && block\.channel && !overBle \? \(\s*<ChannelCopy/)
+    assert.match(view, /\{!panel && channels\?\.length > 1 && block\.channel && canCopy \? \(\s*<ChannelCopy/)
     assert.match(view, /\{panel \|\| tidy \|\| \['input', 'output'\]\.includes\(block\.slug\) \? null : \(\s*<Press\s+label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\}/)
     /* And nothing else: `panel` is read in those three places only, and once more where the tidier Edit's one row is ruled out for a panel. */
     assert.match(view, /const tidy = tidyOn && !panel && !bare && !knobless\n/)

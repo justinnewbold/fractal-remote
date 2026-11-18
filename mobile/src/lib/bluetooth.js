@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE } from './features'
+import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2565,7 +2565,13 @@ export function openWire() {
     /* The chain read as a grid and changed from this device (lib/gen3-grid, lib/am4-chain): every account's since lib/features CHAIN_OVER_BLUETOOTH_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     chain: () => chainOverBluetooth(),
     /* Edit's knobs follow the unit (lib/liveKnobs): every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before); asked at every request and every report the unit sends. Edit's own door still has to be open (`edit`, above). */
-    live: () => liveKnobsOverBluetooth()
+    live: () => liveKnobsOverBluetooth(),
+    /* An FM9's or an Axe-Fx III's tuner asks the unit when its switch brings no readings, as the computer app does (bleWire asksOn): his account, until lib/features TUNER_ASKS_FOR_EVERYONE; asked at each open. */
+    tunerAsks: () => tunerAsksOverBluetooth(),
+    /* The chain with every block's place, for the chain editor (bleWire gen3PlacedBlocks): his account, until lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. The chain itself has to be open too (`chain`, above). */
+    chainEditor: () => chainEditorOverBluetooth(),
+    /* Rename preset and scenes, and Copy channel (lib/bleNames; bleWire namesOn): his account, until lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    editTools: () => editToolsOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2694,3 +2700,30 @@ export const volumeOverBluetooth = (unit = saved.unit) => unit !== 'am4' && edit
  * also wants Edit open on the unit and never follows an AM4.
  */
 export const liveKnobsOverBluetooth = () => allUnits === true || LIVE_KNOBS_FOR_EVERYONE
+
+/**
+ * Whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency
+ * when Fractal's switch brings no readings, the computer app's own way
+ * (bleWire asksOn): his, by the sign-in kept on the device, until
+ * lib/features TUNER_ASKS_FOR_EVERYONE. For the wire alone.
+ */
+export const tunerAsksOverBluetooth = () => allUnits === true || TUNER_ASKS_FOR_EVERYONE
+
+/**
+ * Whether this account has the chain editor over Bluetooth or a USB cable
+ * (one block moved, added or removed; bleWire gen3PlacedBlocks): his, by the
+ * sign-in kept on the device, until lib/features
+ * CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE. For the wire, which also wants
+ * the chain open (chainOverBluetooth) and Edit open on the unit; the screens
+ * read the wire's own word for it (capabilities `chainEditor`).
+ */
+export const chainEditorOverBluetooth = () => (allUnits === true || CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE) && chainOverBluetooth()
+
+/**
+ * Whether this account has Edit's smaller tools over Bluetooth or a USB
+ * cable (Rename preset and scenes, Copy channel): his, by the sign-in kept
+ * on the device, until lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE.
+ * For the wire, which also wants Edit open on the unit; the screens read the
+ * wire's own words for them (capabilities `namesWritable`, `channelCopy`).
+ */
+export const editToolsOverBluetooth = () => allUnits === true || EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE

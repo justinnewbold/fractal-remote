@@ -2577,7 +2577,7 @@ export function run(test) {
     const head = at('<SaveNotes s={saveTo} />')
     const find = at('{finding && !vp4Bench() ? ( <FindControl autoFocus ')
     const chain = at('<ChainUpdating chain={chainNow} />')
-    const tools = at("{toolShown && tool === 'chain' ? <ChainEditor ")
+    const tools = at("{toolShown && tool === 'chain' && chainPlaced ? ( <ChainEditor ")
     const panel = at('<View onLayout={panelLaid}> <BlockPanel')
     const tap = at('<Note>Tap a block to open its controls.</Note>')
     const ble = at('{editNoteUp({ viaBle, up: bleNoteUp, saves: caps?.supportsSave === true }) ? ( <Note onDismiss={() => { setBleNoteUp(false) markBleEditNote() }} > {onCable ? CABLE_EDIT_NOTE : BLE_NOTE} </Note> ) : null}')
@@ -4024,7 +4024,7 @@ export function run(test) {
     const stage = read('mobile/src/screens/Stage.js')
     /* Not over Bluetooth, where renaming is not built (Edit's noChainLine says so). */
     /* From More, or the preset's name, since 10 November 2026 (test/edit-more.mjs): renameHere is the old rule, and a VP4 is left out by it too. */
-    assert.match(read('mobile/src/screens/Edit.js'), /const renameHere = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the Edit screen has no way to rename the preset')
+    assert.match(read('mobile/src/screens/Edit.js'), /const renameHere = !vp4Bench\(\) && \(!viaBle \|\| caps\?\.namesWritable === true\) && !chainNow\.elsewhere/, 'the Edit screen has no way to rename the preset')
     assert.match(read('mobile/src/screens/Edit.js'), /\{toolShown && tool === 'rename' \? <RenameDoor onClose=\{\(\) => setTool\(null\)\} \/> : null\}/, 'the Edit screen has no way to rename the preset')
     assert.ok(!/RenamePreset|setPresetName/.test(read('mobile/src/screens/Settings.js')), 'renaming is still in Settings as well')
 
@@ -15837,7 +15837,7 @@ export function run(test) {
     assert.match(editor, /<Grip label=\{`Drag \$\{block\.name\}`\}/, 'there is no grip to drag a card by')
     assert.match(read('mobile/src/components/Grip.js'), /onPanResponderTerminationRequest: \(\) => false/, 'the grip hands the touch back to the page')
     assert.match(editor, /const dragStart = \(row, index\) => \{ onScrollLock\?\.\(true\)/, 'the page can scroll under a drag')
-    assert.match(editor, /<ChainEditor blocks=\{chainForEditor\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
+    assert.match(editor, /<ChainEditor blocks=\{chainForEditor\} caps=\{caps\} overWire=\{chainOnWire\} slow=\{chainSlow\} unit=\{deviceName\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
     assert.match(editor, /const free = freeAfter\(lane, col\)/, 'Add does not put the new block after the card it was pressed on')
     assert.match(editor, /add\(lane\.row, free, page, `\$\{lane\.row\}:\$\{col\}`\)/, 'Add does not put the new block after the card it was pressed on')
   })
@@ -23652,8 +23652,8 @@ export function run(test) {
     assert.match(edit, /display: chainNow\.elsewhere \? 'none' : 'flex'/, 'the bench draws the last song’s tiles under this song’s name')
     assert.match(edit, /const block = chainNow\.elsewhere \? null : blocks\.find/, 'the last song’s block stays open, its knobs writing to this song')
     /* Opened only through chainTools, which is false while the chain is the last song's (test/edit-more.mjs). */
-    assert.match(edit, /const chainTools = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the chain editor offers Remove on the last song’s blocks')
-    assert.match(edit, /\{toolShown && tool === 'chain' \? <ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
+    assert.match(edit, /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\)/, 'the chain editor offers Remove on the last song’s blocks')
+    assert.match(edit, /\{toolShown && tool === 'chain' && chainPlaced \? \(\s*<ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
     const wait = read('mobile/src/components/ChainWait.js')
     assert.match(wait, /from '\.\.\/lib\/chain-view'/, 'the phone words its own wait')
     assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')
@@ -24065,7 +24065,7 @@ export function run(test) {
      * has a Looper button under the tiles instead, which opens its buttons.
      */
     assert.match(stage, /import \{ findLooper \} from '\.\.\/lib\/looper'/, 'the phone has its own idea of which block is the looper')
-    assert.match(stage, /const looperHere = findLooper\(allBlocks\)/, 'the Looper button asks the tiles, which never hold one')
+    assert.match(stage, /const looperHere = findLooper\(\(allBlocks \|\| \[\]\)\.filter\(\(b\) => b\?\.noControls !== true\)\)/, 'the Looper button asks the tiles, which never hold one')
     /* "Looper button should show up as a button in the chain like all the
        other effects — it should not be visible as its own button all the
        time." One more tile, counted by the fit, that opens the buttons. */

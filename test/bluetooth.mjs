@@ -416,6 +416,12 @@ function fakeGen3(sx, o) {
           state.saved.push(v)
           return
         }
+        /* A name written into the edit buffer (lib/bleNames: 28 00 the preset, 2B 00 a scene, its number where a setting's would be): taken in silence, as a gen-3 unit takes a write, or refused (`refuseName`). */
+        if (sub === 0x28 || sub === 0x2b) {
+          if (opt.refuseName) return reply(0x64, [0x01, opt.refuseName])
+          ;(state.named ||= []).push(sub === 0x28 ? 'preset' : `scene ${pid + 1}`)
+          return
+        }
         /*
          * THE GRID (lib/gen3-grid), where the test gave it one: the live
          * read answered in one frame (`live`: how its cable bits and shunt
@@ -853,6 +859,21 @@ function fakeAm4(sx, o) {
       }
       return
     }
+    /*
+     * A name written into the edit buffer (lib/bleNames: function 0x01,
+     * action 0x0C at CE 01, the preset's register or one of the four
+     * scenes'), which AM4-Edit sends and the codec has from a recording of
+     * it: taken, and answered as a real AM4 answers one, eighteen bytes, the
+     * write's own address and nothing after (forgefx-midi isCommandAck).
+     * Anything else at that action is unexpected, and freezes it below.
+     */
+    const named = b[5] === 0x01 && b[6] === 0x4e && b[7] === 0x01 && b[10] === 0x0c && b[11] === 0x00 ? sx.decode14(b[8], b[9]) : null
+    if (named !== null && (named === 0x000b || (named >= 0x0037 && named <= 0x003a)) && b.length === 60) {
+      if (state.frozen || opt.silent) return
+      ;(state.named ||= []).push(named === 0x000b ? 'preset' : `scene ${named - 0x37 + 1}`)
+      const ack = [...b.slice(0, 12), 0, 0, 0, 0]
+      return say([...ack, sx.checksum(ack), 0xf7], 3)
+    }
     if (!sx.isAllowedAm4(b) && !editFrame(b)) {
       /* What the real one did with a message it did not expect: stopped answering. */
       state.frozen = true
@@ -1035,6 +1056,9 @@ async function onTheLine(kind, options = {}) {
       blockOrder: options.blockOrder,
       io: options.io,
       live: options.live,
+      tunerAsks: options.tunerAsks,
+      chainEditor: options.chainEditor,
+      editTools: options.editTools,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -6441,7 +6465,7 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3Catalog.js', './nam-install.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3Catalog.js', './nam-install.js', './own-echo.js'])
     /* The chain's messages (test/gen3-grid.mjs): the frame helpers and nothing else, so they reach a unit only through the wire that builds them. */
     assert.deepEqual(imports(read('gen3-grid.js')), ['./fractal-sysex.mjs'], 'the grid’s messages import something')
     assert.deepEqual(imports(read('am4-chain.js')), ['./fractal-sysex.mjs'], 'the AM4’s slot message imports something')
@@ -8322,7 +8346,7 @@ export function run(test) {
     /* Editing first, by the switch, from the one place its words live (lib/editWords): closed, today's words. */
     const ew = await import('../mobile/src/lib/editWords.js')
     assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen, saves\), \.\.\.DIFFERENT\]\.map\(/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen, saves, here\), \.\.\.DIFFERENT\]\.map\(/)
     assert.match(different, /Slower to load the preset list\./)
     /*
      * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
@@ -9380,7 +9404,7 @@ export function run(test) {
     assert.equal(ew.NOT_OVER_BLUETOOTH, 'No looper, volume button, unit metronome click or Footswitches page.')
     for (const v of [false, undefined, 1, 'yes', null]) assert.equal(ew.notOverBluetoothLine(v), ew.NOT_OVER_BLUETOOTH, 'anything but a yes takes the volume button out of what is missing')
     assert.equal(ew.notOverBluetoothLine(true), 'No looper, unit metronome click or Footswitches page.')
-    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /\{\[editingLine\(editOpen, saves\), \.\.\.DIFFERENT\]\.map\(\(line\) => \( <Bullet key=\{line\}>\{line\}<\/Bullet> \)\)\} <Bullet>\{notOverBluetoothLine\(volume\)\}<\/Bullet>/, 'what is not there over Bluetooth is not the list’s last line')
+    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /\{\[editingLine\(editOpen, saves, here\), \.\.\.DIFFERENT\]\.map\(\(line\) => \( <Bullet key=\{line\}>\{line\}<\/Bullet> \)\)\} <Bullet>\{notOverBluetoothLine\(volume\)\}<\/Bullet>/, 'what is not there over Bluetooth is not the list’s last line')
     assert.match(page.replace(/\s+/g, ' '), /const volume = volumeOverBluetooth\(b\.unit\)/)
     /* After the two steps now: "a lot of different buttons to press" put setting it up first. */
     assert.ok(page.indexOf('2 · Connect') < page.indexOf('What’s different from USB'), 'the list is above the steps again')
@@ -11017,9 +11041,9 @@ export function run(test) {
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
     /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
-    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}'))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves, here)}'))
     assert.ok((await import('../mobile/src/lib/editWords.js')).LIMITS_CLOSED.endsWith('with no computer. No editing or saving.'))
-    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen, saves), ...DIFFERENT].map('))
+    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen, saves, here), ...DIFFERENT].map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
     assert.match(page, /\{quiet && !fixing && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
@@ -11966,6 +11990,88 @@ export function run(test) {
     const fm3 = await onTheLine('fm3')
     await fm3.post('/tuner', { on: true })
     assert.ok(sameFrame(fm3.frames()[0], fm3.sx.buildTunerPage(0x11, true)))
+  })
+
+  /*
+   * THE COMPUTER'S TUNER, OVER BLUETOOTH (bleWire asksOn; lib/features
+   * TUNER_ASKS_FOR_EVERYONE). "I want to enable all of the items currently
+   * available to computer bridge users to Bluetooth like chain editing and
+   * live tuner on phone and Apple Watch." (Justin, 18 November 2026.) The
+   * computer app opens the tuner page and asks for the frequency on every
+   * gen-3 unit; this wire sent an FM9 and an Axe-Fx III the switch alone,
+   * which shows nothing with Send Realtime Sysex off.
+   */
+  test('the tuner on an FM9 or Axe-Fx III, where it is open to the account: a switch that brings no readings is followed by the page and the frequency question, the computer’s own', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      /* Send Realtime Sysex off: the switch, then, 1.2 s on, the page and the question, and the needle moves. */
+      const t = await onTheLine(unit, { tunerAsks: () => true })
+      await t.post('/tuner', { on: true })
+      assert.deepEqual(t.frames().map(hex), [hex(t.sx.frame(model, 0x11, [1]))], `${unit}: something went with the switch`)
+      await advance(t.clock, 1100)
+      assert.equal(t.frames().length, 1, `${unit}: asked before the switch had its 1.2 s`)
+      await advance(t.clock, 1500)
+      assert.ok(sameFrame(t.frames()[1], t.sx.buildTunerPage(model, true)), `${unit}: the page did not open next`)
+      assert.ok(t.frames().slice(2).length >= 3 && t.frames().slice(2).every((f) => sameFrame(f, t.sx.buildTunerPoll(model))), `${unit}: something but the frequency question went after the page`)
+      assert.ok(t.events.some((e) => e.type === 'tuner' && e.note), `${unit}: no reading reached the needle`)
+      assert.ok(t.logs.some((l) => /asking it for the frequency instead, as the computer app does/.test(l)), `${unit}: the log does not say`)
+      /* Close: the switch off and the page closed, and no question after. */
+      t.sent.length = 0
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(t.frames().map(hex), [hex(t.sx.frame(model, 0x11, [0])), hex(t.sx.buildTunerPage(model, false))], `${unit}: the close`)
+      await advance(t.clock, 2000)
+      assert.equal(t.frames().length, 2, `${unit}: asked after the close`)
+      /* The next open on the connection goes straight to the page and the question: no switch, no wait. */
+      t.sent.length = 0
+      await t.post('/tuner', { on: true })
+      assert.ok(sameFrame(t.frames()[0], t.sx.buildTunerPage(model, true)), `${unit}: the second open did not go straight to the page`)
+      assert.ok(!t.frames().some((f) => f[5] === 0x11), `${unit}: the switch went again`)
+      await t.post('/tuner', { on: false })
+
+      /* Send Realtime Sysex on: the unit's own readings, and nothing asked. */
+      const live = await onTheLine(unit, { tunerAsks: () => true, pushes: true })
+      await live.post('/tuner', { on: true })
+      await advance(live.clock, 4000)
+      assert.deepEqual(live.frames().map(hex), [hex(live.sx.frame(model, 0x11, [1]))], `${unit}: asked of a unit that is sending its readings`)
+
+      /* Closed to the account, by a function that says no as by none at all: the switch alone, however long. */
+      for (const tunerAsks of [undefined, () => false, true]) {
+        const no = await onTheLine(unit, { tunerAsks })
+        await no.post('/tuner', { on: true })
+        await advance(no.clock, 5000)
+        assert.deepEqual(no.frames().map(hex), [hex(no.sx.frame(model, 0x11, [1]))], `${unit}: asked with the switch closed (${String(tunerAsks)})`)
+      }
+
+      /* Asked at each open: closed after the first, the next open is the switch alone again. */
+      let open = true
+      const turn = await onTheLine(unit, { tunerAsks: () => open })
+      await turn.post('/tuner', { on: true })
+      await advance(turn.clock, 3000)
+      await turn.post('/tuner', { on: false })
+      open = false
+      turn.sent.length = 0
+      await turn.post('/tuner', { on: true })
+      await advance(turn.clock, 5000)
+      assert.deepEqual(turn.frames().map(hex), [hex(turn.sx.frame(model, 0x11, [1]))], `${unit}: asked after the account lost it`)
+    }
+    /* The FM3 is as it was, open or not: the page first. */
+    const fm3 = await onTheLine('fm3', { tunerAsks: () => true })
+    await fm3.post('/tuner', { on: true })
+    assert.ok(sameFrame(fm3.frames()[0], fm3.sx.buildTunerPage(0x11, true)))
+    /* And an AM4's tuner is its own: not one frame differs. */
+    const [a, b] = [await onTheLine('am4'), await onTheLine('am4', { tunerAsks: () => true })]
+    for (const w of [a, b]) {
+      await w.post('/tuner', { on: true })
+      await advance(w.clock, 3000)
+    }
+    assert.deepEqual(b.frames().map(hex), a.frames().map(hex))
+  })
+
+  test('the tuner asking the unit is his account’s until its switch says everyone: the wire is handed the one answer', async () => {
+    const f = src('mobile/src/lib/features.js')
+    assert.match(f, /^export const TUNER_ASKS_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new')
+    const b = src('mobile/src/lib/bluetooth.js')
+    assert.match(b, /^export const tunerAsksOverBluetooth = \(\) => allUnits === true \|\| TUNER_ASKS_FOR_EVERYONE$/m)
+    assert.match(b, /^    tunerAsks: \(\) => tunerAsksOverBluetooth\(\),$/m)
   })
 
   test('the Axe-Fx III’s tuner: a close owed from the connection before is the switch off alone, and a refusal puts the tuner down with the reason, the off still owed', async () => {
@@ -14566,7 +14672,7 @@ export function run(test) {
     assert.equal(rule(null, false, true), true, 'TONE3000 is open and its send is refused')
     /* Handed to the wire as `captures`; the reader is still his alone, beside it. */
     assert.match(ble, /reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\),/)
-    assert.match(ble, /import \{ [^}]*\bNAM_PICKER_FOR_EVERYONE, [^}]*\bTONE3000_QUICK_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /import \{ [^}]*\bNAM_PICKER_FOR_EVERYONE, [^}]*\bTONE3000_QUICK_FOR_EVERYONE, [^}]*\} from '\.\/features'/)
     const features = await import('../mobile/src/lib/features.js')
     assert.equal(rule(false, features.NAM_PICKER_FOR_EVERYONE, features.TONE3000_QUICK_FOR_EVERYONE), true, 'with 2.0.0 the captures are open to every account')
     /* On the wire: captures open and the reader closed, the reader's routes answer nothing and ask the unit nothing. */
@@ -15911,8 +16017,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -16635,7 +16741,7 @@ export function run(test) {
     assert.match(edit, /bleEditNoteSeen\(\)\.then\(\(seen\) => \{ if \(alive && !seen\) setBleNoteUp\(true\) \}\)/)
     const coach = flat('mobile/src/lib/coach.js')
     assert.match(coach, /export function markBleEditNote\(\) \{ bleEditSettled = true AsyncStorage\.setItem\(BLE_EDIT_KEY, 'done'\)/)
-    assert.match(edit, /channels\?\.length > 1 && block\.channel && !overBle \? \( <ChannelCopy/)
+    assert.match(edit, /channels\?\.length > 1 && block\.channel && canCopy \? \( <ChannelCopy/)
     assert.match(edit, /overBle=\{viaBle\}/)
     const words = code('mobile/src/screens/Edit.js')
     const note = /export const BLE_NOTE =\s*'([^']+)'/.exec(src('mobile/src/screens/Edit.js'))?.[1]
@@ -16773,7 +16879,7 @@ export function run(test) {
     assert.equal(ew.noChainLine(false), 'Moving, adding and removing blocks, modifiers and renaming need the computer.')
     for (const v of [undefined, null, 1, 'yes']) assert.equal(ew.noChainLine(v), ew.NO_CHAIN_LINE, 'Quick build named where it is not offered')
     const more = code('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
-    assert.match(more, /viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\)\)\}<\/Note> : null\}/, 'Edit → More names Quick build whether it is offered or not')
+    assert.match(more, /viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true \}\)\}<\/Note> : null\}/, 'Edit → More names Quick build whether it is offered or not')
     assert.match(more, /const quickOn = useQuickBuild\(\)/)
     assert.ok(!/BLE_NO_CHAIN/.test(more), 'a fixed sentence for More is back')
     for (const line of [ew.EDITING_LINE_SAVES, ew.LIMITS_SAVES, ew.NO_CHAIN_LINE, ew.NO_CHAIN_LINE_QUICK]) {
@@ -16808,8 +16914,8 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
     assert.match(limits, /const editOpen = editOverBluetooth\(b\.unit\)/)
-    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}'))
-    assert.ok(limits.includes('{[editingLine(editOpen, saves), ...DIFFERENT].map('))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves, here)}'))
+    assert.ok(limits.includes('{[editingLine(editOpen, saves, here), ...DIFFERENT].map('))
     assert.ok(!code('mobile/src/screens/Bluetooth.js').includes('No editing or saving'), 'the page types the closed words itself, beside the switch’s')
     /* And nothing open promises a unit, or saving. */
     assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b|\byet\b|coming/i.test(ew.EDITING_LINE + ew.LIMITS_OPEN))
@@ -21404,6 +21510,554 @@ export function run(test) {
     if (t.unit.state.gridHeard) t.unit.state.gridHeard.length = 0
   }
 
+  /*
+   * RENAME OVER BLUETOOTH (lib/bleNames; bleWire writePresetName and
+   * writeSceneName; lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE).
+   * The computer app's own messages, byte for byte: these are the pinned
+   * codec's frames (forgefx-midi buildRenamePreset and buildSetSceneName at
+   * each gen-3 model byte, and the AM4's buildSetPresetName and
+   * buildSetSceneName), made with scratch code and kept here as hex.
+   */
+  const TOOLS_OPEN = { edit: () => true, editTools: () => true }
+  const named = (t, path, body, opts = { editing: true }) => drive(t.clock, t.wire.request(path, { method: 'POST', body: JSON.stringify(body), ...opts }))
+  test('rename over Bluetooth: the frames are the computer’s own, on every unit, and a name is cleaned as the computer cleans it', async () => {
+    const n = await import('../mobile/src/lib/bleNames.js')
+    assert.equal(hex(n.buildPresetName(0x11, 'Lead Rig')), 'F0 00 01 74 11 01 28 00 00 00 00 00 00 00 00 00 00 00 00 20 00 26 19 2C 16 21 01 24 69 33 48 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 00 77 F7')
+    assert.equal(hex(n.buildSceneName(0x10, 2, 'Solo')), 'F0 00 01 74 10 01 2B 00 00 00 02 00 00 00 00 00 00 00 00 20 00 29 5B 6D 46 79 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 00 3C F7')
+    assert.equal(hex(n.buildPresetName(0x15, 'Lead Rig', 57)), 'F0 00 01 74 15 01 4E 01 0B 00 0C 00 00 00 24 00 1C 40 00 00 02 31 4A 61 32 08 0A 26 4B 1C 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 00 77 F7')
+    assert.equal(hex(n.buildSceneName(0x15, 1, 'Solo')), 'F0 00 01 74 15 01 4E 01 38 00 0C 00 00 00 24 00 00 00 00 00 02 4D 5E 6C 37 48 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 08 04 02 01 00 40 20 10 00 44 F7')
+    /* The FM9's differ from the FM3's by the model byte and the checksum alone. */
+    const [a, b] = [n.buildPresetName(0x11, 'Lead Rig'), n.buildPresetName(0x12, 'Lead Rig')]
+    assert.deepEqual(a.map((x, i) => (x === b[i] ? null : i)).filter((i) => i !== null), [4, a.length - 2])
+    /* Printable ASCII, 32 places at most, as ForgeFX cleans a name before it builds the frame. */
+    assert.equal(n.cleanName('Çlean\tTøne é'), 'leanTne ')
+    assert.equal(n.cleanName('x'.repeat(40)).length, 32)
+    assert.equal(n.cleanName(null), '')
+    /* A scene the unit has not got, an AM4 with no location, a model with no such message: no frame at all. */
+    for (const [model, index] of [[0x11, 8], [0x11, -1], [0x11, 1.5], [0x15, 4], [0x14, 0], [0x03, 0]]) assert.equal(n.buildSceneName(model, index, 'x'), null, `${model} ${index}`)
+    for (const loc of [null, undefined, -1, 104, 1.5]) assert.equal(n.buildPresetName(0x15, 'x', loc), null, String(loc))
+    assert.equal(n.buildPresetName(0x14, 'x'), null, 'a VP4 has no such message')
+    /* The shape, and the one frame that may go. */
+    for (const f of [n.buildPresetName(0x11, 'A'), n.buildSceneName(0x11, 7, 'B')]) assert.equal(n.nameShaped(f, 0x11), true)
+    assert.equal(n.nameShaped(n.buildPresetName(0x11, 'A'), 0x12), false)
+    assert.equal(n.nameShaped(n.buildPresetName(0x15, 'A', 3), 0x15), true)
+    assert.equal(n.nameAllowed(n.buildPresetName(0x11, 'A'), n.buildPresetName(0x11, 'A')), true)
+    assert.equal(n.nameAllowed(n.buildPresetName(0x11, 'A'), n.buildPresetName(0x11, 'B')), false)
+    assert.equal(n.nameAllowed(n.buildPresetName(0x11, 'A'), null), false)
+    assert.equal(src('mobile/src/lib/bleNames.js').match(/^import .*$/gm).join('\n'), "import { AM4, FN, MODELS, am4Frame, encode14, frame, packChunked, sameBytes } from './fractal-sysex.mjs'")
+  })
+
+  test('rename over Bluetooth: the preset and a scene are named in the edit buffer with one message each, only from Edit and only where it is open to the account', async () => {
+    const n = await import('../mobile/src/lib/bleNames.js')
+    for (const [kind, model] of [['fm3', 0x11], ['fm9', 0x12], ['axefx3', 0x10]]) {
+      const t = await onTheLine(kind, TOOLS_OPEN)
+      const caps = (await t.get('/device/detect')).capabilities
+      assert.deepEqual([caps.namesWritable, caps.channelCopy], [true, true], kind)
+      t.sent.length = 0
+      /* Which preset the unit is on is asked first, as a save asks; then the one name. */
+      const sx = await import(SX)
+      assert.deepEqual(await named(t, '/preset/name', { name: 'Lead Rig' }), { ok: true })
+      assert.deepEqual(t.frames().map(hex), [hex(sx.buildGetPreset(model)), hex(n.buildPresetName(model, 'Lead Rig'))], `${kind}: something else went with the name`)
+      t.sent.length = 0
+      assert.deepEqual(await named(t, '/scene/name', { index: 2, name: '  Solo  ' }), { ok: true })
+      assert.deepEqual(t.frames().map(hex), [hex(sx.buildGetPreset(model)), hex(n.buildSceneName(model, 2, 'Solo'))], kind)
+      assert.ok(t.logs.some((l) => /^the preset is named “Lead Rig” in the edit buffer$/.test(l)) && t.logs.some((l) => /^scene 3 is named “Solo” in the edit buffer$/.test(l)), kind)
+      assert.deepEqual(t.unit.state.named, ['preset', 'scene 3'], kind)
+      /* A name with nothing in it, a scene the unit has not got: refused in words, nothing sent. */
+      t.sent.length = 0
+      await assert.rejects(named(t, '/preset/name', { name: '   ' }), (e) => e.status === 400)
+      await assert.rejects(named(t, '/preset/name', { name: 'é' }), (e) => e.status === 400)
+      await assert.rejects(named(t, '/scene/name', { index: 8, name: 'x' }), (e) => e.status === 400)
+      assert.equal(t.sent.length, 0, kind)
+      /* Not Edit's own request: not answered. */
+      await assert.rejects(named(t, '/preset/name', { name: 'x' }, {}), (e) => e.status === 501 && e.unsupported === true)
+      /* Closed to the account, each way: “not over Bluetooth”, and nothing sent. */
+      for (const options of [{}, { edit: () => true }, { editTools: () => true }, { edit: () => false, editTools: () => true }, { edit: () => true, editTools: () => false }, { edit: () => true, editTools: true }]) {
+        const no = await onTheLine(kind, options)
+        const c = (await no.get('/device/detect')).capabilities
+        assert.deepEqual([c.namesWritable, c.channelCopy], [false, false], kind)
+        no.sent.length = 0
+        await assert.rejects(named(no, '/preset/name', { name: 'x' }), (e) => e.status === 501 && e.unsupported === true, kind)
+        await assert.rejects(named(no, '/scene/name', { index: 0, name: 'x' }), (e) => e.status === 501 && e.unsupported === true, kind)
+        assert.equal(no.sent.length, 0, kind)
+      }
+    }
+  })
+
+  test('rename over Bluetooth: the way out passes a name only as the one being written, a refusal is said as one, and a name asked before a preset change is never sent after it', async () => {
+    const n = await import('../mobile/src/lib/bleNames.js')
+    const { gen3Sender, am4Sender } = await import(WIRE)
+    /* The way out, alone: nothing in hand, or another name in hand, and the frame is refused; the very one goes. */
+    const went = []
+    let hand = null
+    const out = gen3Sender((b) => went.push(b), () => {}, 0x11, () => null, () => null, () => false, () => null, () => null, () => null, () => hand)
+    const want = n.buildPresetName(0x11, 'Lead Rig')
+    assert.equal(out(want), 'refused')
+    hand = n.buildPresetName(0x11, 'Other')
+    assert.equal(out(want), 'refused')
+    hand = n.buildSceneName(0x11, 0, 'Lead Rig')
+    assert.equal(out(want), 'refused')
+    hand = want
+    assert.equal(out(want), 'sent')
+    assert.equal(went.length, 1)
+    /* A sender made as every sender was before naming came passes none at all. */
+    assert.equal(gen3Sender(() => true, () => {}, 0x11)(want), 'refused')
+    const am4Out = am4Sender((b) => went.push(b), () => {}, () => null, () => null, () => null, () => null, () => hand)
+    const am4Want = n.buildPresetName(0x15, 'Lead Rig', 3)
+    assert.equal(am4Out(am4Want), 'refused')
+    hand = n.buildPresetName(0x15, 'Lead Rig', 4)
+    assert.equal(am4Out(am4Want), 'refused', 'another location’s name went')
+    hand = am4Want
+    assert.equal(am4Out(am4Want), 'sent')
+    assert.equal(am4Sender(() => true)(am4Want), 'refused')
+
+    /* A preset stepped to while the name waited its turn: the name is not sent to it. */
+    const t = await onTheLine('fm3', TOOLS_OPEN)
+    t.sent.length = 0
+    /* The line is busy with Play's read; the name waits its turn; a preset is tapped meanwhile. */
+    const busy = t.wire.request('/preset/blocks')
+    busy.catch(() => {})
+    const late = t.wire.request('/preset/name', { method: 'POST', body: JSON.stringify({ name: 'Old Song' }), editing: true })
+    late.catch(() => {})
+    const moving = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 13 }) })
+    moving.catch(() => {})
+    await drive(t.clock, moving)
+    await assert.rejects(drive(t.clock, late))
+    await advance(t.clock, 3000)
+    assert.ok(!t.frames().some((f) => n.nameShaped(f, 0x11)), 'a name asked before a preset change was sent after it')
+    assert.equal(t.unit.state.named, undefined)
+    /* And a unit that says no is said as one, in words: the screen believes a rename it is not told failed. */
+    const no = await onTheLine('axefx3', { ...TOOLS_OPEN, refuseName: 0x04 })
+    await assert.rejects(named(no, '/preset/name', { name: 'Lead Rig' }), (e) => e.status === 502 && /does not know that message/.test(e.message))
+    await assert.rejects(named(no, '/scene/name', { index: 0, name: 'Solo' }), (e) => e.status === 502)
+  })
+
+  test('rename over Bluetooth on an AM4: the preset’s name carries the location the AM4 has just said it is on, a scene’s the edit buffer’s nought, and one of four scenes', async () => {
+    const n = await import('../mobile/src/lib/bleNames.js')
+    const t = await onTheLine('am4', TOOLS_OPEN)
+    const here = (await t.get('/preset')).number
+    t.sent.length = 0
+    assert.deepEqual(await named(t, '/preset/name', { name: 'Lead Rig' }), { ok: true })
+    const names = t.frames().filter((f) => n.nameShaped(f, 0x15))
+    assert.deepEqual(names.map(hex), [hex(n.buildPresetName(0x15, 'Lead Rig', here))])
+    assert.ok(!t.logs.some((l) => /^refused to send/.test(l)), t.logs.filter((l) => /refused/.test(l)).join(' | '))
+    t.sent.length = 0
+    assert.deepEqual(await named(t, '/scene/name', { index: 3, name: 'Solo' }), { ok: true })
+    assert.deepEqual(t.frames().filter((f) => n.nameShaped(f, 0x15)).map(hex), [hex(n.buildSceneName(0x15, 3, 'Solo'))])
+    await assert.rejects(named(t, '/scene/name', { index: 4, name: 'x' }), (e) => e.status === 400)
+    /* Closed: every message for an AM4 is held to its lists, and a name is on none. */
+    const no = await onTheLine('am4', { edit: () => true })
+    no.sent.length = 0
+    await assert.rejects(named(no, '/preset/name', { name: 'x' }), (e) => e.status === 501)
+    assert.ok(!no.frames().some((f) => n.nameShaped(f, 0x15)))
+  })
+
+  /*
+   * WHAT AN INDEPENDENT READ FOUND before it went out (18 November 2026),
+   * each fixed, each of these seen to fail with its fix taken out.
+   */
+  test('rename over Bluetooth: a unit stepped to another preset at its own footswitch is not given the name meant for the one on screen, and one that will not say is sent nothing', async () => {
+    const n = await import('../mobile/src/lib/bleNames.js')
+    for (const kind of ['fm3', 'axefx3']) {
+      const t = await onTheLine(kind, TOOLS_OPEN)
+      await t.get('/preset')
+      /* The footswitch: the unit says nothing of it, and the clock has not asked yet. */
+      t.unit.state.preset += 1
+      t.sent.length = 0
+      await assert.rejects(named(t, '/preset/name', { name: 'Old Song' }), (e) => e.status === 409, kind)
+      assert.ok(!t.frames().some((f) => n.nameShaped(f, t.sx.MODELS[kind])), `${kind}: the next preset was given the name`)
+      assert.equal(t.unit.state.named, undefined, kind)
+      /* The move is counted, so the screen follows; the name asked for again now is this preset's own. */
+      assert.deepEqual(await named(t, '/scene/name', { index: 0, name: 'Verse' }), { ok: true })
+      assert.deepEqual(t.unit.state.named, ['scene 1'], kind)
+    }
+    /* A unit that will not say which preset it is on. */
+    const quiet = await onTheLine('fm3', TOOLS_OPEN)
+    await quiet.get('/preset')
+    quiet.unit.state.mutePreset = true
+    quiet.sent.length = 0
+    await assert.rejects(named(quiet, '/preset/name', { name: 'x' }), (e) => e.status === 504 || e.status === 502)
+    assert.ok(!quiet.frames().some((f) => n.nameShaped(f, 0x11)))
+    /* An AM4 the same: its frame would have carried the new location. */
+    const am4 = await onTheLine('am4', TOOLS_OPEN)
+    const here = (await am4.get('/preset')).number
+    am4.unit.state.location = here + 1
+    am4.sent.length = 0
+    await assert.rejects(named(am4, '/preset/name', { name: 'Old Song' }), (e) => e.status === 409)
+    assert.ok(!am4.frames().some((f) => n.nameShaped(f, 0x15)), 'the next location was given the name')
+  })
+
+  test('rename over Bluetooth: two names asked together both go, one after the other, neither refused for the other', async () => {
+    const t = await onTheLine('fm3', TOOLS_OPEN)
+    const a = t.wire.request('/preset/name', { method: 'POST', body: JSON.stringify({ name: 'Lead Rig' }), editing: true })
+    const b = t.wire.request('/scene/name', { method: 'POST', body: JSON.stringify({ index: 1, name: 'Chorus' }), editing: true })
+    const c = t.wire.request('/scene/name', { method: 'POST', body: JSON.stringify({ index: 2, name: 'Solo' }), editing: true })
+    for (const p of [a, b, c]) p.catch(() => {})
+    assert.deepEqual([await drive(t.clock, a), await drive(t.clock, b), await drive(t.clock, c)], [{ ok: true }, { ok: true }, { ok: true }])
+    assert.deepEqual(t.unit.state.named, ['preset', 'scene 2', 'scene 3'])
+    assert.ok(!t.logs.some((l) => /^refused to send/.test(l)), t.logs.filter((l) => /refused/.test(l)).join(' | '))
+  })
+
+  test('the chain editor’s read over Bluetooth: a grid kept from before a footswitch step is never paired with the next preset’s on and off, and a status list the grid does not hold is not drawn from', async () => {
+    const t = await editorOn('fm3', { grid: CHAIN3 })
+    await placedOf(t)
+    /* Within the fifteen seconds, the unit is stepped to another preset at its own footswitch: another grid, another list. */
+    await advance(t.clock, 3000)
+    t.unit.state.preset += 1
+    t.unit.state.grid = BARE3.map((c) => ({ ...c }))
+    sameChain(t)
+    await assert.rejects(placedOf(t), (e) => e.status === 409, 'the old preset’s places were handed out')
+    /* Asked again, it is the new preset's own, read afresh. */
+    assert.deepEqual((await placedOf(t)).map((b) => [b.effectId, b.row, b.col]), [[37, 1, 0], [42, 1, 11]])
+    /* A list with a block the grid does not hold (a change made on the unit since the grid was kept): refused, and the copy let go of. */
+    const u = await editorOn('fm3', { grid: CHAIN3 })
+    await placedOf(u)
+    const dumps = u.unit.state.dumps
+    u.unit.state.blocks.push({ eid: 66, bypassed: false, channel: 0 })
+    await advance(u.clock, 1000)
+    await assert.rejects(placedOf(u), (e) => e.status === 409 && /changed while the app was reading/.test(e.message))
+    u.unit.state.grid.push({ row: 1, col: 5, effectId: 66, fromRows: [] })
+    assert.ok((await placedOf(u)).some((b) => b.effectId === 66 && b.col === 5), 'the chain was answered from the copy let go of')
+    assert.equal(u.unit.state.dumps, dumps + 1)
+    /* A block on the grid the status read does not list is still handed on, with its on and off not known (an FM9 may not list its Input and Output). */
+    const v = await editorOn('fm3', { grid: CHAIN3 })
+    v.unit.state.blocks = v.unit.state.blocks.filter((b) => b.eid !== 37 && b.eid !== 42)
+    const list = await placedOf(v)
+    assert.deepEqual(list.filter((b) => b.effectId === 37 || b.effectId === 42).map((b) => [b.slug, b.bypassed]), [['input', null], ['output', null]])
+  })
+
+  test('the chain editor over Bluetooth: an Add after a scene change, and any Add on an AM4, reads the grid first instead of being refused for good', async () => {
+    /* The wire says whether the chain has been read since the last scene or preset change. */
+    const t = await editorOn('fm3', { grid: CHAIN3 })
+    assert.equal(t.wire.chainRead(), false, 'a new connection has read nothing')
+    await placedOf(t)
+    assert.equal(t.wire.chainRead(), true)
+    await t.post('/scene', { index: 2 })
+    assert.equal(t.wire.chainRead(), false, 'a scene change is counted')
+    await assert.rejects(sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 6, blockId: 66 }), (e) => e.status === 409)
+    await drive(t.clock, t.wire.request('/preset/grid', { kept: true }))
+    assert.equal(t.wire.chainRead(), true)
+    assert.equal((await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 6, blockId: 66 })).ok, true)
+    /* An AM4's chain read is not its grid read: the same. */
+    const a = await onTheLine('am4', EDITOR_OPEN)
+    await placedOf(a)
+    assert.equal(a.wire.chainRead(), false)
+    await a.get('/preset/grid')
+    assert.equal(a.wire.chainRead(), true)
+    /* And lib/device reads the grid first, only over the wire with the editor open, before a place and before a cable. */
+    const d = src('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.match(d, /export const placeBlock = async \(row, col, blockId\) => \{ await chainReadFirst\(\) return put\('\/preset\/grid\/cell', \{ \.\.\.toWireCell\(row, col\), blockId \}\) \}/)
+    assert.match(d, /chainReadFirst\(\)\.then\(\(\) => post\('\/preset\/grid\/cable', \{/)
+    assert.match(d, /async function chainReadFirst\(\) \{ const wire = placedChain && !demoDevice\(\) && !onVp4 \? bluetoothWire\(\) : null if \(!wire \|\| typeof wire\.chainRead !== 'function' \|\| wire\.chainRead\(\)\) return try \{ await remoteRequest\('\/preset\/grid', \{ kept: true, onProgress: tellPlaced \}\) \} finally \{ tellPlaced\(null\) \} \}/)
+    /* Edit reads Play's own chain again as the editor closes. */
+    assert.match(src('mobile/src/screens/Edit.js').replace(/\s+/g, ' '), /setPlacedRead\(false\) \/\*[^*]*\*\/ refreshBlocks\(\{ quiet: true \}\)\.catch\(\(\) => \{\}\) \}/)
+  })
+
+  test('the tuner’s fall-back to asking is Auto’s alone: with the switch picked by hand in the testing tools, an FM9 or Axe-Fx III is sent the switch and nothing more', async () => {
+    for (const unit of ['fm9', 'axefx3']) {
+      const t = await onTheLine(unit, { tunerAsks: () => true, methods: { tuner: 'push' } })
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 5000)
+      assert.deepEqual(t.frames().map(hex), [hex(t.sx.frame(t.sx.MODELS[unit], 0x11, [1]))], unit)
+    }
+  })
+
+  test('Edit’s smaller tools over Bluetooth are his account’s until their switch says everyone: Rename and Copy channel are drawn only on the wire’s word', async () => {
+    assert.match(src('mobile/src/lib/features.js'), /^export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new and the Bluetooth page’s words')
+    const b = src('mobile/src/lib/bluetooth.js')
+    assert.match(b, /^export const editToolsOverBluetooth = \(\) => allUnits === true \|\| EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE$/m)
+    assert.match(b, /^    editTools: \(\) => editToolsOverBluetooth\(\)$/m)
+    const e = src('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
+    assert.match(e, /const renameHere = !vp4Bench\(\) && \(!viaBle \|\| caps\?\.namesWritable === true\) && !chainNow\.elsewhere/)
+    assert.match(e, /canCopy=\{!viaBle \|\| caps\?\.channelCopy === true\}/)
+    assert.match(e, /\{!panel && channels\?\.length > 1 && block\.channel && canCopy \? \( <ChannelCopy/)
+    /* The names go as Edit's own, so the wire answers them. */
+    const d = src('mobile/src/lib/device.js')
+    assert.match(d, /post\('\/preset\/name', \{ name \}, EDITING\)/)
+    assert.match(d, /post\('\/scene\/name', \{ index, name \}, EDITING\)/)
+  })
+
+  test('what still needs the computer is said by what is here: with the chain editor or the smaller tools, the lines name only the rest; with neither, word for word as before', async () => {
+    const w = await import('../mobile/src/lib/editWords.js')
+    /* Neither: every line as every customer copy reads it. */
+    assert.equal(w.noChainLine(false), 'Moving, adding and removing blocks, modifiers and renaming need the computer.')
+    assert.equal(w.noChainLine(true), 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, modifiers and renaming need the computer.')
+    assert.equal(w.noChainLine(true, {}), w.noChainLine(true))
+    assert.equal(w.noChainLine(false, { editor: 'yes', tools: 1 }), w.noChainLine(false), 'only true opens a line')
+    assert.equal(w.editingLine(true, true), w.EDITING_LINE_SAVES)
+    assert.equal(w.editingLine(true, true, {}), w.EDITING_LINE_SAVES)
+    assert.equal(w.editingLine(true, false, { editor: true, tools: true }), w.EDITING_LINE, 'without saving neither is here: both stand on the chain being open')
+    assert.equal(w.editingLine(false, true, { editor: true, tools: true }), w.NO_EDITING_LINE)
+    assert.equal(w.limitsLine(true, true), w.LIMITS_SAVES)
+    assert.equal(w.limitsLine(false, true, { editor: true }), w.LIMITS_CLOSED)
+    /* The chain editor: no line says blocks need the computer. */
+    for (const line of [w.noChainLine(true, { editor: true }), w.noChainLine(false, { editor: true, tools: true }), w.editingLine(true, true, { editor: true }), w.editingLine(true, true, { editor: true, tools: true })]) {
+      assert.doesNotMatch(line, /block/i, line)
+      assert.match(line, /^Modifiers.* need the computer\.$/, line)
+    }
+    assert.match(w.limitsLine(true, true, { editor: true }), /blocks moved, added and removed\.$/)
+    /* The smaller tools: no line says renaming or copying a channel needs the computer. */
+    for (const line of [w.noChainLine(true, { tools: true }), w.noChainLine(false, { tools: true }), w.editingLine(true, true, { tools: true }), w.editingLine(true, true, { editor: true, tools: true })]) assert.doesNotMatch(line, /renam|copying/i, line)
+    assert.match(w.limitsLine(true, true, { tools: true }), /renaming and copying a channel\.$/)
+    assert.match(w.limitsLine(true, true, { editor: true, tools: true }), /blocks moved, added and removed, renaming and copying a channel\.$/)
+    /* Never a promise: no "yet", no "coming", no "soon". */
+    for (const k of Object.keys(w)) if (typeof w[k] === 'string') assert.doesNotMatch(w[k], /\b(yet|coming|soon)\b/i, k)
+    /* The Bluetooth page and Edit hand in what is here. */
+    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /const here = \{ editor: saves && chainEditorOverBluetooth\(\), tools: saves && editToolsOverBluetooth\(\) \}/)
+    assert.match(src('mobile/src/screens/Edit.js').replace(/\s+/g, ' '), /noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true \}\)/)
+  })
+
+  /*
+   * THE CHAIN EDITOR OVER BLUETOOTH (bleWire gen3PlacedBlocks; lib/features
+   * CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE). "I want to enable all of the
+   * items currently available to computer bridge users to Bluetooth like
+   * chain editing" (Justin, 18 November 2026). The editor needs every
+   * block's row, column and joins; the wire answers them, as the computer
+   * app answers GET /preset/blocks, from the preset read whole.
+   */
+  const EDITOR_OPEN = { ...CHAIN_OPEN, chainEditor: () => true }
+  /* The pretend unit's status list made the grid's own, as a real unit's is: the tests give it a grid, and its block list is otherwise a stock one. */
+  const sameChain = (t) => {
+    const was = new Map(t.unit.state.blocks.map((b) => [b.eid, b]))
+    t.unit.state.blocks = t.unit.state.grid.filter((c) => c.effectId < 1024).map((c) => was.get(c.effectId) || { eid: c.effectId, bypassed: false, channel: 0 })
+    return t
+  }
+  const editorOn = async (kind, options = {}) => sameChain(await onTheLine(kind, { ...EDITOR_OPEN, ...options }))
+  const placedOf = (t, more = {}) => drive(t.clock, t.wire.request('/preset/blocks', { editing: true, placed: true, ...more }))
+  const placesOf = (list) => list.map((b) => [b.effectId, b.row, b.col, b.fromRows])
+
+  test('the chain editor’s read over Bluetooth: every block of the grid with its row, column and joins, its on and off and channel from the status read, no bare wire, in the computer’s order', async () => {
+    const grid = await import(GRID)
+    for (const [kind, model] of [['fm3', 0x11], ['fm9', 0x12], ['axefx3', 0x10]]) {
+      const t = await editorOn(kind, { grid: CHAIN3 })
+      assert.equal((await t.get('/device/detect')).capabilities.chainEditor, true, `${kind}: the app is not told the editor is here`)
+      t.sent.length = 0
+      const list = await placedOf(t)
+      assert.deepEqual(placesOf(list), [[37, 1, 0, []], [118, 1, 1, [1]], [58, 1, 2, [1]], [62, 1, 3, [1, 2]], [42, 1, 11, []]], kind)
+      assert.ok(!list.some((b) => b.effectId >= 1024), `${kind}: a bare wire was handed on as a block`)
+      assert.deepEqual(list.map((b) => b.slug), ['input', 'drive', 'amp', 'cab', 'output'], kind)
+      /* On and off and the channel are the status read's own. */
+      const drive1 = list.find((b) => b.effectId === 118)
+      assert.deepEqual([drive1.bypassed, drive1.channel], [true, 'A'], kind)
+      const amp = list.find((b) => b.effectId === 58)
+      assert.deepEqual([amp.bypassed, amp.channel], [false, 'A'], kind)
+      /* Nothing went that the chain did not already send: which preset, the grid's reads, the status read. Never a write. */
+      const sx = await import(SX)
+      for (const f of t.frames()) {
+        const known = [sx.buildGetPreset(model), grid.buildGridRead(model), grid.buildGridDump(model), sx.buildStatusDump(model)].some((k) => sameFrame(f, k))
+        assert.ok(known, `${kind}: something else went for the editor’s read: ${hex(f)}`)
+      }
+      assert.equal(t.unit.state.dumps, 1, `${kind}: the preset was not read whole, once`)
+      assert.equal(cellsOf(t.unit.state.grid), cellsOf(CHAIN3), `${kind}: the read changed the unit’s grid`)
+      /* The joins handed out are the wire’s own copy. */
+      list[1].fromRows.push(9)
+      await advance(t.clock, 500)
+      assert.deepEqual((await placedOf(t))[1].fromRows, [1], kind)
+    }
+  })
+
+  test('the chain editor’s read is answered only where the editor, the chain and Edit are all open to the account, and only to a request that asks for the places: anything else is Play’s read, with no places', async () => {
+    for (const kind of ['fm3', 'axefx3']) {
+      const closed = [CHAIN_OPEN, { ...CHAIN_OPEN, chainEditor: () => false }, { ...CHAIN_OPEN, chainEditor: true }, { edit: () => true, chainEditor: () => true }, { chain: () => true, chainEditor: () => true }, { edit: () => false, chain: () => true, chainEditor: () => true }]
+      for (const options of closed) {
+        const t = await onTheLine(kind, { grid: CHAIN3, ...options })
+        assert.equal((await t.get('/device/detect')).capabilities.chainEditor, false, `${kind}: the app was told the editor is here`)
+        const list = await placedOf(t)
+        assert.ok(list.length > 0 && list.every((b) => !('row' in b) && !('col' in b) && !('fromRows' in b)), `${kind}: places were handed to an account the editor is not open to`)
+        assert.equal(t.unit.state.dumps, 0, `${kind}: the preset was read whole for an account the editor is not open to`)
+      }
+      /* Open, and not asked for: Play’s read, as it always was, and no preset read whole. */
+      const t = await editorOn(kind, { grid: CHAIN3 })
+      for (const opts of [undefined, { editing: true }, { placed: true, editing: false }, { editing: true, placed: 'yes' }]) {
+        const list = await drive(t.clock, t.wire.request('/preset/blocks', opts))
+        assert.ok(list.every((b) => !('row' in b)), `${kind}: places handed to a read that did not ask (${JSON.stringify(opts)})`)
+      }
+      assert.equal(t.unit.state.dumps, 0, `${kind}: Play’s read asked for the whole preset`)
+    }
+    /* Asked at every request: an account that loses it mid-connection gets Play’s read at the next one. */
+    let open = true
+    const turn = sameChain(await onTheLine('fm3', { grid: CHAIN3, ...CHAIN_OPEN, chainEditor: () => open }))
+    assert.ok((await placedOf(turn)).every((b) => Number.isInteger(b.row)))
+    open = false
+    assert.ok((await placedOf(turn)).every((b) => !('row' in b)))
+  })
+
+  test('the chain editor’s read keeps the preset’s grid as the computer keeps its copy, fifteen seconds, and lets go of it at any write to the chain and any preset change', async () => {
+    const t = await editorOn('fm3', { grid: CHAIN3 })
+    await placedOf(t)
+    assert.equal(t.unit.state.dumps, 1)
+    /* Again within fifteen seconds: the status read alone. And the editor’s own look at the joins (`kept`) is answered from the same copy. */
+    await advance(t.clock, 9000)
+    await placedOf(t)
+    await drive(t.clock, t.wire.request('/preset/grid', { kept: true }))
+    assert.equal(t.unit.state.dumps, 1, 'the preset was read whole again inside the fifteen seconds')
+    /* A grid read that does not say `kept` is the moment’s copy only, as before the editor came. */
+    await drive(t.clock, t.wire.request('/preset/grid'))
+    assert.equal(t.unit.state.dumps, 2, 'a grid read that did not ask for the kept copy was answered from it')
+    /* Past fifteen seconds it is read again. */
+    await advance(t.clock, 15100)
+    await placedOf(t)
+    assert.equal(t.unit.state.dumps, 3)
+    /* A block put in a cell: the copy is gone, and the read after shows the block where the unit has it. */
+    const put = await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 66 })
+    assert.equal(put.ok, true)
+    const after = await placedOf(t)
+    assert.equal(t.unit.state.dumps, 4, 'the chain was answered from a copy made before the write')
+    assert.deepEqual(placesOf(after).find((p) => p[0] === 66), [66, 1, 4, []])
+    /* A cell emptied: the same. */
+    await sendTo(t, 'PUT', '/preset/grid/cell', { row: 2, col: 5, blockId: 0 })
+    assert.ok(!(await placedOf(t)).some((b) => b.effectId === 66))
+    assert.equal(t.unit.state.dumps, 5)
+    /* Another preset is another grid, however fresh the copy. */
+    t.unit.state.grid = BARE3.map((c) => ({ ...c }))
+    sameChain(t)
+    await t.post('/preset/select', { number: 13 })
+    const next = await placedOf(t)
+    assert.equal(t.unit.state.dumps, 6)
+    assert.deepEqual(next.map((b) => b.effectId), [37, 42])
+  })
+
+  test('the chain editor’s read: a block this app has no name for keeps its cell with no slug, a looper says its buttons are not sent from here, and a read is told how far it has got', async () => {
+    const strange = [...CHAIN3.filter((c) => c.effectId !== 62), { row: 1, col: 3, effectId: 999, fromRows: [1, 2] }, { row: 1, col: 4, effectId: 166, fromRows: [1] }]
+    const t = await editorOn('fm3', { grid: strange, looper: true })
+    /* Block 999 is one the status read does not list, as a block the unit has and this app has no name for may not be. */
+    t.unit.state.blocks = t.unit.state.blocks.filter((b) => b.eid !== 999)
+    const told = []
+    const list = await placedOf(t, { onProgress: (p) => told.push(p) })
+    const odd = list.find((b) => b.effectId === 999)
+    assert.deepEqual([odd.slug, odd.name, odd.row, odd.col, odd.bypassed, odd.channel], ['', 'eid_999', 1, 3, null, null])
+    const loop = list.find((b) => b.effectId === 166)
+    assert.deepEqual([loop.slug, loop.noControls, loop.row, loop.col], ['looper', true, 1, 4])
+    assert.ok(list.filter((b) => b.effectId !== 166).every((b) => !('noControls' in b)))
+    assert.ok(told.length > 0 && told.every((p) => Number.isFinite(p.got) && Number.isFinite(p.of)), 'the read said nothing of how far it had got')
+    /* Play draws no looper for it (lib/looper), and Play’s own read still leaves the looper out. */
+    const looper = await import('../mobile/src/lib/looper.js')
+    const { withControls } = await import('../mobile/src/lib/chainOnWire.js')
+    assert.equal(looper.findLooper(withControls(list)), null)
+    assert.deepEqual(looper.findLooper(withControls([{ slug: 'amp' }, { slug: 'looper' }])), { slug: 'looper' })
+    assert.equal(withControls(null), null)
+    assert.match(src('mobile/src/screens/Stage.js'), /const looperHere = findLooper\(\(allBlocks \|\| \[\]\)\.filter\(\(b\) => b\?\.noControls !== true\)\)/)
+    assert.match(src('mobile/src/screens/Edit.js'), /block\?\.slug === 'looper' && block\.noControls !== true && !toolShown \? <Looper/)
+    assert.ok(!(await t.get('/preset/blocks')).some((b) => b.slug === 'looper'))
+  })
+
+  test('a drag in the chain editor, run whole over Bluetooth by the editor’s own plan: the blocks land, the row is joined again, the read after shows it, and nothing but the grid’s own messages went', async () => {
+    const grid = await import(GRID)
+    const move = await import('../shared/chain-move.mjs')
+    const ROW = [
+      { row: 1, col: 0, effectId: 37, fromRows: [] },
+      { row: 1, col: 1, effectId: 118, fromRows: [1] },
+      { row: 1, col: 2, effectId: 58, fromRows: [1] },
+      { row: 1, col: 3, effectId: 62, fromRows: [1] },
+      { row: 1, col: 4, effectId: 42, fromRows: [1] }
+    ]
+    for (const [kind, rows, cols] of [['fm3', 4, 12], ['axefx3', 6, 14]]) {
+      const t = await editorOn(kind, { grid: ROW })
+      const before = await placedOf(t)
+      assert.deepEqual(placesOf(before).map((p) => p[0]), [37, 118, 58, 62, 42], kind)
+      t.sent.length = 0
+      /* The editor's own five calls, as lib/device makes them (counted from nought on screen, from one on the wire). */
+      const wire = {
+        gridCells: async () => (await drive(t.clock, t.wire.request('/preset/grid', { kept: true }))).cells,
+        clearCell: (row, col) => sendTo(t, 'PUT', '/preset/grid/cell', { row: row + 1, col: col + 1, blockId: 0 }),
+        placeBlock: (row, col, blockId) => sendTo(t, 'PUT', '/preset/grid/cell', { row: row + 1, col: col + 1, blockId }),
+        setCable: (srcRow, srcCol, destRow, connect = true) => sendTo(t, 'POST', '/preset/grid/cable', { srcRow: srcRow + 1, srcCol: srcCol + 1, destRow: destRow + 1, connect }),
+        readBlock: async () => null
+      }
+      const lines = []
+      /* Drive 1 and Amp 1 change places. */
+      const res = await move.moveBlocks({
+        row: 1,
+        moves: [{ id: 58, name: 'Amp 1', from: 2, to: 1 }, { id: 118, name: 'Drive 1', from: 1, to: 2 }],
+        wire,
+        rows,
+        cols,
+        cables: true,
+        law: false,
+        blocks: before,
+        log: (a, b) => lines.push(b ? `${a} — ${b}` : a)
+      })
+      assert.equal(res.notSent, false, `${kind}: ${res.why}`)
+      assert.equal(res.checked, true, `${kind}: the row was not read back`)
+      assert.deepEqual(res.still, [], `${kind}: joins still missing after the move: ${lines.join(' | ')}`)
+      assert.deepEqual(res.cutsAfter, [], kind)
+      /* The unit's own grid: the two swapped, every cell from the Input's to the Output's fed from the row. */
+      assert.equal(cellsOf(t.unit.state.grid), cellsOf([ROW[0], { row: 1, col: 1, effectId: 58, fromRows: [1] }, { row: 1, col: 2, effectId: 118, fromRows: [1] }, ROW[3], ROW[4]]), `${kind}: ${lines.join(' | ')}`)
+      /* And the editor's read after it says the same. */
+      assert.deepEqual(placesOf(await placedOf(t)), [[37, 1, 0, []], [58, 1, 1, [1]], [118, 1, 2, [1]], [62, 1, 3, [1]], [42, 1, 11 - 7, [1]]], kind)
+      /* Every write was one of the grid's own shapes, sent as the job in hand; nothing of Edit's knobs, no save. */
+      const sx = await import(SX)
+      const model = sx.MODELS[kind]
+      for (const f of t.frames()) {
+        const read = [sx.buildGetPreset(model), grid.buildGridRead(model), grid.buildGridDump(model), sx.buildStatusDump(model)].some((k) => sameFrame(f, k))
+        assert.ok(read || grid.gridShaped(f, model), `${kind}: something else went during the move: ${hex(f)}`)
+      }
+      assert.ok(!t.logs.some((l) => /^refused to send/.test(l)), `${kind}: a frame of the move was refused at the way out`)
+    }
+  })
+
+  test('the chain editor’s read is refused, not guessed, when the preset changes under it or the unit will not say which preset it is on', async () => {
+    const t = await editorOn('fm3', { grid: CHAIN3 })
+    const asking = t.wire.request('/preset/blocks', { editing: true, placed: true })
+    asking.catch(() => {})
+    await advance(t.clock, 30)
+    t.unit.state.preset = 77
+    await assert.rejects(drive(t.clock, asking), (e) => e.status === 409 || e.status === 504)
+  })
+
+  test('an AM4’s chain read is its own with or without the editor: its four slots, and not one frame more', async () => {
+    const [a, b] = [await onTheLine('am4', { ...CHAIN_OPEN }), await onTheLine('am4', { ...EDITOR_OPEN })]
+    const plain = await a.get('/preset/blocks')
+    const placed = await placedOf(b)
+    assert.deepEqual(placed, plain)
+    assert.deepEqual(b.frames().map(hex), a.frames().map(hex))
+    assert.equal((await b.get('/device/detect')).capabilities.chainEditor, true)
+  })
+
+  test('the chain editor over Bluetooth is his account’s until its switch says everyone, and only the device’s own wire is ever asked for the places', async () => {
+    const f = src('mobile/src/lib/features.js')
+    assert.match(f, /^export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new and the Bluetooth page’s words')
+    const b = src('mobile/src/lib/bluetooth.js')
+    assert.match(b, /^export const chainEditorOverBluetooth = \(\) => \(allUnits === true \|\| CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE\) && chainOverBluetooth\(\)$/m)
+    assert.match(b, /^    chainEditor: \(\) => chainEditorOverBluetooth\(\),$/m)
+    const d = src('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.match(d, /const placedAsk = \(\) => \(placedChain && !demoDevice\(\) && !onVp4 && bluetoothWire\(\) \? \{ \.\.\.EDITING, placed: true, onProgress: tellPlaced \} : undefined\)/)
+    assert.match(d, /read = await remoteRequest\('\/preset\/blocks', ask\)/)
+    /* Edit asks for the places only while the editor is open over the wire, and lets go when it closes. */
+    const e = src('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
+    assert.match(e, /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\)/)
+    assert.match(e, /const chainOnWire = viaBle && toolShown && tool === 'chain'/)
+    assert.match(e, /if \(!chainOnWire\) return undefined placedAsks\.current \+= 1 setPlacedRead\(false\) wantPlacedChain\(true\) readPlaced\(\) return \(\) => \{ placedAsks\.current \+= 1 wantPlacedChain\(false\)/)
+    /* Never drawn from places left over from an earlier visit: only from a read that came back on this one. */
+    assert.match(e, /const chainPlaced = !chainOnWire \|\| \(placedRead && placedReady\(chainForEditor\)\)/)
+    /* A read already on its way when the editor opened has no places: the first wait may end on it, and that is waited through, not called a failure. */
+    assert.match(e, /for \(let turn = 0; turn < 2; turn\+\+\) \{ const asked = placedAsks\.current try \{ await refreshBlocks\(\{ quiet: true \}\) \}/)
+    assert.match(e, /if \(asked !== placedAsks\.current\) return if \(placedChainWanted\(\) && getState\(\)\.chain === 'ok' && placedReady\(getState\(\)\.allBlocks\)\) \{ setPlacedRead\(true\) return \}/)
+    assert.match(e, /\{toolShown && tool === 'chain' && chainPlaced \? \( <ChainEditor /)
+    /* Modifiers do not ride in on the chain editor over Bluetooth. */
+    assert.match(e, /const modsHere = chainTools && !viaBle && modifiersBind/)
+  })
+
+  test('the chain editor’s rules over Bluetooth: offered through a computer as ever, over Bluetooth only on the wire’s word, never a VP4; drawn only from a chain with every block’s place', async () => {
+    const r = await import('../mobile/src/lib/chainOnWire.js')
+    assert.equal(r.chainEditorHere({}), true, 'through a computer')
+    assert.equal(r.chainEditorHere({ viaBle: true, caps: { chainEditor: true } }), true)
+    for (const caps of [null, {}, { chainEditor: false }, { chainEditor: 'yes' }, { gridEdit: true }]) assert.equal(r.chainEditorHere({ viaBle: true, caps }), false, JSON.stringify(caps))
+    assert.equal(r.chainEditorHere({ vp4: true }), false)
+    assert.equal(r.chainEditorHere({ vp4: true, viaBle: true, caps: { chainEditor: true } }), false)
+    assert.equal(r.chainEditorHere({ elsewhere: true }), false)
+    assert.equal(r.placedReady([{ row: 0, col: 0 }, { row: 3, col: 11 }]), true)
+    assert.equal(r.placedReady([]), true)
+    for (const b of [{ col: 1 }, { row: 1 }, { row: -1, col: 0 }, { row: 1.5, col: 0 }, { row: '1', col: 0 }]) assert.equal(r.placedReady([{ row: 0, col: 0 }, b]), false, JSON.stringify(b))
+    assert.equal(r.placedPercent({ got: 50, of: 200 }), 25)
+    assert.equal(r.placedPercent({ got: 200, of: 200 }), 99, 'a read still out never says 100')
+    for (const p of [null, {}, { got: 5 }, { got: 5, of: 0 }, { got: -1, of: 9 }]) assert.equal(r.placedPercent(p), null)
+    assert.equal(r.placedReadingLine(null), 'Reading the chain from the unit…')
+    assert.equal(r.placedReadingLine({ got: 1, of: 4 }, { back: true }), 'Reading the chain back from the unit… 25%')
+    assert.equal(r.placedSlowLine('Axe-Fx III'), 'Over Bluetooth the Axe-Fx III is read again after every change, which takes about half a minute to a minute. Keep the app open until it’s done.')
+    assert.doesNotMatch(src('mobile/src/lib/chainOnWire.js'), /^import /m, 'the rules import nothing, so a test reads them as they are')
+  })
+
   test('the chain’s four routes are answered only where the chain is open to the account, with Edit open: anybody else gets “not over Bluetooth” and nothing is sent', async () => {
     const grid = await import(GRID)
     for (const kind of ['fm3', 'fm9', 'axefx3', 'am4']) {
@@ -21995,7 +22649,7 @@ export function run(test) {
     assert.deepEqual(live, [], 'the live read told the bar something')
     /* And in the file: the word goes to the preset's read alone. */
     const wire = code('mobile/src/lib/bleWire.js').replace(/\s+/g, ' ')
-    assert.match(wire, /return editRoute\(\(\) => \(am4 \? am4Grid\(\) : gen3Grid\(opts\?\.onProgress\)\)\)/)
+    assert.match(wire, /return editRoute\(\(\) => \(am4 \? am4Grid\(\) : gen3Grid\(opts\?\.onProgress, opts\?\.kept === true && chainEditorOn\(\) \? PLACED_FRESH_MS : STRUCTURE_FRESH_MS\)\)\)/)
     assert.match(wire, /grid = await gen3DumpGrid\(onProgress\)/)
     assert.ok(!/gen3LiveGrid\([^)]*onProgress/.test(wire), 'the live read is handed the bar')
   })

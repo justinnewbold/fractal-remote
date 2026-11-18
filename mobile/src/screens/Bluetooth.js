@@ -29,6 +29,8 @@ import {
   connectOwedUntil,
   editOverBluetooth,
   saveOverBluetooth,
+  chainEditorOverBluetooth,
+  editToolsOverBluetooth,
   volumeOverBluetooth,
   findAdapters,
   forgetAdapter,
@@ -1434,14 +1436,16 @@ export function BluetoothLimits() {
   const saves = editOpen && saveOverBluetooth()
   /* And whether the volume button is there, for the list's last line (lib/bluetooth volumeOverBluetooth: his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). */
   const volume = volumeOverBluetooth(b.unit)
+  /* And the chain editor and Edit's smaller tools (his account until lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE and EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE): the lines name only what is still the computer's. */
+  const here = { editor: saves && chainEditorOverBluetooth(), tools: saves && editToolsOverBluetooth() }
   return (
     <View style={{ gap: space.md }}>
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
       <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-        {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}
+        {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves, here)}
       </Text>
       <Heading>What’s different from USB</Heading>
-      {[editingLine(editOpen, saves), ...DIFFERENT].map((line) => (
+      {[editingLine(editOpen, saves, here), ...DIFFERENT].map((line) => (
         <Bullet key={line}>{line}</Bullet>
       ))}
       {/* And last, what is not there over Bluetooth at all (lib/editWords): the volume button left out of it where it is there. */}

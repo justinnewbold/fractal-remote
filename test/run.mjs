@@ -4630,7 +4630,7 @@ test('the looper\u2019s buttons are at both ends: the pedal on Edit, a button on
   assert.match(app, /title="Stop the looper"/, 'Setup has no way to stop a looper that keeps playing')
   assert.match(app, /await stopLooper\(looper\.effectId\)/)
   const edit = bare(readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8'))
-  assert.match(edit, /\{block\?\.slug === 'looper' && !toolShown \? <Looper block=\{block\} \/> : null\}/, 'tapping the Looper pedal on the phone does not open its buttons')
+  assert.match(edit, /\{block\?\.slug === 'looper' && block\.noControls !== true && !toolShown \? <Looper block=\{block\} \/> : null\}/, 'tapping the Looper pedal on the phone does not open its buttons')
   const settings = bare(readSrc(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8'))
   assert.match(settings, /title="Stop the looper"/, 'the phone\u2019s Settings has no way to stop a looper that keeps playing')
   assert.match(settings, /await stopLooper\(looper\.effectId\)/)
