@@ -3115,16 +3115,36 @@ export function run(test) {
     assert.match(wf, /if: \$\{\{ inputs\.release != '' && !inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-release\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/, 'a new version’s texts are written without Write it')
   })
 
+  test('the 2.0.0 Description he chose fits Apple’s box, keeps the independence sentence word for word, and names no VP4', async () => {
+    /* "OK, put the new description into App Store connect" (Justin, 17 November 2026). */
+    const { NOT_AFFILIATED } = await import('../shared/affiliation.mjs')
+    const text = read('store/app-store/2.0.0-description.txt').trim()
+    assert.ok([...text].length <= 4000, 'the Description is over Apple’s 4000')
+    assert.ok(text.includes(NOT_AFFILIATED), 'the independence sentence is not there word for word')
+    assert.doesNotMatch(text, /VP4|\bbeta\b|\bofficial|certified|approved|\bsoon\b|\btried\b/i)
+    /* Three ways, Bluetooth first; the cable never on an FM3; TONE3000 only on the Axe-Fx III and named as somebody else's. */
+    assert.ok(text.indexOf('• Bluetooth:') < text.indexOf('• USB cable:') && text.indexOf('• USB cable:') < text.indexOf('• Computer:'))
+    assert.match(text, /• USB cable: plug an AM4, FM9 or Axe-Fx III straight into your iPhone or iPad\./)
+    assert.match(text, /NAM AND TONE3000 ON THE AXE-FX III\n[^\n]*TONE3000 is a separate service with its own free account\./)
+    assert.doesNotMatch(text, /NO COMPUTER\n/, 'a heading says no computer over what works on every connection')
+    assert.match(read('scripts/store-release.mjs'), /if \(\[\.\.\.whole\]\.length > 4000\) throw/)
+  })
+
   test('App Store screenshots are added after the ones there, in Apple’s sizes, and nothing is taken away or sent for review', async () => {
     const { shotsFor, DEVICES, MOST } = await import('../scripts/store-shots.mjs')
     const mine = shotsFor('2.0.0')
-    assert.equal(mine.length, 4)
-    for (const s of mine) assert.ok(s.device === 'iphone' && s.type === 'APP_IPHONE_67' && DEVICES.iphone.sizes.includes(s.size), `${s.name} is not an iPhone picture in Apple's size`)
+    for (const d of ['iphone', 'ipad']) assert.ok(mine.filter((s) => s.device === d).length <= MOST, `more ${d} pictures than Apple takes`)
+    for (const s of mine) assert.ok(DEVICES[s.device].type === s.type && DEVICES[s.device].sizes.includes(s.size), `${s.name} is not in Apple's size for its row`)
+    assert.ok(mine.some((s) => s.device === 'iphone') && mine.some((s) => s.device === 'ipad'), 'a row Apple requires has no pictures in the repo')
     assert.equal(MOST, 10)
     const code = read('scripts/store-shots.mjs')
-    assert.doesNotMatch(code, /method: 'DELETE'|appStoreVersionSubmissions|reviewSubmissions/, 'the job can take a picture away, or send a version for review')
+    assert.doesNotMatch(code, /appStoreVersionSubmissions|reviewSubmissions/, 'the job can send a version for review')
+    /* Pictures go only when he asks for a whole new set, and only the iPhone's row: one DELETE, behind its own flag, on that row's pictures. */
+    assert.equal(code.split("method: 'DELETE'").length - 1, 1, 'there is more than one way to take a picture away')
+    assert.match(code, /for \(const device of clear\) \{\n    const set = sets\.find\(\(s\) => s\.type === DEVICES\[device\]\.type\)[\s\S]{0,400}if \(apply && set\) \{\n      for \(const p of set\.shots\) \{\n        await asc\(`\/v1\/appScreenshots\/\$\{p\.id\}`, \{ method: 'DELETE' \}\)/, 'a picture can be taken away without the flag, without Write it, or from another row')
+    assert.match(code, /const clear = \['iphone', 'ipad'\]\.filter\(\(d\) => process\.argv\.includes\(`--clear-\$\{d\}`\)\)/, 'a row with no flag of its own (the watch’s) can be emptied')
     assert.match(code, /if \(total > MOST\) throw/, 'a set can be filled past Apple’s ten')
-    assert.match(read('.github/workflows/store-text.yml'), /if: \$\{\{ inputs\.release != '' && inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-shots\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/)
+    assert.match(read('.github/workflows/store-text.yml'), /if: \$\{\{ inputs\.release != '' && inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-shots\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\} \$\{\{ inputs\.clear_iphone && '--clear-iphone' \|\| '' \}\} \$\{\{ inputs\.clear_ipad && '--clear-ipad' \|\| '' \}\}/)
   })
 
   test('a new App Store version’s texts: the review notes are changed in place, never printed, and nothing presses Add for Review', async () => {
