@@ -2601,7 +2601,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
    * pop-up that has the knobs ("the quick edit screen"): the one with the
    * channels alone is word for word what it was.
    */
-  const library = useTone3000Door(withKnobs ? block : null)
+  const library = useTone3000Door(withKnobs ? block : null, withKnobs ? null : block)
   const [browsing, setBrowsing] = useState(false)
   const [came, setCame] = useState('')
   useEffect(() => {
@@ -2614,6 +2614,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
         <Tone3000InPop
           id={library.id}
           n={library.n}
+          from={library.from}
           onBack={(line) => {
             setCame(line)
             setBrowsing(false)
@@ -2625,7 +2626,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   const libraryDoor = library.offered ? (
     <>
       <Tone3000Door n={library.n} onPress={() => setBrowsing(true)} />
-      {came ? <NowPlayingCard line={came} /> : null}
+      {came ? <NowPlayingCard line={came} unit={library.unit} /> : null}
     </>
   ) : null
   if (withKnobs) {
@@ -2666,6 +2667,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   }
   return (
     <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
+      {libraryDoor}
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
         {(channels || []).map((ch) => (
           <Press

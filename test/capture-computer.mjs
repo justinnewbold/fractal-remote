@@ -78,6 +78,7 @@ export const t3k = {
 }
 export const readNam = () => ({ ok: true, a2: true }), namSaid = () => 'An A2 capture'
 export const NAM_BLOCKS = [206, 207], NAM_EMPTY = '<EMPTY>'
+export const namBlocksOf = () => NAM_BLOCKS, firstNamOf = () => NAM_BLOCKS[0], unitOfNam = () => 'Axe-Fx III', forUnit = (text) => text, useDeviceName = () => 'Axe-Fx III'
 export const namSlotSaid = (slot) => String(slot + 1).padStart(3, '0')
 /* What the packer would make, without a file: the name XORs to 0x02, 0x60 is packed, with or without the hash. */
 export const namRecord = (text, named) => ({ ok: true, name: named.name, words: [], xor: 0x02, byte: 0x60, hashed: named.hash !== false })

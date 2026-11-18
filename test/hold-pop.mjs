@@ -123,6 +123,7 @@ export function run(test) {
     /* WITHOUT THE KNOBS: today's sheet, to the letter. The one return after the knobs' own. */
     const today = `  return (
     <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
+      {libraryDoor}
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
         {(channels || []).map((ch) => (
           <Press
