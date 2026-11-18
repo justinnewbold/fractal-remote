@@ -17,10 +17,20 @@
  * TONE3000_QUICK_FOR_EVERYONE). Closed to an account, the pop-up it gets is
  * exactly the one it had.
  */
-import { NAM_BLOCKS } from './nam-install.js'
+import { namBlocksOf, onAm4 } from './captureUnit.js'
 
-/** Whether the pop-up for `block` (whose effect id is `id`) offers TONE3000. Every part has to be exactly right. */
-export const tone3000QuickFor = (allowed, block, id) => allowed === true && !!block && block.slug === 'nam' && NAM_BLOCKS.includes(id)
+/**
+ * Whether the pop-up for `block` (whose effect id is `id`) offers TONE3000. Every part has to be exactly right.
+ * An AM4's NAM block too (lib/am4-nam, firmware 3.00): the wire names it only for an account its switch is open to
+ * (lib/features AM4_NAM_FOR_EVERYONE, his account until then), so a block that is here with that id is one of theirs.
+ */
+export const tone3000QuickFor = (allowed, block, id) => allowed === true && !!block && block.slug === 'nam' && !!namBlocksOf(id)
 
 /** Which NAM block that is, 1 or 2, or 0 for a block that is neither. */
-export const namNumber = (id) => NAM_BLOCKS.indexOf(id) + 1
+export const namNumber = (id) => (namBlocksOf(id) || []).indexOf(id) + 1
+
+/**
+ * The block to offer TONE3000 on in a pop-up: the one whose knobs are up ("the quick edit screen"), or, with no
+ * knobs up, an AM4's NAM block, which has none in the app yet and would otherwise have no way in at all.
+ */
+export const doorBlock = (withKnobs, block, id) => (withKnobs ? block : block && block.knobs === false && onAm4(id) ? block : null)

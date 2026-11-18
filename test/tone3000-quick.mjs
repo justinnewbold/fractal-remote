@@ -29,6 +29,53 @@ const rule = () => import('../mobile/src/lib/tone3000Quick.js')
 const words = () => import('../mobile/src/lib/tone3000Words.js')
 
 export function run(test) {
+  test('tone3000 quick: an AM4’s NAM block (firmware 3.00) is offered it over its channels, and every sentence names the AM4', async () => {
+    const { tone3000QuickFor, namNumber, doorBlock } = await rule()
+    const u = await import('../mobile/src/lib/captureUnit.js')
+    const { AM4_NAM_BLOCKS } = await import('../mobile/src/lib/am4-nam.js')
+    assert.deepEqual([...AM4_NAM_BLOCKS], [0xd1, 0xd2])
+    const nam = (more = {}) => ({ slug: 'nam', name: 'NAM 1', ...more })
+    /* Its two blocks, by the family and the number, as an Axe-Fx III's are. */
+    assert.equal(tone3000QuickFor(true, nam(), 0xd1), true)
+    assert.equal(tone3000QuickFor(true, nam(), 0xd2), true)
+    assert.equal(tone3000QuickFor(false, nam(), 0xd1), false)
+    assert.equal(tone3000QuickFor(true, { slug: '0xd1' }, 0xd1), false, 'a block the wire did not name NAM (the switch closed) was offered it')
+    assert.deepEqual([namNumber(0xd1), namNumber(0xd2), namNumber(0xd3)], [1, 2, 0])
+    /* With no knobs up, only an AM4's NAM block that has none: never an Axe-Fx III's, whose pop-up without knobs is word for word what it was. */
+    const bare = nam({ knobs: false })
+    assert.equal(doorBlock(false, bare, 0xd1), bare)
+    assert.equal(doorBlock(false, nam(), 0xd1), null)
+    assert.equal(doorBlock(false, bare, 206), null)
+    assert.equal(doorBlock(false, null, 0xd1), null)
+    assert.equal(doorBlock(true, bare, 206), bare)
+    /* Which unit, by the block alone: the two sets share no number. */
+    assert.deepEqual([u.unitOfNam(0xd1), u.unitOfNam(0xd2), u.unitOfNam(206), u.unitOfNam(null)], ['AM4', 'AM4', 'Axe-Fx III', 'Axe-Fx III'])
+    assert.deepEqual([[...u.namBlocksOf(0xd2)], [...u.namBlocksOf(207)], u.namBlocksOf(58)], [[0xd1, 0xd2], [206, 207], null])
+    assert.deepEqual([u.firstNamOf('AM4'), u.firstNamOf('Axe-Fx III'), u.firstNamOf(''), u.firstNamOf('FM3')], [0xd1, 206, 206, 206])
+    /* The words are the Axe-Fx III's with the name put in: none of them still says Axe-Fx III of an AM4, and of an Axe-Fx III each is untouched. */
+    const w = await words()
+    const all = [...w.stepsFor({ n: 1, held: true, back: 'channels' }), w.stepsFoot({ n: 1, held: true }), w.capturesNote({ n: 1, held: true, back: 'channels' }), w.getSays('X', { n: 1, held: true, back: 'channels' }), w.previewSays('X', 1), w.ON_UNIT, w.SENT_TO_UNIT, w.SENDING_TO_UNIT, w.NOT_ON_UNIT, 'An Axe-Fx III plays it', 'on an Axe-Fx III']
+    for (const said of all) {
+      assert.equal(u.forUnit(said, 'Axe-Fx III'), said)
+      assert.equal(u.forUnit(said), said)
+      const am4 = u.forUnit(said, 'AM4')
+      assert.ok(!/Axe-Fx/.test(am4), am4)
+      assert.ok(!/\ban? AM4\b/.test(am4) || /\b[Aa]n AM4\b/.test(am4), am4)
+    }
+    assert.equal(u.forUnit(w.ON_UNIT, 'AM4'), 'On your AM4')
+    assert.equal(u.forUnit(null, 'AM4'), null)
+    /* A Get from there goes back to the block's channels, and says so. */
+    assert.equal(w.backToChannels(1), '‹ Back to NAM 1’s channels')
+    assert.match(w.getSays('X', { n: 1, held: true, back: 'channels' }), /goes back to its channels$/)
+    assert.match(w.capturesNote({ n: 1, held: true, back: 'channels' }), /takes you back to its channels\./)
+    /* The page says each of its sentences through that one door, and plays in the unit's own blocks. */
+    const card = flat(code(read('mobile/src/components/Tone3000Test.js')))
+    assert.match(card, /const NAM_BLOCKS = namBlocksOf\(block\) \|\| namBlocksOf\(firstNamOf\(deviceName\)\) const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\] const unit = unitOfNam\(playIn\) const u = \(text\) => forUnit\(text, unit\)/)
+    assert.match(card, /head=\{u\(x\.head\)\} line=\{u\(x\.line\)\} more=\{u\(x\.more\)\} \/> : <Note key=\{i\}>\{u\(x\.note\)\}<\/Note>/)
+    assert.match(card, /\{said \? <Note>\{u\(said\)\}<\/Note> : null\} \{fault \? <Note tone="warn">\{u\(fault\)\}<\/Note> : null\}/)
+    assert.ok(!/Axe-Fx III[^'`]*<\//.test(card.replace(/\{u\('[^']*'\)\}/g, '')), 'a sentence drawn on the page names the Axe-Fx III outright')
+  })
+
   test('tone3000 quick: it is offered on a NAM block and nothing else, and only where the account is let in', async () => {
     const { tone3000QuickFor, namNumber } = await rule()
     const { NAM_BLOCKS } = await import('../mobile/src/lib/nam-install.js')
@@ -44,8 +91,9 @@ export function run(test) {
     }
     /* An answer that is not exactly yes is a no: closed, not yet known, or anything else. */
     for (const allowed of [false, null, undefined, 1, 'yes', {}]) assert.equal(tone3000QuickFor(allowed, nam(), 206), false, String(allowed))
-    /* Pure: it imports the capture tools' own list of NAM blocks and nothing else. */
-    assert.deepEqual([...code(read('mobile/src/lib/tone3000Quick.js')).matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./nam-install.js'])
+    /* Pure: it imports the capture units' own lists of NAM blocks (lib/captureUnit, which imports the two units' lists) and nothing else. */
+    assert.deepEqual([...code(read('mobile/src/lib/tone3000Quick.js')).matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./captureUnit.js'])
+    assert.deepEqual([...code(read('mobile/src/lib/captureUnit.js')).matchAll(/from '([^']+)'/g)].map((m) => m[1]), ['./am4-nam.js', './nam-install.js'])
   })
 
   test('tone3000 quick: his account first, behind a switch of its own, and the pop-up everybody else gets is the one it was', async () => {
@@ -55,20 +103,22 @@ export function run(test) {
     /* His account by the sign-in kept on the device, as the capture picker's is: never a question asked of the server. */
     assert.match(hook, /import \{ useBluetoothAdmin \} from '\.\/bluetooth' import \{ TONE3000_QUICK_FOR_EVERYONE \} from '\.\/features' export const useTone3000Quick = \(\) => \{ const his = useBluetoothAdmin\(\) return TONE3000_QUICK_FOR_EVERYONE \|\| his \}/)
     const door = flat(code(read('mobile/src/components/Tone3000Quick.js')))
-    assert.match(door, /export function useTone3000Door\(block\) \{ const allowed = useTone3000Quick\(\) const id = block \? idOf\(block\) : null const offered = tone3000QuickFor\(allowed, block, id\) return \{ offered, id: offered \? id : null, n: offered \? namNumber\(id\) : 0 \} \}/)
+    assert.match(door, /export function useTone3000Door\(block, bare = null\) \{ const allowed = useTone3000Quick\(\) const held = block \|\| doorBlock\(false, bare, bare \? idOf\(bare\) : null\) const id = held \? idOf\(held\) : null const offered = tone3000QuickFor\(allowed, held, id\) return \{ offered, id: offered \? id : null, n: offered \? namNumber\(id\) : 0, unit: unitOfNam\(offered \? id : null\), from: offered && !block \? 'channels' : 'knobs' \} \}/)
 
     /* Play's pop-up. Only the one with the knobs ("the quick edit screen") is asked; the one with the channels alone is held word for word by test/hold-pop.mjs. */
     const stage = flat(code(read('mobile/src/screens/Stage.js')))
     const sheet = stage.slice(stage.indexOf('function ChannelSheet('), stage.indexOf('export const DOWN_DIM'))
-    assert.match(sheet, /const library = useTone3000Door\(withKnobs \? block : null\)/)
+    assert.match(sheet, /const library = useTone3000Door\(withKnobs \? block : null, withKnobs \? null : block\)/)
     /* Nothing is drawn where it is not offered: no button, and the page cannot be up. */
     assert.match(sheet, /const libraryDoor = library\.offered \? \( <> <Tone3000Door n=\{library\.n\} onPress=\{\(\) => setBrowsing\(true\)\} \/>/)
     assert.match(sheet, /if \(browsing && library\.offered\) \{/)
-    assert.equal((sheet.match(/\{libraryDoor\}/g) || []).length, 1)
+    /* Twice: over the knobs, and over the channels of the pop-up that has no knobs, where only an AM4's NAM block is offered it (lib/tone3000Quick doorBlock). */
+    assert.equal((sheet.match(/\{libraryDoor\}/g) || []).length, 2)
+    assert.match(sheet, /note="Channel"> \{libraryDoor\} <View/)
     /* Over the knobs, in the pop-up that has them: "on top of it have it say tone 3000". */
     assert.match(sheet, /\{libraryDoor\} <PopKnobs block=\{block\} onScrollLock=\{setHeld\} \/>/)
     /* The page is in the SAME pop-up (same title, same way out, open on the same condition), with the channels put away while it is up. */
-    assert.match(sheet, /<Sheet open=\{!!block && channels\?\.length > 1\} onClose=\{onClose\} title=\{name\} note="Captures" tall scrollKey="library"> <Tone3000InPop id=\{library\.id\} n=\{library\.n\} onBack=\{\(line\) => \{ setCame\(line\) setBrowsing\(false\) \}\} \/> <\/Sheet>/)
+    assert.match(sheet, /<Sheet open=\{!!block && channels\?\.length > 1\} onClose=\{onClose\} title=\{name\} note="Captures" tall scrollKey="library"> <Tone3000InPop id=\{library\.id\} n=\{library\.n\} from=\{library\.from\} onBack=\{\(line\) => \{ setCame\(line\) setBrowsing\(false\) \}\} \/> <\/Sheet>/)
     /* It is one sheet, so each of its two pages starts at its own top: left where a long list was scrolled to, the knobs came up blank. */
     const sheetSrc = flat(code(read('mobile/src/components/Sheet.js')))
     assert.match(sheetSrc, /<ScrollView key=\{scrollKey\} contentContainerStyle=/)
@@ -76,7 +126,7 @@ export function run(test) {
     /* Another block held, or the pop-up closed, starts on the knobs with nothing said. */
     assert.match(sheet, /useEffect\(\(\) => \{ setBrowsing\(false\) setCame\(''\) \}, \[library\.id\]\)/)
     /* And what the block said it is playing is over the knobs when a Get hands them back. */
-    assert.match(sheet, /\{came \? <NowPlayingCard line=\{came\} \/> : null\}/)
+    assert.match(sheet, /\{came \? <NowPlayingCard line=\{came\} unit=\{library\.unit\} \/> : null\}/)
     /* Play's own file holds the door and nothing of TONE3000's: no client, no card, no words of its own. */
     const src = code(read('mobile/src/screens/Stage.js'))
     assert.deepEqual([...src.matchAll(/from '([^']*[Tt]one3000[^']*)'/g)].map((m) => m[1]), ['../components/Tone3000Quick'])
@@ -87,7 +137,7 @@ export function run(test) {
     const door = flat(code(read('mobile/src/components/Tone3000Quick.js')))
     const card = flat(code(read('mobile/src/components/Tone3000Test.js')))
     /* The page is the Developer page's own, told which block it was opened from. */
-    assert.match(door, /<Press label=\{from === 'captures' \? BACK_TO_CAPTURES : backToKnobs\(n\)\} height=\{44\} disabled=\{working\} onPress=\{\(\) => onBack\(''\)\} \/> <Tone3000Test block=\{id\} held backTo=\{from\} onDone=\{\(line\) => onBack\(line \|\| ''\)\} onWorking=\{setWorking\} onPointed=\{onPointed\} \/>/)
+    assert.match(door, /<Press label=\{from === 'captures' \? BACK_TO_CAPTURES : from === 'channels' \? backToChannels\(n\) : backToKnobs\(n\)\} height=\{44\} disabled=\{working\} onPress=\{\(\) => onBack\(''\)\} \/> <Tone3000Test block=\{id\} held backTo=\{from\} onDone=\{\(line\) => onBack\(line \|\| ''\)\} onWorking=\{setWorking\} onPointed=\{onPointed\} \/>/)
     assert.match(door, /export function Tone3000InPop\(\{ id, n, onBack, from = 'knobs', onPointed = null \}\)/)
     /* The button's words are in the live colour: over the captures on the unit it is a row's size and shape, and in plain ink read as one more capture. */
     assert.match(door, /export function Tone3000Door\(\{ n, onPress \}\) \{ return <Press label=\{T3K_QUICK\} sub=\{quickSub\(n\)\} tone="live" inkColor=\{color\.live\} subInk=\{color\.live\} height=\{56\} onPress=\{onPress\} \/> \}/)
@@ -105,9 +155,9 @@ export function run(test) {
     /* Placed by lib/captureSend captureToSlot (run whole in test/bluetooth.mjs, "one capture into one slot"), which has no page to ask after: never by the page itself. */
     assert.ok(!/\bplace\(m\.id/.test(card), 'the page places a capture itself')
     /* The steps and the note are said for the place the page is in, never the Developer page's by default. */
-    assert.match(card, /\{stepsFor\(where\)\.map\(/)
-    assert.match(card, /\{stepsFoot\(where\)\}/)
-    assert.match(card, /\{capturesNote\(where\)\}/)
+    assert.match(card, /\{stepsFor\(where\)\.map\(u\)\.map\(/)
+    assert.match(card, /\{u\(stepsFoot\(where\)\)\}/)
+    assert.match(card, /\{u\(capturesNote\(where\)\)\}/)
     assert.ok(!/stepsFor\(\)|stepsFoot\(\)|capturesNote\(\)/.test(card))
     /* The word on the button that was tapped: Get's, though from a held block it plays too. */
     assert.match(card, /setTapped\(play && !back \? 'play' : 'keep'\)/)
@@ -119,7 +169,7 @@ export function run(test) {
     assert.match(card, /\{signedIn && !where\.held \? <Press label="Sign out of TONE3000"/)
     /* Never a block that is not a NAM, whatever is handed in; and "held" needs a way back to mean anything. */
     assert.match(card, /const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\]/)
-    assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' \? 'captures' : 'knobs' \}/)
+    assert.match(card, /const where = \{ n: NAM_BLOCKS\.indexOf\(playIn\) \+ 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' \? 'captures' : backTo === 'channels' \? 'channels' : 'knobs' \}/)
     /* Preview: the one send, then the held block pointed at it. It stays on the page. One already on the unit (`there`) is pointed at with nothing sent. */
     assert.match(card, /onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/>/)
     assert.match(card, /setBusy\(`pick \$\{playIn\}`\) const nowPlaying = await point\(playIn, slot, m\.id, tappedAt\)/)
@@ -150,7 +200,7 @@ export function run(test) {
      * No button of another name, and never the other block's, which is not what was held. On the Developer page the two give way
      * to a Play button for each block, as they did.
      */
-    assert.match(card, /\{noUse \|\| \(there && !where\.held\) \? null : \( <> <LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{previewSays\(named, where\.n, there\)\} disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/> <LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{getSays\(named, \{ \.\.\.where, there \}\)\} lit disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id, true\) : sendToUnit\(m, null, false, where\.held, where\.held\)\)\} \/> <\/> \)\}/)
+    assert.match(card, /\{noUse \|\| \(there && !where\.held\) \? null : \( <> <LineButton icon=\{playIcon\} label=\{word\('play', PREVIEW\)\} says=\{u\(previewSays\(named, where\.n, there\)\)\} disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id\) : sendToUnit\(m, null, false, true\)\)\} \/> <LineButton icon=\{saveIcon\} label=\{word\('keep', GET\)\} says=\{u\(getSays\(named, \{ \.\.\.where, there \}\)\)\} lit disabled=\{!!busy\} onPress=\{\(\) => \(there \? useIn\(playIn, at\.slot, m\.id, true\) : sendToUnit\(m, null, false, where\.held, where\.held\)\)\} \/> <\/> \)\}/)
     assert.doesNotMatch(card, /there && where\.held|USE_AND_BACK|useAndBackSub/)
     assert.equal((card.match(/useIn\(/g) || []).length, 3, 'a capture on the unit is played from some other button')
     /* The Developer page is handed nothing, so it is what it was: NAM 1, Get leaves what is playing alone, and nothing goes back anywhere. */

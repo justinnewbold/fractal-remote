@@ -2857,11 +2857,23 @@ over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
   (`am4NamShaped`, `am4NamAllowed`), and nothing of them is on the AM4's
   allow-list. The pretend AM4 in the tests answers them only as "firmware
   3.00" (`nam: true`); without it, it freezes on each, as on any message it
-  does not know. NO SCREEN REACHES THEM YET: the TONE3000 page, its words
-  and the door on a held block are written for the III's two block ids and
-  say "Axe-Fx III". That is the next piece, with the capture picker for an
-  AM4's NAM block (which has no knobs in Edit, so no place for the button
-  yet). NOTHING OF IT HAS BEEN SENT TO AN AM4.
+  does not know. NOTHING OF IT HAS BEEN SENT TO AN AM4.
+- *Since 2.1.1 TONE3000 is on a held AM4 NAM block, HIS ACCOUNT ONLY* (the
+  block is only named NAM where `AM4_NAM_FOR_EVERYONE` or his account opens
+  it). An AM4's NAM block has no knobs in the app, so its pop-up is its
+  channels alone: the TONE3000 button is drawn over them
+  (lib/tone3000Quick `doorBlock`: with no knobs up, only an AM4's NAM
+  block; an Axe-Fx III's pop-up without knobs is word for word what it
+  was), the page takes the channels' place, and Get goes "back to its
+  channels". Which unit is told by the block's id alone
+  (lib/captureUnit: 206/207 an Axe-Fx III's, 0xD1/0xD2 an AM4's), and
+  every sentence of the page is the Axe-Fx III's with the unit's name put
+  in at the one place it is drawn (`forUnit`; the page's `u`), so there is
+  one set of words. Developer → TONE3000 plays in the linked unit's own NAM
+  1 (`firstNamOf`, by the rig's name for the unit). NOT BUILT YET: the
+  capture picker for an AM4 (choosing among captures already on the unit),
+  which has no place in Edit while the block has no knobs there. NOT SEEN
+  ON AN AM4: the pop-up, a search for an empty slot, a send, a pick.
 - *Then, in order:* the same through the computer (ForgeFX's list, a new
   pin and a computer release);
   its knobs (the AM4's settings are not the III's by number: read off the

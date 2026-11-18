@@ -44,7 +44,7 @@
  */
 
 /** Where Get goes back to from a held page: the block's knobs (Play's pop-up), or the list of captures on the unit (Edit's). */
-const backPlace = (back) => (back === 'captures' ? 'the captures on the unit' : 'its knobs')
+const backPlace = (back) => (back === 'captures' ? 'the captures on the unit' : back === 'channels' ? 'its channels' : 'its knobs')
 
 /** A NAM block by its number, as the unit and the app name it. */
 export const namBlockSaid = (n) => `NAM ${n === 2 ? 2 : 1}`
@@ -135,6 +135,8 @@ export const T3K_QUICK = 'TONE3000'
 export const quickSub = (n) => `Browse captures, preview them, and get one for ${namBlockSaid(n)}`
 /** Over the page, while it is up in the block's pop-up, or in the capture list's sheet. */
 export const backToKnobs = (n) => `‹ Back to ${namBlockSaid(n)}’s knobs`
+/** The same, from a block whose pop-up is its channels alone (an AM4's NAM block). */
+export const backToChannels = (n) => `‹ Back to ${namBlockSaid(n)}’s channels`
 export const BACK_TO_CAPTURES = '‹ Back to the captures on the unit'
 
 /*

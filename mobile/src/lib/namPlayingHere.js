@@ -23,3 +23,5 @@ export const usePresetAndScene = () => ({ preset: useRig(presetOf), scene: useRi
 export const linkedNow = () => linkedOf(linkState())
 /** Be told whether the link is up, each time it changes. Returns the way to stop. */
 export const watchLinked = (fn) => subscribeLink((st) => fn(linkedOf(st)))
+/** The name the rig has for the unit linked ('AM4', 'Axe-Fx III', …): which unit's NAM blocks the Developer page plays in (lib/captureUnit). */
+export const useDeviceName = () => useRig((st) => st.deviceName || '')

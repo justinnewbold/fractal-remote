@@ -33,18 +33,24 @@ import { View } from 'react-native'
 
 import { color, space } from '../lib/theme'
 import { idOf } from '../lib/device'
-import { namNumber, tone3000QuickFor } from '../lib/tone3000Quick'
-import { BACK_TO_CAPTURES, backToKnobs, quickSub, T3K_QUICK } from '../lib/tone3000Words'
+import { unitOfNam } from '../lib/captureUnit'
+import { doorBlock, namNumber, tone3000QuickFor } from '../lib/tone3000Quick'
+import { BACK_TO_CAPTURES, backToChannels, backToKnobs, quickSub, T3K_QUICK } from '../lib/tone3000Words'
 import { useTone3000Quick } from '../lib/useTone3000Quick'
 import Press from './Press'
 import Tone3000Test from './Tone3000Test'
 
-/** For the block held (or none): `{ offered, id, n }`, the block's effect id and which NAM it is. */
-export function useTone3000Door(block) {
+/**
+ * For the block held (or none): `{ offered, id, n, unit, from }`, the block's effect id, which NAM it is, the unit it
+ * is on, and what the page takes the place of. `bare` is the block held where the pop-up has no knobs up: only an
+ * AM4's NAM block is offered TONE3000 there (lib/tone3000Quick doorBlock), over its channels.
+ */
+export function useTone3000Door(block, bare = null) {
   const allowed = useTone3000Quick()
-  const id = block ? idOf(block) : null
-  const offered = tone3000QuickFor(allowed, block, id)
-  return { offered, id: offered ? id : null, n: offered ? namNumber(id) : 0 }
+  const held = block || doorBlock(false, bare, bare ? idOf(bare) : null)
+  const id = held ? idOf(held) : null
+  const offered = tone3000QuickFor(allowed, held, id)
+  return { offered, id: offered ? id : null, n: offered ? namNumber(id) : 0, unit: unitOfNam(offered ? id : null), from: offered && !block ? 'channels' : 'knobs' }
 }
 
 /**
@@ -69,7 +75,7 @@ export function Tone3000InPop({ id, n, onBack, from = 'knobs', onPointed = null 
   const [working, setWorking] = useState(false)
   return (
     <View style={{ gap: space.md }}>
-      <Press label={from === 'captures' ? BACK_TO_CAPTURES : backToKnobs(n)} height={44} disabled={working} onPress={() => onBack('')} />
+      <Press label={from === 'captures' ? BACK_TO_CAPTURES : from === 'channels' ? backToChannels(n) : backToKnobs(n)} height={44} disabled={working} onPress={() => onBack('')} />
       <Tone3000Test block={id} held backTo={from} onDone={(line) => onBack(line || '')} onWorking={setWorking} onPointed={onPointed} />
     </View>
   )

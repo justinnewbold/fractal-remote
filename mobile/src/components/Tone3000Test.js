@@ -114,15 +114,16 @@ import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib
 import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE } from '../lib/tone3000Words'
 import { hostPage, onTone3000Return, pageInApp, signOutHere, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
-import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
+import { NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { captureLine, waitOver } from '../lib/captureLine'
+import { firstNamOf, forUnit, namBlocksOf, unitOfNam } from '../lib/captureUnit'
 import { isPlaced, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
 import { captureOrder, captureToSlot, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import { CAPTURES_KEPT_FROM, tooOldUpTop, tooOldWords, unkeptWords } from '../lib/captureComputer'
 import { oldAfterSendHere, oldComputerHere, watchComputer } from '../lib/captureComputerHere'
 import { CHANGING, heardPick, keptWhile, LEFT_OFF, leftOffAfterMove, namPlayButton, pickedLine, playingOn, saysPlaying, STILL_OFF, SWITCHED_ON, switchOnToHear } from '../lib/namPlaying'
-import { linkedNow, unitNow, usePresetAndScene, watchLinked } from '../lib/namPlayingHere'
+import { linkedNow, unitNow, useDeviceName, usePresetAndScene, watchLinked } from '../lib/namPlayingHere'
 import { namOffHere, namOnHere } from '../lib/namOnHere'
 import Avatar from './Avatar'
 import Note from './Note'
@@ -268,11 +269,17 @@ function LineButton({ icon, label, says, lit = false, disabled, onPress }) {
  * on it), and `null` after a pick that failed, since it may have landed:
  * the slot said before it is then no longer vouched for.
  */
-export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDone = null, onWorking = null, backTo = 'knobs', onPointed = null }) {
+export default function Tone3000Test({ block = null, held = false, onDone = null, onWorking = null, backTo = 'knobs', onPointed = null }) {
+  /* The unit's own NAM blocks (lib/captureUnit): the held block's, else by the unit linked (an AM4's since its firmware 3.00, an Axe-Fx III's otherwise). */
+  const deviceName = useDeviceName()
+  const NAM_BLOCKS = namBlocksOf(block) || namBlocksOf(firstNamOf(deviceName))
   /* The NAM block a preview plays in: the one held, else NAM 1. Never a block that is not a NAM. */
   const playIn = NAM_BLOCKS.includes(block) ? block : NAM_BLOCKS[0]
-  /* And where a Get goes back to from there, for the words only: the block's knobs, or the captures on the unit. */
-  const where = { n: NAM_BLOCKS.indexOf(playIn) + 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' ? 'captures' : 'knobs' }
+  /* The unit's name in every sentence here: they are written for an Axe-Fx III, and said of an AM4 where the block is an AM4's. */
+  const unit = unitOfNam(playIn)
+  const u = (text) => forUnit(text, unit)
+  /* And where a Get goes back to from there, for the words only: the block's knobs (or its channels), or the captures on the unit. */
+  const where = { n: NAM_BLOCKS.indexOf(playIn) + 1, held: held === true && typeof onDone === 'function', back: backTo === 'captures' ? 'captures' : backTo === 'channels' ? 'channels' : 'knobs' }
   /* null until the device has said whether a sign-in is kept: neither the list nor the sign-in card is drawn on a guess. */
   const [signedIn, setSignedIn] = useState(null)
   /* Whose sign-in it is, as TONE3000 has them: shown across the top (its rule for a list of its tones). */
@@ -896,19 +903,19 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       </View>
       {info ? (
         <View style={{ gap: space.sm }}>
-          {stepsFor(where).map((step, i) => (
+          {stepsFor(where).map(u).map((step, i) => (
             <Text key={step} style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
               {`${i + 1}. ${step}`}
             </Text>
           ))}
-          <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{stepsFoot(where)}</Text>
+          <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{u(stepsFoot(where))}</Text>
         </View>
       ) : null}
 
       {busy === 'back' ? <Note>{COMING_BACK}</Note> : null}
       {busy === 'tone' && !tone ? <Note>Fetching the tone you picked…</Note> : null}
-      {said ? <Note>{said}</Note> : null}
-      {fault ? <Note tone="warn">{fault}</Note> : null}
+      {said ? <Note>{u(said)}</Note> : null}
+      {fault ? <Note tone="warn">{u(fault)}</Note> : null}
 
       {/* Before a sign-in: what this is, and Continue to TONE3000's own sign-in. */}
       {signedIn === false ? (
@@ -976,11 +983,11 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
             </View>
           </View>
           {busy === 'tone' ? <Note>Fetching its captures…</Note> : null}
-          {models && !models.length ? <Note>This tone has no A2 captures, which is the kind the Axe-Fx III’s NAM block plays.</Note> : null}
+          {models && !models.length ? <Note>{u('This tone has no A2 captures, which is the kind the Axe-Fx III’s NAM block plays.')}</Note> : null}
           {models && models.length ? (
             <View style={{ gap: 2 }}>
               <Text style={{ color: color.silkDim, fontSize: font.small }}>{CAPTURES_HEAD}</Text>
-              <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{capturesNote(where)}</Text>
+              <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{u(capturesNote(where))}</Text>
             </View>
           ) : null}
           {/* The computer app is too old to have a capture kept: said once, here, as the view opens, so the buttons are not a surprise; a capture whose button was tapped says it under itself instead (lib/captureComputer tooOldUpTop). */}
@@ -1012,8 +1019,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   */}
                   {noUse || (there && !where.held) ? null : (
                     <>
-                      <LineButton icon={playIcon} label={word('play', PREVIEW)} says={previewSays(named, where.n, there)} disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id) : sendToUnit(m, null, false, true))} />
-                      <LineButton icon={saveIcon} label={word('keep', GET)} says={getSays(named, { ...where, there })} lit disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id, true) : sendToUnit(m, null, false, where.held, where.held))} />
+                      <LineButton icon={playIcon} label={word('play', PREVIEW)} says={u(previewSays(named, where.n, there))} disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id) : sendToUnit(m, null, false, true))} />
+                      <LineButton icon={saveIcon} label={word('keep', GET)} says={u(getSays(named, { ...where, there }))} lit disabled={!!busy} onPress={() => (there ? useIn(playIn, at.slot, m.id, true) : sendToUnit(m, null, false, where.held, where.held))} />
                     </>
                   )}
                 </View>
@@ -1023,7 +1030,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   run whole by a test. This draws what it answers, in order.
                 */}
                 {captureLine({ working, fetching: busy === m.id, mine, send, at, slotSaid: at ? namSlotSaid(at.slot) : '', name: named, halted }).map((x, i) =>
-                  x.card ? <SentCard key={i} tone={x.card} head={x.head} line={x.line} more={x.more} /> : <Note key={i}>{x.note}</Note>
+                  x.card ? <SentCard key={i} tone={x.card} head={u(x.head)} line={u(x.line)} more={u(x.more)} /> : <Note key={i}>{u(x.note)}</Note>
                 )}
                 {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.way, halted.play, halted.back === true)} /> : null}
                 {/* On the unit, on the Developer page: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the capture's own two buttons play it there (above). */}
@@ -1036,7 +1043,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   : null}
                 {checked[m.id] && (noUse || mine) ? (
                   <Text selectable style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>
-                    {checked[m.id]}
+                    {u(checked[m.id])}
                   </Text>
                 ) : null}
               </View>

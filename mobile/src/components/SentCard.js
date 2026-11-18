@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { forUnit } from '../lib/captureUnit'
 import { ON_UNIT } from '../lib/tone3000Words'
 
 /**
@@ -52,6 +53,6 @@ export default function SentCard({ head, line = '', more = '', tone = 'ok' }) {
 }
 
 /** The card over a block's knobs, or its list of captures, after a Get: the block has said what it is playing (`line`). */
-export function NowPlayingCard({ line }) {
-  return <SentCard head={ON_UNIT} more={line} />
+export function NowPlayingCard({ line, unit = undefined }) {
+  return <SentCard head={forUnit(ON_UNIT, unit)} more={line} />
 }
