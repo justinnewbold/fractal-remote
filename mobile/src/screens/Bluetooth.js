@@ -32,6 +32,11 @@ import {
   chainEditorOverBluetooth,
   editToolsOverBluetooth,
   volumeOverBluetooth,
+  looperOverBluetooth,
+  unitClickOverBluetooth,
+  modifiersOverBluetooth,
+  cabPickerOverBluetooth,
+  footswitchesOverBluetooth,
   findAdapters,
   forgetAdapter,
   forgetAdapterFor,
@@ -303,6 +308,8 @@ const ios = Platform.OS === 'ios'
  * and Quick build are among what Edit does, and the line says only the
  * chain editor, modifiers, renaming and copying a channel).
  */
+/* The list's line about cabs, left out where a cab is picked by name from here (BluetoothLimits `cabsHere`). */
+const CAB_WITH_COMPUTER = 'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.'
 const DIFFERENT = [
   'Slower to load the preset list.',
   'Footswitch changes may take a moment to show.',
@@ -310,7 +317,7 @@ const DIFFERENT = [
   'The adapter connects to one thing at a time.',
   'On the AM4, scene names take a moment the first time a preset is seen.',
   /* lib/gen3-edit: there is no cab state over Bluetooth, so a cab is not picked there. An AM4's is. */
-  'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.'
+  CAB_WITH_COMPUTER
   /* And last, what is not there at all: lib/editWords notOverBluetoothLine, by whether the volume button is (BluetoothLimits). */
 ]
 
@@ -1437,7 +1444,11 @@ export function BluetoothLimits() {
   /* And whether the volume button is there, for the list's last line (lib/bluetooth volumeOverBluetooth: his account until lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE). */
   const volume = volumeOverBluetooth(b.unit)
   /* And the chain editor and Edit's smaller tools (his account until lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE and EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE): the lines name only what is still the computer's. */
-  const here = { editor: saves && chainEditorOverBluetooth(), tools: saves && editToolsOverBluetooth() }
+  const here = { editor: saves && chainEditorOverBluetooth(), tools: saves && editToolsOverBluetooth(), mods: editOpen && modifiersOverBluetooth(b.unit) }
+  /* A cab picked by name (his account until lib/features CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE): the list's line about choosing a cab with the computer is left out where it is. */
+  const cabsHere = editOpen && cabPickerOverBluetooth(b.unit)
+  /* And the looper and the unit's own click, where they are here (his account until lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE and UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE): the last line names only what is still missing. */
+  const gone = { looper: looperOverBluetooth(b.unit), click: unitClickOverBluetooth(b.unit), footswitches: footswitchesOverBluetooth(b.unit) }
   return (
     <View style={{ gap: space.md }}>
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
@@ -1445,11 +1456,9 @@ export function BluetoothLimits() {
         {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves, here)}
       </Text>
       <Heading>What’s different from USB</Heading>
-      {[editingLine(editOpen, saves, here), ...DIFFERENT].map((line) => (
-        <Bullet key={line}>{line}</Bullet>
-      ))}
+      {[editingLine(editOpen, saves, here), ...DIFFERENT].map((line) => (line && !(cabsHere && line === CAB_WITH_COMPUTER) ? <Bullet key={line}>{line}</Bullet> : null))}
       {/* And last, what is not there over Bluetooth at all (lib/editWords): the volume button left out of it where it is there. */}
-      <Bullet>{notOverBluetoothLine(volume)}</Bullet>
+      {notOverBluetoothLine(volume, gone) ? <Bullet>{notOverBluetoothLine(volume, gone)}</Bullet> : null}
       {/* The unit's own: a block Play does not draw yet, when a unit has one (shared/bluetooth-gear missingBlocksLine: none since 1.90.47, so no line). */}
       {missingBlocksLine(b.unit) ? <Bullet>{missingBlocksLine(b.unit)}</Bullet> : null}
       <Hint>{BLUETOOTH_WAYS}</Hint>

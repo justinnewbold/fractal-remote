@@ -2541,7 +2541,7 @@ main's updates reach). The 2.0.0 review notes as written on 17 November do
 not describe them; whether Apple's 2.0.0 had been sent for review by then
 was not known, and he was asked. If one has to be shut again, its switch
 goes back to false in an update: tell him first. The next pass's pieces
-are still his account first.
+(below) are his account first.
 
 THE FIRST PASS, three switches:
 
@@ -2656,18 +2656,132 @@ that went before. THE PRETEND AM4 IN THE TESTS FREEZES ON ANY MESSAGE NOT
 ON ITS LIST, as the real one once did; the name message was added to what
 it knows, with the eighteen-byte answer the codec has from AM4-Edit.
 
-STILL THE COMPUTER'S, in the order they would be built: modifiers, a gen-3
-cab picker (the IR names are the codec's tables, which the phone does not
-carry), the looper's buttons, the unit's own click (one typed write
-at block 1, but the metronome's rules ask "is this Bluetooth?" in five
-places and every one would have to learn the difference), the Footswitches
-page, and an AM4's volume. A VP4 gets none of it: its wire sends no SysEx.
+THE SECOND PASS, 2.0.6, THE SAME DAY, FIVE SWITCHES, ALL FALSE (his account
+only). "Yes the 2.0 version Apple app is already in review. Let's get the
+rest of the computer only items implemented for over Bluetooth." (18
+November 2026.) So everything that was still the computer's is built for an
+FM3, FM9 and Axe-Fx III, and NONE OF IT HAS BEEN SEEN ON A UNIT. It stays
+his account's until he says: Apple's 2.0.0 is in review, an update reaches
+the copy Apple is reviewing, and its notes describe none of this.
+
+- **The looper's buttons** (`LOOPER_OVER_BLUETOOTH_FOR_EVERYONE`; lib/bleTools,
+  bleWire gen3LooperButton and gen3LooperTelemetry; the wire's `looper`,
+  capabilities `looper`). Open, the wire hands the Looper block on in Play's
+  chain (it left it out: `OFF_STAGE`), so Play draws its looper pedal and
+  the panel works as through the computer. Each button is the computer's
+  one message (function 0x01, 10 00, the block, the button's setting, 1.0
+  or 0.0), to a block the catalog calls a looper and one of its eight
+  buttons only; never sent twice. The panel's read is the playhead each
+  time (23 bytes) and the loop's picture (some 600 bytes) no more than once
+  in six seconds, both at the lowest place in the line: with anything else
+  waiting, nothing is asked and the last picture stands. The looper's level
+  is not asked for (the panel does not draw it). The chain editor's read
+  marks the looper `noControls` only while this is closed.
+- **The unit's own metronome click** (`UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE`;
+  bleWire gen3WriteClick and gen3ReadClick; the wire's `unitClick`). The
+  Metronome switch at the unit's Global block (block 1), its number the
+  unit's own from shared/metronome.mjs, written typed 1 or 0 as the
+  computer writes it, and read back (1A 00) for the metronome's own follow.
+  NOTHING ELSE AT BLOCK 1 IS EVER WRITTEN FROM HERE: any other number is
+  refused before a frame is built. shared/metronome.mjs is untouched (it is
+  inside the computer app). What changed is what its `bluetooth` flag is
+  handed: every place that asked "is this Bluetooth?" for the click
+  (MetronomeSwitch, Settings → Metronome, lib/metronome useUnitCan, App's
+  useUnitMetronome) asks lib/bluetooth `useBluetoothNoClick` now: Bluetooth
+  AND the click not switchable over it. Closed, that is `useBluetoothOn`
+  exactly. Never an AM4.
+- **Modifiers** (`MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE`; bleWire
+  gen3BindModifier and gen3RawSlot; the wire's `modifiers`, capabilities
+  `modifiers.overWire`, which is what Edit's `modsHere` reads over the
+  wire). GET /mod/model is ForgeFX's own answer; a slot's stored numbers
+  are the slot's block (3 to 34) read whole; an attach is the computer's
+  three typed writes on the slot's block (the target block, the target
+  control, the source), refused for a slot past the 32nd and never sent
+  after a scene or preset change. AS THROUGH THE COMPUTER, ONLY AN FM3
+  LISTS ITS SOURCES: an FM9's and an Axe-Fx III's are not known to the
+  engine, and the panel says so. Edit's requests for these say they are
+  Edit's (lib/device `EDITING`), and want Edit's door open.
+- **A cab picked by name** (`CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE`; bleWire
+  gen3CabState; the wire's `cabs`, capabilities `cabIrs`). The cab state is
+  ForgeFX's cabState line for line, out of the block's own read (kept from
+  Edit's read of the block just before, so nothing more is asked of the
+  unit); the IR names are the engine's lists (about 100 KB in the app; a
+  player's own User IRs show as numbers, as at the computer); a cab's model
+  list is the engine's own for the unit (an FM3's 45 DynaCabs; empty for an
+  FM9 and an Axe-Fx III there too). The picks are Edit's own typed writes,
+  which the way out already took. ONE NEW ROAD: an IR's number written
+  typed as the number itself (`continuous: false`), which Edit's rule
+  answers "not sent" for a whole-number setting; with the picker open the
+  wire builds the same typed frame the rule builds from a place.
+- **The Footswitches page** (`FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE`;
+  bleWire gen3FcState, gen3FcCurrent, gen3FcNames; the wire's
+  `footswitches`). AN FM3 ONLY, the one unit whose switches the engine
+  reads live. Reads only, each one question (function 0x01, 1B 00, block
+  199 and a setting) answered with one number; some thirty to a switch, so
+  a view of three is a few seconds over an adapter. Nothing is ever written
+  to block 199, from here or at the computer.
+- **The tables are the engine's own, generated** by scripts/gen3-tools.mjs
+  into mobile/src/lib/gen3-tools.js: it bundles ForgeFX's devices.ts and
+  gen3.ts as they are (esbuild) and RUNS them, so the modifier model, the
+  footswitch model, the cab picker's settings and lists and the IR names
+  are the driver's own answers, re-derived nowhere. A NEW PIN OF EITHER
+  MEANS RUNNING IT (`node scripts/gen3-tools.mjs <forgefx> <forgefx-midi,
+  built>`); a test holds the commits in the file to desktop/forgefx.lock.json.
+- **AND THE PHONE IS HELD TO THE ENGINE'S OWN DRIVER.** The same script runs
+  that driver against a pretend unit with fixed contents and writes every
+  message it sent and every answer it gave to test/gen3-tools-engine.json.
+  test/bluetooth.mjs puts the same contents in its own pretend unit, makes
+  the same calls of the wire (a cab's state, a slot read, an attach, and on
+  an FM3 a footswitch, the layout and view on now, the layout names), and
+  fails on a message or an answer that differs, on all three units. The
+  looper's and the click's frames are held to the codec's by hex.
+- **The way out** (gen3Sender, `tooling`, `looperAt`, `setupAt`; lib/bleTools
+  `toolShaped`): a looper button (10 00), a looper's picture (23 00), a
+  range read (1A 00), a footswitch read (1B 00), a monitor read at a looper
+  (19 00; the tuner's own is the same read at block 35 and is not held), and
+  any write, typed or a knob's, at block 1, a modifier's slot or block 199,
+  goes only as, byte for byte, the one message in hand. A modifier's slot
+  read whole is one of Edit's shapes and passes only as the one in hand.
+  "A capture is coming" is a typed write at block 1 too, and is asked about
+  first (namShaped), as before.
+- **A reading of nought is the question's own bytes** (the read has noughts
+  where the answer has its value), which the echo guard drops as the
+  phone's own message come back: each of these reads says what that means
+  (`same`), as the blocks' question does.
+- **The words** follow what is here: Bluetooth → What Bluetooth can't do's
+  last line names only what is still missing (lib/editWords
+  `notOverBluetoothLine(volume, here)`; null where nothing is), its line
+  about choosing a cab with the computer is left out where the picker is
+  here, and `noChainLine`, `editingLine` and `limitsLine` take `mods`. With
+  none of the five, every sentence is word for word what it was.
+- **What an independent read found before it went out, fixed, each with a
+  test.** A looper press waited behind the panel's own reads and lost its
+  tap deadline (it was sent a third of a second late): a press has its own
+  turn on the line and its own hand at the way out now, with the deadline
+  taken before request() lets go of it. One lane held a whole page of
+  footswitch questions (a hundred and more), so the metronome's switch
+  asked meanwhile went seconds late: the lane is taken a question at a
+  time. And the click's read back no longer takes its own bytes for an
+  answer of nought (an echo would have read as "off"). It found no frame
+  the wire sent before that the new guard refuses. LEFT, AS AT THE
+  COMPUTER: a scene changed between an attach's three writes leaves it
+  part-written, and the 32 slot reads are not stopped by a preset change
+  (the panel's own `stillHere` is). NOT HELD BY A TEST: the wire's own
+  `setupAt` wiring (no route can build such a frame to try it with).
+- **AN AM4'S VOLUME WAS NEVER THE COMPUTER'S.** The first pass's list had it.
+  Through the computer an AM4 lists no Output block either (ForgeFX am4.ts),
+  so it has no volume button on any connection. Nothing to bring over.
+- **Not brought over, and why:** the engine's meters, CPU and block monitors
+  (no screen of the phone draws them); the looper-at-the-end button in the
+  chain editor (hidden over the wire); a player's own User IR names (the
+  engine cannot read them either). A VP4 gets none of it: its wire sends no
+  SysEx.
 
 TO OPEN ANY OF THESE TO EVERYONE: its switch to true, its What's new line,
 Bluetooth → What Bluetooth can't do read again, and the review notes (or a
-store version) saying so. Apple's 2.0.0 was prepared and not submitted when
-this was written; if it is still not in review when he says open, the
-2.0.0 notes can carry it.
+store version) saying so. NOT WHILE APPLE'S 2.0.0 IS IN REVIEW, unless he
+says so knowing an update reaches the reviewer's copy: tell him that first.
+The first pass's three went out that way on his word.
 
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**

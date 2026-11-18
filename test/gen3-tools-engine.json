@@ -1,0 +1,1143 @@
+{
+ "pins": {
+  "forgefx": "3321ba7d6362e76b7f7c2486f1f9f5886b8d04ab",
+  "codec": "a17eb4a51d6d86985d8d8040966caa8da295f364"
+ },
+ "pretend": {
+  "cab": 62,
+  "cabChannel": 1,
+  "cabCount": 106,
+  "cabValues": {
+   "0": 3,
+   "1": 2,
+   "4": 57,
+   "5": 700,
+   "31": 1,
+   "85": 11,
+   "86": 65534
+  },
+  "slot": 5,
+  "slotCount": 16,
+  "slotValues": {
+   "0": 12,
+   "1": 6553,
+   "2": 58981,
+   "8": 58,
+   "9": 7
+  },
+  "bind": {
+   "slot": 5,
+   "targetEffectId": 58,
+   "targetParam": 7,
+   "source": 12
+  },
+  "fcSwitch": {
+   "layout": 0,
+   "view": 1,
+   "switch": 2
+  }
+ },
+ "units": {
+  "fm3": {
+   "fc": {
+    "5": 3,
+    "113": 0,
+    "221": 2,
+    "354": 2,
+    "355": 3,
+    "977": 4,
+    "1085": 0,
+    "1326": 58,
+    "1944": 77,
+    "1945": 89,
+    "1946": 32,
+    "1947": 83,
+    "1948": 79,
+    "1949": 78,
+    "1950": 71,
+    "1951": 83,
+    "1976": 66,
+    "2008": 7,
+    "2237": 2,
+    "2238": 99,
+    "2296": 83,
+    "2297": 79,
+    "2298": 76,
+    "2299": 79,
+    "4623": 5,
+    "5640": 1
+   },
+   "calls": [
+    {
+     "call": "cabState",
+     "args": [
+      62
+     ],
+     "sent": [
+      "f0 00 01 74 11 1f 3e 00 35 f7",
+      "f0 00 01 74 11 13 07 f7"
+     ],
+     "answer": {
+      "modeParam": 31,
+      "mode": {
+       "value": 1,
+       "label": "DYNA-CAB"
+      },
+      "modeOptions": [
+       {
+        "value": 0,
+        "label": "LEGACY"
+       },
+       {
+        "value": 1,
+        "label": "DYNA-CAB"
+       }
+      ],
+      "bankOptions": [
+       "FACTORY 1",
+       "FACTORY 2",
+       "USER",
+       "LEGACY",
+       "SCRATCHPAD"
+      ],
+      "dynaOptions": [
+       {
+        "value": 0,
+        "label": "1x8 5F1 TWEED"
+       },
+       {
+        "value": 1,
+        "label": "1x8 PRINCETONE"
+       },
+       {
+        "value": 2,
+        "label": "1x10 BF PRINCETONE"
+       },
+       {
+        "value": 3,
+        "label": "1x10 METRO BLUES"
+       },
+       {
+        "value": 4,
+        "label": "1x10 SF PRINCETONE"
+       },
+       {
+        "value": 5,
+        "label": "1x12 AC20"
+       },
+       {
+        "value": 6,
+        "label": "1x12 BLACK MAGICK"
+       },
+       {
+        "value": 7,
+        "label": "1x12 CAR AMBLER"
+       },
+       {
+        "value": 8,
+        "label": "1x12 DELUXE TWEED"
+       },
+       {
+        "value": 9,
+        "label": "1x12 DELUXE VERB"
+       },
+       {
+        "value": 10,
+        "label": "1x12 DIV13 CJ11"
+       },
+       {
+        "value": 11,
+        "label": "1x12 G12T-100"
+       },
+       {
+        "value": 12,
+        "label": "1x12 HOT KITTY"
+       },
+       {
+        "value": 13,
+        "label": "1x12 JR BLUES"
+       },
+       {
+        "value": 14,
+        "label": "1x12 NUCLEAR TONE"
+       },
+       {
+        "value": 15,
+        "label": "1x12 SCHOLZ"
+       },
+       {
+        "value": 16,
+        "label": "1x12 TWEED 20112"
+       },
+       {
+        "value": 17,
+        "label": "1x12 VIBRATO LUX"
+       },
+       {
+        "value": 18,
+        "label": "1x15 HEART KEY"
+       },
+       {
+        "value": 19,
+        "label": "1x15 PORTABASS"
+       },
+       {
+        "value": 20,
+        "label": "1x15 VIBROVERB"
+       },
+       {
+        "value": 21,
+        "label": "2x10 HEART KEY"
+       },
+       {
+        "value": 22,
+        "label": "2x10 SUPER 6G4"
+       },
+       {
+        "value": 23,
+        "label": "2x12 5153 STEALTH"
+       },
+       {
+        "value": 24,
+        "label": "2x12 65 BASSGUY"
+       },
+       {
+        "value": 25,
+        "label": "2x12 CHIEFMAN"
+       },
+       {
+        "value": 26,
+        "label": "2x12 CLASS-A 30W"
+       },
+       {
+        "value": 27,
+        "label": "2x12 DOUBLE VERB"
+       },
+       {
+        "value": 28,
+        "label": "2x12 LEAD 80"
+       },
+       {
+        "value": 29,
+        "label": "2x12 TEXAS STAR"
+       },
+       {
+        "value": 30,
+        "label": "4x10 BASSGUY RI"
+       },
+       {
+        "value": 31,
+        "label": "4x12 1960TV"
+       },
+       {
+        "value": 32,
+        "label": "4x12 5153"
+       },
+       {
+        "value": 33,
+        "label": "4x12 5153 STEALTH"
+       },
+       {
+        "value": 34,
+        "label": "4x12 CITRUS"
+       },
+       {
+        "value": 35,
+        "label": "4x12 FRIEDMAN GB"
+       },
+       {
+        "value": 36,
+        "label": "4x12 FRIEDMAN V30"
+       },
+       {
+        "value": 37,
+        "label": "4x12 LERXST"
+       },
+       {
+        "value": 38,
+        "label": "4x12 RECTO SLANT"
+       },
+       {
+        "value": 39,
+        "label": "4x12 RECTO STRAIGHT"
+       },
+       {
+        "value": 40,
+        "label": "4x12 RUMBLE EV12L"
+       },
+       {
+        "value": 41,
+        "label": "4x12 RUMBLE EV12S"
+       },
+       {
+        "value": 42,
+        "label": "4x12 SOLO 100"
+       },
+       {
+        "value": 43,
+        "label": "4x12 USA MC90"
+       },
+       {
+        "value": 44,
+        "label": "8x10 SV BASS"
+       }
+      ],
+      "slots": [
+       {
+        "slot": 1,
+        "bankParam": 0,
+        "irParam": 4,
+        "dynaParam": 85,
+        "bank": {
+         "value": 3,
+         "label": "LEGACY"
+        },
+        "irIndex": 57,
+        "irName": "4x12 TV MIX C1 (ML)",
+        "dyna": {
+         "value": 11,
+         "label": "1x12 G12T-100"
+        }
+       },
+       {
+        "slot": 2,
+        "bankParam": 1,
+        "irParam": 5,
+        "dynaParam": 86,
+        "bank": {
+         "value": 2,
+         "label": "USER"
+        },
+        "irIndex": 700,
+        "irName": "#700",
+        "dyna": {
+         "value": 44,
+         "label": "8x10 SV BASS"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "call": "rawBlock",
+     "args": [
+      7
+     ],
+     "sent": [
+      "f0 00 01 74 11 1f 07 00 0c f7"
+     ],
+     "answer": {
+      "eid": 7,
+      "values": {
+       "0": 12,
+       "1": 6553,
+       "2": 58981,
+       "8": 58,
+       "9": 7
+      }
+     }
+    },
+    {
+     "call": "bindModifier",
+     "args": [
+      5,
+      58,
+      7,
+      12
+     ],
+     "sent": [
+      "f0 00 01 74 11 01 09 00 07 00 08 00 00 00 20 13 04 00 00 00 00 24 f7",
+      "f0 00 01 74 11 01 09 00 07 00 09 00 00 00 00 07 04 00 00 00 00 11 f7",
+      "f0 00 01 74 11 01 09 00 07 00 00 00 00 00 00 0a 04 00 00 00 00 15 f7"
+     ],
+     "answer": {
+      "ok": true,
+      "slotEid": 7,
+      "slot": 5,
+      "targetEffectId": 58,
+      "targetParam": 7,
+      "source": 12
+     }
+    },
+    {
+     "call": "fcReadState",
+     "args": [
+      0,
+      1,
+      2
+     ],
+     "sent": [
+      "f0 00 01 74 11 01 1b 00 47 01 05 00 00 00 00 00 00 00 00 00 00 4d f7",
+      "f0 00 01 74 11 01 1b 00 47 01 71 00 00 00 00 00 00 00 00 00 00 39 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 5d 01 00 00 00 00 00 00 00 00 00 14 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 51 07 00 00 00 00 00 00 00 00 00 1e f7",
+      "f0 00 01 74 11 01 1b 00 47 01 3d 08 00 00 00 00 00 00 00 00 00 7d f7",
+      "f0 00 01 74 11 01 1b 00 47 01 29 09 00 00 00 00 00 00 00 00 00 68 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 0f 24 00 00 00 00 00 00 00 00 00 63 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 78 11 00 00 00 00 00 00 00 00 00 21 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 79 11 00 00 00 00 00 00 00 00 00 20 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7a 11 00 00 00 00 00 00 00 00 00 23 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7b 11 00 00 00 00 00 00 00 00 00 22 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7c 11 00 00 00 00 00 00 00 00 00 25 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7d 11 00 00 00 00 00 00 00 00 00 24 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7e 11 00 00 00 00 00 00 00 00 00 27 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 7f 11 00 00 00 00 00 00 00 00 00 26 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 00 12 00 00 00 00 00 00 00 00 00 5a f7",
+      "f0 00 01 74 11 01 1b 00 47 01 01 12 00 00 00 00 00 00 00 00 00 5b f7",
+      "f0 00 01 74 11 01 1b 00 47 01 02 12 00 00 00 00 00 00 00 00 00 58 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1c 1b 00 00 00 00 00 00 00 00 00 4f f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1d 1b 00 00 00 00 00 00 00 00 00 4e f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1e 1b 00 00 00 00 00 00 00 00 00 4d f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1f 1b 00 00 00 00 00 00 00 00 00 4c f7",
+      "f0 00 01 74 11 01 1b 00 47 01 20 1b 00 00 00 00 00 00 00 00 00 73 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 21 1b 00 00 00 00 00 00 00 00 00 72 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 22 1b 00 00 00 00 00 00 00 00 00 71 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 23 1b 00 00 00 00 00 00 00 00 00 70 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 24 1b 00 00 00 00 00 00 00 00 00 77 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 25 1b 00 00 00 00 00 00 00 00 00 76 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 26 1b 00 00 00 00 00 00 00 00 00 75 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 62 02 00 00 00 00 00 00 00 00 00 28 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 63 02 00 00 00 00 00 00 00 00 00 29 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 2e 0a 00 00 00 00 00 00 00 00 00 6c f7"
+     ],
+     "answer": {
+      "effectId": 199,
+      "layout": 0,
+      "view": 1,
+      "switch": 2,
+      "config": 5,
+      "fields": {
+       "tapCategory": 3,
+       "tapFunction": 0,
+       "tapDisplay": 2,
+       "holdCategory": 4,
+       "holdFunction": 0,
+       "holdDisplay": 0,
+       "color": 5
+      },
+      "tapLabel": "SOLO",
+      "holdLabel": "",
+      "tapParams": [
+       2,
+       3,
+       null,
+       null,
+       null,
+       null
+      ],
+      "holdParams": [
+       58,
+       null,
+       null,
+       null,
+       null,
+       null
+      ],
+      "tapPick": {
+       "category": 3,
+       "function": 0,
+       "slots": [
+        {
+         "i": 0,
+         "role": "Scene",
+         "type": "scene",
+         "value": 2
+        },
+        {
+         "i": 1,
+         "role": "2nd Press = Prev. Scene",
+         "type": "bool",
+         "value": 3
+        }
+       ]
+      },
+      "holdPick": {
+       "category": 4,
+       "function": 0,
+       "slots": [
+        {
+         "i": 0,
+         "role": "Effect",
+         "type": "block",
+         "value": 58,
+         "block": {
+          "effectId": 58,
+          "slug": "amp",
+          "instance": 1,
+          "name": "Amp 1"
+         }
+        }
+       ]
+      }
+     }
+    },
+    {
+     "call": "fcReadCurrent",
+     "args": [],
+     "sent": [
+      "f0 00 01 74 11 01 1b 00 47 01 3d 11 00 00 00 00 00 00 00 00 00 64 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 08 2c 00 00 00 00 00 00 00 00 00 6c f7",
+      "f0 00 01 74 11 01 1b 00 47 01 3e 11 00 00 00 00 00 00 00 00 00 67 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 09 2c 00 00 00 00 00 00 00 00 00 6d f7",
+      "f0 00 01 74 11 01 1b 00 47 01 3f 11 00 00 00 00 00 00 00 00 00 66 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 0a 2c 00 00 00 00 00 00 00 00 00 6e f7"
+     ],
+     "answer": {
+      "effectId": 199,
+      "current": {
+       "layout": 2,
+       "view": 1
+      },
+      "units": [
+       {
+        "index": 0,
+        "layout": 2,
+        "view": 1
+       },
+       {
+        "index": 1,
+        "layout": null,
+        "view": 0
+       },
+       {
+        "index": 2,
+        "layout": 0,
+        "view": 0
+       }
+      ]
+     }
+    },
+    {
+     "call": "fcReadLayoutNames",
+     "args": [],
+     "sent": [
+      "f0 00 01 74 11 01 1b 00 47 01 18 0f 00 00 00 00 00 00 00 00 00 5f f7",
+      "f0 00 01 74 11 01 1b 00 47 01 19 0f 00 00 00 00 00 00 00 00 00 5e f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1a 0f 00 00 00 00 00 00 00 00 00 5d f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1b 0f 00 00 00 00 00 00 00 00 00 5c f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1c 0f 00 00 00 00 00 00 00 00 00 5b f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1d 0f 00 00 00 00 00 00 00 00 00 5a f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1e 0f 00 00 00 00 00 00 00 00 00 59 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 1f 0f 00 00 00 00 00 00 00 00 00 58 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 20 0f 00 00 00 00 00 00 00 00 00 67 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 38 0f 00 00 00 00 00 00 00 00 00 7f f7",
+      "f0 00 01 74 11 01 1b 00 47 01 39 0f 00 00 00 00 00 00 00 00 00 7e f7",
+      "f0 00 01 74 11 01 1b 00 47 01 58 0f 00 00 00 00 00 00 00 00 00 1f f7",
+      "f0 00 01 74 11 01 1b 00 47 01 78 0f 00 00 00 00 00 00 00 00 00 3f f7",
+      "f0 00 01 74 11 01 1b 00 47 01 18 10 00 00 00 00 00 00 00 00 00 40 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 38 10 00 00 00 00 00 00 00 00 00 60 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 58 10 00 00 00 00 00 00 00 00 00 00 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 78 10 00 00 00 00 00 00 00 00 00 20 f7",
+      "f0 00 01 74 11 01 1b 00 47 01 18 11 00 00 00 00 00 00 00 00 00 41 f7"
+     ],
+     "answer": {
+      "effectId": 199,
+      "names": [
+       "MY SONGS",
+       "B",
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null
+      ]
+     }
+    }
+   ]
+  },
+  "fm9": {
+   "fc": {},
+   "calls": [
+    {
+     "call": "cabState",
+     "args": [
+      62
+     ],
+     "sent": [
+      "f0 00 01 74 12 1f 3e 00 36 f7",
+      "f0 00 01 74 12 13 04 f7"
+     ],
+     "answer": {
+      "modeParam": 31,
+      "mode": {
+       "value": 1,
+       "label": "DYNA-CAB"
+      },
+      "modeOptions": [
+       {
+        "value": 0,
+        "label": "LEGACY"
+       },
+       {
+        "value": 1,
+        "label": "DYNA-CAB"
+       }
+      ],
+      "bankOptions": [
+       "FACTORY 1",
+       "FACTORY 2",
+       "USER",
+       "LEGACY",
+       "SCRATCHPAD"
+      ],
+      "dynaOptions": [
+       {
+        "value": 0,
+        "label": "1x8 5F1 TWEED"
+       },
+       {
+        "value": 1,
+        "label": "1x8 PRINCETONE"
+       },
+       {
+        "value": 2,
+        "label": "1x10 BF PRINCETONE"
+       },
+       {
+        "value": 3,
+        "label": "1x10 METRO BLUES"
+       },
+       {
+        "value": 4,
+        "label": "1x10 SF PRINCETONE"
+       },
+       {
+        "value": 5,
+        "label": "1x12 AC20"
+       },
+       {
+        "value": 6,
+        "label": "1x12 BLACK MAGICK"
+       },
+       {
+        "value": 7,
+        "label": "1x12 CAR AMBLER"
+       },
+       {
+        "value": 8,
+        "label": "1x12 DELUXE TWEED"
+       },
+       {
+        "value": 9,
+        "label": "1x12 DELUXE VERB"
+       },
+       {
+        "value": 10,
+        "label": "1x12 DIV13 CJ11"
+       },
+       {
+        "value": 11,
+        "label": "1x12 G12T-100"
+       },
+       {
+        "value": 12,
+        "label": "1x12 HOT KITTY"
+       },
+       {
+        "value": 13,
+        "label": "1x12 JR BLUES"
+       },
+       {
+        "value": 14,
+        "label": "1x12 NUCLEAR TONE"
+       },
+       {
+        "value": 15,
+        "label": "1x12 SCHOLZ"
+       },
+       {
+        "value": 16,
+        "label": "1x12 TWEED 20112"
+       },
+       {
+        "value": 17,
+        "label": "1x12 VIBRATO LUX"
+       },
+       {
+        "value": 18,
+        "label": "1x15 HEART KEY"
+       },
+       {
+        "value": 19,
+        "label": "1x15 PORTABASS"
+       },
+       {
+        "value": 20,
+        "label": "1x15 VIBROVERB"
+       },
+       {
+        "value": 21,
+        "label": "2x10 HEART KEY"
+       },
+       {
+        "value": 22,
+        "label": "2x10 SUPER 6G4"
+       },
+       {
+        "value": 23,
+        "label": "2x12 5153 STEALTH"
+       },
+       {
+        "value": 24,
+        "label": "2x12 65 BASSGUY"
+       },
+       {
+        "value": 25,
+        "label": "2x12 CHIEFMAN"
+       },
+       {
+        "value": 26,
+        "label": "2x12 CLASS-A 30W"
+       },
+       {
+        "value": 27,
+        "label": "2x12 DOUBLE VERB"
+       },
+       {
+        "value": 28,
+        "label": "2x12 LEAD 80"
+       },
+       {
+        "value": 29,
+        "label": "2x12 TEXAS STAR"
+       },
+       {
+        "value": 30,
+        "label": "4x10 BASSGUY RI"
+       },
+       {
+        "value": 31,
+        "label": "4x12 1960TV"
+       },
+       {
+        "value": 32,
+        "label": "4x12 5153"
+       },
+       {
+        "value": 33,
+        "label": "4x12 5153 STEALTH"
+       },
+       {
+        "value": 34,
+        "label": "4x12 CITRUS"
+       },
+       {
+        "value": 35,
+        "label": "4x12 FRIEDMAN GB"
+       },
+       {
+        "value": 36,
+        "label": "4x12 FRIEDMAN V30"
+       },
+       {
+        "value": 37,
+        "label": "4x12 LERXST"
+       },
+       {
+        "value": 38,
+        "label": "4x12 RECTO SLANT"
+       },
+       {
+        "value": 39,
+        "label": "4x12 RECTO STRAIGHT"
+       },
+       {
+        "value": 40,
+        "label": "4x12 RUMBLE EV12L"
+       },
+       {
+        "value": 41,
+        "label": "4x12 RUMBLE EV12S"
+       },
+       {
+        "value": 42,
+        "label": "4x12 SOLO 100"
+       },
+       {
+        "value": 43,
+        "label": "4x12 USA MC90"
+       },
+       {
+        "value": 44,
+        "label": "8x10 SV BASS"
+       }
+      ],
+      "slots": [
+       {
+        "slot": 1,
+        "bankParam": 0,
+        "irParam": 4,
+        "dynaParam": 85,
+        "bank": {
+         "value": 3,
+         "label": "LEGACY"
+        },
+        "irIndex": 57,
+        "irName": "4x12 TV MIX C1 (ML)",
+        "dyna": {
+         "value": 11,
+         "label": "1x12 G12T-100"
+        }
+       },
+       {
+        "slot": 2,
+        "bankParam": 1,
+        "irParam": 5,
+        "dynaParam": 86,
+        "bank": {
+         "value": 2,
+         "label": "USER"
+        },
+        "irIndex": 700,
+        "irName": "#700",
+        "dyna": {
+         "value": 44,
+         "label": "8x10 SV BASS"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "call": "rawBlock",
+     "args": [
+      7
+     ],
+     "sent": [
+      "f0 00 01 74 12 1f 07 00 0f f7"
+     ],
+     "answer": {
+      "eid": 7,
+      "values": {
+       "0": 12,
+       "1": 6553,
+       "2": 58981,
+       "8": 58,
+       "9": 7
+      }
+     }
+    },
+    {
+     "call": "bindModifier",
+     "args": [
+      5,
+      58,
+      7,
+      12
+     ],
+     "sent": [
+      "f0 00 01 74 12 01 09 00 07 00 08 00 00 00 20 13 04 00 00 00 00 27 f7",
+      "f0 00 01 74 12 01 09 00 07 00 09 00 00 00 00 07 04 00 00 00 00 12 f7",
+      "f0 00 01 74 12 01 09 00 07 00 00 00 00 00 00 0a 04 00 00 00 00 16 f7"
+     ],
+     "answer": {
+      "ok": true,
+      "slotEid": 7,
+      "slot": 5,
+      "targetEffectId": 58,
+      "targetParam": 7,
+      "source": 12
+     }
+    }
+   ]
+  },
+  "axefx3": {
+   "fc": {},
+   "calls": [
+    {
+     "call": "cabState",
+     "args": [
+      62
+     ],
+     "sent": [
+      "f0 00 01 74 10 1f 3e 00 34 f7",
+      "f0 00 01 74 10 13 06 f7"
+     ],
+     "answer": {
+      "modeParam": 31,
+      "mode": {
+       "value": 1,
+       "label": "DYNA-CAB"
+      },
+      "modeOptions": [
+       {
+        "value": 0,
+        "label": "LEGACY"
+       },
+       {
+        "value": 1,
+        "label": "DYNA-CAB"
+       }
+      ],
+      "bankOptions": [
+       "FACTORY 1",
+       "FACTORY 2",
+       "USER 1",
+       "USER 2",
+       "LEGACY"
+      ],
+      "dynaOptions": [
+       {
+        "value": 0,
+        "label": "1x8 5F1 TWEED"
+       },
+       {
+        "value": 1,
+        "label": "1x8 PRINCETONE"
+       },
+       {
+        "value": 2,
+        "label": "1x10 BF PRINCETONE"
+       },
+       {
+        "value": 3,
+        "label": "1x10 METRO BLUES"
+       },
+       {
+        "value": 4,
+        "label": "1x10 SF PRINCETONE"
+       },
+       {
+        "value": 5,
+        "label": "1x12 AC20"
+       },
+       {
+        "value": 6,
+        "label": "1x12 BLACK MAGIK"
+       },
+       {
+        "value": 7,
+        "label": "1x12 CAR AMBLER"
+       },
+       {
+        "value": 8,
+        "label": "1x12 DELUXE TWEED"
+       },
+       {
+        "value": 9,
+        "label": "1x12 DELUXE VERB"
+       },
+       {
+        "value": 10,
+        "label": "1x12 DIV13 CJ11"
+       },
+       {
+        "value": 11,
+        "label": "1x12 G12T-100"
+       },
+       {
+        "value": 12,
+        "label": "1x12 HOT KITTY"
+       },
+       {
+        "value": 13,
+        "label": "1x12 JR BLUES"
+       },
+       {
+        "value": 14,
+        "label": "1x12 NUCLEAR TONE"
+       },
+       {
+        "value": 15,
+        "label": "1x12 SCHOLZ"
+       },
+       {
+        "value": 16,
+        "label": "1x12 TWEED 20112"
+       },
+       {
+        "value": 17,
+        "label": "1x12 VIBRATO LUX"
+       },
+       {
+        "value": 18,
+        "label": "1x15 HEART KEY"
+       },
+       {
+        "value": 19,
+        "label": "1x15 PORTABASS"
+       },
+       {
+        "value": 20,
+        "label": "1x15 VIBROVERB"
+       },
+       {
+        "value": 21,
+        "label": "2x10 HEART KEY"
+       },
+       {
+        "value": 22,
+        "label": "2x10 SUPER 6G4"
+       },
+       {
+        "value": 23,
+        "label": "2x12 5153 STEALTH"
+       },
+       {
+        "value": 24,
+        "label": "2x12 65 BASSGUY"
+       },
+       {
+        "value": 25,
+        "label": "2x12 CHIEFMAN"
+       },
+       {
+        "value": 26,
+        "label": "2x12 CLASS-A 30W"
+       },
+       {
+        "value": 27,
+        "label": "2x12 DOUBLE VERB"
+       },
+       {
+        "value": 28,
+        "label": "2x12 LEAD 80"
+       },
+       {
+        "value": 29,
+        "label": "2x12 TEXAS STAR"
+       },
+       {
+        "value": 30,
+        "label": "4x10 BASSGUY RI"
+       },
+       {
+        "value": 31,
+        "label": "4x12 1960TV"
+       },
+       {
+        "value": 32,
+        "label": "4x12 5153"
+       },
+       {
+        "value": 33,
+        "label": "4x12 5153 STEALTH"
+       },
+       {
+        "value": 34,
+        "label": "4x12 CITRUS"
+       },
+       {
+        "value": 35,
+        "label": "4x12 FRIEDMAN GB"
+       },
+       {
+        "value": 36,
+        "label": "4x12 FRIEDMAN V30"
+       },
+       {
+        "value": 37,
+        "label": "4x12 LERXST"
+       },
+       {
+        "value": 38,
+        "label": "4x12 RECTO SLANT"
+       },
+       {
+        "value": 39,
+        "label": "4x12 RECTO STRAIGHT"
+       },
+       {
+        "value": 40,
+        "label": "4x12 RUMBLE EV12L"
+       },
+       {
+        "value": 41,
+        "label": "4x12 RUMBLE EV12S"
+       },
+       {
+        "value": 42,
+        "label": "4x12 SOLO 100"
+       },
+       {
+        "value": 43,
+        "label": "4x12 USA MC90"
+       },
+       {
+        "value": 44,
+        "label": "8x10 SV BASS"
+       }
+      ],
+      "slots": [
+       {
+        "slot": 1,
+        "bankParam": 0,
+        "irParam": 4,
+        "dynaParam": 85,
+        "bank": {
+         "value": 3,
+         "label": "USER 2"
+        },
+        "irIndex": 57,
+        "irName": "#57",
+        "dyna": {
+         "value": 11,
+         "label": "1x12 G12T-100"
+        }
+       },
+       {
+        "slot": 2,
+        "bankParam": 1,
+        "irParam": 5,
+        "dynaParam": 86,
+        "bank": {
+         "value": 2,
+         "label": "USER 1"
+        },
+        "irIndex": 700,
+        "irName": "#700",
+        "dyna": {
+         "value": 44,
+         "label": "8x10 SV BASS"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "call": "rawBlock",
+     "args": [
+      7
+     ],
+     "sent": [
+      "f0 00 01 74 10 1f 07 00 0d f7"
+     ],
+     "answer": {
+      "eid": 7,
+      "values": {
+       "0": 12,
+       "1": 6553,
+       "2": 58981,
+       "8": 58,
+       "9": 7
+      }
+     }
+    },
+    {
+     "call": "bindModifier",
+     "args": [
+      5,
+      58,
+      7,
+      12
+     ],
+     "sent": [
+      "f0 00 01 74 10 01 09 00 07 00 08 00 00 00 20 13 04 00 00 00 00 25 f7",
+      "f0 00 01 74 10 01 09 00 07 00 09 00 00 00 00 07 04 00 00 00 00 10 f7",
+      "f0 00 01 74 10 01 09 00 07 00 00 00 00 00 00 0a 04 00 00 00 00 14 f7"
+     ],
+     "answer": {
+      "ok": true,
+      "slotEid": 7,
+      "slot": 5,
+      "targetEffectId": 58,
+      "targetParam": 7,
+      "source": 12
+     }
+    }
+   ]
+  }
+ }
+}

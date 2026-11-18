@@ -1194,14 +1194,14 @@ export const setType = (eid, value) => told(`block ${eid} model ${value}`, post(
  * model change above to write — see lib/cab-pick.js — so this is where the
  * cab picker reads what the block is really playing.
  */
-export const cabState = (eid) => remoteRequest(`/preset/blocks/${eid}/cab`)
+export const cabState = (eid) => remoteRequest(`/preset/blocks/${eid}/cab`, EDITING)
 
 /**
  * The unit's IR names by bank — the browser's `listIrBanks`, on the same
  * route. A bare bank → names map; his own User IRs are not in it, because the
  * host cannot read their names yet. See irBanks in lib/cab-pick.js.
  */
-export const listIrBanks = () => remoteRequest('/cab/irs')
+export const listIrBanks = () => remoteRequest('/cab/irs', EDITING)
 
 /**
  * The unit's own metronome, on or off: Setup → Global → Metronome.
@@ -1423,16 +1423,16 @@ export async function wireRow(row, lastCol) {
  * so the screen that offers this has to read that flag rather than assume. An
  * Attach button that cannot attach is worse than no Attach button.
  */
-export const modifierModel = () => remoteRequest('/mod/model')
+export const modifierModel = () => remoteRequest('/mod/model', EDITING)
 
 /** A block's stored values as whole numbers — a modifier slot's binding. See lib/mod-read. */
-export const rawBlock = (eid) => remoteRequest(`/preset/blocks/${Number(eid)}/raw`)
+export const rawBlock = (eid) => remoteRequest(`/preset/blocks/${Number(eid)}/raw`, EDITING)
 
 /** Attach a source to a control, in one of the unit's modifier slots. */
 export const bindModifier = (slot, targetEffectId, targetParam, source) =>
   told(
     `modifier ${slot}: ${source} → block ${targetEffectId} param ${targetParam}`,
-    post('/mod/bind', { slot, targetEffectId, targetParam, source })
+    post('/mod/bind', { slot, targetEffectId, targetParam, source }, EDITING)
   )
 
 /** Name the preset, and name a scene. Both land in the edit buffer only. */

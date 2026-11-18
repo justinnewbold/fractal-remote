@@ -9,7 +9,7 @@ import { PLACES, beatMs, clicks, placeLit, placesFor, unitClick } from '../lib/m
 import { EDGE_WORDS, SOUND_WORDS, deviceSounds, offLine, soundChoices, soundLine, soundLit } from '../lib/edgeFlash'
 import { useRig } from '../lib/rig'
 import { useDemo } from '../lib/demo'
-import { useBluetoothOn } from '../lib/bluetooth'
+import { useBluetoothNoClick } from '../lib/bluetooth'
 import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
@@ -79,7 +79,8 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   const slug = useRig(ofSlug)
   const bpm = useRig(ofBpm)
   const demo = useDemo()
-  const bluetooth = useBluetoothOn()
+  /* Bluetooth where the unit's own click cannot be switched over it (lib/bluetooth useBluetoothNoClick): where it can, this is as through the computer. */
+  const bluetooth = useBluetoothNoClick()
   /* The same "here" as Settings → Metronome: not over Bluetooth, not on an AM4, not in the demo. */
   const clickHere = { bluetooth: bluetooth && !demo, demo }
   const unitCan = unitClick(slug, clickHere)

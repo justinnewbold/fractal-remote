@@ -67,13 +67,13 @@ export function run(test) {
       'More’s rows are not the four buttons, by their own names'
     )
     const edit = flat(code(read('mobile/src/screens/Edit.js')))
-    assert.match(edit, /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\) const modsHere = chainTools && !viaBle && modifiersBind const renameHere = !vp4Bench\(\) && \(!viaBle \|\| caps\?\.namesWritable === true\) && !chainNow\.elsewhere/)
+    assert.match(edit, /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\) const modsHere = viaBle \? caps\?\.modifiers\?\.overWire === true && !chainNow\.elsewhere : chainTools && modifiersBind const renameHere = !vp4Bench\(\) && \(!viaBle \|\| caps\?\.namesWritable === true\) && !chainNow\.elsewhere/)
     const more = edit.slice(edit.indexOf('<Sheet open={moreOpen}'), edit.indexOf('</Sheet>'))
     for (const [rule, row] of [['chainTools', 'chain'], ['modsHere', 'modifiers'], ['renameHere', 'rename']]) {
       assert.match(more, new RegExp(`\\{${rule} \\? <Press label=\\{MORE_ROWS\\.${row}\\.label\\} sub=\\{MORE_ROWS\\.${row}\\.sub\\} onPress=\\{\\(\\) => openTool\\('${row}'\\)\\} \\/> : null\\}`), `More’s ${row} row is not behind ${rule}`)
     }
     assert.match(more, /\{onOpenGear \? \( <Press label=\{MORE_ROWS\.gear\.label\}/)
-    assert.match(more, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true \}\)\}<\/Note> : null\}/)
+    assert.match(more, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle && noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true, mods: caps\?\.modifiers\?\.overWire === true \}\) \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true, mods: caps\?\.modifiers\?\.overWire === true \}\)\}<\/Note> : null\}/)
     assert.match(more, /<Note tone="warn">\{BETA_NOTE\}<\/Note>/)
     /* None of the four is a button on the page any more, and the beta note is not a box at its foot. */
     const page = edit.slice(edit.indexOf('export default function Edit('), edit.indexOf('<Sheet open={moreOpen}'))

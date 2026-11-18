@@ -455,8 +455,9 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
 
   /* What this preset, this unit and this connection let More offer: the same rules the buttons under the knobs had. */
   /* The chain editor: through a computer as ever, and over Bluetooth or a USB cable where the wire says it answers every block's place (lib/chainOnWire chainEditorHere; capabilities `chainEditor`). Rename the same: over Bluetooth where the wire says it writes names (capabilities `namesWritable`: lib/bleNames). Modifiers are still the computer's. */
+  /* Modifiers: through a computer where the chain's tools are, and over Bluetooth or a USB cable where the wire says it attaches them (capabilities `modifiers.overWire`; lib/features MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE). */
   const chainTools = chainEditorHere({ vp4: vp4Bench(), viaBle, caps, elsewhere: chainNow.elsewhere })
-  const modsHere = chainTools && !viaBle && modifiersBind
+  const modsHere = viaBle ? caps?.modifiers?.overWire === true && !chainNow.elsewhere : chainTools && modifiersBind
   const renameHere = !vp4Bench() && (!viaBle || caps?.namesWritable === true) && !chainNow.elsewhere
   /* One of More's rows, or a shortcut: opened under the chain, with the page brought up to it. */
   const openTool = (which, start = null) => {
@@ -948,7 +949,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
               }}
             />
           ) : null}
-          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{noChainLine(quickBuildHere({ on: quickOn, caps }), { editor: caps?.chainEditor === true, tools: caps?.namesWritable === true })}</Note> : null}
+          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle && noChainLine(quickBuildHere({ on: quickOn, caps }), { editor: caps?.chainEditor === true, tools: caps?.namesWritable === true, mods: caps?.modifiers?.overWire === true }) ? <Note tone="hint">{noChainLine(quickBuildHere({ on: quickOn, caps }), { editor: caps?.chainEditor === true, tools: caps?.namesWritable === true, mods: caps?.modifiers?.overWire === true })}</Note> : null}
           <Note tone="warn">{BETA_NOTE}</Note>
         </View>
       </Sheet>

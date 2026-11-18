@@ -8,7 +8,7 @@ import clickPadded from '../../assets/click-pad.wav'
 import { readUnitMetronome, setUnitMetronome } from './device'
 import { DEFAULT_METRONOME, beatMs, clicks, flashLead, flashNudge, followSwitch, metronomeSetting, nextBeat, unitClick, unitMetronome } from './metronome-rules'
 import { useRig } from './rig'
-import { useBluetoothAdmin, useBluetoothOn } from './bluetooth'
+import { useBluetoothAdmin, useBluetoothNoClick } from './bluetooth'
 import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
@@ -255,7 +255,7 @@ const ofSlug = (s) => s.deviceSlug
 function useUnitCan() {
   const slug = useRig(ofSlug)
   const demo = isDemo()
-  const bluetooth = useBluetoothOn() && !demo
+  const bluetooth = useBluetoothNoClick() && !demo
   return { can: unitClick(slug, { bluetooth, demo }).can, heard: useUnitHeardOn(slug), slug }
 }
 
