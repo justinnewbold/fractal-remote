@@ -19,10 +19,10 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 import { APPLE } from '../shared/stores.mjs'
 import { token } from './store-text.mjs'
 
-/* The folder's name, Apple's name for the size, and the only sizes Apple takes there (upright). */
+/* The folder's name, Apple's name for the size, and the only sizes Apple takes there (an iPhone's upright; an iPad's either way up). The iPad's are his 11-inch iPad's own screenshots (kept as they came in ipad-11/), scaled up to the 13-inch size with the thin margin filled from the screen's own edge: nothing stretched, nothing cut. */
 export const DEVICES = {
   iphone: { type: 'APP_IPHONE_67', sizes: ['1320x2868', '1290x2796', '1260x2736'] },
-  ipad: { type: 'APP_IPAD_PRO_3GEN_129', sizes: ['2064x2752', '2048x2732'] }
+  ipad: { type: 'APP_IPAD_PRO_3GEN_129', sizes: ['2064x2752', '2048x2732', '2752x2064', '2732x2048'] }
 }
 export const MOST = 10
 

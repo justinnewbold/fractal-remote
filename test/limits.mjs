@@ -3133,8 +3133,9 @@ export function run(test) {
   test('App Store screenshots are added after the ones there, in Apple’s sizes, and nothing is taken away or sent for review', async () => {
     const { shotsFor, DEVICES, MOST } = await import('../scripts/store-shots.mjs')
     const mine = shotsFor('2.0.0')
-    assert.ok(mine.length >= 4 && mine.length <= MOST, 'the iPhone folder holds too few pictures, or more than Apple takes')
-    for (const s of mine) assert.ok(s.device === 'iphone' && s.type === 'APP_IPHONE_67' && DEVICES.iphone.sizes.includes(s.size), `${s.name} is not an iPhone picture in Apple's size`)
+    for (const d of ['iphone', 'ipad']) assert.ok(mine.filter((s) => s.device === d).length <= MOST, `more ${d} pictures than Apple takes`)
+    for (const s of mine) assert.ok(DEVICES[s.device].type === s.type && DEVICES[s.device].sizes.includes(s.size), `${s.name} is not in Apple's size for its row`)
+    assert.ok(mine.some((s) => s.device === 'iphone') && mine.some((s) => s.device === 'ipad'), 'a row Apple requires has no pictures in the repo')
     assert.equal(MOST, 10)
     const code = read('scripts/store-shots.mjs')
     assert.doesNotMatch(code, /appStoreVersionSubmissions|reviewSubmissions/, 'the job can send a version for review')
