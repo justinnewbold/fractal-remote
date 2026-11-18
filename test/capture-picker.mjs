@@ -87,6 +87,44 @@ function clock() {
 }
 
 export function run(test) {
+  test('capture picker: an AM4’s list is its own, 128 slots, kept apart from an Axe-Fx III’s, and which one is on show goes by the unit linked', async () => {
+    const c = await import('../mobile/src/lib/captureList.js')
+    /* A unit of 129 slots, a capture in the first, the 128th and the one more: the list reads 128 and offers 128, as an Axe-Fx III's leaves its last out. */
+    const asked = []
+    const heads = async (from, count) => {
+      const out = []
+      for (let slot = from; slot < from + count; slot++) {
+        asked.push(slot)
+        out.push([0, 127, 128].includes(slot) ? { slot, name: `Capture ${slot}`, empty: false } : { slot, name: '<EMPTY>', empty: true })
+      }
+      return { from, heads: out }
+    }
+    const list = c.captureList({ heads, pause: async () => {}, now: () => 1, rest: () => 0, piece: () => 32, listed: 128 })
+    const got = await list.load()
+    assert.equal(got.total, 128)
+    assert.deepEqual(got.list.map((h) => h.slot), [0, 127])
+    assert.equal(Math.max(...asked), 127, 'a slot past the 128th was asked for the list')
+    /* With nothing said, the Axe-Fx III's 256, as it always was. */
+    const iii = c.captureList({ heads: async (from, count) => ({ from, heads: Array.from({ length: count }, (_, i) => ({ slot: from + i, name: '<EMPTY>', empty: true })) }), pause: async () => {}, now: () => 1, rest: () => 0, piece: () => 32 })
+    assert.equal((await iii.load()).total, c.CAPTURES_LISTED)
+    assert.equal(c.CAPTURES_LISTED, 256)
+    /* On the device: two lists under two keys, and the unit linked says which. */
+    const here = flat(code(read('mobile/src/lib/captureListHere.js')))
+    assert.match(here, /const KEY = 'fractal\.captures' const AM4_KEY = 'fractal\.captures\.am4' const AM4_LISTED = 128/)
+    assert.match(here, /const iii = make\(KEY, undefined\) const am4 = make\(AM4_KEY, AM4_LISTED\)/)
+    assert.match(here, /const onAm4 = \(st\) => \(st\?\.deviceName \|\| ''\) === 'AM4' const here = \(\) => \(onAm4\(getState\(\)\) \? am4 : iii\)/)
+    assert.match(here, /export const useCaptures = \(\) => \{ const which = useRig\(onAm4\) \? am4 : iii return useSyncExternalStore\(which\.subscribe, which\.get, which\.get\) \}/)
+    /* The button over a held AM4 NAM block's channels: which capture is asked of the unit, a pick is the captures' own, and it is drawn only for the pop-up with no knobs. */
+    const held = flat(code(read('mobile/src/components/HeldCapture.js')))
+    assert.match(held, /namWhichHere\(id\)/)
+    assert.match(held, /const got = await chooseCapture\(id, to\)/)
+    assert.match(held, /\}, \[id, preset, scene, rev, block\?\.channel\]\)/)
+    assert.ok(!/setParam|setEnum|remoteRequest|bluetoothWire/.test(held), 'the held capture button reaches the unit some other way')
+    const stage = flat(code(read('mobile/src/screens/Stage.js')))
+    assert.match(stage, /\{library\.from === 'channels' \? <HeldCapture block=\{block\} \/> : null\}/)
+    assert.match(flat(code(read('mobile/src/lib/device.js'))), /export const namWhichHere = \(block\) => captureAsks\(`\/nam\/blocks\/\$\{block\}\/slot`\)/)
+  })
+
   test('capture picker: a capture is said by its number as the unit counts it and its name, and found by any of its words', async () => {
     const c = await lib()
     assert.equal(c.CAPTURES_LISTED, 256)

@@ -21,31 +21,48 @@ import { useSyncExternalStore } from 'react'
 import { capturesThroughComputer, namHeadsHere, namPickHere, onCaptureSent } from './device'
 import { captureList } from './captureList'
 import { NAM_HEADS_MOST } from './nam-install'
+import { getState, useRig } from './rig'
 import { hydrate, sync } from './store'
 
 const KEY = 'fractal.captures'
+/* An AM4's own (firmware 3.00, lib/am4-nam): 128 slots and one more, which is not offered, as an Axe-Fx III's last is not. Kept apart: a player with both units has two lists. */
+const AM4_KEY = 'fractal.captures.am4'
+const AM4_LISTED = 128
 
-const list = captureList({
-  heads: (from, count) => namHeadsHere(from, count),
-  pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  piece: () => (capturesThroughComputer() ? NAM_HEADS_MOST : 8),
-  rest: () => (capturesThroughComputer() ? 0 : 150),
-  keep: (kept) => sync.setItem(KEY, JSON.stringify(kept))
-})
-
-/* What was written down the last time, once the disk has been read. */
-hydrate().then(() => {
-  try {
-    list.recall(JSON.parse(sync.getItem(KEY) || 'null'))
-  } catch {
-    // Nothing kept that can be read: the list is read from the unit.
-  }
-})
+const make = (key, listed) => {
+  const list = captureList({
+    heads: (from, count) => namHeadsHere(from, count),
+    pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    piece: () => (capturesThroughComputer() ? NAM_HEADS_MOST : 8),
+    rest: () => (capturesThroughComputer() ? 0 : 150),
+    keep: (kept) => sync.setItem(key, JSON.stringify(kept)),
+    listed
+  })
+  /* What was written down the last time, once the disk has been read. */
+  hydrate().then(() => {
+    try {
+      list.recall(JSON.parse(sync.getItem(key) || 'null'))
+    } catch {
+      // Nothing kept that can be read: the list is read from the unit.
+    }
+  })
+  return list
+}
+const iii = make(KEY, undefined)
+const am4 = make(AM4_KEY, AM4_LISTED)
+/* The list of the unit linked now, by the name the rig has for it: an AM4's, else the Axe-Fx III's, which is the one there has always been. */
+const onAm4 = (st) => (st?.deviceName || '') === 'AM4'
+const here = () => (onAm4(getState()) ? am4 : iii)
+/* For the lines below, which were written when there was one list. */
+const list = { load: (how) => here().load(how), ensure: (slot, how) => here().ensure(slot, how), head: (slot) => here().head(slot), note: (slot, name) => here().note(slot, name), stale: (slot, name) => here().stale(slot, name), turn: (run) => here().turn(run) }
 /* A capture sent from the app (the TONE3000 card): the send says which slot it went into and what the unit said that slot holds afterwards, so it is in the list at once, the newest; the rest of the list is read again. */
 onCaptureSent((got) => list.stale(got?.slot, got?.name))
 
 /** The list as the screen draws it: { list, asked, total, loading, done, stale, at, fault }. */
-export const useCaptures = () => useSyncExternalStore(list.subscribe, list.get, list.get)
+export const useCaptures = () => {
+  const which = useRig(onAm4) ? am4 : iii
+  return useSyncExternalStore(which.subscribe, which.get, which.get)
+}
 /** Read the list, unless it is here and nothing says it has changed; `{ again: true }` reads it whatever. */
 export const loadCaptures = (how) => list.load(how)
 /** The head of the slot a block is on, asked of the unit by itself. */

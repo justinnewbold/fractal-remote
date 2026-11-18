@@ -110,7 +110,7 @@ import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, m
 import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
-import { AM4_NAM_BLOCKS, AM4_NAM_SLOTS, am4NamAllowed, am4NamBusyAnswer, am4NamBusyFrame, am4NamPickFrame, am4NamShaped, am4NamSlotQuery, readAm4NamPick, readAm4NamSlot } from './am4-nam.js'
+import { AM4_NAM_BLOCKS, AM4_NAM_SLOTS, am4NamAllowed, am4NamBusyAnswer, am4NamBusyFrame, am4NamPickFrame, am4NamPickRead, am4NamShaped, am4NamSlotQuery, readAm4NamPick, readAm4NamSlot } from './am4-nam.js'
 import { ANSWER_MS, describeAllowed, describeBlock, describeEcho } from './gen3-describe.js'
 import {
   NAM_BLOCKS,
@@ -983,7 +983,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * itself is the same on both, at the unit's model byte.
    */
   const NX = am4
-    ? { slots: AM4_NAM_SLOTS, blocks: AM4_NAM_BLOCKS, slotQuery: (slot) => am4NamSlotQuery(slot), readSlot: (f) => readAm4NamSlot(f), busy: (on) => am4NamBusyFrame(on), busyAnswer: (f) => am4NamBusyAnswer(f), pick: (eid, slot) => am4NamPickFrame(eid, slot), readPick: (f, eid) => readAm4NamPick(f, eid) }
+    ? { slots: AM4_NAM_SLOTS, blocks: AM4_NAM_BLOCKS, slotQuery: (slot) => am4NamSlotQuery(slot), readSlot: (f) => readAm4NamSlot(f), busy: (on) => am4NamBusyFrame(on), busyAnswer: (f) => am4NamBusyAnswer(f), pick: (eid, slot) => am4NamPickFrame(eid, slot), readPick: (f, eid) => readAm4NamPick(f, eid), pickRead: (eid) => am4NamPickRead(eid) }
     : { slots: NAM_SLOTS, blocks: NAM_BLOCKS, slotQuery: (slot) => namSlotQuery(model, slot), readSlot: (f) => readNamSlot(f, model), busy: (on) => namBusyFrame(model, on), busyAnswer: (f) => namBusyAnswer(f, model), pick: (eid, slot) => namPickFrame(model, eid, slot), readPick: (f, eid) => readNamPick(f, model, eid) }
   let capturing = null
   let captureBusy = false
@@ -5423,6 +5423,30 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     })
   }
 
+  /*
+   * GET /nam/blocks/<eid>/slot: which capture a NAM block is on now,
+   * { block, slot, name }, asked of the unit. AN AM4 ONLY: its NAM block has
+   * no read of its settings in the app yet, so nothing else says which
+   * capture it plays (an Axe-Fx III's comes with the block's own read, as
+   * `capture`). The question is AM4-Edit's own (lib/am4-nam am4NamPickRead,
+   * off the recording), let through the way out as the read of the one
+   * block in hand and nothing else.
+   */
+  function namWhich(eid) {
+    if (typeof NX.pickRead !== 'function') throw unsupported()
+    if (!NX.blocks.includes(eid)) throw badInput('Only a NAM block plays a capture.')
+    const which = `NAM ${NX.blocks.indexOf(eid) + 1}`
+    return captureRun({ pick: { block: eid, slot: 0 } }, async () => {
+      const list = await am4Placed()
+      if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
+      if (!list.some((b) => b.effectId === eid)) throw failure(`${which} isn’t in the preset the ${spec.name} is on now.`, 409)
+      const got = await ex(NX.pickRead(eid), { match: (f) => NX.readPick(f, eid) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `which capture ${which} plays`, priority: 'editRead', capture: true })
+      if (rejected(got)) throw failure(`The ${spec.name} would not say which capture ${which} plays (${rejectedWords(got.rejected)}).`, 502)
+      if (!got) throw failure(`The ${spec.name} didn’t say which capture ${which} plays.`, 504)
+      return { block: eid, slot: got.slot, name: got.name }
+    })
+  }
+
   async function am4TunerTick(run) {
     const values = []
     try {
@@ -6265,6 +6289,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (method === 'GET' && part.length === 4 && part[1] === 'heads' && isNum(part[2]) && isNum(part[3])) return editRoute(() => namHeads(Number(part[2]), Number(part[3])))
       if (method === 'POST' && part.length === 3 && part[1] === 'slots' && isNum(part[2])) return editRoute(() => namInstall(Number(part[2]), body, opts.onProgress))
       if (method === 'POST' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namPick(Number(part[2]), body))
+      if (method === 'GET' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namWhich(Number(part[2])))
     }
     /* The chain read as a grid and changed from here, only where it is open to this account (chainOn): his alone so far. Nobody else is ever answered, and a wire made without `chain` answers these as it always did, "not over Bluetooth". */
     if (chainOn()) {

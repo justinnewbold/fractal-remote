@@ -140,7 +140,7 @@ const headOf = (h) => ({ slot: h.slot, name: text(h.name), by: text(h.by), make:
  * @param {number} [c.busyFor]       ms of that before it is said instead of waited out
  * @param {(kept: object) => void} [c.keep]  write the list down
  */
-export function captureList({ heads, pause, now = () => Date.now(), piece = () => 8, rest = () => 150, again = 2500, busyEvery = 1200, busyFor = 45000, keep = () => {} }) {
+export function captureList({ heads, pause, now = () => Date.now(), piece = () => 8, rest = () => 150, again = 2500, busyEvery = 1200, busyFor = 45000, keep = () => {}, listed = CAPTURES_LISTED }) {
   /* Every slot that has answered, empty ones too, by slot. */
   const bySlot = new Map()
   /* Slots a whole read left out because they said nothing, with what each held before (UNHEARD where it had never answered): what comes back in one is not new for having been missed. */
@@ -165,8 +165,8 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
   /** What the screen draws: the same object until something changes. */
   const get = () => {
     if (!snapshot) {
-      const list = [...bySlot.values()].filter((h) => !h.empty && h.slot < CAPTURES_LISTED).sort((a, b) => a.slot - b.slot)
-      snapshot = Object.freeze({ list, asked, total: CAPTURES_LISTED, loading: loading !== null, done, stale, at, fault })
+      const list = [...bySlot.values()].filter((h) => !h.empty && h.slot < listed).sort((a, b) => a.slot - b.slot)
+      snapshot = Object.freeze({ list, asked, total: listed, loading: loading !== null, done, stale, at, fault })
     }
     return snapshot
   }
@@ -303,7 +303,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
 
   /* The read itself. Answers with the slots that said nothing twice and were left out, each with what the list had for it then. */
   async function read() {
-    const total = CAPTURES_LISTED
+    const total = listed
     let from = 0
     /* The slot that said nothing last, and how many times running. */
     let silentAt = null
@@ -437,7 +437,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     /* Against what the list has NOW: a piece of it may have been read while this waited its turn. */
     const had = bySlot.get(slot) || null
     if (!head) return had
-    const differs = had ? had.name !== text(head.name) || had.empty !== (head.empty === true) : head.empty !== true && slot < CAPTURES_LISTED
+    const differs = had ? had.name !== text(head.name) || had.empty !== (head.empty === true) : head.empty !== true && slot < listed
     /* While the list is being read, that only says it is out of date for a slot the read has already passed: one still ahead of it is about to be read anyway. */
     if (differs && (loading ? slot < asked : done)) outOfDate()
     take(head)
@@ -493,7 +493,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
   /** What was written down the last time (lib/store): shown at once, whole, until there is reason to read again. */
   function recall(kept) {
     if (done || loading || bySlot.size) return false
-    const list = Array.isArray(kept?.heads) ? kept.heads.filter((h) => Number.isInteger(h?.slot) && h.slot >= 0 && h.slot < CAPTURES_LISTED && typeof h.name === 'string' && h.name) : []
+    const list = Array.isArray(kept?.heads) ? kept.heads.filter((h) => Number.isInteger(h?.slot) && h.slot >= 0 && h.slot < listed && typeof h.name === 'string' && h.name) : []
     if (!list.length || !Number.isFinite(kept?.at)) return false
     /* As they were kept, stamps and all: nothing "arrives" by being remembered. */
     for (const h of list) bySlot.set(h.slot, { ...headOf({ ...h, empty: false }), ...(Number.isFinite(h.added) ? { added: h.added } : {}) })
@@ -504,7 +504,7 @@ export function captureList({ heads, pause, now = () => Date.now(), piece = () =
     done = true
     if (kept.stale === true) outOfDate()
     at = kept.at
-    asked = CAPTURES_LISTED
+    asked = listed
     publish()
     return true
   }

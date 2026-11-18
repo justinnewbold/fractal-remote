@@ -35,6 +35,7 @@ import { sayPlayHead } from '../lib/playHead'
 import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
+import HeldCapture from '../components/HeldCapture'
 import PopKnobs from '../components/PopKnobs'
 import { Tone3000Door, Tone3000InPop, useTone3000Door } from '../components/Tone3000Quick'
 import StageView from '../components/StageView'
@@ -2627,6 +2628,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
     <>
       <Tone3000Door n={library.n} onPress={() => setBrowsing(true)} />
       {came ? <NowPlayingCard line={came} unit={library.unit} /> : null}
+      {/* An AM4's NAM block has no knobs in the app, so no place in Edit for its Capture button: it is here, over its channels (components/HeldCapture). */}
+      {library.from === 'channels' ? <HeldCapture block={block} /> : null}
     </>
   ) : null
   if (withKnobs) {
