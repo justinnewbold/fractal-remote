@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { at as tint } from '../lib/vivid'
 
@@ -23,11 +23,15 @@ import {
   setParam,
   setCable,
   setParamConfirmed,
-  setType
+  setType,
+  placedChainWanted,
+  wantPlacedChain
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { demoUnit, isDemo } from '../lib/demo'
 import { gridReadTakesLong, overBluetooth } from '../lib/bleSwitch'
+import { PLACED_FAILED, chainEditorHere, placedReady } from '../lib/chainOnWire'
+import ChainReading from '../components/ChainReading'
 import { bluetoothAdmin, useCableNow, useOutputAndSceneLevels } from '../lib/bluetooth'
 import { sceneFloor, sceneLevelToSend, sceneRowsFor } from '../lib/sceneLevel'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
@@ -139,6 +143,7 @@ const ofScene = (s) => s.sceneIndex
 const ofBufferRev = (s) => s.bufferRev
 const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
+const ofDeviceName = (s) => s.deviceName
 const ofChain = (s) => s.chain
 const ofPreset = (s) => s.preset
 const ofPresetNumber = (s) => s.preset?.number
@@ -277,6 +282,8 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   const pending = !!unsaved && unsaved.number === preset?.number
   /* Over Bluetooth: knobs, models and on/off; and Save only where the wire says the app can (lib/bleSave: rig.noteEdited marks nothing unsaved anywhere else). See BLE_NOTE. */
   const viaBle = overBluetooth(caps)
+  /* The unit's own name, for the chain editor's line over Bluetooth (the capabilities carry none). */
+  const deviceName = useRig(ofDeviceName)
   /* Whether the unit can be told to attach a modifier, as the computer says (capabilities.modifiers.bind); absent, from an older computer, it is offered as before. */
   const modifiersBind = caps?.modifiers?.bind !== false
   /* A unit on its own USB cable is the same wire, and its note says the cable that is in, not Bluetooth (lib/cableWords CABLE_EDIT_NOTE). */
@@ -447,9 +454,10 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   }, [openEid, presetNumber])
 
   /* What this preset, this unit and this connection let More offer: the same rules the buttons under the knobs had. */
-  const chainTools = !vp4Bench() && !viaBle && !chainNow.elsewhere
-  const modsHere = chainTools && modifiersBind
-  const renameHere = !vp4Bench() && !viaBle && !chainNow.elsewhere
+  /* The chain editor: through a computer as ever, and over Bluetooth or a USB cable where the wire says it answers every block's place (lib/chainOnWire chainEditorHere; capabilities `chainEditor`). Rename the same: over Bluetooth where the wire says it writes names (capabilities `namesWritable`: lib/bleNames). Modifiers are still the computer's. */
+  const chainTools = chainEditorHere({ vp4: vp4Bench(), viaBle, caps, elsewhere: chainNow.elsewhere })
+  const modsHere = chainTools && !viaBle && modifiersBind
+  const renameHere = !vp4Bench() && (!viaBle || caps?.namesWritable === true) && !chainNow.elsewhere
   /* One of More's rows, or a shortcut: opened under the chain, with the page brought up to it. */
   const openTool = (which, start = null) => {
     setMoreOpen(false)
@@ -478,6 +486,63 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   }
   /* A tool this preset no longer offers (a move to Bluetooth, a chain still on its way) closes. */
   const toolShown = tool === 'chain' ? chainTools : tool === 'modifiers' ? modsHere : tool === 'rename' ? renameHere : false
+  /*
+   * THE CHAIN EDITOR OVER BLUETOOTH OR A USB CABLE (lib/chainOnWire). While
+   * it is open the chain is asked for with every block's place (lib/device
+   * wantPlacedChain: the preset read whole, slow down an adapter), and read
+   * at once; closed, Play's small read again. `placedFailed` is that first
+   * read not coming back, said with Try again in the editor's place.
+   */
+  const chainOnWire = viaBle && toolShown && tool === 'chain'
+  const [placedFailed, setPlacedFailed] = useState(false)
+  /* Whether a read with the places has come back since the editor was opened: places left on the chain from an earlier visit are not drawn from, since the chain may have been changed since (Quick build, the unit's own front panel). */
+  const [placedRead, setPlacedRead] = useState(false)
+  /* Which visit to the editor a read belongs to. */
+  const placedAsks = useRef(0)
+  const readPlaced = useCallback(async () => {
+    setPlacedFailed(false)
+    /*
+     * TWICE AT MOST. A chain read already on its way when the editor opened
+     * was asked without the places, and the rig hands back that same read
+     * and asks once more after it (rig refreshBlocks), so the first wait can
+     * end on a chain with no places while the read that has them is still
+     * out: waited for, never called a failure. A read that failed is asked
+     * once more by the same loop.
+     */
+    for (let turn = 0; turn < 2; turn++) {
+      const asked = placedAsks.current
+      try {
+        await refreshBlocks({ quiet: true })
+      } catch {
+        /* Said below, with Try again. */
+      }
+      /* The editor was closed, or opened again, while this was out: its answer is not this visit's. */
+      if (asked !== placedAsks.current) return
+      if (placedChainWanted() && getState().chain === 'ok' && placedReady(getState().allBlocks)) {
+        setPlacedRead(true)
+        return
+      }
+    }
+    setPlacedFailed(true)
+  }, [])
+  useEffect(() => {
+    if (!chainOnWire) return undefined
+    placedAsks.current += 1
+    setPlacedRead(false)
+    wantPlacedChain(true)
+    readPlaced()
+    return () => {
+      placedAsks.current += 1
+      wantPlacedChain(false)
+      setPlacedFailed(false)
+      setPlacedRead(false)
+      /* And Play's own read again, so the chain on screen is the one every other screen expects (no places, no looper whose buttons cannot be sent). */
+      refreshBlocks({ quiet: true }).catch(() => {})
+    }
+  }, [chainOnWire, readPlaced])
+  /* Drawn only from a chain read with its places on this visit, every block's: a block drawn in the wrong space is a block written over. */
+  const chainPlaced = !chainOnWire || (placedRead && placedReady(chainForEditor))
+  const chainSlow = gridReadTakesLong(caps, onCable)
 
   return (
     <ScrollView
@@ -767,13 +832,31 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         Modifiers (on a held knob's control when a knob opened it), or the
         rename boxes. Each draws what its door under the knobs opened.
       */}
-      {toolShown && tool === 'chain' ? <ChainEditor blocks={chainForEditor} caps={caps} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} /> : null}
+      {toolShown && tool === 'chain' && chainPlaced ? (
+        <ChainEditor blocks={chainForEditor} caps={caps} overWire={chainOnWire} slow={chainSlow} unit={deviceName} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} />
+      ) : null}
+      {toolShown && tool === 'chain' && !chainPlaced ? (
+        <View style={{ gap: space.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+            <Label>The chain</Label>
+            <Press label="Close" height={40} onPress={() => setTool(null)} />
+          </View>
+          {placedFailed ? (
+            <>
+              <Note tone="warn">{PLACED_FAILED}</Note>
+              <Press label="Try again" onPress={readPlaced} />
+            </>
+          ) : (
+            <ChainReading slow={chainSlow} unit={deviceName} />
+          )}
+        </View>
+      ) : null}
       {toolShown && tool === 'modifiers' ? (
         <Modifiers key={modStart ? `${modStart.eid}:${modStart.paramId}` : 'more'} blocks={modBlocks} onError={setError} start={modStart} onClose={() => setTool(null)} />
       ) : null}
       {toolShown && tool === 'rename' ? <RenameDoor onClose={() => setTool(null)} /> : null}
 
-      {block?.slug === 'looper' && !toolShown ? <Looper block={block} /> : null}
+      {block?.slug === 'looper' && block.noControls !== true && !toolShown ? <Looper block={block} /> : null}
 
       {/*
         A VP4's knobs, said once, in words, where the line below says to tap
@@ -811,6 +894,8 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             undoSaid={undoSaid && sameBlock(block, undoSaid.eid) && undoSaid.rev === bufferRev ? undoSaid : null}
             onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
             overBle={viaBle}
+            /* Copy channel: over Bluetooth or a USB cable only where the wire says so (capabilities `channelCopy`). */
+            canCopy={!viaBle || caps?.channelCopy === true}
             /* The i beside the model: Amp & pedal names, on that model (lib/editMore gearStart). */
             onModelInfo={onOpenGear ? (start) => onOpenGear(start) : null}
             /* A knob held still: Modifiers, on that knob (lib/editMore HOLD_MS). Only where More offers Modifiers. */
@@ -863,7 +948,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
               }}
             />
           ) : null}
-          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{noChainLine(quickBuildHere({ on: quickOn, caps }))}</Note> : null}
+          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{noChainLine(quickBuildHere({ on: quickOn, caps }), { editor: caps?.chainEditor === true, tools: caps?.namesWritable === true })}</Note> : null}
           <Note tone="warn">{BETA_NOTE}</Note>
         </View>
       </Sheet>
@@ -953,6 +1038,8 @@ export function BlockPanel({
    * Edit screen, which draws everything it always did.
    */
   panel = false,
+  /* Copy channel under the knobs: over Bluetooth or a USB cable only where the wire says so (capabilities `channelCopy`); everywhere else as ever. */
+  canCopy = !overBle,
   /*
    * ON THE EDIT SCREEN ONLY (lib/editMore): the i beside the model, which
    * opens Amp & pedal names on it (`onModelInfo`, handed { family, name }),
@@ -2068,8 +2155,8 @@ export function BlockPanel({
         2026): the knobs are what a player opens a block for, so they come
         straight under the channel buttons, and these follow them.
       */}
-      {/* Copy this channel onto another — see ChannelCopy below. Not over Bluetooth, where it is not built yet. Not in Derek's panel. */}
-      {!panel && channels?.length > 1 && block.channel && !overBle ? (
+      {/* Copy this channel onto another — see ChannelCopy below. Over Bluetooth only where the wire says so (`canCopy`: capabilities channelCopy). Not in Derek's panel. */}
+      {!panel && channels?.length > 1 && block.channel && canCopy ? (
         <ChannelCopy
           eid={eid}
           block={block}
@@ -2231,7 +2318,7 @@ function RenameDoor({ onClose }) {
 }
 
 /** The chain editor, opened from More or the ＋ tile at the end of the chain (lib/editMore); its Close is `onClose`. */
-function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
+function ChainEditor({ blocks, caps, overWire = false, slow = false, unit = '', onError, onScrollLock, onClose }) {
   const open = true
   const setOpen = (on) => {
     if (!on) onClose?.()
@@ -2793,6 +2880,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       </View>
 
       {issue ? <Note tone="warn">{issue}</Note> : null}
+      {/* Over Bluetooth every change is read back from the unit, the preset whole: said while it is, with how far it has got (components/ChainReading). */}
+      {overWire && (busy || chainUndo.running) ? <ChainReading back slow={slow} unit={unit} /> : null}
 
       {/*
         A SPLIT CHAIN, SAID OUT LOUD.
@@ -2825,7 +2914,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
       */}
       {linear ? null : <RowsPanel blocks={blocks} caps={caps} palette={palette} onError={onError} />}
       {/* The block somebody wants in every preset, in one tap and in the right place. */}
-      {linear ? null : (
+      {linear || overWire ? null : (
         <LooperAtEnd
           blocks={blocks}
           caps={caps}

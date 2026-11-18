@@ -95,10 +95,48 @@ export const EDITING_LINE_SAVES = 'Moving, adding or removing a block in a chain
  */
 export const NO_CHAIN_LINE = 'Moving, adding and removing blocks, modifiers and renaming need the computer.'
 export const NO_CHAIN_LINE_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, modifiers and renaming need the computer.'
-export const noChainLine = (quick = false) => (quick === true ? NO_CHAIN_LINE_QUICK : NO_CHAIN_LINE)
+/*
+ * AND WHERE MORE OF THE COMPUTER'S TOOLS ARE HERE (18 November 2026: "I want
+ * to enable all of the items currently available to computer bridge users to
+ * Bluetooth like chain editing"): the chain editor (`editor`: the wire's
+ * capabilities `chainEditor`, lib/features
+ * CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE) and Rename with Copy channel
+ * (`tools`: capabilities `namesWritable`, lib/features
+ * EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE). Each line names only what is
+ * still the computer's on this connection. With neither, the two lines
+ * above, word for word as before.
+ */
+export const NO_CHAIN_LINE_EDITOR = 'Modifiers and renaming need the computer.'
+export const NO_CHAIN_LINE_TOOLS = 'Moving, adding and removing blocks, and modifiers, need the computer.'
+export const NO_CHAIN_LINE_TOOLS_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, and modifiers, need the computer.'
+export const NO_CHAIN_LINE_BOTH = 'Modifiers need the computer.'
+export const noChainLine = (quick = false, { editor = false, tools = false } = {}) => {
+  if (editor === true) return tools === true ? NO_CHAIN_LINE_BOTH : NO_CHAIN_LINE_EDITOR
+  if (tools === true) return quick === true ? NO_CHAIN_LINE_TOOLS_QUICK : NO_CHAIN_LINE_TOOLS
+  return quick === true ? NO_CHAIN_LINE_QUICK : NO_CHAIN_LINE
+}
+
+/*
+ * The Bluetooth page's two lines where the chain editor or the smaller tools
+ * are here too (`editor`, `tools`, as noChainLine above; only ever with
+ * `saves`, since both stand on the chain being open, which opens with
+ * saving). What Edit does gains them, and the list's first line loses them.
+ */
+export const EDIT_DOES_EDITOR = 'In Edit: knobs, models, effects on and off, Save, Quick build, and blocks moved, added and removed.'
+export const EDIT_DOES_TOOLS = 'In Edit: knobs, models, effects on and off, Save, Quick build on an empty preset, renaming and copying a channel.'
+export const EDIT_DOES_BOTH = 'In Edit: knobs, models, effects on and off, Save, Quick build, blocks moved, added and removed, renaming and copying a channel.'
+export const EDITING_LINE_EDITOR = 'Modifiers, renaming and copying a channel need the computer.'
+export const EDITING_LINE_TOOLS = 'Moving, adding or removing a block in a chain that has blocks, and modifiers, need the computer.'
+export const EDITING_LINE_BOTH = 'Modifiers need the computer.'
+const more = (saves, { editor = false, tools = false } = {}) => (saves === true ? (editor === true ? (tools === true ? 'both' : 'editor') : tools === true ? 'tools' : null) : null)
 
 /** "What's different from USB", its first line. */
-export const editingLine = (open, saves = false) => (open !== true ? NO_EDITING_LINE : saves === true ? EDITING_LINE_SAVES : EDITING_LINE)
+export const editingLine = (open, saves = false, here = {}) => {
+  if (open !== true) return NO_EDITING_LINE
+  const m = more(saves, here)
+  if (m) return { both: EDITING_LINE_BOTH, editor: EDITING_LINE_EDITOR, tools: EDITING_LINE_TOOLS }[m]
+  return saves === true ? EDITING_LINE_SAVES : EDITING_LINE
+}
 
 /*
  * "WHAT'S DIFFERENT FROM USB", ITS LAST LINE: what is not there over
@@ -130,5 +168,10 @@ export const LIMITS_DOES = 'Presets, scenes, names, effects on and off, channels
 export const LIMITS_CLOSED = `${LIMITS_DOES} No editing or saving.`
 export const LIMITS_OPEN = `${LIMITS_DOES} ${EDIT_DOES}`
 export const LIMITS_SAVES = `${LIMITS_DOES} ${EDIT_DOES_SAVES}`
-/** The paragraph: closed, open, or open with the app's own Save. */
-export const limitsLine = (open, saves = false) => (open !== true ? LIMITS_CLOSED : saves === true ? LIMITS_SAVES : LIMITS_OPEN)
+/** The paragraph: closed, open, or open with the app's own Save, and with the chain editor or the smaller tools where they are here (`here`: { editor, tools }). */
+export const limitsLine = (open, saves = false, here = {}) => {
+  if (open !== true) return LIMITS_CLOSED
+  const m = more(saves, here)
+  if (m) return `${LIMITS_DOES} ${{ both: EDIT_DOES_BOTH, editor: EDIT_DOES_EDITOR, tools: EDIT_DOES_TOOLS }[m]}`
+  return saves === true ? LIMITS_SAVES : LIMITS_OPEN
+}

@@ -4853,7 +4853,7 @@ export function run(test) {
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const modifiersBind = caps\?\.modifiers\?\.bind !== false/)
     /* From More or a held knob since 10 November 2026, by modsHere, which asks modifiersBind (test/edit-more.mjs). */
-    assert.match(edit, /const modsHere = chainTools && modifiersBind/, 'the phone’s Edit offers Modifiers whatever the computer says')
+    assert.match(edit, /const modsHere = chainTools && !viaBle && modifiersBind/, 'the phone’s Edit offers Modifiers whatever the computer says')
     assert.match(edit, /\{toolShown && tool === 'modifiers' \? \( <Modifiers /, 'the phone’s Edit offers Modifiers whatever the computer says')
     assert.equal((edit.match(/<Modifiers /g) || []).length, 1, 'the phone has another way to Modifiers')
     const app = flat('src/App.jsx')

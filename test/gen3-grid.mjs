@@ -585,7 +585,7 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/features.js'), /export const CHAIN_OVER_BLUETOOTH_FOR_EVERYONE = true/)
     const ble = flat('mobile/src/lib/bluetooth.js')
     assert.match(ble, /export const chainOverBluetooth = \(\) => allUnits === true \|\| CHAIN_OVER_BLUETOOTH_FOR_EVERYONE/)
-    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), \/\*[^*]*\*\/ live: \(\) => liveKnobsOverBluetooth\(\) \}\)/)
+    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), \/\*[^*]*\*\/ live: \(\) => liveKnobsOverBluetooth\(\), \/\*/)
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /const chainOn = \(\) => editOn\(\) && typeof chain === 'function' && chain\(\) === true/)
     /* The page does not ask the chain's switch itself: its words follow saving (lib/editWords), which opens with the chain (test/bluetooth.mjs holds the two equal). */

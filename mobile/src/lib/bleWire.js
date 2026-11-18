@@ -26,6 +26,7 @@
  * is remembered on the phone (`remember`). The check panel can force either.
  */
 import { SAVE_NOT_OPEN, buildSave, saveAllowed, saveElsewhere, saveShaped } from './bleSave.js'
+import { buildPresetName, buildSceneName, cleanName, nameAllowed, nameShaped } from './bleNames.js'
 import {
   AM4,
   AM4_BLOCKS,
@@ -336,6 +337,8 @@ export const LATE_MS = 2000
 export const NAM_SLOT_ASKS = 3
 /** The AM4's preset answer is reused for this long, so one screen load is one read. */
 export const STRUCTURE_FRESH_MS = 400
+/** How long the grid read from the preset is kept for the chain editor: the computer app's own fifteen seconds for its copy of the preset (ForgeFX gen3 grid). */
+export const PLACED_FRESH_MS = 15000
 /**
  * A block Edit has read is kept this long after its last read, so a knob let
  * go is one register read, not three whole blocks (editKept); and never longer
@@ -573,14 +576,21 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
     /*
      * A save (lib/bleSave) goes only as the one save being sent, over the location the AM4 has just said it is on (`saving`): never on the lists below, which know no save.
      * And a block put in a slot (lib/am4-chain) only as the one slot write the wire is sending at this moment (`slotting`), one of the four slots and a block the AM4 itself names: on neither list, and never while nothing of the chain's is going.
      */
-    const ok = sysex ? (saveShaped(bytes, MODELS.am4) ? saveAllowed(bytes, MODELS.am4, saving()) : am4Allowed(bytes) || am4EditAllowed(bytes, placed()) || am4SlotAllowed(bytes, slotting())) : am4ShortAllowed(bytes, learned())
+    /* And a name (lib/bleNames) only as the one name being written at this moment (`naming`), byte for byte: on no list, and never while nothing is being named. */
+    const ok = sysex
+      ? saveShaped(bytes, MODELS.am4)
+        ? saveAllowed(bytes, MODELS.am4, saving())
+        : nameShaped(bytes, MODELS.am4)
+          ? nameAllowed(bytes, naming())
+          : am4Allowed(bytes) || am4EditAllowed(bytes, placed()) || am4SlotAllowed(bytes, slotting())
+      : am4ShortAllowed(bytes, learned())
     if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
       return 'refused'
@@ -617,7 +627,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null, naming = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -684,6 +694,19 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
       }
       return send(bytes) === false ? 'failed' : 'sent'
     }
+    /*
+     * A NAME (lib/bleNames: function 0x01, 28 00 for the preset, 2B 00 for a
+     * scene) goes only as, byte for byte, the one name being written at this
+     * moment (`naming`). Any other frame of that shape, or one with nothing
+     * being named, is refused. Nothing this file sent before had the shape.
+     */
+    if (nameShaped(bytes, model)) {
+      if (!nameAllowed(bytes, naming())) {
+        log(`refused to send ${toHex(bytes.slice(0, 24))}${bytes.length > 24 ? ' …' : ''}: it is a name, and not the one being written now`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
@@ -714,8 +737,11 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.blockOrder]  whether Play's blocks are put in the unit's own order from the grid's live read (gridOrder; every account's since lib/features BLOCK_ORDER_FROM_GRID_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every send
  * @param {() => boolean} [o.io]  whether the Input and Output blocks are handed on in the chain answer and may be read and written by Edit (lib/sceneLevel; every account's since lib/features OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and every send
  * @param {() => boolean} [o.live]  whether Edit's knobs follow the unit for this account (lib/liveKnobs; every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and at every report the unit sends
+ * @param {() => boolean} [o.editTools]  whether Edit's smaller tools are here: the preset and its scenes named from this device (lib/bleNames), and a channel copied onto another (lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), where Edit is open, asked at every request and every send
+ * @param {() => boolean} [o.chainEditor]  whether the chain is answered with every block's place and joins for the chain editor (gen3PlacedBlocks; lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), where the chain is open (`chain`), asked at every request
+ * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -763,6 +789,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const saveOn = () => editOn() && typeof save === 'function' && save() === true
   let savingSlot = null
   /*
+   * THE PRESET AND ITS SCENES NAMED FROM HERE (lib/bleNames; writePresetName
+   * and writeSceneName below): open to this account or not (`editTools`,
+   * lib/bluetooth editToolsOverBluetooth: his, until lib/features
+   * EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE), where Edit is open, asked at
+   * every request and every send. `namingFrame` is the one name being
+   * written, for exactly as long as it is being sent: the way out passes a
+   * frame of a name's shape only as that one, byte for byte.
+   */
+  const namesOn = () => editOn() && typeof editTools === 'function' && editTools() === true
+  let namingFrame = null
+  /*
    * THE CHAIN, READ AS A GRID AND CHANGED FROM HERE (lib/gen3-grid on an
    * FM3, FM9 or Axe-Fx III; lib/am4-chain on an AM4): open to this account
    * or not (`chain`, lib/bluetooth: every account's since lib/features
@@ -774,6 +811,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const chainOn = () => editOn() && typeof chain === 'function' && chain() === true
   const chainHand = gridHand()
+  /*
+   * AND THE CHAIN EDITOR'S OWN READ (gen3PlacedBlocks): the blocks with the
+   * row, column and joins of each, as the computer app answers the chain,
+   * where the chain is open and the editor is open to this account
+   * (`chainEditor`, lib/bluetooth chainEditorOverBluetooth: his, until
+   * lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE), asked at every
+   * request. It sends nothing the chain did not already send: the preset
+   * read whole and the status read.
+   */
+  const chainEditorOn = () => chainOn() && typeof chainEditor === 'function' && chainEditor() === true
   /*
    * PLAY'S BLOCKS IN THE UNIT'S OWN ORDER (gridOrder): open to this account
    * or not (`blockOrder`, lib/bluetooth: every account's since lib/features
@@ -860,8 +907,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)))
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -2335,6 +2382,119 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { ok: true, number: slot }
   }
 
+  /*
+   * A NAME WRITTEN INTO THE EDIT BUFFER (lib/bleNames): the computer app's
+   * own message, the name cleaned as the computer cleans it. Never sent
+   * after a scene or preset change that came since it was asked for: a name
+   * meant for one preset must not land on the next. A refusal is THROWN, not
+   * answered: the screen believes a rename it is not told failed (components/
+   * RenamePreset), so a unit that says no has to be said as one. Kept
+   * names are let go of, so the next read is the unit's.
+   */
+  async function nameWrite(out, what, at) {
+    movedSince(at, what)
+    namingFrame = out
+    let answer
+    try {
+      answer = await fire(out, what, EDIT_WRITE)
+    } finally {
+      namingFrame = null
+    }
+    sceneCache = null
+    if (am4) {
+      am4Names.clear()
+      structure = null
+    }
+    if (rejected(answer)) throw refusedBy(answer.rejected)
+    return { ok: true }
+  }
+  /*
+   * ONE NAME AT A TIME. The rename screen's boxes each send their own, and
+   * the way out knows one name in hand: two overlapping would each be
+   * refused there for the other's.
+   */
+  let nameLane = Promise.resolve()
+  const inNames = (run) => {
+    const next = nameLane.then(run, run)
+    nameLane = next.then(
+      () => {},
+      () => {}
+    )
+    return next
+  }
+  /*
+   * AND THE UNIT IS ASKED WHICH PRESET IT IS ON FIRST, as a save asks
+   * (storePreset). A name frame says nothing of which preset it is for (a
+   * gen-3 unit's), or carries whatever location the AM4 has just said (an
+   * AM4's): a preset stepped to at the unit's own footswitch, which a
+   * gen-3 unit does not announce and the clock may not have asked about
+   * yet, would otherwise be given the name meant for the one on screen,
+   * and a Save after it would keep it. On another preset than the wire
+   * last knew, the move is counted and nothing is sent; a unit that will
+   * not say is sent nothing either. Answers the AM4's location, or null.
+   */
+  async function nameHere(what) {
+    const knew = last.preset
+    if (am4) {
+      const s = await readStructure({ priority: 'write', fresh: true })
+      const location = s && s !== SKIPPED ? s.location : null
+      if (!Number.isInteger(location)) throw failure('The AM4 didn’t say which preset it is on, so the name was not sent. Try again.', 504)
+      notePreset({ number: location, name: s.name }, true)
+      if (knew !== null && location !== knew) {
+        say(`not sent, the AM4 is on another preset now: ${what}`)
+        throw movedFirst()
+      }
+      return location
+    }
+    const got = await presetNow('write')
+    if (!got || got === SKIPPED || rejected(got) || !Number.isInteger(got.number)) {
+      throw failure(`The ${spec.name} didn’t say which preset it is on, so the name was not sent. Try again.`, 504)
+    }
+    notePreset(got, true)
+    if (knew !== null && got.number !== knew) {
+      say(`not sent, the ${spec.name} is on another preset now: ${what}`)
+      throw movedFirst()
+    }
+    return null
+  }
+  const nameGiven = (name) => {
+    const clean = cleanName(name).trim()
+    if (!clean) throw badInput('A name needs at least one letter or number.')
+    return clean
+  }
+  /** POST /preset/name {name}: the preset the unit is on, named in its edit buffer. */
+  function writePresetName(name) {
+    const clean = nameGiven(name)
+    const at = moves
+    return inNames(async () => {
+      const what = `the preset named “${clean}”`
+      movedSince(at, what)
+      /* An AM4's frame carries the location it names: the one the AM4 has just said it is on. */
+      const location = await nameHere(what)
+      const out = buildPresetName(model, clean, location)
+      if (!out) throw failure('The AM4 didn’t say which preset it is on, so the name was not sent. Try again.', 504)
+      const done = await nameWrite(out, what, at)
+      if (!am4) last.name = clean
+      say(`the preset is named “${clean}” in the edit buffer`)
+      return done
+    })
+  }
+  /** POST /scene/name {index, name}: scene `index` (from nought) of the preset the unit is on, named in its edit buffer. */
+  function writeSceneName(index, name) {
+    const clean = nameGiven(name)
+    const out = buildSceneName(model, index, clean)
+    if (!out) throw badInput(`The ${spec.name} has no scene ${Number.isInteger(index) ? index + 1 : index}.`)
+    const at = moves
+    return inNames(async () => {
+      const what = `scene ${index + 1} named “${clean}”`
+      movedSince(at, what)
+      await nameHere(what)
+      const done = await nameWrite(out, what, at)
+      say(`scene ${index + 1} is named “${clean}” in the edit buffer`)
+      return done
+    })
+  }
+
   /* ---------------- the answers both families give ---------------- */
 
   const CH = ['A', 'B', 'C', 'D']
@@ -2356,7 +2516,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* Save from the phone (lib/bleSave), where it is open to this account: asked when the app asks what the unit can do. */
       supportsSave: saveOn(),
       /* The chain read as a grid and changed from here (lib/gen3-grid, lib/am4-chain), where it is open to this account: the computer app's own word for it. */
-      gridEdit: chainOn()
+      gridEdit: chainOn(),
+      /* And the chain editor (one block moved, added or removed), where its own read of every block's place is open to this account (chainEditorOn). */
+      chainEditor: chainEditorOn(),
+      /* The preset and its scenes named from here (lib/bleNames), where naming is open to this account (namesOn). */
+      namesWritable: namesOn(),
+      /* And a channel copied onto another in Edit: reads and writes Edit already makes, offered where the same switch is open. */
+      channelCopy: namesOn()
     }
     if (am4) {
       return { ...common, slotModel: 'linear', slotCount: AM4_SLOTS, sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
@@ -3297,7 +3463,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitShapes: new Map(),
     unitKeepAt: 0,
     unitKeepNote: null,
-    unitKeepAway: null
+    unitKeepAway: null,
+    pushQuiet: false
   }
   /* The app off screen (screenOff/screenOn, from the link's AppState): the AM4's own tuner is not kept up meanwhile. */
   let offScreen = false
@@ -3373,6 +3540,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /*
+   * AND THE COMPUTER'S WAY WHEN THE SWITCH BRINGS NOTHING (`tunerAsks`,
+   * lib/bluetooth tunerAsksOverBluetooth: his account, until lib/features
+   * TUNER_ASKS_FOR_EVERYONE). "I want to enable all of the items currently
+   * available to computer bridge users to Bluetooth like chain editing and
+   * live tuner" (Justin, 18 November 2026). Through a computer an FM9's or an
+   * Axe-Fx III's tuner needs no setting on the unit: the computer app opens
+   * the tuner page and asks for the frequency on every gen-3 unit (ForgeFX
+   * registryCore #setTuner and #pollTuner), where this wire sent Fractal's
+   * switch alone and showed nothing with Send Realtime Sysex off, which is
+   * how a unit comes. Open, a switch that brings no reading in 1.2 s is
+   * followed by exactly those two messages, the FM3's own here already
+   * (startAsking), and the next open on the connection goes straight to them
+   * (`pushQuiet`). Closed, the switch alone, as it always was. NOT SEEN ON A
+   * UNIT over its MIDI jacks: the computer sends the same bytes over USB.
+   */
+  const asksOn = () => !am4 && !pollTunerByAuto && typeof tunerAsks === 'function' && tunerAsks() === true
+
+  /*
    * THE PUBLISHED TUNER FIRST, ON AN FM9 OR AN AXE-FX III (pollTunerByAuto):
    * Fractal's switch, 0x11 01, and the readings the unit sends with Send
    * Realtime Sysex on. With none in 1.2 s the log says why, and nothing else
@@ -3385,7 +3570,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   async function gen3TunerOn(deadline) {
     const run = tuner.run
-    const way = wayFor('tuner') || (pollTunerByAuto ? 'poll' : 'push')
+    const way = wayFor('tuner') || (pollTunerByAuto || (asksOn() && tuner.pushQuiet) ? 'poll' : 'push')
     if (way === 'push') {
       tuner.way = 'push'
       tuner.pushSent = true
@@ -3404,6 +3589,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const seen = pushes
       tunerLater(run, WAIT.push, () => {
         if (pushes !== seen) return
+        if (!pollTunerByAuto && ways.tuner === 'auto' && asksOn()) {
+          /* The computer's way, on an FM9 or an Axe-Fx III (see asksOn): the page and the frequency question, and straight to them at the next open on this connection. */
+          tuner.pushQuiet = true
+          say(`no tuner data from the ${spec.name} in 1.2 s (Send Realtime Sysex may be off on it): asking it for the frequency instead, as the computer app does`)
+          startAsking(run).catch(() => {})
+          return
+        }
         if (!pollTunerByAuto && ways.tuner !== 'poll') {
           say(`no tuner data from the ${spec.name} in 1.2 s: Send Realtime Sysex may be off on it (Setup → MIDI/Remote). Nothing else is sent`)
           return
@@ -4197,10 +4389,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * `onProgress` goes to the preset's read alone (gen3DumpGrid): never to
    * the live read, and a grid kept a moment tells nothing.
    */
-  function gen3Grid(onProgress) {
+  function gen3Grid(onProgress, keptFor = STRUCTURE_FRESH_MS) {
     return inGrid(async () => {
       /* (A grid kept is one read at this same count, so the chain has been seen at it: chainSeen.) */
-      if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < STRUCTURE_FRESH_MS) return gridKept.value
+      /* For `keptFor`: a moment, or, for the chain editor, the computer app's own fifteen seconds (PLACED_FRESH_MS). Any write to the chain, and any scene or preset change, lets go of it sooner (chainChanged, `moves`). */
+      if (gridKept && gridKept.moves === moves && time.now() - gridKept.at < keptFor) return gridKept.value
       await gen3KnownFirst()
       const at = moves
       const started = time.now()
@@ -4256,6 +4449,82 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       say(`the grid, read ${source === 'live' ? 'live' : 'from the preset'} in ${((time.now() - started) / 1000).toFixed(1)} s: ${cells.length - shunts} block${cells.length - shunts === 1 ? '' : 's'}${shunts ? `, ${shunts} shunt${shunts === 1 ? '' : 's'}` : ''}`)
       return value
     })
+  }
+
+  /*
+   * THE CHAIN AS THE CHAIN EDITOR NEEDS IT (chainEditorOn): every block with
+   * its row, its column and the rows of the column before that feed it, as
+   * the computer app answers GET /preset/blocks (ForgeFX gen3 placedBlocks:
+   * the grid's cells, less its bare wires, each with its on and off and its
+   * channel from the status read).
+   *
+   * "I want to enable all of the items currently available to computer
+   * bridge users to Bluetooth like chain editing" (Justin, 18 November
+   * 2026). Play's read over Bluetooth is the status read, which has no
+   * places, so the editor that moves, adds and removes one block could not
+   * be drawn. The places are the PRESET'S OWN, read whole (gen3Grid: never
+   * the live read, which is not believed), so this read is as slow as that
+   * one down an adapter, and it is asked only while the editor is open
+   * (lib/device wantPlacedChain). Kept as the computer keeps its copy, for
+   * PLACED_FRESH_MS, and let go of at any write to the chain and any scene
+   * or preset change.
+   *
+   * Every cell that holds a block is answered, the Input, the Output and the
+   * looper too, and one this app has no name for (no slug, so the screens
+   * hold its cell as a New block and never write over it). The looper says
+   * `noControls`: its buttons are not sent from here, so Play draws no
+   * looper for it (lib/chainOnWire withControls).
+   */
+  async function gen3PlacedBlocks(onProgress) {
+    /* The count the whole answer is for: taken before the grid, so a move during either read is seen. */
+    const at = moves
+    const grid = await gen3Grid(onProgress, PLACED_FRESH_MS)
+    const list = await statusNow('editRead')
+    if (rejected(list)) throw refusedBy(list.rejected)
+    if (!Array.isArray(list)) throw timedOut()
+    /*
+     * THE TWO READS ARE ONE PRESET'S ONLY IF THE UNIT SAYS SO AFTER BOTH. A
+     * grid kept (up to PLACED_FRESH_MS) was vouched for when it was read,
+     * not now, and a gen-3 unit stepped on at its own footswitch says
+     * nothing: the old preset's places would be handed out with the new
+     * one's on and off. So the unit is asked which preset it is on after the
+     * status read, every time (gen3StillHere counts a move it finds), and a
+     * move lets go of the grid kept.
+     */
+    try {
+      await gen3StillHere(at)
+    } catch (err) {
+      gridKept = null
+      throw err
+    }
+    const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
+    sayStrangers(states)
+    /* And every block the status read lists has to be on the grid (the ids that are no block left out): one that is not is another preset's list, or a grid from before a change, and nothing is drawn from the pair. */
+    const onGrid = new Set(grid.cells.filter((c) => !c.isShunt).map((c) => c.effectId))
+    const adrift = states.filter((b) => Number.isInteger(b.effectId) && !NOT_BLOCKS.includes(b.effectId) && !onGrid.has(b.effectId))
+    if (adrift.length) {
+      gridKept = null
+      say(`the status read lists ${adrift.length === 1 ? 'a block' : 'blocks'} the grid does not hold (${adrift.map((b) => b.effectId).join(', ')}): the chain is not drawn from the two`)
+      throw failure('The chain changed while the app was reading it. Try again.', 409)
+    }
+    const named = new Map((outlineChain(states, blocks) || []).map((b) => [b.effectId, knobsSaid(b)]))
+    const stateOf = new Map(states.map((b) => [b.effectId, b]))
+    return grid.cells
+      .filter((c) => !c.isShunt)
+      .sort((a, b) => a.col - b.col || a.row - b.row)
+      .map((c) => {
+        const known = named.get(c.effectId) || blocks.find((b) => b.page === c.effectId && b.slug)
+        const st = stateOf.get(c.effectId)
+        const base = named.get(c.effectId) || {
+          slug: known?.slug || '',
+          name: known?.name || `eid_${c.effectId}`,
+          effectId: c.effectId,
+          bypassed: typeof st?.bypassed === 'boolean' ? st.bypassed : null,
+          channel: st?.channel || null
+        }
+        const placed = { ...base, row: c.row, col: c.col, fromRows: [...c.fromRows] }
+        return placed.slug === 'looper' ? { ...placed, noControls: true } : placed
+      })
   }
 
   /* A block id a cell may be sent: 0 for empty, a block this unit's own list names, or a shunt (put back by an Undo). */
@@ -5487,10 +5756,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* The chain read as a grid and changed from here, only where it is open to this account (chainOn): his alone so far. Nobody else is ever answered, and a wire made without `chain` answers these as it always did, "not over Bluetooth". */
     if (chainOn()) {
       if (method === 'GET' && path === '/blocks') return editRoute(async () => (am4 ? AM4_PALETTE.map((b) => ({ ...b })) : gen3Palette()))
-      if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid(opts?.onProgress)))
+      if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid(opts?.onProgress, opts?.kept === true && chainEditorOn() ? PLACED_FRESH_MS : STRUCTURE_FRESH_MS)))
       if (method === 'PUT' && path === '/preset/grid/cell') return editRoute(() => (am4 ? am4PlaceSlot(body) : gen3PlaceCell(body)))
       if (method === 'POST' && path === '/preset/grid/cable' && !am4) return editRoute(() => gen3Cable(body))
     }
+    /* The chain with every block's place, for the chain editor, only when the request says it is Edit's and wants them, and the editor is open to this account (chainEditorOn). An AM4's own read has its slots already. */
+    if (!am4 && method === 'GET' && path === '/preset/blocks' && opts?.placed === true && opts?.editing === true && chainEditorOn()) return editRoute(() => gen3PlacedBlocks(opts.onProgress))
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect
       if (path === '/preset') return am4 ? am4Preset : gen3Preset
@@ -5511,6 +5782,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         if (part.length === 3 && part[2] === 'scenes') return async () => ({ number: n, names: await gen3SceneNames(n) })
       }
       return null
+    }
+    /* The preset and its scenes named (lib/bleNames), only from Edit and only where naming is open to this account (namesOn). */
+    if (method === 'POST' && opts?.editing === true && namesOn()) {
+      if (path === '/preset/name') return editRoute(() => writePresetName(body?.name))
+      if (path === '/scene/name') return editRoute(() => writeSceneName(body?.index, body?.name))
     }
     if (method === 'POST') {
       if (path === '/preset/select') return () => (am4 ? am4SelectPreset(body?.number) : gen3SelectPreset(body?.number))
@@ -6187,6 +6463,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      */
     /** Save the unit's edit buffer over the preset it is on (lib/bleSave): see storePreset, above. */
     storePreset,
+    /** Whether the chain has been read as a grid since the last scene or preset change: what a place or a cable is held to (chainSeen). The chain editor reads the grid first where it has not (lib/device chainReadFirst). */
+    chainRead: () => gridSeenAt !== null && gridSeenAt === moves,
     forgetSceneNames() {
       sceneCache = null
       am4Names.clear()

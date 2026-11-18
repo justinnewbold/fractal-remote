@@ -654,7 +654,8 @@ export default function Stage({
    * what will bring up the controls." So it is one more tile, last in the
    * chain where the unit puts it, and the fit counts it like any other.
    */
-  const looperHere = findLooper(allBlocks)
+  /* Never one whose buttons cannot be sent from here (`noControls`: the chain editor's read over Bluetooth, bleWire gen3PlacedBlocks; lib/chainOnWire withControls is the same rule). */
+  const looperHere = findLooper((allBlocks || []).filter((b) => b?.noControls !== true))
   const looperTile = !chainNow.elsewhere && !!looperHere
   /* Its colour, asked once: the look's, or the player's own (Tile `picked`). */
   const looperHue = blockColor('looper')

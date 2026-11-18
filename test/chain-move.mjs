@@ -502,7 +502,7 @@ export function run(test) {
       assert.match(flat(code(read(file))), /setRunning\(true\) onWrite\?\.\(u\.kind === 'put' \? u\.back\.row : u\.row\)/, `${file}: the undo does not say which row it writes`)
     }
     /* Never over Bluetooth: the chain editor is not drawn there. */
-    assert.match(flat(read('mobile/src/screens/Edit.js')), /const chainTools = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/)
+    assert.match(flat(read('mobile/src/screens/Edit.js')), /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\)/)
   })
 
   test('chain move: the browser’s drag is the phone’s plan, and its tap-to-move and Replace say a row they leave cut', async () => {

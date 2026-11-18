@@ -1574,7 +1574,7 @@ function sourceTests(test) {
     assert.equal(flat(read('mobile/src/lib/useLiveKnobs.js')).trim(), "import { useBluetoothAdmin } from './bluetooth' import { LIVE_KNOBS_FOR_EVERYONE } from './features' export const useLiveKnobs = () => { const his = useBluetoothAdmin() return LIVE_KNOBS_FOR_EVERYONE || his }")
     const ble = flat(read('mobile/src/lib/bluetooth.js'))
     assert.match(ble, /export const liveKnobsOverBluetooth = \(\) => allUnits === true \|\| LIVE_KNOBS_FOR_EVERYONE/)
-    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\) \}\)/, 'the wire is not asked whether this account’s knobs follow the unit')
+    assert.match(ble, /chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: /, 'the wire is not asked whether this account’s knobs follow the unit')
     assert.equal((ble.match(/LIVE_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     /* The wire asks it, and on a gen-3 unit with Edit open only. */
     const wire = flat(read('mobile/src/lib/bleWire.js'))

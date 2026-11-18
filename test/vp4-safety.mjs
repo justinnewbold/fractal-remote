@@ -1706,8 +1706,8 @@ export function run(test) {
     assert.match(flat('src/lib/forgefx.js'), /if \(unitIsVp4\) res = vp4ScreenUnit\(res\)/)
     const edit = flat('mobile/src/screens/Edit.js')
     /* In More since 10 November 2026 (test/edit-more.mjs): its rows by chainTools, modsHere and renameHere, none of them on a VP4, and VP4_NO_EDITS said there instead. */
-    assert.match(edit, /const chainTools = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere const modsHere = chainTools && modifiersBind const renameHere = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the phone offers a VP4 Edit chain and Modifiers')
-    assert.match(edit, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\)\)\}<\/Note> : null\}/, 'the phone offers a VP4 Edit chain and Modifiers')
+    assert.match(edit, /const chainTools = chainEditorHere\(\{ vp4: vp4Bench\(\), viaBle, caps, elsewhere: chainNow\.elsewhere \}\) const modsHere = chainTools && !viaBle && modifiersBind const renameHere = !vp4Bench\(\) && \(!viaBle \|\| caps\?\.namesWritable === true\) && !chainNow\.elsewhere/, 'the phone offers a VP4 Edit chain and Modifiers')
+    assert.match(edit, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{noChainLine\(quickBuildHere\(\{ on: quickOn, caps \}\), \{ editor: caps\?\.chainEditor === true, tools: caps\?\.namesWritable === true \}\)\}<\/Note> : null\}/, 'the phone offers a VP4 Edit chain and Modifiers')
     assert.match(edit, /function RenameDoor\(\{ onClose \}\) \{ \/\*[^*]*\*\/ if \(vp4Bench\(\)\) return null/, 'the phone offers to rename on a VP4')
     const app = flat('src/App.jsx')
     assert.equal((app.match(/\{vp4Edit \? \( <p className="hint">\{VP4_NO_EDITS\}<\/p> \) : \(/g) || []).length, 2, 'the browser offers a VP4 its chain editor or modifiers')
