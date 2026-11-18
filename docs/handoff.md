@@ -38,6 +38,14 @@ Apple approved 2.0.0 the same day and he said "Enable the 5 new Bluetooth
 items to all accounts, not just mine": all five switches are TRUE since
 2.0.8, with two What's new lines. Still none seen on a unit.
 
+## NAM on an AM4 (18 November 2026)
+
+His AM4 on the 3.00 beta said the block's code: 0xD1 (209). Since 2.0.9 it
+is named NAM on Play over Bluetooth with on/off and channels, his account
+only (`AM4_NAM_FOR_EVERYONE`, false). Nothing has been sent to it on a unit
+yet. Next: the same through the computer (ForgeFX), knobs, captures (needs
+a MIDI Monitor recording of AM4-Edit loading one). CLAUDE.md has it.
+
 ## Shipped (all merged to main unless it says open)
 
 - #934 (2.0.0): release day. The five waiting patches into main, the

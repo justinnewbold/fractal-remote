@@ -1116,6 +1116,7 @@ async function onTheLine(kind, options = {}) {
       modifiers: options.modifiers,
       cabs: options.cabs,
       footswitches: options.footswitches,
+      am4Nam: options.am4Nam,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -3988,6 +3989,59 @@ export function run(test) {
     const plain = await onTheLine('am4')
     await plain.get('/preset/blocks')
     assert.ok(!plain.logs.some((l) => /no name for yet on the AM4/.test(l)))
+  })
+
+  test('the AM4’s NAM Player block (0xD1, firmware 3.00) is named, switched and has its channel changed where it is open, and is a number asked nothing where it is not', async () => {
+    const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
+    assert.deepEqual(sx.AM4_NEW_BLOCKS, { nam: 0xd1 })
+    assert.deepEqual(sx.am4Block(0xd1), { slug: 'nam', base: 0xd1, copy: 0, own: true })
+    assert.deepEqual(sx.am4Block(0xd2), { slug: 'nam', base: 0xd1, copy: 1, own: true })
+    assert.equal(sx.am4Block(0xd0), null)
+    assert.equal(sx.am4Block(0x3a).own, undefined)
+    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_FOR_EVERYONE, false)
+    /* Never a block a slot is given, and never one Edit has knobs for: neither is known. */
+    const chainLib = await import('../mobile/src/lib/am4-chain.js')
+    assert.ok(!chainLib.AM4_PALETTE.some((b) => b.page === 0xd1 || b.slug === 'nam'))
+    assert.equal(chainLib.buildAm4Slot(2, 0xd1), null)
+    assert.equal(sx.AM4_BLOCKS.nam, undefined)
+
+    const withNam = (t) => {
+      t.unit.state.slots = [0x3a, 0xd1, 0, 0]
+      t.unit.state.bypass.set(0xd1, true)
+      t.unit.state.channel.set(0xd1, 2)
+    }
+    /* Closed: as before 2.0.9, a number, in the log, asked nothing; a switch is refused with nothing sent. */
+    const shut = await onTheLine('am4')
+    withNam(shut)
+    assert.deepEqual((await shut.get('/preset/blocks'))[1], { slug: '0xd1', name: '0xd1', effectId: 0xd1, row: 1, col: 2, fromRows: [], bypassed: null, channel: null })
+    assert.ok(shut.logs.some((l) => /slot 2 holds 0xd1 \(209\)/.test(l)))
+    await assert.rejects(shut.post('/preset/blocks/209/bypass', { bypassed: false }), /There is no block 209 here/)
+    assert.ok(!shut.frames().some((f) => f[0] === 0xf0 && f[5] === 0x01 && f[6] === 0x51 && f[7] === 0x01), 'the NAM block was sent something for an account it is closed to')
+    /* And the way out refuses it by itself, whatever built the frame. */
+    const lib = await import(WIRE)
+    const went = []
+    const out = lib.am4Sender((b) => (went.push(b), true), () => {}, () => null, () => null, () => null, () => null, () => null, () => false)
+    assert.equal(out(sx.buildAm4Bypass(0xd1, false)), 'refused')
+    assert.equal(out(sx.buildAm4Bypass(0x3a, false)), 'sent')
+    assert.equal(went.length, 1)
+    assert.equal(lib.am4Sender((b) => (went.push(b), true), () => {}, () => null, () => null, () => null, () => null, () => null, () => true)(sx.buildAm4Bypass(0xd1, false)), 'sent')
+
+    /* Open: named, its on and off and channel read, and both written by the messages every AM4 block gets. */
+    let on = true
+    const t = await onTheLine('am4', { am4Nam: () => on })
+    withNam(t)
+    assert.deepEqual((await t.get('/preset/blocks'))[1], { slug: 'nam', name: 'nam', effectId: 0xd1, row: 1, col: 2, fromRows: [], bypassed: true, channel: 'C', knobs: false })
+    assert.ok(!t.logs.some((l) => /no name for yet/.test(l)))
+    await t.post('/preset/blocks/209/bypass', { bypassed: false })
+    assert.ok(sameFrame(t.frames().at(-1), sx.buildAm4Bypass(0xd1, false)))
+    assert.equal(t.unit.state.bypass.get(0xd1), false)
+    await t.post('/preset/blocks/209/channel', { channel: 'B' })
+    assert.equal(t.unit.state.channel.get(0xd1), 1)
+    assert.equal(t.unit.state.frozen, false)
+    /* Asked at every request: closed again, it is refused again. */
+    on = false
+    await assert.rejects(t.post('/preset/blocks/209/bypass', { bypassed: true }), /There is no block 209 here/)
+    assert.equal(t.unit.state.bypass.get(0xd1), false)
   })
 
   /*
@@ -16096,8 +16150,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -22290,7 +22344,7 @@ export function run(test) {
     assert.match(b, /export const looperOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| LOOPER_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /export const unitClickOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /const readNoClick = \(\) => readOn\(\) && !unitClickOverBluetooth\(\)/)
-    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\) \}\)/)
+    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\) \}\)/)
     /* The five: the switch in the volume pop-up, Settings → Metronome, the rules' own hook, and the app telling a unit that has just arrived. */
     assert.match(src('mobile/src/components/MetronomeSwitch.js'), /const bluetooth = useBluetoothNoClick\(\)/)
     assert.doesNotMatch(src('mobile/src/components/MetronomeSwitch.js'), /useBluetoothOn/)

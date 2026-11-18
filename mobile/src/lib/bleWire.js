@@ -579,9 +579,14 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null, newBlocks = () => false) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
+    /* A block a newer firmware brought (fractal-sysex AM4_NEW_BLOCKS: the NAM Player) is sent nothing for an account it is not open to, whatever the lists below say. */
+    if (sysex && bytes.length >= 18 && bytes[5] === FN.PARAM && am4Block(decode14(bytes[6], bytes[7]))?.own && newBlocks() !== true) {
+      log(`refused to send the AM4 ${toHex(bytes)}: that block is not open to this account yet`)
+      return 'refused'
+    }
     /*
      * A save (lib/bleSave) goes only as the one save being sent, over the location the AM4 has just said it is on (`saving`): never on the lists below, which know no save.
      * And a block put in a slot (lib/am4-chain) only as the one slot write the wire is sending at this moment (`slotting`), one of the four slots and a block the AM4 itself names: on neither list, and never while nothing of the chain's is going.
@@ -770,7 +775,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.footswitches]  whether the Footswitches page's reads are answered from this device (lib/gen3-tools; lib/features FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); only a unit whose switches the computer reads live (an FM3)
  * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -863,6 +868,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const tools = am4 ? null : GEN3_TOOLS[unit] || null
   const modsOn = () => !!tools?.mod && editOn() && typeof modifiers === 'function' && modifiers() === true
   const cabOn = () => !!tools?.cab && editOn() && typeof cabs === 'function' && cabs() === true
+  /* The AM4's NAM Player block (fractal-sysex AM4_NEW_BLOCKS), named and switched only for an account it is open to (lib/features AM4_NAM_FOR_EVERYONE); asked at every request and every send. */
+  const am4NamOn = () => typeof am4Nam === 'function' && am4Nam() === true
+  /* The block at this code as this account's AM4 knows it: one a newer firmware brought only where it is open. */
+  const am4Known = (code) => {
+    const b = am4Block(code)
+    return b && (!b.own || am4NamOn()) ? b : null
+  }
   const fcOn = () => tools?.fc?.liveState === true && typeof footswitches === 'function' && footswitches() === true
   /* The unit's setup blocks: a modifier's slot, the Foot Controller. Nothing is written to either but a modifier's three binding fields, and that only as the one in hand. */
   const modSlot = (eid) => !!tools?.mod && Number.isInteger(eid) && eid >= tools.mod.effectId && eid < tools.mod.effectId + tools.mod.slotCount
@@ -975,7 +987,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null))
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn())
     : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
 
   const handlers = new Set()
@@ -2643,7 +2655,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return n
   }
   const blockNumber = (eid) => {
-    if (!Number.isInteger(eid) || eid < 1 || eid > 0x3fff || (am4 && !am4Block(eid))) throw badInput(`There is no block ${eid} here.`)
+    if (!Number.isInteger(eid) || eid < 1 || eid > 0x3fff || (am4 && !am4Known(eid))) throw badInput(`There is no block ${eid} here.`)
     return eid
   }
 
@@ -3878,7 +3890,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     for (let i = 0; i < s.slots.length; i++) {
       const code = s.slots[i]
       if (!code) continue
-      const block = am4Block(code)
+      const block = am4Known(code)
       if (!block) {
         const name = `0x${code.toString(16)}`
         /*
@@ -3902,7 +3914,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         col: i + 1,
         fromRows: [],
         bypassed: typeof off === 'boolean' ? off : null,
-        channel: Number.isInteger(ch) ? channelLetter(ch) : null
+        channel: Number.isInteger(ch) ? channelLetter(ch) : null,
+        /* A block Edit has no knobs for (a newer firmware's, fractal-sysex AM4_NEW_BLOCKS): Edit opens it on its on and off alone, as it does a gen-3 unit's (knobsSaid). */
+        ...(block.own ? { knobs: false } : {})
       })
     }
     const line = strangers.join(', ')
@@ -4685,7 +4699,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     })
   }
 
-  const am4Named = (code) => AM4_PALETTE.find((b) => b.page === code)?.name || am4Block(code)?.slug || `0x${Number(code).toString(16)}`
+  const am4Named = (code) => AM4_PALETTE.find((b) => b.page === code)?.name || am4Known(code)?.slug || `0x${Number(code).toString(16)}`
   /* The AM4's four slots as it has just said them, read again where one answer is not yet believed (believeSlots). */
   /*
    * The same answer says WHICH PRESET they are (its location), and that is
@@ -6681,7 +6695,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* The AM4, step by step: reads from the list, and four writes that each put things back. */
   const slotWords = (codes) =>
-    codes ? codes.map((c) => (c ? am4Block(c)?.slug || `0x${c.toString(16)}` : 'empty')).join(', ') : 'not taken from an answer that did not hold together'
+    codes ? codes.map((c) => (c ? am4Known(c)?.slug || `0x${c.toString(16)}` : 'empty')).join(', ') : 'not taken from an answer that did not hold together'
   const AM4_CHECKS = {
     structure: (row) =>
       row('Preset, name, scene and blocks', () => readStructure({ fresh: true }), (s) =>
@@ -6694,7 +6708,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const s = await row('Preset', () => readStructure({ fresh: true }), (v) => (v ? `slots ${slotWords(v.slots)}` : 'no answer'))
       if (!s) return
       for (const code of s.slots || []) {
-        const block = am4Block(code)
+        const block = am4Known(code)
         if (!block) continue
         await row(`${block.slug} on or off`, () => am4BypassNow(code), (v) => said(v, (off) => (off ? 'off' : 'on')))
         await row(`${block.slug} channel`, () => am4ChannelNow(code), (v) => said(v, (c) => CH[c]))
@@ -6731,9 +6745,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     'write-bypass': async (row) => {
       const s = await row('Preset', () => readStructure({ fresh: true }), (v) => (v ? `slots ${slotWords(v.slots)}` : 'no answer'))
       if (s && !s.slots) throw failure('The AM4’s answer came through damaged, so no block was switched. Run it again.', 502)
-      const code = s ? s.slots.find((c) => am4Block(c)) : undefined
+      const code = s ? s.slots.find((c) => am4Known(c)) : undefined
       if (!code) throw failure('There is no block to switch in this preset.', 409)
-      const slug = am4Block(code).slug
+      const slug = am4Known(code).slug
       const was = await row(`${slug} on or off`, () => am4BypassNow(code), (v) => said(v, (off) => (off ? 'off' : 'on')))
       if (typeof was !== 'boolean') throw failure(`The AM4 did not say whether the ${slug} is on.`, 504)
       await row(`${slug} ${was ? 'on' : 'off'}`, () => fire(buildAm4Bypass(code, !was), `the ${slug}`), sentWords)

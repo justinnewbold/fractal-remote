@@ -844,3 +844,21 @@ export const CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE = true
  * a unit; his call). Off, it is his account only again.
  */
 export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = true
+
+/**
+ * THE AM4'S NAM PLAYER BLOCK (firmware 3.00) named on Play over Bluetooth or
+ * a USB cable, with its on and off and its channels (lib/fractal-sysex
+ * AM4_NEW_BLOCKS, bleWire am4NamOn).
+ *
+ * "Fractal just announced NAM support for AM4, so please research that and
+ * let's get the support built in as well." (Justin, 18 November 2026.) His
+ * AM4 on the 3.00 beta said the block's code the same day: 0xD1 (209). Open,
+ * the wire asks that block for its on and off and its channel and writes
+ * them, by the messages every AM4 block gets; closed, it is drawn by its
+ * number and asked nothing, as before.
+ *
+ * His account first: NO MESSAGE HAS BEEN SENT TO THAT BLOCK ON A UNIT, and
+ * an AM4 froze once on a message it did not expect. It opens when he says
+ * so, with its What's new line.
+ */
+export const AM4_NAM_FOR_EVERYONE = false
