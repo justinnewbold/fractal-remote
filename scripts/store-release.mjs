@@ -21,7 +21,7 @@
  *   node scripts/store-release.mjs 2.0.0           says what it would do
  *   node scripts/store-release.mjs 2.0.0 --apply   does it, then reads it back
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { APPLE } from '../shared/stores.mjs'
 import { token } from './store-text.mjs'
@@ -82,6 +82,10 @@ async function main() {
   const apply = process.argv.includes('--apply')
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('which version? e.g. 2.0.0')
   const plan = JSON.parse(readFileSync(new URL(`../store/app-store/${version}.json`, import.meta.url), 'utf8'))
+  const wholeFile = new URL(`../store/app-store/${version}-description.txt`, import.meta.url)
+  const whole = existsSync(wholeFile) ? readFileSync(wholeFile, 'utf8').trim() : ''
+  if ([...whole].length > 4000) throw new Error(`the Description is ${[...whole].length} characters; App Store Connect takes 4000`)
+  if (/VP4/i.test(whole)) throw new Error('a VP4 in a text for Apple')
   const { ASC_KEY_ID: keyId, ASC_ISSUER_ID: issuerId, ASC_KEY_PATH: keyPath } = process.env
   if (!keyId || !issuerId || !keyPath) throw new Error('ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH are all needed')
   const jwt = token({ keyId, issuerId, p8: readFileSync(keyPath, 'utf8') })
@@ -156,7 +160,12 @@ async function main() {
     const a = locale.attributes
     let description = a.description ?? ''
     const said = []
-    for (const pair of plan.description ?? []) {
+    /* A whole Description of his own choosing (store/app-store/<version>-description.txt) goes in as it is, in place of the sentence swaps. */
+    if (whole) {
+      said.push(description === whole ? 'the whole text, already there' : `the whole text, ${[...whole].length} characters`)
+      description = whole
+    }
+    for (const pair of whole ? [] : plan.description ?? []) {
       const r = swap(description, pair)
       description = r.text
       said.push(r.did)

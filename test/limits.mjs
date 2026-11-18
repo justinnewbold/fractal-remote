@@ -3115,6 +3115,21 @@ export function run(test) {
     assert.match(wf, /if: \$\{\{ inputs\.release != '' && !inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-release\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\}/, 'a new version’s texts are written without Write it')
   })
 
+  test('the 2.0.0 Description he chose fits Apple’s box, keeps the independence sentence word for word, and names no VP4', async () => {
+    /* "OK, put the new description into App Store connect" (Justin, 17 November 2026). */
+    const { NOT_AFFILIATED } = await import('../shared/affiliation.mjs')
+    const text = read('store/app-store/2.0.0-description.txt').trim()
+    assert.ok([...text].length <= 4000, 'the Description is over Apple’s 4000')
+    assert.ok(text.includes(NOT_AFFILIATED), 'the independence sentence is not there word for word')
+    assert.doesNotMatch(text, /VP4|\bbeta\b|\bofficial|certified|approved|\bsoon\b|\btried\b/i)
+    /* Three ways, Bluetooth first; the cable never on an FM3; TONE3000 only on the Axe-Fx III and named as somebody else's. */
+    assert.ok(text.indexOf('• Bluetooth:') < text.indexOf('• USB cable:') && text.indexOf('• USB cable:') < text.indexOf('• Computer:'))
+    assert.match(text, /• USB cable: plug an AM4, FM9 or Axe-Fx III straight into your iPhone or iPad\./)
+    assert.match(text, /NAM AND TONE3000 ON THE AXE-FX III\n[^\n]*TONE3000 is a separate service with its own free account\./)
+    assert.doesNotMatch(text, /NO COMPUTER\n/, 'a heading says no computer over what works on every connection')
+    assert.match(read('scripts/store-release.mjs'), /if \(\[\.\.\.whole\]\.length > 4000\) throw/)
+  })
+
   test('App Store screenshots are added after the ones there, in Apple’s sizes, and nothing is taken away or sent for review', async () => {
     const { shotsFor, DEVICES, MOST } = await import('../scripts/store-shots.mjs')
     const mine = shotsFor('2.0.0')
