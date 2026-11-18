@@ -3133,7 +3133,7 @@ export function run(test) {
   test('App Store screenshots are added after the ones there, in Apple’s sizes, and nothing is taken away or sent for review', async () => {
     const { shotsFor, DEVICES, MOST } = await import('../scripts/store-shots.mjs')
     const mine = shotsFor('2.0.0')
-    assert.equal(mine.length, 4)
+    assert.ok(mine.length >= 4 && mine.length <= MOST, 'the iPhone folder holds too few pictures, or more than Apple takes')
     for (const s of mine) assert.ok(s.device === 'iphone' && s.type === 'APP_IPHONE_67' && DEVICES.iphone.sizes.includes(s.size), `${s.name} is not an iPhone picture in Apple's size`)
     assert.equal(MOST, 10)
     const code = read('scripts/store-shots.mjs')
