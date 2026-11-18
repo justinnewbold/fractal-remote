@@ -35,6 +35,11 @@ on:
         type: boolean
         default: false
 
+      clear_iphone:
+        description: With Screenshots, first remove every iPhone picture on that version (the iPad's and the watch's stay). Only when Justin has asked for a whole new set
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -89,7 +94,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           RELEASE: ${{ inputs.release }}
-        run: node scripts/store-shots.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }}
+        run: node scripts/store-shots.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }} ${{ inputs.clear_iphone && '--clear-iphone' || '' }}
 
       - name: The key is gone
         if: always()

@@ -6,7 +6,9 @@
  * store/app-store/screenshots/<version>/<device>/ and sent in the files'
  * name order. Added AFTER the ones already there, never in their place, and
  * only to a version that can still be edited. It never sends a version for
- * review.
+ * review. One thing takes pictures away, and only when asked for by name:
+ * --clear-iphone empties the iPhone's row first (the iPad's and the watch's
+ * are never touched), for when he wants a whole new set.
  *
  *   node scripts/store-shots.mjs 2.0.0           what is there, and what would be added
  *   node scripts/store-shots.mjs 2.0.0 --apply   adds them, then reads the set back
@@ -48,6 +50,8 @@ export function shotsFor(version, root = fileURLToPath(new URL('../store/app-sto
 async function main() {
   const version = process.argv[2]
   const apply = process.argv.includes('--apply')
+  /* "Just remove all of them and I'll give you all the new screenshots I want" (Justin, 17 November 2026): the iPhone's row only, on his word, each time. */
+  const clear = process.argv.includes('--clear-iphone')
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('which version? e.g. 2.0.0')
   const shots = shotsFor(version)
   const { ASC_KEY_ID: keyId, ASC_ISSUER_ID: issuerId, ASC_KEY_PATH: keyPath } = process.env
@@ -95,6 +99,18 @@ async function main() {
   let sets = await setsNow()
   console.log(`Version ${version} (${state}), ${locale.attributes.locale}, now:`)
   show(sets)
+
+  if (clear) {
+    const set = sets.find((s) => s.type === DEVICES.iphone.type)
+    console.log(`\n${DEVICES.iphone.type}: ${apply ? 'removing' : 'would remove'} all ${set?.shots.length ?? 0} picture(s) there now. The iPad's and the watch's are left alone.`)
+    if (apply && set) {
+      for (const p of set.shots) {
+        await asc(`/v1/appScreenshots/${p.id}`, { method: 'DELETE' })
+        console.log(`  removed ${p.attributes.fileName}`)
+      }
+      set.shots = []
+    } else if (set) set.shots = []
+  }
 
   for (const type of new Set(shots.map((s) => s.type))) {
     const mineHere = shots.filter((s) => s.type === type)
