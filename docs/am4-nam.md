@@ -38,20 +38,31 @@ mobile/src/lib/nam-install.js rebuilds all 130 recorded messages byte for
 byte. So the phone's packer and upload builder need nothing new for an AM4
 but the model byte and the "transfer under way" write.
 
-## The list of slots
+## The list of slots (worked out the same evening)
 
-After the upload AM4-Edit asked 129 questions, `01 | 0, 0, action 0x45 |
-the slot as a 32-bit number` (0 to 128), each answered with 327 bytes.
-**129 slots**, then, where the III has 257. The answers' packing is NOT
-read yet: the III's unpacking gives nothing sensible on them. That is the
-next thing to work out (the name loaded into slot 1 is known, so its
-answer is the key).
+After the upload AM4-Edit asked 129 questions: `01 | 0, 0, action 0x45,
+hdr4 4 | the slot`, the slot a 32-bit number packed eight bits into seven,
+high bit first (slot n is `n>>1, (n&1)<<6, 0, 0, 0`). Each answer is 327
+bytes: the same header, `hdr4` 272, then 272 bytes packed the same way,
+which are **the III's slot head exactly** (the text lines, the hash, the
+four numbers; `namHead` reads them). An empty slot's name is "<EMPTY>".
+
+- Slot 0 answered "Orange Amp…", slot 1 the same, 2 to 128 "<EMPTY>".
+- **Slots count from 0, as on the III.** Before the upload both NAM blocks
+  read (setting 10, action 0x0D) as slot 0, "Orange Amp…": he had loaded
+  that capture once already, so AM4-Edit took the first EMPTY slot, 1.
+  The 0x54 message named slot 1 and the pick wrote 1.0.
+- 129 answers, where the III has 257: taken as 128 slots (0 to 127) and
+  one more, as the III's 256 and one more. Index 128 read "<EMPTY>".
 
 ## Pointing a block at a capture
 
-`01 | block 0xD2, setting 0x0A, action 1 | 1.0`: NAM 2 pointed at slot 1.
-The answer carries text (the capture's name, packed). On the III it is
-setting 0; on the AM4 it is setting **10**.
+`01 | block 0xD2, setting 0x0A, action 1, hdr4 4 | 1.0` (the AM4's own
+float packing): NAM 2 pointed at slot 1. The 62-byte answer unpacks to the
+slot as a 16-bit number (then `80 3F`), four more bytes, and the
+capture's name. Reading it back is the same block and setting with action
+0x0D: the slot, and the name. On the III it is setting 0; on the AM4 it
+is setting **10**.
 
 Then the preset was saved (`action 0x1B`, the save the phone already has).
 
@@ -67,7 +78,7 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
 
 - 2.0.9: the block is named and switched on Play over Bluetooth, his
   account only (`AM4_NAM_FOR_EVERYONE`).
-- Next: the capture list (unpack the 327-byte answers), the pick (setting
+- Next: the capture list (action 0x45, read as above), the pick (setting
   10), and the sender (the III's, at model 0x15, with setting 0x5C round
   it). Each frame held at the AM4's way out to the one job in hand, as on
   the III: an AM4 froze once on a message it did not expect.

@@ -2841,8 +2841,9 @@ over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
   recording is not in the repository). The same record, word for word in
   its layout, and the phone's own `namUploadFrames(0x15, 1, words)`
   rebuilds all 130 recorded messages byte for byte. Round it the AM4
-  writes setting 0x5C of block 1 (the III: setting 114). 129 slots, asked
-  with action 0x45 (their 327-byte answers are NOT unpacked yet). A block
+  writes setting 0x5C of block 1 (the III: setting 114). Slots 0 to 127 and one more, asked
+  with action 0x45; each 327-byte answer is the III's slot head, packed the
+  same way. A block
   is pointed at a slot by writing its setting 10 (the III: setting 0). A
   second NAM block IS 0xD2: AM4-Edit read it.
 - *Then, in order:* the same through the computer (ForgeFX's list, a new
