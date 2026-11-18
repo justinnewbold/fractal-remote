@@ -2846,6 +2846,22 @@ over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
   same way. A block
   is pointed at a slot by writing its setting 10 (the III: setting 0). A
   second NAM block IS 0xD2: AM4-Edit read it.
+- *Since 2.1.0 the Bluetooth wire answers the capture tools' four routes
+  for an AM4, HIS ACCOUNT ONLY* (GET /nam/empty, GET /nam/heads/a/n, POST
+  /nam/slots/n, POST /nam/blocks/id/slot): one piece of code for an Axe-Fx
+  III and an AM4, with each unit's own four messages handed in (bleWire
+  `NX`; lib/am4-nam.js for the AM4's, held to the recording's own frames by
+  test/am4-nam.mjs). Open only where `AM4_NAM_FOR_EVERYONE` or his account
+  AND the captures' own gate say so (`captureOn`). Every frame of a capture
+  job's shape is held at the AM4's way out to the one job in hand
+  (`am4NamShaped`, `am4NamAllowed`), and nothing of them is on the AM4's
+  allow-list. The pretend AM4 in the tests answers them only as "firmware
+  3.00" (`nam: true`); without it, it freezes on each, as on any message it
+  does not know. NO SCREEN REACHES THEM YET: the TONE3000 page, its words
+  and the door on a held block are written for the III's two block ids and
+  say "Axe-Fx III". That is the next piece, with the capture picker for an
+  AM4's NAM block (which has no knobs in Edit, so no place for the button
+  yet). NOTHING OF IT HAS BEEN SENT TO AN AM4.
 - *Then, in order:* the same through the computer (ForgeFX's list, a new
   pin and a computer release);
   its knobs (the AM4's settings are not the III's by number: read off the

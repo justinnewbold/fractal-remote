@@ -926,6 +926,79 @@ function fakeAm4(sx, o) {
       const ack = [...b.slice(0, 12), 0, 0, 0, 0]
       return say([...ack, sx.checksum(ack), 0xf7], 3)
     }
+    /*
+     * FIRMWARE 3.00's NAM CAPTURES (`nam: true`), as his AM4 answered
+     * AM4-Edit (docs/am4-nam.md): the slots' heads, "a transfer is under
+     * way", an upload's 130 messages each answered, and a NAM block's
+     * capture setting. A firmware without them (the default) freezes on
+     * every one, below, as it would on any message it does not know.
+     */
+    if (opt.nam && sx.isFractal(b) && b[4] === 0x15) {
+      const answer = (fn) => say(close([0xf0, 0x00, 0x01, 0x74, 0x15, 0x64, fn, 0x00]), 2)
+      state.captures ||= new Map()
+      state.namPicked ||= new Map()
+      state.namBusy ||= []
+      const headOf = (slot) => {
+        const raw = new Array(272).fill(0)
+        const c = state.captures.get(slot)
+        ;[...(c ? c.name : '<EMPTY>')].forEach((ch, i) => (raw[i] = ch.charCodeAt(0)))
+        return raw
+      }
+      if (b[5] === 0x54) {
+        state.upload = { slot: b[7] | (b[8] << 7), words: [], chunks: 0 }
+        return opt.namSilentAt === 0 ? undefined : answer(0x54)
+      }
+      if (b[5] === 0x55) {
+        if (!state.upload) return
+        state.upload.chunks++
+        const body = b.slice(8, -2)
+        for (let i = 0; i + 5 <= body.length; i += 5) state.upload.words.push(sx.fromSeptets32(body, i))
+        return opt.namSilentAt === state.upload.chunks ? undefined : answer(0x55)
+      }
+      if (b[5] === 0x56) {
+        const up = state.upload
+        state.upload = null
+        if (up && up.words.length === 16384 && !opt.namDrops) {
+          let name = ''
+          for (let i = 0; i < 31; i++) {
+            const ch = (up.words[i >> 2] >>> ((i & 3) * 8)) & 0xff
+            if (!ch) break
+            name += String.fromCharCode(ch)
+          }
+          state.captures.set(up.slot, { name, words: up.words })
+        }
+        return answer(0x56)
+      }
+      if (b[5] === 0x01 && b.length >= 18) {
+        const low = d14(b[6], b[7])
+        const high = d14(b[8], b[9])
+        const act = d14(b[10], b[11])
+        if (act === 0x45) {
+          const slot = sx.unpackMsb(b.slice(16, 21), 4)[0]
+          ;(state.namAsked ||= []).push(slot)
+          if (opt.namQuietSlots?.includes(slot)) return
+          return say(close([...head(b), 0, 0, 0x10, 0x02, ...sx.packMsb(headOf(slot))]))
+        }
+        if (low === 1 && high === 0x5c && act === 1) {
+          state.namBusy.push(sx.am4ReadFloat(b, 16))
+          return say(close([...head(b), 0, 0, 0x28, 0, ...b.slice(16, 21), ...new Array(41).fill(0)]))
+        }
+        if ((low === 0xd1 || low === 0xd2) && high === 0x0a && (act === 1 || act === 0x0d)) {
+          if (!state.slots.includes(low)) {
+            state.frozen = true
+            state.unknown.push(b)
+            return
+          }
+          if (act === 1) state.namPicked.set(low, sx.am4ReadFloat(b, 16))
+          const slot = state.namPicked.get(low) ?? 0
+          const raw = new Array(40).fill(0)
+          raw[0] = slot & 0xff
+          raw[1] = slot >> 8
+          ;[...(state.captures.get(slot)?.name ?? '<EMPTY>')].forEach((ch, i) => (raw[8 + i] = ch.charCodeAt(0)))
+          return say(close([...head(b), 0, 0, 0x28, 0, ...sx.packMsb(raw)]))
+        }
+      }
+    }
     if (!sx.isAllowedAm4(b) && !editFrame(b)) {
       /* What the real one did with a message it did not expect: stopped answering. */
       state.frozen = true
@@ -4044,6 +4117,72 @@ export function run(test) {
     assert.equal(t.unit.state.bypass.get(0xd1), false)
   })
 
+  test('an AM4’s captures (firmware 3.00): the list, the first empty slot, a capture sent as AM4-Edit sends one, and a NAM block pointed at it', async () => {
+    const nam = await import('../mobile/src/lib/nam-install.js')
+    const a = await import('../mobile/src/lib/am4-nam.js')
+    const t = await onTheLine('am4', { nam: true, am4Nam: () => true, captures: () => true })
+    t.unit.state.slots = [0x3a, 0xd1, 0, 0]
+    t.unit.state.bypass.set(0xd1, false)
+    t.unit.state.channel.set(0xd1, 0)
+    t.unit.state.captures = new Map([[0, { name: 'Already Here' }]])
+    const asks = (path, o = {}) => drive(t.clock, t.wire.request(path, { capturing: true, ...o }))
+    const shaped = () => t.frames().filter((f) => a.am4NamShaped(f))
+    /* The list, in pieces, as the III's. */
+    const piece = await asks('/nam/heads/0/3')
+    assert.deepEqual(piece.heads.map((h) => [h.slot, h.name, h.empty]), [[0, 'Already Here', false], [1, '<EMPTY>', true], [2, '<EMPTY>', true]])
+    assert.deepEqual(shaped(), [a.am4NamSlotQuery(0), a.am4NamSlotQuery(1), a.am4NamSlotQuery(2)])
+    await assert.rejects(asks('/nam/heads/129/1'), /no such capture slot/)
+    /* The first empty slot. */
+    const found = await asks('/nam/empty')
+    assert.equal(found.slot, 1)
+    /* A capture, sent: "under way", the 130 messages each answered, "over", and the slot read back. */
+    t.sent.length = 0
+    const rec = nam.namRecord(A2('Sent To An AM4', 3))
+    const took = await asks('/nam/slots/1', { method: 'POST', body: { words: rec.words } })
+    assert.equal(took.slot, 1)
+    assert.equal(took.name, 'Sent To An AM4')
+    const went = shaped()
+    const upload = nam.namUploadFrames(0x15, 1, rec.words)
+    assert.deepEqual(went.slice(0, 2), [a.am4NamSlotQuery(1), a.am4NamBusyFrame(true)])
+    assert.deepEqual(went.slice(2, 132), upload)
+    assert.deepEqual(went[132], a.am4NamBusyFrame(false))
+    assert.deepEqual(went.slice(133), [a.am4NamSlotQuery(1)])
+    assert.deepEqual(t.unit.state.namBusy, [1, 0])
+    assert.equal(t.unit.state.captures.get(1).name, 'Sent To An AM4')
+    /* A slot in use is never written. */
+    await assert.rejects(asks('/nam/slots/0', { method: 'POST', body: { words: rec.words } }), /already holds “Already Here”/)
+    /* The NAM block pointed at it, and its answer believed. */
+    t.sent.length = 0
+    const picked = await asks('/nam/blocks/209/slot', { method: 'POST', body: { slot: 1 } })
+    assert.deepEqual(picked, { block: 0xd1, slot: 1, name: 'Sent To An AM4' })
+    assert.deepEqual(shaped(), [a.am4NamPickFrame(0xd1, 1)])
+    /* Not a block that is no NAM block, and not one that is not in the preset. */
+    await assert.rejects(asks('/nam/blocks/58/slot', { method: 'POST', body: { slot: 1 } }), /Only a NAM block/)
+    await assert.rejects(asks('/nam/blocks/210/slot', { method: 'POST', body: { slot: 1 } }), /isn’t in the preset/)
+    assert.equal(t.unit.state.frozen, false)
+    assert.deepEqual(t.unit.state.unknown, [])
+  })
+
+  test('an AM4’s captures are his account’s until the NAM switch says everyone: closed, every capture route is unsupported and not one byte goes', async () => {
+    const a = await import('../mobile/src/lib/am4-nam.js')
+    for (const options of [{ nam: true, captures: () => true }, { nam: true, am4Nam: () => true }, { nam: true, am4Nam: () => false, captures: () => true }]) {
+      const t = await onTheLine('am4', options)
+      t.sent.length = 0
+      for (const [path, o] of [['/nam/empty', {}], ['/nam/heads/0/8', {}], ['/nam/slots/1', { method: 'POST', body: { words: [] } }], ['/nam/blocks/209/slot', { method: 'POST', body: { slot: 1 } }]]) {
+        await assert.rejects(drive(t.clock, t.wire.request(path, { capturing: true, ...o })), (e) => e.unsupported === true, path)
+      }
+      assert.deepEqual(t.frames().filter((f) => a.am4NamShaped(f)), [])
+    }
+    /* And the way out refuses a capture frame with no job in hand, whoever built it. */
+    const lib = await import(WIRE)
+    const went = []
+    const out = lib.am4Sender((b) => (went.push(b), true), () => {}, () => null, () => null, () => null, () => null, () => null, () => true, () => null)
+    assert.equal(out(a.am4NamSlotQuery(0)), 'refused')
+    assert.equal(out(a.am4NamBusyFrame(true)), 'refused')
+    assert.equal(out(a.am4NamPickFrame(0xd1, 1)), 'refused')
+    assert.equal(went.length, 0)
+  })
+
   /*
    * The slot codes in the preset answer are the addresses the AM4 is asked
    * about and sent switches for. A byte lost on the adapter's MIDI side
@@ -6594,10 +6733,11 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './am4-nam.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js'])
     /* The chain's messages (test/gen3-grid.mjs): the frame helpers and nothing else, so they reach a unit only through the wire that builds them. */
     assert.deepEqual(imports(read('gen3-grid.js')), ['./fractal-sysex.mjs'], 'the grid’s messages import something')
     assert.deepEqual(imports(read('am4-chain.js')), ['./fractal-sysex.mjs'], 'the AM4’s slot message imports something')
+    assert.deepEqual(imports(read('am4-nam.js')).sort(), ['./fractal-sysex.mjs', './nam-install.js'], 'the AM4’s capture messages import something else')
     /* The developer's block reader (test/gen3-describe.mjs): the frame helpers and nothing else, so it reaches the unit only through the wire it is handed to. */
     assert.deepEqual(imports(read('gen3-describe.js')), ['./fractal-sysex.mjs'], 'the block reader imports something')
     assert.deepEqual(imports(read('own-echo.js')), [], 'Play’s settle waits import something')
