@@ -42,8 +42,9 @@ items to all accounts, not just mine": all five switches are TRUE since
 
 His AM4 on the 3.00 beta said the block's code: 0xD1 (209). Since 2.0.9 it
 is named NAM on Play over Bluetooth with on/off and channels, his account
-only (`AM4_NAM_FOR_EVERYONE`, false). Nothing has been sent to it on a unit
-yet. Next: the same through the computer (ForgeFX), knobs, captures (needs
+first, and with TONE3000 and the Capture button on a held block every
+account's since 2.1.3 (`AM4_NAM_FOR_EVERYONE`, true), after his AM4 kept a
+capture sent from the app. Next: the same through the computer (ForgeFX), knobs, captures (needs
 a MIDI Monitor recording of AM4-Edit loading one). CLAUDE.md has it.
 
 ## Shipped (all merged to main unless it says open)

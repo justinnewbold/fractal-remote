@@ -2784,7 +2784,31 @@ unit: read the log first.
   SysEx.
 
 **NAM on an AM4: asked for 18 November 2026. Named and switched on Play
-over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
+over Bluetooth, with TONE3000 and the Capture button on a held block. OPEN
+TO EVERY ACCOUNT SINCE 2.1.3 (18 November 2026; his account's from 2.0.9).
+Its knobs, and all of it through the computer, are not built.**
+
+> "It works. Go ahead and put it out to everybody.." (18 November 2026,
+> with his log: an AM4 on the 3.00 beta through a WIDI Jack, an iPhone,
+> app 2.1.2)
+
+- *OPEN SINCE 2.1.3, and what his log showed first.* `AM4_NAM_FOR_EVERYONE`
+  is true, with a What's new line. That one switch opens the name and the
+  on and off, and, through `captureOn`, the capture tools for an AM4 (the
+  TONE3000 door and the Capture button were already everybody's by their
+  own switches). The paragraphs below were written while it was his
+  account's and say so; read "HIS ACCOUNT ONLY" in them as "until 2.1.3".
+  SEEN ON HIS AM4: the block's channel set (block 209); hold NAM,
+  TONE3000, a search for an empty slot (two slots answered in 0.4 s, 003
+  empty); a capture sent over Bluetooth in 35.4 s, 130 messages, the
+  closing one answered in 660 ms, the slot read back by name, KEPT ON THE
+  FIRST TRY (name byte 0x60 with the file's hash); NAM 1 pointed at slot
+  003 and named back; Get. NOT IN THAT LOG: a pick from the Capture list,
+  the block switched off and on at 2.1.2, a second NAM block (0xD2), the
+  unit's USB cable, an Android phone. One AM4, one adapter, one capture.
+  If it has to be shut again, the switch goes back to false in an update
+  and it is his account's that day: tell him first. Google's 2.0.0 review
+  was not known to be over when it opened; Apple's was.
 
 > "Fractal just announced NAM support for AM4, so please research that and
 > let's get the support built in as well." (18 November 2026, the day Apple

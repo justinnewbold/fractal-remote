@@ -4071,7 +4071,8 @@ export function run(test) {
     assert.deepEqual(sx.am4Block(0xd2), { slug: 'nam', base: 0xd1, copy: 1, own: true })
     assert.equal(sx.am4Block(0xd0), null)
     assert.equal(sx.am4Block(0x3a).own, undefined)
-    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_FOR_EVERYONE, false)
+    /* Open to every account since 2.1.3, on his word after his AM4 kept a capture sent from the app. */
+    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_FOR_EVERYONE, true)
     /* Never a block a slot is given, and never one Edit has knobs for: neither is known. */
     const chainLib = await import('../mobile/src/lib/am4-chain.js')
     assert.ok(!chainLib.AM4_PALETTE.some((b) => b.page === 0xd1 || b.slug === 'nam'))
