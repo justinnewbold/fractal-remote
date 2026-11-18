@@ -150,7 +150,7 @@ export default function CapturePicker({ slot, choosing = null, disabled = false,
         ) : open ? (
           <View style={{ gap: space.sm }}>
             {library.offered ? <Tone3000Door n={library.n} onPress={browse} /> : null}
-            {came ? <NowPlayingCard line={came} /> : null}
+            {came ? <NowPlayingCard line={came} unit={library.unit} /> : null}
             {reading ? <Note>{reading}</Note> : null}
             {captures.fault && !captures.loading ? <Note tone="warn">{captures.fault}</Note> : null}
             <TextInput

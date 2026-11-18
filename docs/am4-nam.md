@@ -83,6 +83,7 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
   mobile/src/lib/am4-nam.js holding the AM4's own four messages. No screen
   reaches them yet.
 - 2.1.1: TONE3000 on a held AM4 NAM block, over its channels (the block has no knobs in the app yet), his account only. The page's words are the Axe-Fx III's with "AM4" put in (mobile/src/lib/captureUnit.js). Not built: a picker for the captures already on an AM4.
+- 2.1.2: that picker, as a Capture button under TONE3000 on the held block (components/HeldCapture). The wire answers which capture a block is on (GET /nam/blocks/<id>/slot, AM4-Edit's own read), and the AM4 has a list of its own, 128 slots.
 - Next: the screens (the TONE3000 page and its words by unit, the door on a
   held NAM block, a capture picker for a block with no knobs), then the
   same through the computer (ForgeFX), then the block's knobs.

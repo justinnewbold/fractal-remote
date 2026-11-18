@@ -842,6 +842,8 @@ export const namPickHere = (block, slot) => {
   if (capturesGoing > 0) return Promise.reject(Object.assign(new Error(CAPTURE_BEING_SENT), { status: 409 }))
   return captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } }, () => ({ method: 'POST', body: JSON.stringify({ slot }) }))
 }
+/** Which capture a NAM block is on now, asked of the unit: { block, slot, name }. An AM4's only (its wire answers it; an Axe-Fx III's comes with the block's own read). */
+export const namWhichHere = (block) => captureAsks(`/nam/blocks/${block}/slot`)
 /**
  * Some of the unit's capture slots' heads, in order from `from`, for the
  * picker in Edit (lib/captureList): { from, heads: [{ slot, name, by, make,

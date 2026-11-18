@@ -4159,8 +4159,19 @@ export function run(test) {
     /* Not a block that is no NAM block, and not one that is not in the preset. */
     await assert.rejects(asks('/nam/blocks/58/slot', { method: 'POST', body: { slot: 1 } }), /Only a NAM block/)
     await assert.rejects(asks('/nam/blocks/210/slot', { method: 'POST', body: { slot: 1 } }), /isn’t in the preset/)
+    /* Which capture the block is on, asked of the unit: AM4-Edit's own question and nothing else, for the button over a held block's channels. */
+    t.sent.length = 0
+    assert.deepEqual(await asks('/nam/blocks/209/slot'), { block: 0xd1, slot: 1, name: 'Sent To An AM4' })
+    assert.deepEqual(shaped(), [a.am4NamPickRead(0xd1)])
+    await assert.rejects(asks('/nam/blocks/58/slot'), /Only a NAM block/)
+    await assert.rejects(asks('/nam/blocks/210/slot'), /isn’t in the preset/)
     assert.equal(t.unit.state.frozen, false)
     assert.deepEqual(t.unit.state.unknown, [])
+    /* An Axe-Fx III is not asked it: which capture its block plays comes with the block's own read. */
+    const iii = await onTheLine('axefx3', { captures: () => true })
+    iii.sent.length = 0
+    await assert.rejects(drive(iii.clock, iii.wire.request('/nam/blocks/206/slot', { capturing: true })))
+    assert.deepEqual(iii.frames().filter((f) => nam.namShaped(f, 0x10)), [])
   })
 
   test('an AM4’s captures are his account’s until the NAM switch says everyone: closed, every capture route is unsupported and not one byte goes', async () => {

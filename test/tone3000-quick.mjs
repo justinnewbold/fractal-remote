@@ -264,7 +264,7 @@ export function run(test) {
     assert.match(picker, /const library = useTone3000Door\(block\)/)
     assert.match(edit, /<CapturePicker slot=\{capture\.slot\} choosing=\{capturing\} disabled=\{!!restoring \|\| capturing !== null \|\| rereading\} onPick=\{pickCapture\} block=\{block\} onChanged=\{captureChanged\} \/>/)
     /* Over the list ("they see the ones they've already downloaded but then they can also click tone 3000 from that"), and nothing where it is not offered. */
-    assert.match(picker, /<View style=\{\{ gap: space\.sm \}\}> \{library\.offered \? <Tone3000Door n=\{library\.n\} onPress=\{browse\} \/> : null\} \{came \? <NowPlayingCard line=\{came\} \/> : null\} \{reading \? <Note>\{reading\}<\/Note> : null\}/)
+    assert.match(picker, /<View style=\{\{ gap: space\.sm \}\}> \{library\.offered \? <Tone3000Door n=\{library\.n\} onPress=\{browse\} \/> : null\} \{came \? <NowPlayingCard line=\{came\} unit=\{library\.unit\} \/> : null\} \{reading \? <Note>\{reading\}<\/Note> : null\}/)
     assert.equal((picker.match(/<Tone3000Door /g) || []).length, 1)
     /* The page is in the SAME sheet, in the list's place, taller while it is up and starting at its own top; never where it is not offered. */
     assert.match(picker, /tall=\{browsing && library\.offered\} scrollKey=\{browsing && library\.offered \? 'library' : undefined\}/)

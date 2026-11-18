@@ -2870,10 +2870,21 @@ over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
   every sentence of the page is the Axe-Fx III's with the unit's name put
   in at the one place it is drawn (`forUnit`; the page's `u`), so there is
   one set of words. Developer → TONE3000 plays in the linked unit's own NAM
-  1 (`firstNamOf`, by the rig's name for the unit). NOT BUILT YET: the
-  capture picker for an AM4 (choosing among captures already on the unit),
-  which has no place in Edit while the block has no knobs there. NOT SEEN
-  ON AN AM4: the pop-up, a search for an empty slot, a send, a pick.
+  1 (`firstNamOf`, by the rig's name for the unit). NOT SEEN ON AN AM4:
+  the pop-up, a search for an empty slot, a send, a pick.
+- *Since 2.1.2 the Capture button is there too, HIS ACCOUNT ONLY*
+  (components/HeldCapture): under TONE3000 on a held AM4 NAM block, the
+  capture the block is on and the list of the AM4's captures to choose
+  from, the Axe-Fx III's own picker (components/CapturePicker). It is in
+  the pop-up because the block has no knobs in Edit to sit over. Which
+  capture is asked of the unit (the wire's GET /nam/blocks/<id>/slot,
+  AM4-Edit's own question, an AM4 only; lib/device `namWhichHere`), when
+  the pop-up opens and when the preset, scene or channel moves. The AM4's
+  list is its own, 128 slots, kept under `fractal.captures.am4`
+  (lib/captureListHere: the unit linked says which list is on show;
+  lib/captureList `listed`). A pick marks the preset changed. NOT SEEN ON
+  AN AM4, and the picker's sheet opens over the pop-up's sheet, which has
+  not been seen on a phone.
 - *Then, in order:* the same through the computer (ForgeFX's list, a new
   pin and a computer release);
   its knobs (the AM4's settings are not the III's by number: read off the
