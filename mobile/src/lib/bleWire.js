@@ -3866,18 +3866,29 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * is listed under its own number and asked nothing: the AM4 is never sent a
    * question about a block that is not on the list.
    */
+  /* The AM4 blocks this app has no name for, as last said in the log (am4Placed): said again only when they change. */
+  let am4StrangersSaid = ''
   async function am4Placed() {
     let s = await readStructure()
     /* Slots not believed yet (see believeSlots): asked once more, and believed if the two agree. */
     if (s && !s.slots) s = await readStructure({ fresh: true })
     if (!s || !s.slots) return null
     const out = []
+    const strangers = []
     for (let i = 0; i < s.slots.length; i++) {
       const code = s.slots[i]
       if (!code) continue
       const block = am4Block(code)
       if (!block) {
         const name = `0x${code.toString(16)}`
+        /*
+         * SAID IN THE LOG BY ITS NUMBER, once for each set of them on a
+         * connection: a block a newer firmware brought (the AM4's NAM Player,
+         * firmware 3.00) is in the unit's answer and in no log otherwise,
+         * and its number is the one thing needed to name it. Still asked
+         * nothing.
+         */
+        strangers.push(`slot ${i + 1} holds ${name} (${code})`)
         out.push({ slug: name, name, effectId: code, row: 1, col: i + 1, fromRows: [], bypassed: null, channel: null })
         continue
       }
@@ -3894,6 +3905,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         channel: Number.isInteger(ch) ? channelLetter(ch) : null
       })
     }
+    const line = strangers.join(', ')
+    if (line && line !== am4StrangersSaid) say(`blocks this app has no name for yet on the AM4, preset ${am4LocationCode(s.location)}: ${line}. Nothing was asked of them.`)
+    am4StrangersSaid = line
     return out
   }
 
