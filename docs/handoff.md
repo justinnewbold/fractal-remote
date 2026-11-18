@@ -34,6 +34,10 @@ each one. An AM4's volume button turned out not to exist through the
 computer either. They open when he says, and not into a review without his
 knowing an update reaches the reviewer's copy.
 
+Apple approved 2.0.0 the same day and he said "Enable the 5 new Bluetooth
+items to all accounts, not just mine": all five switches are TRUE since
+2.0.8, with two What's new lines. Still none seen on a unit.
+
 ## Shipped (all merged to main unless it says open)
 
 - #934 (2.0.0): release day. The five waiting patches into main, the

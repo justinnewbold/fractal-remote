@@ -746,8 +746,13 @@ export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = true
  * other account's Play over Bluetooth has no looper, as before. It opens
  * when he says so, with its What's new line, and never while a store review
  * is under way with notes that do not describe it.
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.8 (18 November 2026): "Enable the 5 new
+ * Bluetooth items to all accounts, not just mine" (Justin, the day they
+ * were built and the day Apple approved 2.0.0, before any of it had run on
+ * a unit; his call). Off, it is his account only again.
  */
-export const LOOPER_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const LOOPER_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * THE UNIT'S OWN METRONOME CLICK OVER BLUETOOTH OR A USB CABLE, on an FM3,
@@ -765,8 +770,13 @@ export const LOOPER_OVER_BLUETOOTH_FOR_EVERYONE = false
  * His account first: THE SWITCH HAS NOT BEEN WRITTEN THIS WAY ON A UNIT.
  * Off, it is his account only (lib/bluetooth unitClickOverBluetooth), and
  * every other account reads and sends what it did. Never an AM4.
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.8 (18 November 2026): "Enable the 5 new
+ * Bluetooth items to all accounts, not just mine" (Justin, the day they
+ * were built and the day Apple approved 2.0.0, before any of it had run on
+ * a unit; his call). Off, it is his account only again.
  */
-export const UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * MODIFIERS OVER BLUETOOTH OR A USB CABLE, on an FM3, FM9 or Axe-Fx III
@@ -783,8 +793,13 @@ export const UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE = false
  *
  * His account first: NO MODIFIER HAS BEEN ATTACHED OR READ THIS WAY ON A
  * UNIT. Off, it is his account only (lib/bluetooth modifiersOverBluetooth).
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.8 (18 November 2026): "Enable the 5 new
+ * Bluetooth items to all accounts, not just mine" (Justin, the day they
+ * were built and the day Apple approved 2.0.0, before any of it had run on
+ * a unit; his call). Off, it is his account only again.
  */
-export const MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * A CAB PICKED BY NAME OVER BLUETOOTH OR A USB CABLE, on an FM3, FM9 or
@@ -801,8 +816,13 @@ export const MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE = false
  *
  * His account first: NO CAB HAS BEEN PICKED THIS WAY ON A UNIT. Off, it is
  * his account only (lib/bluetooth cabPickerOverBluetooth).
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.8 (18 November 2026): "Enable the 5 new
+ * Bluetooth items to all accounts, not just mine" (Justin, the day they
+ * were built and the day Apple approved 2.0.0, before any of it had run on
+ * a unit; his call). Off, it is his account only again.
  */
-export const CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * THE FOOTSWITCHES PAGE OVER BLUETOOTH OR A USB CABLE, on an FM3 (the one
@@ -817,5 +837,10 @@ export const CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE = false
  *
  * His account first: NO SWITCH HAS BEEN READ THIS WAY ON A UNIT. Off, it is
  * his account only (lib/bluetooth footswitchesOverBluetooth).
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.8 (18 November 2026): "Enable the 5 new
+ * Bluetooth items to all accounts, not just mine" (Justin, the day they
+ * were built and the day Apple approved 2.0.0, before any of it had run on
+ * a unit; his call). Off, it is his account only again.
  */
-export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = true
