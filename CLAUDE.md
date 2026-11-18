@@ -2541,7 +2541,7 @@ main's updates reach). The 2.0.0 review notes as written on 17 November do
 not describe them; whether Apple's 2.0.0 had been sent for review by then
 was not known, and he was asked. If one has to be shut again, its switch
 goes back to false in an update: tell him first. The next pass's pieces
-(below) are his account first.
+(below) were his account first, and opened in 2.0.8.
 
 THE FIRST PASS, three switches:
 
@@ -2656,13 +2656,19 @@ that went before. THE PRETEND AM4 IN THE TESTS FREEZES ON ANY MESSAGE NOT
 ON ITS LIST, as the real one once did; the name message was added to what
 it knows, with the eighteen-byte answer the codec has from AM4-Edit.
 
-THE SECOND PASS, 2.0.6, THE SAME DAY, FIVE SWITCHES, ALL FALSE (his account
-only). "Yes the 2.0 version Apple app is already in review. Let's get the
-rest of the computer only items implemented for over Bluetooth." (18
+THE SECOND PASS, 2.0.6, THE SAME DAY, FIVE SWITCHES, ALL TRUE SINCE 2.0.8
+(every account). "Yes the 2.0 version Apple app is already in review. Let's
+get the rest of the computer only items implemented for over Bluetooth." (18
 November 2026.) So everything that was still the computer's is built for an
-FM3, FM9 and Axe-Fx III, and NONE OF IT HAS BEEN SEEN ON A UNIT. It stays
-his account's until he says: Apple's 2.0.0 is in review, an update reaches
-the copy Apple is reviewing, and its notes describe none of this.
+FM3, FM9 and Axe-Fx III, and NONE OF IT HAS BEEN SEEN ON A UNIT. It was his
+account's for two releases, because Apple's 2.0.0 was in review. Then, the
+same day: "Apple approved the 2.0.0", and "Enable the 5 new Bluetooth items
+to all accounts, not just mine". So the five went to true in 2.0.8, with two
+lines in What's new, on 2.0.0 copies (the only copies main's updates reach).
+The 2.0.0 review notes do not describe them; the review was over. If one has
+to be shut again, its switch goes back to false in an update: tell him
+first. When a report comes in about any of the five, it has never run on a
+unit: read the log first.
 
 - **The looper's buttons** (`LOOPER_OVER_BLUETOOTH_FOR_EVERYONE`; lib/bleTools,
   bleWire gen3LooperButton and gen3LooperTelemetry; the wire's `looper`,
@@ -2820,9 +2826,10 @@ on his AM4's own answer.**
 
 TO OPEN ANY OF THESE TO EVERYONE: its switch to true, its What's new line,
 Bluetooth → What Bluetooth can't do read again, and the review notes (or a
-store version) saying so. NOT WHILE APPLE'S 2.0.0 IS IN REVIEW, unless he
+store version) saying so. NOT WHILE A STORE REVIEW IS UNDER WAY, unless he
 says so knowing an update reaches the reviewer's copy: tell him that first.
-The first pass's three went out that way on his word.
+The first pass's three went out that way on his word, and the second
+pass's five in 2.0.8, after Apple had approved 2.0.0.
 
 **In the chain editor, what a tap did is said under the card that was
 tapped, and a tap that sends nothing is in the log.**

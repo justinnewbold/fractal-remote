@@ -21789,8 +21789,8 @@ export function run(test) {
     assert.equal(src('mobile/src/lib/bleTools.js').match(/^import .*$/gm).join('\n'), "import { FN, MODELS, encode14, frame, sameBytes } from './fractal-sysex.mjs'")
   })
 
-  test('the looper over Bluetooth is his account’s until its switch says everyone: closed, Play’s chain has no looper and a button is refused with nothing sent', async () => {
-    assert.equal((await import('../mobile/src/lib/features.js')).LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, false)
+  test('the looper over Bluetooth is open to every account since 2.0.8, and with its switch closed Play’s chain has no looper and a button is refused with nothing sent', async () => {
+    assert.equal((await import('../mobile/src/lib/features.js')).LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, true)
     for (const [kind] of TOOL_G3) {
       const t = await onTheLine(kind, { looper: true })
       assert.equal((await t.get('/device/detect')).capabilities.looper, false)
@@ -21907,8 +21907,8 @@ export function run(test) {
     assert.equal((await quiet.get('/preset/looper?eid=166')).position, null)
   })
 
-  test('the unit’s own click over Bluetooth is his account’s until its switch says everyone: closed, the switch is neither written nor read', async () => {
-    assert.equal((await import('../mobile/src/lib/features.js')).UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE, false)
+  test('the unit’s own click over Bluetooth is open to every account since 2.0.8, and with its switch closed the switch is neither written nor read', async () => {
+    assert.equal((await import('../mobile/src/lib/features.js')).UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE, true)
     for (const [kind, , pid] of TOOL_G3) {
       const t = await onTheLine(kind)
       assert.equal((await t.get('/device/detect')).capabilities.unitClick, false)
@@ -22088,9 +22088,9 @@ export function run(test) {
     }
   })
 
-  test('modifiers, a cab by name and the Footswitches page over Bluetooth are his account’s until each switch says everyone: closed, nothing of theirs is answered or sent', async () => {
+  test('modifiers, a cab by name and the Footswitches page over Bluetooth are open to every account since 2.0.8, and with a switch closed nothing of theirs is answered or sent', async () => {
     const f = await import('../mobile/src/lib/features.js')
-    for (const k of ['MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE', 'CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE', 'FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE']) assert.equal(f[k], false, k)
+    for (const k of ['MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE', 'CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE', 'FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE']) assert.equal(f[k], true, k)
     const P = ENGINE.pretend
     const asks = (t) => [
       () => asEdit(t, '/mod/model'),
