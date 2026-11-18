@@ -857,8 +857,12 @@ export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = true
  * them, by the messages every AM4 block gets; closed, it is drawn by its
  * number and asked nothing, as before.
  *
- * His account first: NO MESSAGE HAS BEEN SENT TO THAT BLOCK ON A UNIT, and
- * an AM4 froze once on a message it did not expect. It opens when he says
- * so, with its What's new line.
+ * OPEN TO EVERY ACCOUNT SINCE 2.1.3 (18 November 2026): "It works. Go ahead
+ * and put it out to everybody.." (Justin, with his log: an AM4 on the 3.00
+ * beta through a WIDI Jack, the block's channel set, a capture from TONE3000
+ * sent, kept on the first try and played in NAM 1). It was his account's
+ * from 2.0.9. With it open the capture tools answer an AM4 for every account
+ * too (bleWire captureOn), so TONE3000 and the Capture button are on a held
+ * AM4 NAM block for everybody. Back to false and it is his account's again.
  */
-export const AM4_NAM_FOR_EVERYONE = false
+export const AM4_NAM_FOR_EVERYONE = true

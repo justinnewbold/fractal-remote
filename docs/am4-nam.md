@@ -76,6 +76,10 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
 
 ## What is built, and what is next
 
+- 2.1.3: all of the below is open to every account (`AM4_NAM_FOR_EVERYONE`,
+  true), on his word after his AM4 kept a capture sent from the app over
+  a WIDI Jack (35.4 s, 130 messages, kept first try, played in NAM 1).
+
 - 2.0.9: the block is named and switched on Play over Bluetooth, his
   account only (`AM4_NAM_FOR_EVERYONE`).
 - 2.1.0: the Bluetooth wire answers the capture tools' routes for an AM4

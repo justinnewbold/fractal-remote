@@ -2580,7 +2580,7 @@ export function openWire() {
     modifiers: () => modifiersOverBluetooth(),
     cabs: () => cabPickerOverBluetooth(),
     footswitches: () => footswitchesOverBluetooth(),
-    /* The AM4's NAM Player block (firmware 3.00) named and switched (lib/fractal-sysex AM4_NEW_BLOCKS): his account, until lib/features AM4_NAM_FOR_EVERYONE; asked at every request and every send. */
+    /* The AM4's NAM Player block (firmware 3.00) named and switched (lib/fractal-sysex AM4_NEW_BLOCKS): every account since lib/features AM4_NAM_FOR_EVERYONE went true (2.1.3); asked at every request and every send. */
     am4Nam: () => am4NamOverBluetooth()
   })
   const mine = wire

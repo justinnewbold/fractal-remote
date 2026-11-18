@@ -22,7 +22,7 @@ import { namBlocksOf, onAm4 } from './captureUnit.js'
 /**
  * Whether the pop-up for `block` (whose effect id is `id`) offers TONE3000. Every part has to be exactly right.
  * An AM4's NAM block too (lib/am4-nam, firmware 3.00): the wire names it only for an account its switch is open to
- * (lib/features AM4_NAM_FOR_EVERYONE, his account until then), so a block that is here with that id is one of theirs.
+ * (lib/features AM4_NAM_FOR_EVERYONE, every account since 2.1.3), so a block that is here with that id is one of theirs.
  */
 export const tone3000QuickFor = (allowed, block, id) => allowed === true && !!block && block.slug === 'nam' && !!namBlocksOf(id)
 
