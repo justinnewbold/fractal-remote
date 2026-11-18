@@ -983,6 +983,39 @@ function fakeAm4(sx, o) {
           state.namBusy.push(sx.am4ReadFloat(b, 16))
           return say(close([...head(b), 0, 0, 0x28, 0, ...b.slice(16, 21), ...new Array(41).fill(0)]))
         }
+        /* A NAM block's own settings, one at a time, as AM4-Edit asked them (docs/am4-nam.md): the value and the AM4's words for it. `namOddLevel` is a unit whose Level reads another number than the app's range makes of it. */
+        const NAM_SETTINGS = { 0: 52427, 11: 32767, 12: 0, 13: 1, 14: 0, 15: 32767, 16: 32767, 17: 32767, 19: 32767 }
+        if ((low === 0xd1 || low === 0xd2) && high in NAM_SETTINGS && ((act === 0x0d && b.length === 18) || ((act === 1 || act === 2) && b.length === 23))) {
+          if (!state.slots.includes(low)) {
+            state.frozen = true
+            state.unknown.push(b)
+            return
+          }
+          state.namSet ||= new Map()
+          const key = `${low}/${high}`
+          if (act !== 0x0d) {
+            const v = sx.am4ReadFloat(b, 16)
+            state.namSet.set(key, act === 2 ? Math.round(v * 65534) : v)
+            ;(state.namEdits ||= []).push({ block: low, setting: high, action: act, value: v })
+          }
+          ;(state.namAskedSettings ||= []).push(act === 0x0d ? high : -high)
+          if (opt.namSettingSilent === high && act === 0x0d) return
+          const wire = state.namSet.get(key) ?? NAM_SETTINGS[high]
+          const along = wire / 65534
+          const words =
+            high === 0 ? `${(opt.namOddLevel ? -40 + along * 60 : -80 + along * 100).toFixed(1)} dB`
+            : high === 11 ? `${(-20 + along * 40).toFixed(2)} dB`
+            : high === 12 ? ['NORMAL', 'INVERT'][wire]
+            : high === 13 ? ['PRE', 'POST', 'OFF'][wire]
+            : high === 14 ? ['ACTIVE', 'BROWNFACE', 'BLACKFACE'][wire] ?? `STACK ${wire}`
+            : high === 19 ? (-10 + along * 20).toFixed(2)
+            : (along * 10).toFixed(2)
+          const raw = new Array(40).fill(0)
+          raw[0] = wire & 0xff
+          raw[1] = wire >> 8
+          ;[...String(words)].forEach((ch, i) => (raw[8 + i] = ch.charCodeAt(0)))
+          return say(close([...head(b), 0, 0, 0x28, 0, ...sx.packMsb(raw)]), act === 0x0d ? undefined : 3)
+        }
         if ((low === 0xd1 || low === 0xd2) && high === 0x0a && (act === 1 || act === 0x0d)) {
           if (!state.slots.includes(low)) {
             state.frozen = true
@@ -1190,6 +1223,7 @@ async function onTheLine(kind, options = {}) {
       cabs: options.cabs,
       footswitches: options.footswitches,
       am4Nam: options.am4Nam,
+      am4NamKnobs: options.am4NamKnobs,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -4175,6 +4209,103 @@ export function run(test) {
     assert.deepEqual(iii.frames().filter((f) => nam.namShaped(f, 0x10)), [])
   })
 
+  test('an AM4’s NAM block has its knobs in Edit where they are open: read one setting at a time by AM4-Edit’s own question, never whole, written as any AM4 knob, with its capture; shut, it is its on and off alone', async () => {
+    const ed = await import('../mobile/src/lib/am4-edit.js')
+    const own = await import('../mobile/src/lib/am4-own-knobs.js')
+    const a = await import('../mobile/src/lib/am4-nam.js')
+    const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
+    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_EDIT_FOR_EVERYONE, false)
+    /* The list: only what the recording showed, the capture never among it. */
+    const rows = own.AM4_OWN_KNOBS.nam.params
+    assert.deepEqual(rows.map((r) => r[3]).sort((x, y) => x - y), [0, 11, 12, 13, 14, 15, 16, 17, 19])
+    assert.ok(!rows.some((r) => r[3] === a.AM4_NAM_CAPTURE || r[3] === 3))
+    assert.ok(rows.every((r) => r[2] === 0xd1 && r[4] in { db: 1, knob_0_10: 1, enum: 1 }))
+    assert.equal(ed.readEach(0xd1), true)
+    assert.equal(ed.readEach(0xd2), true)
+    assert.equal(ed.readEach(0x3a), false)
+    /* The question is the recording's own bytes for setting 11 of block 0xD1. */
+    assert.deepEqual(ed.buildAm4ReadOne(0xd1, 11), H('F0 00 01 74 15 01 51 01 0B 00 0D 00 00 00 00 00 47 F7'))
+    assert.equal(ed.buildAm4ReadOne(0xd1, 10), null)
+    assert.equal(ed.buildAm4ReadOne(0xd1, 18), null)
+    assert.equal(ed.buildAm4ReadOne(0x3a, 11), null)
+    /* And its recorded answer reads as half-way, "0.00 dB". */
+    const rec = H('F0 00 01 74 15 01 51 01 0B 00 0D 00 00 00 28 00 7F 5F 6D 46 60 00 00 00 1F 4C 05 63 01 40 40 64 21 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 75 F7')
+    assert.deepEqual(ed.readAm4One(rec, 0xd1, 11), { wire: 32767, text: '0.00 dB' })
+    assert.equal(ed.readAm4One(rec, 0xd1, 12), null)
+    assert.equal(ed.readAm4One(rec, 0xd2, 11), null)
+    /* The way out: a setting's question only of a NAM block placed now, a setting on the list; never the whole register. */
+    assert.equal(ed.am4EditAllowed(ed.buildAm4ReadOne(0xd1, 11), [0x3a, 0xd1]), 'block setting read')
+    assert.equal(ed.am4EditAllowed(ed.buildAm4ReadOne(0xd1, 11), [0x3a]), null)
+    assert.equal(ed.am4EditAllowed(ed.buildAm4ReadOne(0xd2, 11), [0x3a, 0xd1]), null)
+    assert.equal(ed.am4EditAllowed(sx.am4Frame({ pidLow: 0xd1, pidHigh: 18, action: sx.AM4.READ_LONG }), [0xd1]), null)
+    assert.equal(ed.am4EditAllowed(sx.am4Frame({ pidLow: 0x3a, pidHigh: 11, action: sx.AM4.READ_LONG }), [0x3a]), null)
+    assert.equal(ed.am4EditAllowed(ed.buildAm4ReadAll(0xd1), [0x3a, 0xd1]), null)
+    assert.equal(ed.am4EditAllowed(ed.buildAm4ReadAll(0x3a), [0x3a, 0xd1]), 'block settings read')
+    assert.equal(ed.am4EditAllowed(ed.buildAm4SetNorm(0xd1, 15, 0.7), [0xd1]), 'block knob')
+    assert.equal(ed.am4EditAllowed(ed.buildAm4SetNorm(0xd1, 18, 0.7), [0xd1]), null)
+    assert.equal(ed.am4EditAllowed(ed.buildAm4SetValue(0xd1, 13, 2), [0xd1]), 'block switch')
+    assert.equal(ed.am4EditAllowed(ed.buildAm4SetValue(0xd1, 13, 3), [0xd1]), null)
+
+    const open = { nam: true, edit: () => true, am4Nam: () => true, am4NamKnobs: () => true, captures: () => true }
+    const t = await onTheLine('am4', open)
+    t.unit.state.slots = [0x3a, 0xd1, 0, 0]
+    t.unit.state.bypass.set(0xd1, false)
+    t.unit.state.channel.set(0xd1, 1)
+    t.unit.state.captures = new Map([[0, { name: 'First' }], [4, { name: 'Fifth' }]])
+    t.unit.state.namPicked = new Map([[0xd1, 4]])
+    const asks = (path, o = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...o }))
+    const chain = await asks('/preset/blocks')
+    const tile = chain.find((b) => b.effectId === 0xd1)
+    assert.equal(tile.slug, 'nam')
+    assert.equal(tile.knobs, undefined, 'open, the block is one Edit has knobs for')
+    t.sent.length = 0
+    const p = await asks('/preset/blocks/209/params')
+    assert.deepEqual(p.named.map((k) => [k.name, k.value, k.min, k.max]), [['Level', 0, -80, 20], ['Input Gain', 0, -20, 20], ['Bass', 5, 0, 10], ['Mid', 5, 0, 10], ['Treble', 5, 0, 10], ['Bright', 0, -10, 10]])
+    assert.deepEqual(p.enums.map((e) => [e.name, e.value]), [['Bypass', 0], ['Phase Invert', 0], ['Tone Stack Location', 1], ['Tone Stack Type', 0]])
+    assert.deepEqual(p.capture, { slot: 4 })
+    assert.equal(p.type, null)
+    /* Not one read of the whole register, and the nine questions in the list's order. */
+    assert.ok(!t.frames().some((f) => f[5] === 0x1f))
+    assert.deepEqual(t.unit.state.namAskedSettings, [0, 11, 15, 16, 17, 19, 12, 13, 14])
+    assert.ok(t.logs.some((l) => /read the nam’s settings one at a time .* channel B, as the AM4 words them: Level “-?0\.0 dB”, Input Gain “0\.00 dB”, Bass “5\.00”.*Tone Stack Location “POST”.*; capture slot 4/.test(l)), t.logs.join('\n'))
+    assert.ok(!t.logs.some((l) => /RANGE IS WRONG/.test(l)))
+    /* A knob, as any AM4 knob: its place along the travel. A switch, its number. */
+    t.sent.length = 0
+    assert.deepEqual(await asks('/preset/blocks/209/params/15', { method: 'PUT', body: { value: 0.7 } }), { ok: true })
+    assert.ok(t.frames().some((f) => String(f) === String(ed.buildAm4SetNorm(0xd1, 15, 0.7))))
+    assert.deepEqual(await asks('/preset/blocks/209/params/13', { method: 'PUT', body: { value: 2 } }), { ok: true })
+    const again = await asks('/preset/blocks/209/params')
+    assert.equal(again.named.find((k) => k.name === 'Bass').value, 7)
+    assert.equal(again.enums.find((e) => e.name === 'Tone Stack Location').value, 2)
+    /* Never the capture, the on and off or an unlisted setting through Edit's write. */
+    for (const id of [10, 3, 18, 20, 42]) await assert.rejects(asks(`/preset/blocks/209/params/${id}`, { method: 'PUT', body: { value: 0.5 } }), /isn’t one the app can change/)
+    assert.equal(t.unit.state.frozen, false)
+    assert.deepEqual(t.unit.state.unknown, [])
+    /* A setting that does not answer is a failed read, said; nothing is made up. */
+    const q = await onTheLine('am4', { ...open, namSettingSilent: 16 })
+    q.unit.state.slots = [0x3a, 0xd1, 0, 0]
+    await assert.rejects(drive(q.clock, q.wire.request('/preset/blocks/209/params', { editing: true })), /didn’t send the nam’s Mid/)
+    /* A range that does not fit the AM4's own words is said in the log. */
+    const o = await onTheLine('am4', { ...open, namOddLevel: true })
+    o.unit.state.slots = [0x3a, 0xd1, 0, 0]
+    await drive(o.clock, o.wire.request('/preset/blocks/209/params', { editing: true }))
+    assert.ok(o.logs.some((l) => /THE APP’S RANGE IS WRONG for Level: the AM4 says 8, the app worked out 0/.test(l)), o.logs.join('\n'))
+
+    /* SHUT (every account but his): its on and off alone, and no read or write of Edit's reaches it, at the route or at the way out. */
+    for (const options of [{ nam: true, edit: () => true, am4Nam: () => true }, { nam: true, edit: () => true, am4Nam: () => true, am4NamKnobs: () => false }, { nam: true, edit: () => true, am4Nam: () => false, am4NamKnobs: () => true }]) {
+      const c = await onTheLine('am4', options)
+      c.unit.state.slots = [0x3a, 0xd1, 0, 0]
+      const list = await drive(c.clock, c.wire.request('/preset/blocks', { editing: true }))
+      const nam = list.find((b) => b.effectId === 0xd1)
+      if (nam.slug === 'nam') assert.equal(nam.knobs, false)
+      c.sent.length = 0
+      await assert.rejects(drive(c.clock, c.wire.request('/preset/blocks/209/params', { editing: true })))
+      await assert.rejects(drive(c.clock, c.wire.request('/preset/blocks/209/params/15', { editing: true, method: 'PUT', body: { value: 0.7 } })))
+      assert.deepEqual(c.frames().filter((f) => f[5] === 0x01 && f[6] === 0x51 && f[7] === 0x01 && ![3].includes(f[8]) && f[8] < 0x50), [], 'a frame of Edit’s went to the NAM block')
+      assert.equal(c.unit.state.namAskedSettings, undefined)
+    }
+  })
+
   test('an AM4’s captures are his account’s until the NAM switch says everyone: closed, every capture route is unsupported and not one byte goes', async () => {
     const a = await import('../mobile/src/lib/am4-nam.js')
     for (const options of [{ nam: true, captures: () => true }, { nam: true, am4Nam: () => true }, { nam: true, am4Nam: () => false, captures: () => true }]) {
@@ -6760,7 +6891,9 @@ export function run(test) {
     /* The block lists, for the ids that are not blocks (NOT_BLOCKS): the FM3's list and nothing that sends. */
     assert.deepEqual(imports(read('gen3Catalog.js')), ['../data/blocks.json'], 'the block lists import something')
     /* Edit's knobs: the codec and the catalogs the computer's codec writes (scripts/am4-knobs.mjs, scripts/gen3-knobs.mjs), and nothing that sends. */
-    assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './am4-own-knobs.js', './fractal-sysex.mjs'])
+    /* The AM4's NAM block's settings, written by hand (the codec's catalog has none): plain data and the one block number. */
+    assert.deepEqual(imports(read('am4-own-knobs.js')), ['./fractal-sysex.mjs'], 'the AM4’s own knobs import something')
     assert.deepEqual(imports(read('am4-knobs.js')), [], 'the AM4 catalog imports something')
     assert.deepEqual(imports(read('gen3-edit.js')), ['./fractal-sysex.mjs'], 'the gen-3 Edit imports something')
     for (const unit of ['fm3', 'fm9', 'axefx3']) {
@@ -16302,8 +16435,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\) \}\)/)
+    assert.match(ble, /import \{ AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -22496,7 +22629,7 @@ export function run(test) {
     assert.match(b, /export const looperOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| LOOPER_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /export const unitClickOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /const readNoClick = \(\) => readOn\(\) && !unitClickOverBluetooth\(\)/)
-    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\) \}\)/)
+    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\) \}\)/)
     /* The five: the switch in the volume pop-up, Settings → Metronome, the rules' own hook, and the app telling a unit that has just arrived. */
     assert.match(src('mobile/src/components/MetronomeSwitch.js'), /const bluetooth = useBluetoothNoClick\(\)/)
     assert.doesNotMatch(src('mobile/src/components/MetronomeSwitch.js'), /useBluetoothOn/)

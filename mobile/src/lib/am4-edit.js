@@ -37,7 +37,8 @@
  * Node runs it against a pretend AM4 byte for byte.
  */
 import { AM4_FAMILY_BY_BLOCK, AM4_KNOBS, AM4_PAGES, AM4_UNIT_LABEL } from './am4-knobs.js'
-import { AM4, FN, MODELS, am4Block, am4Float, am4Frame, am4ReadFloat, checksumOk, decode14, encode14, frame, isFractal } from './fractal-sysex.mjs'
+import { AM4_OWN_KNOBS } from './am4-own-knobs.js'
+import { AM4, FN, MODELS, am4Block, am4Float, am4Frame, am4ReadFloat, checksumOk, decode14, encode14, frame, isFractal, unpackMsb } from './fractal-sysex.mjs'
 
 /* The read and the three parts of its answer. */
 export const READ_ALL = 0x1f
@@ -85,10 +86,21 @@ const NOT_A_KNOB = new Set(['channel', 'type'])
 
 const rowsBySlug = new Map()
 
+/*
+ * A block's entry: the codec's catalog, or, for a block it has none for (a
+ * newer firmware's: the NAM Player), the hand-written one beside it
+ * (am4-own-knobs.js). WHO MAY OPEN SUCH A BLOCK IS THE WIRE'S TO SAY
+ * (bleWire am4KnobsShut), not this file's: this is only what is known.
+ */
+const specOf = (slug) => AM4_KNOBS[slug] || AM4_OWN_KNOBS[slug] || null
+
+/** Whether the block at this code is read one setting at a time (am4-own-knobs `each`), never whole. */
+export const readEach = (code) => specOf(am4Block(code)?.slug)?.each === true
+
 /** A block's settings in the catalog's order, as objects. */
 export function settingsOf(slug) {
   if (rowsBySlug.has(slug)) return rowsBySlug.get(slug)
-  const spec = AM4_KNOBS[slug]
+  const spec = specOf(slug)
   const rows = (spec?.params || []).map(([key, label, pidLow, pidHigh, unit, min, max, log, enumValues]) => ({
     key,
     label,
@@ -111,7 +123,7 @@ export function settingsOf(slug) {
  */
 export function editBlock(code) {
   const b = am4Block(code)
-  if (!b || !AM4_KNOBS[b.slug]) return null
+  if (!b || !specOf(b.slug)) return null
   return { ...b, code }
 }
 
@@ -128,7 +140,7 @@ export function readsOf(code) {
   const b = editBlock(code)
   if (!b) return []
   const out = []
-  for (const key of AM4_KNOBS[b.slug].reads) {
+  for (const key of specOf(b.slug).reads) {
     if (key === b.base) out.push({ wire: code, key })
     else if (b.copy === 0) out.push({ wire: key, key })
   }
@@ -213,6 +225,49 @@ export function readAllCollector(wire) {
 }
 
 /* ------------------------------------------------------------------ */
+/* One setting at a time (a block the catalog has none for)            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * AM4-Edit's own question for one setting of a block (action 0x0D), as it
+ * asked a NAM block's in the recording: null for a block that is not read
+ * this way, or a setting its list does not name.
+ */
+export function buildAm4ReadOne(code, setting) {
+  if (!readEach(code)) return null
+  const b = editBlock(code)
+  if (!settingsOf(b.slug).some((p) => p.pidLow === b.base && p.pidHigh === setting)) return null
+  return am4Frame({ pidLow: code, pidHigh: setting, action: AM4.READ_LONG })
+}
+
+/**
+ * The AM4's answer to that: `{ wire, text }`, the value as a read of the
+ * whole block would hold it (0 to 65534 along a knob's travel; a switch's
+ * own number) and the AM4's own words for it ("0.00 dB", "POST"). Null for
+ * anything else.
+ */
+export function readAm4One(f, code, setting) {
+  if (!Array.isArray(f) || f.length !== 64 || !isFractal(f) || f[4] !== MODELS.am4 || f[5] !== FN.PARAM || !checksumOk(f)) return null
+  if (decode14(f[6], f[7]) !== code || decode14(f[8], f[9]) !== setting || decode14(f[10], f[11]) !== AM4.READ_LONG) return null
+  const raw = unpackMsb(f.slice(16, f.length - 2), 40)
+  let text = ''
+  for (let i = 8; i < 40 && raw[i]; i++) text += raw[i] >= 0x20 && raw[i] < 0x7f ? String.fromCharCode(raw[i]) : '?'
+  return { wire: raw[0] | (raw[1] << 8), text }
+}
+
+/**
+ * The registers map blockParamsOf takes, made from settings read one at a
+ * time (`got`: setting → wire value). A count of 1 says "one copy, the
+ * channel the block is on", which is what such a read answers.
+ */
+export function chunksFromEach(code, got) {
+  const b = editBlock(code)
+  const values = []
+  for (const [setting, wire] of got) values[setting] = wire
+  return new Map([[b.base, { count: 1, values }]])
+}
+
+/* ------------------------------------------------------------------ */
 /* The values                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -255,7 +310,7 @@ function valueIn(p, chunks, channel) {
   if (count > 0 && count % 4 === 0) at = channel * (count / 4) + p.pidHigh
   else if (channel === 0) at = p.pidHigh
   else return undefined
-  if (at >= values.length) return undefined
+  if (at >= values.length || !Number.isInteger(values[at])) return undefined
   return shown(p, values[at])
 }
 
@@ -291,7 +346,7 @@ const idOf = (p, base) => (p.pidLow === base ? p.pidHigh : (p.pidLow << 16) | p.
  * knobs in `named`, switches in `enums` (with a made-up Bypass first when
  * the on/off is known), the model in `type`, and the pages.
  */
-export function blockParamsOf(code, chunks, { channel = 0, bypassed } = {}) {
+export function blockParamsOf(code, chunks, { channel = 0, bypassed, capture } = {}) {
   const b = editBlock(code)
   if (!b) return null
   const settings = settingsOf(b.slug)
@@ -332,6 +387,8 @@ export function blockParamsOf(code, chunks, { channel = 0, bypassed } = {}) {
     enumsOut.unshift({ id: 0xffff, name: 'Bypass', value: bypassed ? 1 : 0, options: [{ value: 0, label: 'Engaged' }, { value: 1, label: 'Bypassed' }] })
   }
   const out = { block: b.slug, slug: b.slug, page: -1, named: once(named), enums: enumsOut, type }
+  /* A NAM block's capture, where the wire read which one it is on: `capture: { slot }`, as an Axe-Fx III's read says it (gen3-edit). */
+  if (capture && Number.isInteger(capture.slot)) out.capture = { slot: capture.slot }
   const layout = layoutFor(b.slug, type?.value)
   if (layout) out.layout = layout
   return out
@@ -450,7 +507,9 @@ function rowAt(pidLow, pidHigh, placed) {
  *     knob of a block placed now, with a value from 0 to 1;
  *   - a switch or model write (SET) only at an address the catalog names as
  *     a switch of a block placed now, with one of its own numbers; and
- *     never the channel, which is AM4_ALLOWED's, at the base code only.
+ *     never the channel, which is AM4_ALLOWED's, at the base code only;
+ *   - one setting's question (action 0x0D) only of a block placed now that
+ *     is read that way (`each`), and only a setting its list names.
  */
 export function am4EditAllowed(f, placed) {
   if (!Array.isArray(f) || f.length < 10 || !Array.isArray(placed) || !placed.length) return null
@@ -463,9 +522,17 @@ export function am4EditAllowed(f, placed) {
   if (f[5] === READ_ALL) {
     if (f.length !== 10) return null
     const wire = decode14(f[6], f[7])
-    return placed.some((code) => readsOf(code).some((r) => r.wire === wire)) ? 'block settings read' : null
+    /* Never a block read one setting at a time: nobody has seen it answer a read of the whole register. */
+    return placed.some((code) => !readEach(code) && readsOf(code).some((r) => r.wire === wire)) ? 'block settings read' : null
   }
-  if (f[5] !== FN.PARAM || f.length !== 23) return null
+  if (f[5] !== FN.PARAM) return null
+  if (f.length === 18) {
+    const code = decode14(f[6], f[7])
+    if (!placed.includes(code) || !readEach(code)) return null
+    const q = buildAm4ReadOne(code, decode14(f[8], f[9]))
+    return q && q.length === f.length && q.every((x, i) => x === f[i]) ? 'block setting read' : null
+  }
+  if (f.length !== 23) return null
   const pidLow = decode14(f[6], f[7])
   const pidHigh = decode14(f[8], f[9])
   const action = decode14(f[10], f[11])
