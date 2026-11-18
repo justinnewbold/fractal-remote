@@ -3972,6 +3972,22 @@ export function run(test) {
     assert.deepEqual(chain[1], { slug: '0x9a', name: '0x9a', effectId: 0x9a, row: 1, col: 2, fromRows: [], bypassed: null, channel: null })
     assert.ok(!t.frames().some((f) => f[6] === 0x1a && f[7] === 0x01), 'the unknown block was asked about')
     assert.equal(t.unit.state.frozen, false)
+    /* And its number is in the log, once: it is the one thing needed to name a block a newer firmware brought (the AM4's NAM Player, firmware 3.00). */
+    const said = () => t.logs.filter((l) => /^blocks this app has no name for yet on the AM4/.test(l))
+    assert.equal(said().length, 1)
+    assert.match(said()[0], /: slot 2 holds 0x9a \(154\)\. Nothing was asked of them\.$/)
+    await advance(t.clock, 6000)
+    await t.get('/preset/blocks')
+    assert.equal(said().length, 1, 'said again for the same blocks')
+    t.unit.state.slots = [0x3a, 0x9a, 0x9b, 0]
+    await advance(t.clock, 6000)
+    await t.get('/preset/blocks')
+    assert.equal(said().length, 2)
+    assert.match(said()[1], /slot 2 holds 0x9a \(154\), slot 3 holds 0x9b \(155\)/)
+    /* A preset of known blocks says nothing. */
+    const plain = await onTheLine('am4')
+    await plain.get('/preset/blocks')
+    assert.ok(!plain.logs.some((l) => /no name for yet on the AM4/.test(l)))
   })
 
   /*

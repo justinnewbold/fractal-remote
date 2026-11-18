@@ -2777,6 +2777,47 @@ the copy Apple is reviewing, and its notes describe none of this.
   engine cannot read them either). A VP4 gets none of it: its wire sends no
   SysEx.
 
+**NAM on an AM4: asked for 18 November 2026, AND NOT BUILT YET. It waits
+on his AM4's own answer.**
+
+> "Fractal just announced NAM support for AM4, so please research that and
+> let's get the support built in as well." (18 November 2026, the day Apple
+> approved 2.0.0)
+
+- *What is known* (Fractal's forum, read through search results only: its
+  pages and the wiki refuse a cloud session). AM4 firmware 3.00 is in beta
+  ("AM4 Firmware V3.00 Beta 4" is pinned in the AM4 forum) and brings a NAM
+  Player block. As on the Axe-Fx III it plays NAM A2 captures only, runs on
+  the amp's core, and has a Full and a Lite algorithm (Full about six times
+  the Lite's load); forum members report two NAM blocks a preset, the second
+  dropping to Lite beside an amp on a non-Turbo unit. NOT KNOWN: its release
+  notes word for word, how many capture slots an AM4 has, and which AM4-Edit
+  loads them.
+- *Why nothing is built from that.* An AM4's blocks are known to the phone
+  and to the computer app by a fixed list of seventeen codes
+  (fractal-sysex `AM4_BLOCKS`; the codec's own tables at the pin), and
+  neither has one for NAM. The codes are the gen-3 units' block numbers,
+  but the III's NAM is 206, which on an AM4 is where the NAMES are written
+  (0xCE), so it cannot simply be assumed. AND AN AM4 FROZE ON A MESSAGE IT
+  DID NOT EXPECT: nothing is sent to a guessed address, ever.
+- *What an AM4 on 3.00 does in the app today.* A slot holding a block the
+  app has no name for is drawn by its number ("0xNN"), with no on and off,
+  and is asked nothing (bleWire am4Placed). Everything else is as it was,
+  IF firmware 3.00 left the AM4's other messages alone, which nobody here
+  has seen.
+- *Since 2.0.7 the log says the number*: "blocks this app has no name for
+  yet on the AM4, preset A01: slot 2 holds 0xNN (n). Nothing was asked of
+  them." (once for each set of them on a connection). THAT LINE, from his
+  AM4 on the 3.00 beta with a NAM block in a preset, over Bluetooth, is the
+  first thing needed. Through the computer the engine's own log has it.
+- *Then, in order:* the block named, with its on and off and channels on
+  Play (the phone's list and ForgeFX's, a new pin and a computer release);
+  its knobs (the AM4's settings are not the III's by number: read off the
+  unit, as the III's were, or from a newer codec); the capture list and
+  pick; and sending a capture from TONE3000, which needs a recording of
+  AM4-Edit loading one (the III's was 130 messages worked out from his
+  MIDI Monitor recording; an AM4's upload has never been seen).
+
 TO OPEN ANY OF THESE TO EVERYONE: its switch to true, its What's new line,
 Bluetooth → What Bluetooth can't do read again, and the review notes (or a
 store version) saying so. NOT WHILE APPLE'S 2.0.0 IS IN REVIEW, unless he
