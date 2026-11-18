@@ -27,6 +27,9 @@
  */
 import { SAVE_NOT_OPEN, buildSave, saveAllowed, saveElsewhere, saveShaped } from './bleSave.js'
 import { buildPresetName, buildSceneName, cleanName, nameAllowed, nameShaped } from './bleNames.js'
+import { GLOBAL_BLOCK, LOOPER_BUTTONS, buildFcRead, buildLooperButton, buildLooperPosition, buildLooperWave, buildUnitClick, buildUnitClickRead, readFcValue, readLooperPosition, readLooperWave, readUnitClick, toolAllowed, toolShaped } from './bleTools.js'
+import { BLOCK_OF, GEN3_TOOLS, IR_BANKS } from './gen3-tools.js'
+import { unitMetronome } from './metronome-rules.js'
 import {
   AM4,
   AM4_BLOCKS,
@@ -627,7 +630,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null, naming = () => null) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null, naming = () => null, tooling = () => null, looperAt = () => false, setupAt = () => false) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -707,7 +710,28 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
       }
       return send(bytes) === false ? 'failed' : 'sent'
     }
-    if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
+    /*
+     * THE LOOPER'S BUTTONS AND THE UNIT'S OWN CLICK (lib/bleTools: a looper
+     * button, where the loop is and what it looks like, the Metronome
+     * switch at the unit's Global settings and its read back): goes only
+     * as, byte for byte, the one the wire is sending at this moment
+     * (`tooling`). Any other frame of those shapes, or one with nothing of
+     * theirs going, is refused. Nothing this file sent before had any of
+     * them: the tuner's own question is the same read at block 35, which is
+     * no looper (`looperAt`). And the same for a modifier's slot and the
+     * Foot Controller (`setupAt`, the unit's setup blocks): a footswitch
+     * value asked (1B 00), a write at one of them. A modifier's slot read
+     * whole is one of Edit's shapes, and is passed below only as the one in
+     * hand.
+     */
+    if (toolShaped(bytes, model, looperAt, setupAt)) {
+      if (!toolAllowed(bytes, tooling())) {
+        log(`refused to send ${toHex(bytes)}: it is one of the looper’s or the unit click’s messages, and not the one being sent now`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
+    if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes) && !(bytes[5] === fm3Edit.READ_ALL && toolAllowed(bytes, tooling()))) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
     }
@@ -739,9 +763,14 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.live]  whether Edit's knobs follow the unit for this account (lib/liveKnobs; every account's since lib/features LIVE_KNOBS_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before)), asked at every request and at every report the unit sends
  * @param {() => boolean} [o.editTools]  whether Edit's smaller tools are here: the preset and its scenes named from this device (lib/bleNames), and a channel copied onto another (lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), where Edit is open, asked at every request and every send
  * @param {() => boolean} [o.chainEditor]  whether the chain is answered with every block's place and joins for the chain editor (gen3PlacedBlocks; lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), where the chain is open (`chain`), asked at every request
+ * @param {() => boolean} [o.looper]  whether the Looper block is handed on in Play's chain and its buttons are sent from this device (lib/bleTools; lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), asked at every request and every send; never an AM4
+ * @param {() => boolean} [o.unitClick]  whether the unit's own Metronome switch is written and read back from this device (lib/bleTools; lib/features UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE, his account until then), asked at every request and every send; never an AM4
+ * @param {() => boolean} [o.modifiers]  whether a modifier is attached and the slots read from this device (lib/gen3-tools; lib/features MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); wants Edit open; never an AM4
+ * @param {() => boolean} [o.cabs]  whether a cab is picked by name from this device: its state and the IR names answered here (lib/gen3-tools; lib/features CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); wants Edit open; never an AM4
+ * @param {() => boolean} [o.footswitches]  whether the Footswitches page's reads are answered from this device (lib/gen3-tools; lib/features FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); only a unit whose switches the computer reads live (an FM3)
  * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -799,6 +828,45 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const namesOn = () => editOn() && typeof editTools === 'function' && editTools() === true
   let namingFrame = null
+  /*
+   * THE LOOPER'S BUTTONS AND THE UNIT'S OWN CLICK (lib/bleTools), on an FM3,
+   * FM9 or Axe-Fx III: each open to this account or not (`looper`,
+   * `unitClick`, lib/bluetooth: his, until lib/features
+   * LOOPER_OVER_BLUETOOTH_FOR_EVERYONE and
+   * UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request and
+   * every send. Neither is Edit's: the looper is Play's, the click is the
+   * metronome's, so neither waits on Edit's door. `toolFrame` is the one
+   * message of theirs being sent, for exactly as long as it is being sent:
+   * the way out passes a frame of their shapes only as that one, byte for
+   * byte. Never an AM4, which has no looper block and whose click is never
+   * written (shared/metronome.mjs).
+   */
+  const looperOn = () => !am4 && typeof looper === 'function' && looper() === true
+  const clickOn = () => !am4 && typeof unitClick === 'function' && unitClick() === true
+  let toolFrame = null
+  /* And the looper's buttons in hand: a press is not kept waiting behind a read of these tools, so it has a hand of its own beside theirs. */
+  const buttonFrames = []
+  const toolsInHand = () => (toolFrame ? [toolFrame, ...buttonFrames] : buttonFrames.length ? [...buttonFrames] : null)
+  const isLooperBlock = (eid) => blocks.some((b) => b?.page === eid && b?.slug === 'looper')
+  /*
+   * AND THE THREE THE COMPUTER ANSWERS FROM ITS OWN TABLES (lib/gen3-tools,
+   * ForgeFX's own answers at the pinned commits): MODIFIERS (a source
+   * attached to a control, the slots read back), A CAB PICKED BY NAME (the
+   * block's cab state and the IR names) and THE FOOTSWITCHES PAGE (reads
+   * only). Each open to this account or not (`modifiers`, `cabs`,
+   * `footswitches`, lib/bluetooth: his, until each one's switch in
+   * lib/features), asked at every request and every send. Modifiers and
+   * the cab picker are Edit's and want its door open; the Footswitches page
+   * is Settings', and only on a unit whose switches the computer reads live
+   * (an FM3: the profile's `liveState`).
+   */
+  const tools = am4 ? null : GEN3_TOOLS[unit] || null
+  const modsOn = () => !!tools?.mod && editOn() && typeof modifiers === 'function' && modifiers() === true
+  const cabOn = () => !!tools?.cab && editOn() && typeof cabs === 'function' && cabs() === true
+  const fcOn = () => tools?.fc?.liveState === true && typeof footswitches === 'function' && footswitches() === true
+  /* The unit's setup blocks: a modifier's slot, the Foot Controller. Nothing is written to either but a modifier's three binding fields, and that only as the one in hand. */
+  const modSlot = (eid) => !!tools?.mod && Number.isInteger(eid) && eid >= tools.mod.effectId && eid < tools.mod.effectId + tools.mod.slotCount
+  const isSetupBlock = (eid) => modSlot(eid) || (!!tools?.fc && eid === tools.fc.effectId)
   /*
    * THE CHAIN, READ AS A GRID AND CHANGED FROM HERE (lib/gen3-grid on an
    * FM3, FM9 or Axe-Fx III; lib/am4-chain on an AM4): open to this account
@@ -908,7 +976,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
 
   const handlers = new Set()
   const emit = (event) => {
@@ -2510,8 +2578,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       hasScenes: true,
       hasChannels: true,
       channelNames: [...CH],
-      cabIrs: false,
-      fc: { model: false, liveState: false },
+      /* A cab picked by name (lib/gen3-tools), where it is open to this account (cabOn): the IR names are answered from here. */
+      cabIrs: cabOn(),
+      /* The Footswitches page's reads, where they are open to this account on a unit that has them (fcOn): the words the computer's own capabilities use (lib/footswitches). */
+      fc: { model: fcOn(), liveState: fcOn(), current: fcOn(), names: fcOn() },
+      /* A modifier attached from here, where it is open to this account (modsOn): `overWire` is how Edit knows to offer Modifiers on this connection. */
+      modifiers: { bind: modsOn(), overWire: modsOn() },
       tuner: true,
       /* Save from the phone (lib/bleSave), where it is open to this account: asked when the app asks what the unit can do. */
       supportsSave: saveOn(),
@@ -2522,7 +2594,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* The preset and its scenes named from here (lib/bleNames), where naming is open to this account (namesOn). */
       namesWritable: namesOn(),
       /* And a channel copied onto another in Edit: reads and writes Edit already makes, offered where the same switch is open. */
-      channelCopy: namesOn()
+      channelCopy: namesOn(),
+      /* The Looper block's buttons (lib/bleTools), where they are open to this account (looperOn): Play draws its looper tile from the chain, which hands the block on then. */
+      looper: looperOn(),
+      /* The unit's own Metronome switch written from here, where it is open to this account (clickOn). */
+      unitClick: clickOn()
     }
     if (am4) {
       return { ...common, slotModel: 'linear', slotCount: AM4_SLOTS, sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
@@ -2648,7 +2724,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     sayStrangers(states)
     /* And the Input and Output after all, where they are open to this account (ioOn): Edit's chain ends. Play still leaves them out (lib/device stageBlocks). */
     const ends = ioOn()
-    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug) || (ends && CHAIN_ENDS.includes(b.slug))).map(knobsSaid)
+    /* And the Looper block, where its buttons are sent from here (looperOn): Play draws its looper tile from it, as it does through the computer. */
+    const loops = looperOn()
+    const shown = (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug) || (ends && CHAIN_ENDS.includes(b.slug)) || (loops && b.slug === 'looper')).map(knobsSaid)
     const order = await gridOrder(list, shown, at)
     return order ? inGridOrder(shown, order) : shown
   }
@@ -4523,7 +4601,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
           channel: st?.channel || null
         }
         const placed = { ...base, row: c.row, col: c.col, fromRows: [...c.fromRows] }
-        return placed.slug === 'looper' ? { ...placed, noControls: true } : placed
+        return placed.slug === 'looper' && !looperOn() ? { ...placed, noControls: true } : placed
       })
   }
 
@@ -4751,8 +4829,19 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const e = blockNumber(eid)
     const ed = g3()
     if (!ed.editBlock(e) || ioClosed(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
-    const made = ed.knobFrame(model, e, id, body)
+    let made = ed.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
+    /*
+     * A CAB'S IR NUMBER, PICKED BY NAME (cabOn; lib/cab-pick pickIr): the
+     * computer writes it as the number itself, typed (ForgeFX setParam,
+     * `continuous: false`), and so does the picker's write here. A whole
+     * number's one frame is that typed write (gen3-edit knobFrame), which
+     * the way out already takes at this setting within its range; only the
+     * road to it differs, a number in place of a place along the travel.
+     */
+    if (made.unsent && cabOn() && cabIrSetting(e, id) && body?.continuous === false && Number.isInteger(body?.value) && body.value >= 0 && body.value <= 1023) {
+      made = { frame: g3Edit.buildTyped(model, e, id, body.value), what: `the cab’s IR on block ${e} to number ${body.value}` }
+    }
     /* The typed way asked of a knob, which a gen-3 knob is never sent (gen3-edit ONE WAY ONLY): nothing goes, and it is answered as not sent rather than refused, so the checked write (lib/device setParamConfirmed) goes no further with it and says what its own check read. */
     if (made.unsent) {
       say(`${made.unsent}: nothing sent`)
@@ -5703,6 +5792,383 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /* ================================================================ */
+  /* The looper's buttons, and the unit's own click (lib/bleTools)     */
+  /* ================================================================ */
+
+  /* One message of theirs, held at the way out to exactly itself for as long as it is being sent. One at a time: the frame in hand is one frame. */
+  let toolLane = Promise.resolve()
+  const inTools = (run) => {
+    const next = toolLane.then(run, run)
+    toolLane = next.then(
+      () => {},
+      () => {}
+    )
+    return next
+  }
+  /*
+   * A number read off an answer, boxed: nought is an answer, and a match
+   * that is falsy is no match. AND AN ANSWER OF NOUGHT IS THE QUESTION'S OWN
+   * BYTES (the read has noughts where the answer has its value), which the
+   * echo guard would drop as the phone's own message come back: each of
+   * these reads says what that means (`same`), as the blocks' question does.
+   */
+  const boxed = (v) => (v === undefined ? undefined : { is: v })
+  async function toolSend(out, run) {
+    toolFrame = out
+    try {
+      return await run()
+    } finally {
+      toolFrame = null
+    }
+  }
+
+  /*
+   * ONE LOOPER BUTTON, DOWN OR UP: the computer app's own write (ForgeFX
+   * gen3.ts looperControl), to a block the catalog calls a looper and to one
+   * of its eight buttons, and nothing else. Like the computer, it is sent
+   * and not waited on beyond the moment a refusal would take: the unit does
+   * not answer a button. Never sent twice: a second press is a second press.
+   */
+  function gen3LooperButton(body) {
+    const eid = Number(body?.eid)
+    const action = String(body?.action || '')
+    if (!isLooperBlock(eid) || !Object.prototype.hasOwnProperty.call(LOOPER_BUTTONS, action)) return Promise.resolve({ ok: false })
+    const on = body?.on !== false
+    const out = buildLooperButton(model, eid, action, on)
+    /*
+     * A PRESS IS A TAP: sent in its own turn on the line, never behind the
+     * panel's own reads or a page of footswitch questions (the tools' lane),
+     * and with the tap's deadline, taken here before request() lets go of it
+     * (as an open of the tuner takes its own). Its frame is in hand for
+     * exactly as long as it is being sent, beside whatever else is.
+     */
+    const deadline = tapUntil
+    buttonFrames.push(out)
+    const done = () => {
+      const i = buttonFrames.indexOf(out)
+      if (i >= 0) buttonFrames.splice(i, 1)
+    }
+    return fire(out, `looper ${action} ${on ? 'down' : 'up'}`, deadline !== null ? { deadline } : {}).then(
+      (r) => {
+        done()
+        if (rejected(r)) throw refusedBy(r.rejected)
+        return { ok: true }
+      },
+      (err) => {
+        done()
+        throw err
+      }
+    )
+  }
+
+  /*
+   * WHERE THE LOOP IS, AND WHAT IT LOOKS LIKE (ForgeFX looperTelemetry).
+   * The open panel asks every second and a half. Each answer here is one
+   * small read (the playhead, 23 bytes) and, no more than once in
+   * LOOPER_WAVE_MS, the picture (some six hundred bytes: a fifth of a
+   * second of a Bluetooth adapter's line, where the computer's USB does not
+   * notice it). Both at the lowest place in the line: with anything else
+   * waiting or out, nothing is asked and the last picture stands. The level
+   * the computer also reads is not asked for: the panel does not draw it.
+   */
+  const LOOPER_WAVE_MS = 6000
+  let looperWave = { eid: null, at: -Infinity, wave: [] }
+  function gen3LooperTelemetry(eid) {
+    if (!isLooperBlock(eid)) return Promise.resolve({ wave: [], position: null, level: null })
+    return inTools(async () => {
+      let position = null
+      const ask = buildLooperPosition(model, eid)
+      const got = await toolSend(ask, () => ex(ask, { match: (f) => boxed(readLooperPosition(f, model, eid)), ms: WAIT.tunerPoll, fn: FN.PARAM, priority: 'poll', same: { is: 0 } })).catch(() => null)
+      if (typeof got?.is === 'number') position = got.is
+      if (looperWave.eid !== eid || time.now() - looperWave.at >= LOOPER_WAVE_MS) {
+        const q = buildLooperWave(model, eid)
+        const wave = await toolSend(q, () => ex(q, { match: (f) => readLooperWave(f, model, eid), ms: WAIT.scene, fn: FN.PARAM, priority: 'poll' })).catch(() => null)
+        if (Array.isArray(wave)) looperWave = { eid, at: time.now(), wave }
+      }
+      return { wave: looperWave.eid === eid ? looperWave.wave : [], position, level: null }
+    })
+  }
+
+  /* ================================================================ */
+  /* Modifiers, a cab by name, the Footswitches page (lib/gen3-tools)  */
+  /* ================================================================ */
+
+  /* A block read whole for one of these, kept as Edit keeps it (editKept), so a cab's state asked straight after Edit's own read of the block asks the unit nothing. */
+  async function gen3Bulk(e, name) {
+    const kept = editKept.get(e)
+    const st = await gen3PlacedHere(e)
+    if (kept && !kept.stale.size && kept.channel !== null && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) return { bulk: kept.bulk, channel: kept.channel }
+    const at = moves
+    const got = await ask(g3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the settings of the ${name}`, {
+      cap: WAIT.gen3ReadAll,
+      firstMs: WAIT.gen3ReadAllFirst,
+      collect: g3Edit.readAllCollector(model, e),
+      priority: 'editRead'
+    })
+    if (rejected(got)) throw refusedBy(got.rejected)
+    if (!got || got.damaged) throw failure(`The ${spec.name} didn’t send the ${name}’s settings. Try again.`, 504)
+    if (moves === at) editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
+    return { bulk: got, channel: st.channel }
+  }
+
+  /* The unit's IR names by bank (ForgeFX GET /cab/irs: the profile's cabIrs). The player's own User IRs are not in it; the unit's names for those cannot be read yet, here or at the computer. */
+  const irBanksHere = () => Object.fromEntries(Object.entries(tools.irs).map(([bank, i]) => [bank, [...IR_BANKS[i]]]))
+  const isCab = (e) => g3().editBlock(e)?.slug === 'cab'
+  /* A block's models, as GET /blocks/<slug>/types answers on the computer. A cab's list (ForgeFX's own for the unit, lib/gen3-tools) only where a cab is picked through its cab state from here (cabOn): never as a model change, which Edit still refuses for a cab. */
+  const gen3Models = (slug) => (cabOn() && String(slug || '').toLowerCase() === 'cab' ? tools.cabTypes.map((m) => ({ ...m })) : g3().modelsOf(slug))
+  const cabIrSetting = (e, id) => isCab(e) && tools.cab.slots.some((s) => s.irParam === id)
+
+  /*
+   * A CAB BLOCK'S STATE FOR THE PICKER (ForgeFX gen3.ts cabState, line for
+   * line): which mode it is in, and each slot's bank, IR and DynaCab, out of
+   * the block's whole read for the channel it is on, with the lists and the
+   * settings' numbers from ForgeFX's own answer (lib/gen3-tools). A read
+   * that fails answers every number at nought, as the computer's does: the
+   * picker tells that from a real state by the params read (lib/cab-pick
+   * cabAgrees).
+   */
+  async function gen3CabState(eid) {
+    const e = blockNumber(eid)
+    if (!isCab(e)) return { error: 'not a cab block' }
+    const t = tools.cab
+    let values = []
+    let base = 0
+    try {
+      const { bulk, channel } = await gen3Bulk(e, 'Cab')
+      values = bulk.values
+      base = g3().sliceFor(e, bulk, { channel }).base
+    } catch (err) {
+      say(`the cab’s state could not be read (${String(err?.message || err)}): answered as the computer answers one, every number at nought`)
+    }
+    /* A setting kept as its ordinal; one that looks scaled to 16 bits is put back against the most it can be. */
+    const ord = (id, max) => {
+      const raw = values[base + id] ?? 0
+      return max > 0 && raw > max ? Math.round((raw / 65534) * max) : raw
+    }
+    const irs = irBanksHere()
+    const slots = t.slots.map((s) => {
+      const bankV = ord(s.bankParam, t.bankOptions.length - 1)
+      const bankLabel = t.bankOptions[bankV] ?? String(bankV)
+      const list = irs[bankLabel] ?? []
+      const irIndex = ord(s.irParam, Math.max(0, list.length - 1))
+      const dynaV = ord(s.dynaParam, Math.max(0, t.dynaOptions.length - 1))
+      return { slot: s.slot, bankParam: s.bankParam, irParam: s.irParam, dynaParam: s.dynaParam, bank: { value: bankV, label: bankLabel }, irIndex, irName: list[irIndex] ?? `#${irIndex}`, dyna: { value: dynaV, label: t.dynaOptions[dynaV]?.label ?? String(dynaV) } }
+    })
+    const modeV = ord(t.modeParam, 1)
+    return { modeParam: t.modeParam, mode: { value: modeV, label: t.modeOptions[modeV]?.label ?? '' }, modeOptions: t.modeOptions.map((o) => ({ ...o })), bankOptions: [...t.bankOptions], dynaOptions: t.dynaOptions.map((o) => ({ ...o })), slots }
+  }
+
+  /*
+   * A MODIFIER SLOT'S STORED NUMBERS (ForgeFX gen3.ts rawBlock): the slot's
+   * block read whole, every value that is not nought by its place. Only a
+   * modifier's slot: nothing else is read this way from here. A slot is no
+   * block of the preset, so the way out passes its read only as the one in
+   * hand.
+   */
+  function gen3RawSlot(eid) {
+    const e = blockNumber(eid)
+    if (!modSlot(e)) throw unsupported()
+    const out = g3Edit.buildReadAll(model, e)
+    return inTools(() =>
+      toolSend(out, async () => {
+        const got = await ask(out, null, WAIT.gen3ReadAllGap, `modifier slot ${e - tools.mod.effectId + 1}`, { cap: WAIT.gen3ReadAll, firstMs: WAIT.gen3ReadAllFirst, collect: g3Edit.readAllCollector(model, e), priority: 'editRead' })
+        if (rejected(got)) throw refusedBy(got.rejected)
+        if (!got || got.damaged) throw failure(`The ${spec.name} didn’t send that modifier slot. Try again.`, 504)
+        const values = {}
+        got.values.forEach((v, i) => {
+          if (v) values[i] = v
+        })
+        return { eid: e, values }
+      })
+    )
+  }
+
+  /*
+   * A SOURCE ATTACHED TO A CONTROL (ForgeFX gen3.ts bindModifier): three
+   * typed writes on the slot's own block, the target block, the target
+   * control and the source, in the computer's order and at the fields its
+   * model names. A slot past the last is refused here; a preset or scene
+   * changed since it was asked is never written to.
+   */
+  function gen3BindModifier(body) {
+    const mm = tools.mod
+    const f = mm.fields || {}
+    const { slot, targetEffectId, targetParam, source } = body || {}
+    if (slot == null || targetEffectId == null || targetParam == null || source == null) throw badInput('slot, targetEffectId, targetParam, source required')
+    if (!f.targetEffectId || !f.targetParam || !f.source) return Promise.resolve({ ok: false, error: 'modifier model is missing the target-binding fields (source/targetEffectId/targetParam)' })
+    const n = Math.max(1, Math.floor(Number(slot)))
+    const slotEid = mm.effectId + (n - 1)
+    const whole = (v) => Number.isInteger(v) && v >= 0 && v <= 0x3fff
+    if (!modSlot(slotEid) || !whole(targetEffectId) || !whole(targetParam) || !whole(source)) throw badInput('That is not a modifier the app can attach.')
+    const at = moves
+    const writes = [
+      [f.targetEffectId.pid, targetEffectId, 'its block'],
+      [f.targetParam.pid, targetParam, 'its control'],
+      [f.source.pid, source, 'its source']
+    ]
+    return inTools(async () => {
+      for (const [pid, value, what] of writes) {
+        const said = `modifier ${n}: ${what} (${value})`
+        movedSince(at, said)
+        const out = g3Edit.buildTyped(model, slotEid, pid, value)
+        const r = await toolSend(out, () => fire(out, said, EDIT_WRITE))
+        if (rejected(r)) throw refusedBy(r.rejected)
+      }
+      return { ok: true, slotEid, slot, targetEffectId, targetParam, source }
+    })
+  }
+
+  /*
+   * THE FOOTSWITCHES PAGE (ForgeFX gen3.ts fcReadState, fcReadCurrent,
+   * fcReadLayoutNames): reads only, each one question (lib/bleTools
+   * buildFcRead) answered with one whole number, and nothing else is ever
+   * sent for it. A question that goes unanswered is null, as the computer's
+   * is, and the page says what it could not read.
+   */
+  async function fcRead(pid) {
+    const eid = tools.fc.effectId
+    const out = buildFcRead(model, eid, pid)
+    /* The tools' lane is taken a question at a time, never for a whole page: a page is a hundred questions, and the metronome's switch or a modifier asked meanwhile goes between two of them. */
+    const got = await inTools(() => toolSend(out, () => ex(out, { match: (f) => boxed(readFcValue(f, model, eid, pid)), ms: WAIT.tempo, fn: FN.PARAM, what: `footswitch setting ${pid}`, priority: 'read', same: { is: 0 } }))).catch(() => null)
+    return typeof got?.is === 'number' ? got.is : null
+  }
+  /* The categories whose functions and slots the codec calls verified: Preset, Scene, Effect (gen3.ts FC_PICK_CATEGORIES). */
+  const FC_PICK_CATEGORIES = [2, 3, 4]
+  const blockOfEid = (eid) => {
+    const b = BLOCK_OF[eid]
+    return b ? { effectId: eid, slug: b[0], instance: b[1], name: b[2] } : null
+  }
+  async function fcPick(readSlot, category, fn) {
+    const m = tools.fc
+    const params = new Array(m.paramsWidth).fill(null)
+    if (category == null || fn == null || !FC_PICK_CATEGORIES.includes(category)) return { params, pick: null }
+    const def = (m.functions?.[category] ?? []).find((d) => d.ord === fn)
+    if (!def || !def.slots.length) return { params, pick: null }
+    const slots = []
+    for (const sl of def.slots) {
+      if (sl.i < 0 || sl.i >= m.paramsWidth) continue
+      const value = await readSlot(sl.i)
+      params[sl.i] = value
+      slots.push({ i: sl.i, role: sl.role, type: sl.type, value, ...(sl.type === 'block' ? { block: value == null ? null : blockOfEid(value) } : {}) })
+    }
+    return { params, pick: { category, function: fn, slots } }
+  }
+  function gen3FcState(raw) {
+    const m = tools.fc
+    const num = (key) => Number(new RegExp(`[?&]${key}=(-?\\d+)`).exec(raw)?.[1] ?? 0)
+    const [layout, view, sw] = [num('layout'), num('view'), num('switch')]
+    const inside = (v, most) => Number.isInteger(v) && v >= 0 && v < most
+    if (!inside(layout, m.layouts) || !inside(view, m.views) || !inside(sw, m.switches)) throw badInput('There is no such footswitch on this unit.')
+    return (async () => {
+      const config = layout * m.configsPerLayout + view * m.switches + sw
+      const pidOf = (field, idx = 0) => {
+        const fd = m.fields[field]
+        if (!fd || fd.base == null || fd.stride == null) throw failure(`FC field '${field}' has no base/stride on this device`, 501)
+        return fd.base + config * fd.stride + idx
+      }
+      const readLabel = async (field) => {
+        let text = ''
+        for (let i = 0; i < (m.labelLen ?? 0); i++) {
+          const c = await fcRead(pidOf(field, i))
+          if (c && c > 0) text += String.fromCharCode(c)
+        }
+        return text
+      }
+      const fields = {}
+      for (const field of ['tapCategory', 'tapFunction', 'tapDisplay', 'holdCategory', 'holdFunction', 'holdDisplay', 'color']) fields[field] = await fcRead(pidOf(field))
+      const tapLabel = await readLabel('tapLabel')
+      const holdLabel = await readLabel('holdLabel')
+      const tap = await fcPick((i) => fcRead(pidOf('tapParams', i)), fields.tapCategory ?? null, fields.tapFunction ?? null)
+      const hold = await fcPick((i) => fcRead(pidOf('holdParams', i)), fields.holdCategory ?? null, fields.holdFunction ?? null)
+      return { effectId: m.effectId, layout, view, switch: sw, config, fields, tapLabel, holdLabel, tapParams: tap.params, holdParams: hold.params, tapPick: tap.pick, holdPick: hold.pick }
+    })()
+  }
+  function gen3FcCurrent() {
+    const m = tools.fc
+    return (async () => {
+      const inRange = (v, n) => (v != null && v >= 0 && v < n ? v : null)
+      const units = []
+      for (const [n, [layoutPid, viewPid]] of tools.fcParams.sets.entries()) {
+        const layout = inRange(await fcRead(layoutPid), m.layouts ?? 0)
+        const view = inRange(await fcRead(viewPid), m.views ?? 0)
+        units.push({ index: n, layout, view })
+      }
+      const own = units[0]
+      return { effectId: m.effectId, current: own && own.layout != null && own.view != null ? { layout: own.layout, view: own.view } : null, units }
+    })()
+  }
+  function gen3FcNames() {
+    const m = tools.fc
+    return (async () => {
+      const layouts = m.layouts ?? 0
+      const names = new Array(layouts).fill(null)
+      const base = tools.fcParams.nameBegin
+      const stride = m.layoutNameStride
+      const most = m.layoutNameRead ?? 0
+      if (base == null || !stride || !most) return { effectId: m.effectId, names }
+      for (let layout = 0; layout < layouts; layout++) {
+        let text = ''
+        let ok = true
+        for (let i = 0; i < most; i++) {
+          const c = await fcRead(base + layout * stride + i)
+          if (c == null) {
+            ok = false
+            /* A unit that does not answer the first question of the first name is asked nothing more. */
+            if (layout === 0 && i === 0) return { effectId: m.effectId, names }
+            break
+          }
+          if (c === 0) break
+          if (c < 0x20 || c > 0x7e) {
+            ok = false
+            break
+          }
+          text += String.fromCharCode(c)
+        }
+        const t = text.trim()
+        names[layout] = ok && t ? t : null
+      }
+      return { effectId: m.effectId, names }
+    })()
+  }
+
+  /*
+   * THE UNIT'S OWN METRONOME SWITCH (shared/metronome.mjs: a setting of the
+   * unit's Global block, block 1, whose number is the unit's own): written
+   * as the computer writes it (ForgeFX setParam, a typed 1 or 0), and only
+   * that one setting of that block. Any other number at block 1 is refused
+   * here with nothing sent: the footswitch setup and the rest of Global
+   * live there.
+   */
+  const clickPid = () => {
+    /* shared/metronome.mjs knows the units by the slugs the computer gives them. */
+    const how = unitMetronome(unit === 'axefx3' ? 'axefxiii' : unit)
+    return how && how.kind === 'block' && how.eid === GLOBAL_BLOCK ? how.paramId : null
+  }
+  function gen3WriteClick(pid, body) {
+    if (pid !== clickPid() || body?.continuous !== false || (body?.value !== 0 && body?.value !== 1)) throw unsupported()
+    const on = body.value === 1
+    const out = buildUnitClick(model, pid, on)
+    return inTools(() =>
+      toolSend(out, async () => {
+        const r = await fire(out, `the unit’s metronome ${on ? 'on' : 'off'}`)
+        if (rejected(r)) throw refusedBy(r.rejected)
+        return { ok: true }
+      })
+    )
+  }
+  /* And read back, for the metronome's own follow (shared followSwitch): the switch as 0 to 1, by its number, or nothing. Its own bytes coming back are never taken as an answer of nought (no `same`): on a rig that echoes that would read as off, and off and no answer mean the same to the follow (not heard on). */
+  function gen3ReadClick(body) {
+    const pid = clickPid()
+    const pids = Array.isArray(body?.pids) ? body.pids : []
+    if (pid === null || pids.length !== 1 || pids[0] !== pid) throw unsupported()
+    const ask = buildUnitClickRead(model, pid)
+    return inTools(async () => {
+      const v = await toolSend(ask, () => ex(ask, { match: (f) => boxed(readUnitClick(f, model, pid)), ms: WAIT.tempo, fn: FN.PARAM, what: 'the unit’s metronome switch', priority: 'read' })).catch(() => null)
+      return typeof v?.is === 'number' ? { [pid]: v.is } : {}
+    })
+  }
+
+  /* ================================================================ */
   /* The routes                                                        */
   /* ================================================================ */
 
@@ -5721,7 +6187,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const BLOCK_READS = ['/preset/scene-state', '/preset/blocks']
 
   /** The handler for a request, or null when Bluetooth does not answer it. */
-  function routeFor(method, path, part, body, opts) {
+  function routeFor(method, path, part, body, opts, raw = '') {
     /*
      * EDIT'S, ONLY FROM EDIT. The block reads and writes below go only when
      * Edit is open to this account on this unit (editOn) AND the request
@@ -5739,7 +6205,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (method === 'POST' && part.length === 4 && part[3] === 'type') return editRoute(() => (am4 ? am4WriteModel(eid, body?.value) : gen3WriteModel(eid, body?.value)))
     }
     if (editing && method === 'GET' && part[0] === 'blocks' && part.length === 3 && part[2] === 'types') {
-      return editRoute(() => (am4 ? modelsOf(decodeURIComponent(part[1])) : g3().modelsOf(decodeURIComponent(part[1]))))
+      return editRoute(() => (am4 ? modelsOf(decodeURIComponent(part[1])) : gen3Models(decodeURIComponent(part[1]))))
     }
     /* The developer's reader, only when the request says it is the reader's and it is open to this account (readerOn): his alone. */
     if (opts?.reading === true && readerOn() && method === 'GET' && part[0] === 'reader' && part[1] === 'blocks') {
@@ -5762,6 +6228,34 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     /* The chain with every block's place, for the chain editor, only when the request says it is Edit's and wants them, and the editor is open to this account (chainEditorOn). An AM4's own read has its slots already. */
     if (!am4 && method === 'GET' && path === '/preset/blocks' && opts?.placed === true && opts?.editing === true && chainEditorOn()) return editRoute(() => gen3PlacedBlocks(opts.onProgress))
+    /* The Looper block's buttons and its picture (lib/bleTools), only where they are open to this account (looperOn). */
+    if (looperOn()) {
+      if (method === 'POST' && path === '/preset/looper/control') return () => gen3LooperButton(body)
+      if (method === 'GET' && path === '/preset/looper') return editRoute(() => gen3LooperTelemetry(Number(/[?&]eid=(\d+)/.exec(raw)?.[1] ?? NaN)))
+    }
+    /* Modifiers (lib/gen3-tools), only from Edit and only where they are open to this account (modsOn): the model, a slot's stored numbers, a source attached. */
+    if (opts?.editing === true && modsOn()) {
+      if (method === 'GET' && path === '/mod/model') return editRoute(async () => JSON.parse(JSON.stringify(tools.mod)))
+      if (method === 'GET' && part.length === 4 && part[0] === 'preset' && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'raw') return editRoute(() => gen3RawSlot(Number(part[2])))
+      if (method === 'POST' && path === '/mod/bind') return editRoute(() => gen3BindModifier(body))
+    }
+    /* A cab picked by name (lib/gen3-tools), only from Edit and only where it is open to this account (cabOn): the IR names and the block's cab state. Its writes are Edit's own. */
+    if (opts?.editing === true && cabOn() && method === 'GET') {
+      if (path === '/cab/irs') return editRoute(async () => irBanksHere())
+      if (part.length === 4 && part[0] === 'preset' && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'cab') return editRoute(() => gen3CabState(Number(part[2])))
+    }
+    /* The Footswitches page's reads (lib/gen3-tools), only where they are open to this account on a unit that has them (fcOn). */
+    if (fcOn() && method === 'GET' && part[0] === 'fc' && part.length === 2) {
+      if (part[1] === 'model') return editRoute(async () => JSON.parse(JSON.stringify(tools.fc)))
+      if (part[1] === 'state') return editRoute(() => gen3FcState(raw))
+      if (part[1] === 'current') return editRoute(() => gen3FcCurrent())
+      if (part[1] === 'names') return editRoute(() => gen3FcNames())
+    }
+    /* The unit's own Metronome switch, written and read back (lib/bleTools), only where it is open to this account (clickOn): block 1 and nothing else of it. */
+    if (clickOn() && part[0] === 'preset' && part[1] === 'blocks' && part[2] === String(GLOBAL_BLOCK)) {
+      if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4])) return () => gen3WriteClick(Number(part[4]), body)
+      if (method === 'POST' && part.length === 4 && part[3] === 'readrange') return editRoute(() => gen3ReadClick(body))
+    }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect
       if (path === '/preset') return am4 ? am4Preset : gen3Preset
@@ -5827,7 +6321,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch {
       body = null
     }
-    const route = method === 'GET' || method === 'POST' || method === 'PUT' ? routeFor(method, clean, part, body, options) : null
+    const route = method === 'GET' || method === 'POST' || method === 'PUT' ? routeFor(method, clean, part, body, options, String(path || '')) : null
     if (!route) {
       /*
        * WHAT BLUETOOTH NEVER ANSWERS IS SAID ONCE A CONNECTION. "Don't know if

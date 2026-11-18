@@ -727,3 +727,95 @@ export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = true
  * unit; his call). Off, it is his account only again.
  */
 export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = true
+
+/**
+ * THE LOOPER'S BUTTONS OVER BLUETOOTH OR A USB CABLE, on an FM3, FM9 or
+ * Axe-Fx III (lib/bleTools, bleWire gen3LooperButton and
+ * gen3LooperTelemetry).
+ *
+ * "Let's get the rest of the computer only items implemented for over
+ * Bluetooth." (Justin, 18 November 2026.) Through the computer a preset's
+ * Looper block is a pedal on Play that opens its eight buttons; over
+ * Bluetooth the wire left the block out of the chain. Open, the wire hands
+ * it on and sends the computer app's own message for each button, byte for
+ * byte, and the panel's playhead and picture are read at the lowest place
+ * in the line (the picture no more than once in six seconds).
+ *
+ * His account first: NO LOOPER BUTTON HAS BEEN SENT THIS WAY TO A UNIT. Off,
+ * it is his account only (lib/bluetooth looperOverBluetooth), and every
+ * other account's Play over Bluetooth has no looper, as before. It opens
+ * when he says so, with its What's new line, and never while a store review
+ * is under way with notes that do not describe it.
+ */
+export const LOOPER_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * THE UNIT'S OWN METRONOME CLICK OVER BLUETOOTH OR A USB CABLE, on an FM3,
+ * FM9 or Axe-Fx III (lib/bleTools, bleWire gen3WriteClick and
+ * gen3ReadClick).
+ *
+ * Through the computer Settings → Metronome → Where it clicks offers Unit
+ * and Both, and the app switches the unit's own Metronome on and off; over
+ * Bluetooth only the device was offered. Open, the wire writes that one
+ * switch (a setting of the unit's Global block, its number the unit's own:
+ * shared/metronome.mjs) as the computer writes it, and reads it back for
+ * the metronome's own follow. Every screen that asked "is this Bluetooth?"
+ * for the click now asks lib/bluetooth useBluetoothNoClick instead.
+ *
+ * His account first: THE SWITCH HAS NOT BEEN WRITTEN THIS WAY ON A UNIT.
+ * Off, it is his account only (lib/bluetooth unitClickOverBluetooth), and
+ * every other account reads and sends what it did. Never an AM4.
+ */
+export const UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * MODIFIERS OVER BLUETOOTH OR A USB CABLE, on an FM3, FM9 or Axe-Fx III
+ * (lib/gen3-tools, bleWire gen3BindModifier and gen3RawSlot).
+ *
+ * Through the computer Edit → More → Modifiers attaches a source (a pedal,
+ * an LFO, an envelope) to a control and reads back what is attached; over
+ * Bluetooth it was not offered. Open, the wire answers the computer app's
+ * own three routes: its model for the unit (ForgeFX's own answer, carried
+ * in lib/gen3-tools), a slot's stored numbers (the slot read whole) and the
+ * attach (three typed writes on the slot's block, the computer's own).
+ * As through the computer, only an FM3 lists its sources: an FM9's and an
+ * Axe-Fx III's are not known, and the panel says so.
+ *
+ * His account first: NO MODIFIER HAS BEEN ATTACHED OR READ THIS WAY ON A
+ * UNIT. Off, it is his account only (lib/bluetooth modifiersOverBluetooth).
+ */
+export const MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * A CAB PICKED BY NAME OVER BLUETOOTH OR A USB CABLE, on an FM3, FM9 or
+ * Axe-Fx III (lib/gen3-tools, bleWire gen3CabState).
+ *
+ * Through the computer a cab block's model list is its DynaCabs and its IRs
+ * by name, picked through the block's cab state (lib/cab-pick); over
+ * Bluetooth a cab had knobs and no picker ("a cab is chosen with the
+ * computer"). Open, the wire answers the cab state from the block's own
+ * read, ForgeFX's rule line for line, and the unit's IR names from the
+ * computer app's own lists (about 100 KB of names in the app). The picks
+ * are Edit's own writes, which the way out already took. A player's own
+ * User IRs show as numbers, as through the computer.
+ *
+ * His account first: NO CAB HAS BEEN PICKED THIS WAY ON A UNIT. Off, it is
+ * his account only (lib/bluetooth cabPickerOverBluetooth).
+ */
+export const CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/**
+ * THE FOOTSWITCHES PAGE OVER BLUETOOTH OR A USB CABLE, on an FM3 (the one
+ * unit whose switches the computer reads live; lib/gen3-tools, bleWire
+ * gen3FcState, gen3FcCurrent and gen3FcNames).
+ *
+ * Settings → Footswitches shows what each of the unit's switches does, read
+ * off the unit. Reads only: one question a value (lib/bleTools buildFcRead),
+ * some thirty to a switch, so a view of three switches is a few seconds
+ * over an adapter. Nothing is ever written to the footswitch setup, here or
+ * at the computer.
+ *
+ * His account first: NO SWITCH HAS BEEN READ THIS WAY ON A UNIT. Off, it is
+ * his account only (lib/bluetooth footswitchesOverBluetooth).
+ */
+export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = false

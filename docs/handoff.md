@@ -23,6 +23,17 @@ To check frames against the codec the computer app carries: check out
 forgefx-midi at the commit in desktop/forgefx.lock.json, `npm ci`, then
 `npx tsc -p .`, and import from its dist/ in a scratch script.
 
+## And after that (18 November 2026, later still): the rest of the computer's tools over Bluetooth
+
+He confirmed Apple's 2.0.0 is in review, and asked for the rest. Built in
+2.0.6, each behind its own switch, all FALSE (his account only), none seen
+on a unit: the looper's buttons, the unit's own metronome click, modifiers,
+a cab picked by name, and the Footswitches page (FM3 only, as at the
+computer), on an FM3, FM9 and Axe-Fx III. CLAUDE.md, "THE SECOND PASS", has
+each one. An AM4's volume button turned out not to exist through the
+computer either. They open when he says, and not into a review without his
+knowing an update reaches the reviewer's copy.
+
 ## Shipped (all merged to main unless it says open)
 
 - #934 (2.0.0): release day. The five waiting patches into main, the

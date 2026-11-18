@@ -110,7 +110,23 @@ export const NO_CHAIN_LINE_EDITOR = 'Modifiers and renaming need the computer.'
 export const NO_CHAIN_LINE_TOOLS = 'Moving, adding and removing blocks, and modifiers, need the computer.'
 export const NO_CHAIN_LINE_TOOLS_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, and modifiers, need the computer.'
 export const NO_CHAIN_LINE_BOTH = 'Modifiers need the computer.'
-export const noChainLine = (quick = false, { editor = false, tools = false } = {}) => {
+/*
+ * AND WHERE MODIFIERS ARE HERE TOO (`mods`: the wire's capabilities
+ * `modifiers.overWire`, lib/features MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE):
+ * each line as above with modifiers left out of it, and with everything
+ * here there is no line at all (null).
+ */
+export const NO_CHAIN_LINE_MODS = 'Moving, adding and removing blocks, and renaming, need the computer.'
+export const NO_CHAIN_LINE_MODS_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks, and renaming, need the computer.'
+export const NO_CHAIN_LINE_MODS_EDITOR = 'Renaming needs the computer.'
+export const NO_CHAIN_LINE_MODS_TOOLS = 'Moving, adding and removing blocks needs the computer.'
+export const NO_CHAIN_LINE_MODS_TOOLS_QUICK = 'Quick build fills an empty preset. Moving, adding or removing a block in a chain that has blocks needs the computer.'
+export const noChainLine = (quick = false, { editor = false, tools = false, mods = false } = {}) => {
+  if (mods === true) {
+    if (editor === true) return tools === true ? null : NO_CHAIN_LINE_MODS_EDITOR
+    if (tools === true) return quick === true ? NO_CHAIN_LINE_MODS_TOOLS_QUICK : NO_CHAIN_LINE_MODS_TOOLS
+    return quick === true ? NO_CHAIN_LINE_MODS_QUICK : NO_CHAIN_LINE_MODS
+  }
   if (editor === true) return tools === true ? NO_CHAIN_LINE_BOTH : NO_CHAIN_LINE_EDITOR
   if (tools === true) return quick === true ? NO_CHAIN_LINE_TOOLS_QUICK : NO_CHAIN_LINE_TOOLS
   return quick === true ? NO_CHAIN_LINE_QUICK : NO_CHAIN_LINE
@@ -130,9 +146,22 @@ export const EDITING_LINE_TOOLS = 'Moving, adding or removing a block in a chain
 export const EDITING_LINE_BOTH = 'Modifiers need the computer.'
 const more = (saves, { editor = false, tools = false } = {}) => (saves === true ? (editor === true ? (tools === true ? 'both' : 'editor') : tools === true ? 'tools' : null) : null)
 
-/** "What's different from USB", its first line. */
+/* The same lines where modifiers are here too (`here.mods`): modifiers left out, and with everything here no line at all (null). */
+export const EDITING_LINE_MODS = 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, renaming and copying a channel need the computer.'
+export const EDITING_LINE_MODS_SAVES = 'Moving, adding or removing a block in a chain that has blocks, renaming and copying a channel need the computer.'
+export const EDITING_LINE_MODS_EDITOR = 'Renaming and copying a channel need the computer.'
+export const EDITING_LINE_MODS_TOOLS = 'Moving, adding or removing a block in a chain that has blocks needs the computer.'
+/** And what Edit does, with modifiers: the sentence after whichever of the others applies. */
+export const EDIT_DOES_MODS = 'Modifiers can be attached.'
+
+/** "What's different from USB", its first line, or null where nothing of Edit's is left to the computer. */
 export const editingLine = (open, saves = false, here = {}) => {
   if (open !== true) return NO_EDITING_LINE
+  if (here?.mods === true) {
+    const m = more(saves, here)
+    if (m) return { both: null, editor: EDITING_LINE_MODS_EDITOR, tools: EDITING_LINE_MODS_TOOLS }[m]
+    return saves === true ? EDITING_LINE_MODS_SAVES : EDITING_LINE_MODS
+  }
   const m = more(saves, here)
   if (m) return { both: EDITING_LINE_BOTH, editor: EDITING_LINE_EDITOR, tools: EDITING_LINE_TOOLS }[m]
   return saves === true ? EDITING_LINE_SAVES : EDITING_LINE
@@ -151,7 +180,27 @@ export const editingLine = (open, saves = false, here = {}) => {
  */
 export const NOT_OVER_BLUETOOTH = 'No looper, volume button, unit metronome click or Footswitches page.'
 export const NOT_OVER_BLUETOOTH_VOLUME = 'No looper, unit metronome click or Footswitches page.'
-export const notOverBluetoothLine = (volume = false) => (volume === true ? NOT_OVER_BLUETOOTH_VOLUME : NOT_OVER_BLUETOOTH)
+/* What may be missing, in the line's order. */
+const NOT_THERE = [
+  ['looper', 'looper'],
+  ['volume', 'volume button'],
+  ['click', 'unit metronome click'],
+  ['footswitches', 'Footswitches page']
+]
+/**
+ * The line, less whatever IS there: the volume button (`volume`), and of
+ * `here` the looper, the unit's click and the Footswitches page (lib/bluetooth
+ * looperOverBluetooth, unitClickOverBluetooth). With nothing more than the
+ * volume button it is one of the two sentences above, word for word; with
+ * everything there, there is no line (null).
+ */
+export const notOverBluetoothLine = (volume = false, here = {}) => {
+  const there = { volume: volume === true, looper: here?.looper === true, click: here?.click === true, footswitches: here?.footswitches === true }
+  const missing = NOT_THERE.filter(([key]) => !there[key]).map(([, words]) => words)
+  if (!missing.length) return null
+  if (missing.length === 1) return `No ${missing[0]}.`
+  return `No ${missing.slice(0, -1).join(', ')} or ${missing[missing.length - 1]}.`
+}
 
 /**
  * WHETHER EDIT'S ONE-TIME NOTE IS UP over Bluetooth or a USB cable (Edit's
@@ -172,6 +221,7 @@ export const LIMITS_SAVES = `${LIMITS_DOES} ${EDIT_DOES_SAVES}`
 export const limitsLine = (open, saves = false, here = {}) => {
   if (open !== true) return LIMITS_CLOSED
   const m = more(saves, here)
-  if (m) return `${LIMITS_DOES} ${{ both: EDIT_DOES_BOTH, editor: EDIT_DOES_EDITOR, tools: EDIT_DOES_TOOLS }[m]}`
-  return saves === true ? LIMITS_SAVES : LIMITS_OPEN
+  const line = m ? `${LIMITS_DOES} ${{ both: EDIT_DOES_BOTH, editor: EDIT_DOES_EDITOR, tools: EDIT_DOES_TOOLS }[m]}` : saves === true ? LIMITS_SAVES : LIMITS_OPEN
+  /* And modifiers, where they are here (`here.mods`). */
+  return here?.mods === true ? `${line} ${EDIT_DOES_MODS}` : line
 }

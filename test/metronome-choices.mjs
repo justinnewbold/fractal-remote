@@ -60,6 +60,8 @@ export const setEdgeFlash = (on) => { world.asked.push(['setEdgeFlash', on]) }
 export const useRig = (pick) => pick({ deviceSlug: world.slug, bpm: world.bpm })
 export const useDemo = () => world.demo
 export const useBluetoothOn = () => world.bluetooth
+/* Bluetooth where the unit's own click cannot be switched over it: in these tests, wherever it is Bluetooth. */
+export const useBluetoothNoClick = () => world.bluetooth
 `
 
 async function bench() {

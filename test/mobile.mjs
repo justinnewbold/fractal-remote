@@ -165,7 +165,7 @@ async function clickOnTheBench(os = 'ios') {
     `,
     'rig.js': "export const useRig = (pick) => pick({ deviceSlug: globalThis.__clickSlug ?? 'fm3' })\n",
     /* Whose account it is, for what is offered to his alone (the flash as a choice): nobody's, unless a test says so. */
-    'bluetooth.js': 'export const useBluetoothOn = () => globalThis.__clickBluetooth === true\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
+    'bluetooth.js': 'export const useBluetoothOn = () => globalThis.__clickBluetooth === true\nexport const useBluetoothNoClick = () => globalThis.__clickBluetooth === true\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
     'demo.js': 'export const isDemo = () => false\n',
     /* The tap felt with the click: counted, and when (lining up moves it with the click). */
     'feedback.js': "import { now } from './clock.js'\nexport let ticks = 0\nexport const times = []\nexport const tick = () => { ticks++; times.push(now()) }\n",
@@ -6613,7 +6613,7 @@ export function run(test) {
     /* And the demo's unit makes no sound, so Unit there is the phone. */
     assert.equal(m.unitClick('fm3', { demo: true }).can, false, 'the demo says the unit clicks, and nothing does')
     assert.match(m.unitClick('fm3', { demo: true }).why, /demo/)
-    assert.match(metronome, /const demo = isDemo\(\) const bluetooth = useBluetoothOn\(\) && !demo return \{ can: unitClick\(slug, \{ bluetooth, demo \}\)\.can/)
+    assert.match(metronome, /const demo = isDemo\(\) const bluetooth = useBluetoothNoClick\(\) && !demo return \{ can: unitClick\(slug, \{ bluetooth, demo \}\)\.can/)
     /* Only Phone offered, so Phone is lit, and tapping it keeps a saved Unit. */
     assert.equal(m.placeLit(unit, 'phone', false), true, 'the one row offered is not lit, though it is what clicks')
     assert.equal(m.placeLit(unit, 'unit', true), true)
@@ -16128,7 +16128,7 @@ export function run(test) {
    */
   test('the phone reads a cab’s state and writes its selectors as whole numbers', () => {
     const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
-    assert.match(dev, /export const cabState = \(eid\) => remoteRequest\(`\/preset\/blocks\/\$\{eid\}\/cab`\)/, 'the phone cannot read cab state')
+    assert.match(dev, /export const cabState = \(eid\) => remoteRequest\(`\/preset\/blocks\/\$\{eid\}\/cab`, EDITING\)/, 'the phone cannot read cab state')
     assert.match(
       dev,
       /export const setEnum = \(eid, paramId, ordinal\) => told\(`[^`]+`, put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: ordinal, continuous: false \}, EDITING\)\)/,
@@ -16307,7 +16307,7 @@ export function run(test) {
     assert.match(picker, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how an IR is found')
     assert.match(picker, /findIrs\(banks, hunt, onBank, SHOWN\)/)
     assert.match(picker, /onPick\(\{ bank: r\.bank, ir: r\.ir, name: r\.name \}\)/)
-    assert.match(read('mobile/src/lib/device.js'), /export const listIrBanks = \(\) => remoteRequest\('\/cab\/irs'\)/, 'the phone asks for the IR names somewhere the host does not serve them')
+    assert.match(read('mobile/src/lib/device.js'), /export const listIrBanks = \(\) => remoteRequest\('\/cab\/irs', EDITING\)/, 'the phone asks for the IR names somewhere the host does not serve them')
     assert.match(read('mobile/src/lib/cab-pick.js'), /export async function pickIr\(/, 'the phone’s copy of the cab rules has no IR pick')
   })
 

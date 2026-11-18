@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE } from './features'
+import { BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2571,7 +2571,15 @@ export function openWire() {
     /* The chain with every block's place, for the chain editor (bleWire gen3PlacedBlocks): his account, until lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. The chain itself has to be open too (`chain`, above). */
     chainEditor: () => chainEditorOverBluetooth(),
     /* Rename preset and scenes, and Copy channel (lib/bleNames; bleWire namesOn): his account, until lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
-    editTools: () => editToolsOverBluetooth()
+    editTools: () => editToolsOverBluetooth(),
+    /* The Looper block's buttons (lib/bleTools): his account, until lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. */
+    looper: () => looperOverBluetooth(),
+    /* The unit's own Metronome switch (lib/bleTools): his account, until lib/features UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. */
+    unitClick: () => unitClickOverBluetooth(),
+    /* Modifiers, a cab picked by name, and the Footswitches page's reads (lib/gen3-tools): his account, until each one's switch in lib/features; asked at every request and every send. */
+    modifiers: () => modifiersOverBluetooth(),
+    cabs: () => cabPickerOverBluetooth(),
+    footswitches: () => footswitchesOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2727,3 +2735,62 @@ export const chainEditorOverBluetooth = () => (allUnits === true || CHAIN_EDITOR
  * wire's own words for them (capabilities `namesWritable`, `channelCopy`).
  */
 export const editToolsOverBluetooth = () => allUnits === true || EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE
+
+/* The units whose looper and whose own click the wire reaches (lib/bleTools): never an AM4 or a VP4. */
+const TOOL_UNITS = ['fm3', 'fm9', 'axefx3']
+
+/**
+ * Whether this account has the Looper block's buttons over Bluetooth or a
+ * USB cable (lib/bleTools): his, by the sign-in kept on the device, until
+ * lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE. On an FM3, FM9 or Axe-Fx
+ * III only.
+ */
+export const looperOverBluetooth = (unit = saved.unit) => (allUnits === true || LOOPER_OVER_BLUETOOTH_FOR_EVERYONE) && TOOL_UNITS.includes(unit)
+
+/**
+ * Whether the unit's own Metronome click can be switched from this device
+ * over Bluetooth or a USB cable (lib/bleTools): his, by the sign-in kept on
+ * the device, until lib/features UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE. On
+ * an FM3, FM9 or Axe-Fx III only.
+ */
+export const unitClickOverBluetooth = (unit = saved.unit) => (allUnits === true || UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE) && TOOL_UNITS.includes(unit)
+
+/**
+ * Whether this account has Modifiers over Bluetooth or a USB cable
+ * (lib/gen3-tools): his, by the sign-in kept on the device, until
+ * lib/features MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE. On an FM3, FM9 or
+ * Axe-Fx III only; the wire also wants Edit open on the unit, and the
+ * screens read its own word for it (capabilities `modifiers.overWire`).
+ */
+export const modifiersOverBluetooth = (unit = saved.unit) => (allUnits === true || MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE) && TOOL_UNITS.includes(unit)
+
+/**
+ * Whether this account picks a cab by name over Bluetooth or a USB cable
+ * (lib/gen3-tools): his, until lib/features
+ * CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE. On an FM3, FM9 or Axe-Fx III only;
+ * the wire also wants Edit open on the unit.
+ */
+export const cabPickerOverBluetooth = (unit = saved.unit) => (allUnits === true || CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE) && TOOL_UNITS.includes(unit)
+
+/**
+ * Whether this account has the Footswitches page over Bluetooth or a USB
+ * cable (lib/gen3-tools): his, until lib/features
+ * FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE. On an FM3 only, the one unit
+ * whose switches the computer reads live.
+ */
+export const footswitchesOverBluetooth = (unit = saved.unit) => (allUnits === true || FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE) && unit === 'fm3'
+
+/**
+ * WHAT THE METRONOME ASKS IN PLACE OF "IS THIS BLUETOOTH?": whether this is
+ * Bluetooth (or the cable) AND the unit's click cannot be switched over it.
+ * The shared rule (shared/metronome.mjs unitClick) takes `bluetooth` to mean
+ * exactly that, so where the click is open here it is handed false and
+ * reads, offers and writes as it does through the computer.
+ */
+const readNoClick = () => readOn() && !unitClickOverBluetooth()
+export const useBluetoothNoClick = () => {
+  /* The account and the unit are part of the answer: read so a change of either draws again. */
+  useBluetoothAdmin()
+  useBluetoothUnit()
+  return useSyncExternalStore(subscribeBluetooth, readNoClick, readNoClick)
+}

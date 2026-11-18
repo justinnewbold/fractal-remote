@@ -80,6 +80,7 @@ import {
   setBluetooth,
   turnOnBluetooth,
   useAdapterGone,
+  useBluetoothNoClick,
   useBluetoothOn,
   useBluetoothTrouble,
   useCableNow
@@ -708,7 +709,9 @@ export default function App() {
   const rigSlug = useRig((s) => s.deviceSlug)
   const rigBpm = useRig((s) => s.bpm)
   const unitHere = useRig((s) => s.unit === 'present')
-  useUnitMetronome(rigSlug, unitHere && !demo, { bluetooth })
+  /* Bluetooth where the unit's own click cannot be switched over it (lib/bluetooth useBluetoothNoClick). */
+  const noClick = useBluetoothNoClick()
+  useUnitMetronome(rigSlug, unitHere && !demo, { bluetooth: noClick })
   /*
    * Out looking and not yet answered: the computer (over Bluetooth (beta),
    * the adapter). 'joining' and 'no-answer' are one stretch of looking, not

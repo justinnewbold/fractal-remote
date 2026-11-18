@@ -77,7 +77,7 @@ import WatchPageOrder from '../components/WatchPageOrder'
 import WatchTunerStays from '../components/WatchTunerStays'
 import LineUp from '../components/LineUp'
 import { useWatchPages } from '../lib/watchPages'
-import { appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
+import { appleScreenOpens, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothNoClick, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH, quietCardLine } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
@@ -441,6 +441,8 @@ export default function Settings({
   const onRealVp4 = vp4Here()
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
+  /* For the metronome: Bluetooth where the unit's own click cannot be switched over it (lib/bluetooth useBluetoothNoClick). */
+  const noClick = useBluetoothNoClick()
   /*
    * And through a USB cable rather than an adapter (lib/bleAdapters isCable):
    * the same link with no computer, said as the cable wherever these pages
@@ -542,7 +544,7 @@ export default function Settings({
   }
   const inUse = demo ? null : wayInUse({ bluetooth, cable, link })
   /* Where the unit's own click can be switched from here: not over Bluetooth, not on an AM4, not in the demo. */
-  const clickHere = { bluetooth: bluetooth && !demo, demo }
+  const clickHere = { bluetooth: noClick && !demo, demo }
   const unitCan = unitClick(rigSlug, clickHere)
   /* And whether the unit has said its click is on: until it does, the phone keeps time under Unit too. */
   const clickHeard = useUnitHeardOn(rigSlug)
