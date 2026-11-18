@@ -12068,7 +12068,7 @@ export function run(test) {
 
   test('the tuner asking the unit is his account’s until its switch says everyone: the wire is handed the one answer', async () => {
     const f = src('mobile/src/lib/features.js')
-    assert.match(f, /^export const TUNER_ASKS_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new')
+    assert.match(f, /^export const TUNER_ASKS_FOR_EVERYONE = true$/m, 'closed again: every account had it from 2.0.5, on his word (“Open it up to everyone”, 18 November 2026); shutting it takes it from customers, so tell him first')
     const b = src('mobile/src/lib/bluetooth.js')
     assert.match(b, /^export const tunerAsksOverBluetooth = \(\) => allUnits === true \|\| TUNER_ASKS_FOR_EVERYONE$/m)
     assert.match(b, /^    tunerAsks: \(\) => tunerAsksOverBluetooth\(\),$/m)
@@ -21763,7 +21763,7 @@ export function run(test) {
   })
 
   test('Edit’s smaller tools over Bluetooth are his account’s until their switch says everyone: Rename and Copy channel are drawn only on the wire’s word', async () => {
-    assert.match(src('mobile/src/lib/features.js'), /^export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new and the Bluetooth page’s words')
+    assert.match(src('mobile/src/lib/features.js'), /^export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = true$/m, 'closed again: every account had it from 2.0.5, on his word (“Open it up to everyone”, 18 November 2026); shutting it takes it from customers, so tell him first')
     const b = src('mobile/src/lib/bluetooth.js')
     assert.match(b, /^export const editToolsOverBluetooth = \(\) => allUnits === true \|\| EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE$/m)
     assert.match(b, /^    editTools: \(\) => editToolsOverBluetooth\(\)$/m)
@@ -22016,7 +22016,7 @@ export function run(test) {
 
   test('the chain editor over Bluetooth is his account’s until its switch says everyone, and only the device’s own wire is ever asked for the places', async () => {
     const f = src('mobile/src/lib/features.js')
-    assert.match(f, /^export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'opened to everyone: that is his word to give, with its line in What’s new and the Bluetooth page’s words')
+    assert.match(f, /^export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = true$/m, 'closed again: every account had it from 2.0.5, on his word (“Open it up to everyone”, 18 November 2026); shutting it takes it from customers, so tell him first')
     const b = src('mobile/src/lib/bluetooth.js')
     assert.match(b, /^export const chainEditorOverBluetooth = \(\) => \(allUnits === true \|\| CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE\) && chainOverBluetooth\(\)$/m)
     assert.match(b, /^    chainEditor: \(\) => chainEditorOverBluetooth\(\),$/m)

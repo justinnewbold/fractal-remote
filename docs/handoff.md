@@ -9,8 +9,8 @@ stood when the last session ended. No Expo build was started in it: the
 He asked for everything the computer does to work over Bluetooth, "like
 chain editing and live tuner on phone and Apple Watch". #938 was already
 merged. The first pass went in as 2.0.5, three switches in
-mobile/src/lib/features.js, ALL FALSE (his account only), none seen on a
-unit: `TUNER_ASKS_FOR_EVERYONE` (an FM9's or Axe-Fx III's tuner asks the
+mobile/src/lib/features.js, TRUE for every account since the same day on
+his word ("Open it up to everyone"), none seen on a unit: `TUNER_ASKS_FOR_EVERYONE` (an FM9's or Axe-Fx III's tuner asks the
 unit when its switch brings nothing), `CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE`
 (move, add, remove a block; slow over an adapter, and it says so) and
 `EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE` (Rename, Copy channel). CLAUDE.md,

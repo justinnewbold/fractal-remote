@@ -2515,7 +2515,7 @@ lost question of another kind ahead costs its own wait (about 0.7 s for a
 scene or tempo read), with the order kept.
 
 **The computer's tools over Bluetooth: started 18 November 2026 (2.0.5),
-HIS ACCOUNT ONLY, AND NONE OF IT HAS BEEN SEEN ON A UNIT.**
+OPEN TO EVERY ACCOUNT THE SAME DAY, AND NONE OF IT HAS BEEN SEEN ON A UNIT.**
 
 > "I want to enable all of the items currently available to computer bridge
 > users to Bluetooth like chain editing and live tuner on phone and Apple
@@ -2532,6 +2532,16 @@ customers: a copy's review notes have to describe it, or it is keyed to a
 store version (the rule under *Everything that was his account's is open*).
 The watch is the phone's: whatever the phone can do with the unit, the
 watch's pages do through it, and nothing here needed the watch's own code.
+
+HE OPENED THE FIRST PASS TO EVERYONE THE DAY IT WAS BUILT: "Open it up to
+everyone" (18 November 2026, before the pull request had merged and before
+any of it had run on a unit). So the three switches below are TRUE since
+2.0.5, with three lines in What's new, on 2.0.0 copies (the only copies
+main's updates reach). The 2.0.0 review notes as written on 17 November do
+not describe them; whether Apple's 2.0.0 had been sent for review by then
+was not known, and he was asked. If one has to be shut again, its switch
+goes back to false in an update: tell him first. The next pass's pieces
+are still his account first.
 
 THE FIRST PASS, three switches:
 

@@ -671,8 +671,12 @@ export const LIVE_KNOBS_FOR_EVERYONE = true
  * MIDI jacks. Off, it is his account only (lib/bluetooth
  * tunerAsksOverBluetooth) and every other account's tuner sends the switch
  * alone, as before.
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.5 (18 November 2026): "Open it up to
+ * everyone" (Justin, the day it was built, before any of it had run on a
+ * unit; his call). Off, it is his account only again.
  */
-export const TUNER_ASKS_FOR_EVERYONE = false
+export const TUNER_ASKS_FOR_EVERYONE = true
 
 /**
  * THE CHAIN EDITOR OVER BLUETOOTH OR A USB CABLE: one block moved, added or
@@ -694,8 +698,12 @@ export const TUNER_ASKS_FOR_EVERYONE = false
  * UNIT. Off, it is his account only (lib/bluetooth
  * chainEditorOverBluetooth) and every other account's Edit says what it
  * said. It also wants the chain itself open (CHAIN_OVER_BLUETOOTH_FOR_EVERYONE).
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.5 (18 November 2026): "Open it up to
+ * everyone" (Justin, the day it was built, before any of it had run on a
+ * unit; his call). Off, it is his account only again.
  */
-export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = true
 
 /**
  * EDIT'S SMALLER TOOLS OVER BLUETOOTH OR A USB CABLE: Rename preset and
@@ -713,5 +721,9 @@ export const CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE = false
  * ON A UNIT. Off, it is his account only (lib/bluetooth
  * editToolsOverBluetooth) and every other account's Edit offers neither
  * over Bluetooth, as before.
+ *
+ * OPEN TO EVERY ACCOUNT SINCE 2.0.5 (18 November 2026): "Open it up to
+ * everyone" (Justin, the day it was built, before any of it had run on a
+ * unit; his call). Off, it is his account only again.
  */
-export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = false
+export const EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE = true

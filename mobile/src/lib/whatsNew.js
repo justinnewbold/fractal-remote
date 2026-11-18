@@ -10,6 +10,25 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-18",
+    "day": "18 November 2026",
+    "version": "2.0.5",
+    "lines": [
+      {
+        "text": "From version 2.0.0 of the app, over Bluetooth or a USB cable on an AM4, FM3, FM9 or Axe-Fx III: Edit chain moves, adds and removes blocks. Over a Bluetooth adapter the FM3, FM9 and Axe-Fx III are read again after each change, which takes up to a minute.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0, over Bluetooth or a USB cable: Rename preset and scenes, Copy a scene onto another and Copy channel are in Edit, as they are through a computer.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0, the tuner on an FM9 or Axe-Fx III over Bluetooth no longer needs Send Realtime Sysex switched on at the unit: when the unit sends no readings, the app asks it for the pitch.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-17",
     "day": "17 November 2026",
     "version": "2.0.1",
