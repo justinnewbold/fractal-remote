@@ -110,6 +110,7 @@ import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, m
 import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
+import { AM4_NAM_BLOCKS, AM4_NAM_SLOTS, am4NamAllowed, am4NamBusyAnswer, am4NamBusyFrame, am4NamPickFrame, am4NamShaped, am4NamSlotQuery, readAm4NamPick, readAm4NamSlot } from './am4-nam.js'
 import { ANSWER_MS, describeAllowed, describeBlock, describeEcho } from './gen3-describe.js'
 import {
   NAM_BLOCKS,
@@ -579,7 +580,7 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null, newBlocks = () => false) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null, newBlocks = () => false, capturing = () => null) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
     /* A block a newer firmware brought (fractal-sysex AM4_NEW_BLOCKS: the NAM Player) is sent nothing for an account it is not open to, whatever the lists below say. */
@@ -592,6 +593,14 @@ export function am4Sender(send, log = () => {}, learned = () => null, placed = (
      * And a block put in a slot (lib/am4-chain) only as the one slot write the wire is sending at this moment (`slotting`), one of the four slots and a block the AM4 itself names: on neither list, and never while nothing of the chain's is going.
      */
     /* And a name (lib/bleNames) only as the one name being written at this moment (`naming`), byte for byte: on no list, and never while nothing is being named. */
+    /* A capture job's messages (lib/am4-nam): each only as the one job in hand, and on no list below. */
+    if (sysex && am4NamShaped(bytes)) {
+      if (!am4NamAllowed(bytes, capturing())) {
+        log(`refused to send the AM4 ${toHex(bytes)}: no capture job in hand sends that`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     const ok = sysex
       ? saveShaped(bytes, MODELS.am4)
         ? saveAllowed(bytes, MODELS.am4, saving())
@@ -965,7 +974,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * asks nothing and nothing else is written; `captureTurn` keeps two of
    * them from running at once.
    */
-  const captureOn = () => unit === 'axefx3' && typeof captures === 'function' && captures() === true
+  const captureOn = () => (unit === 'axefx3' || (am4 && am4NamOn())) && typeof captures === 'function' && captures() === true
+  /*
+   * THE CAPTURE TOOLS' MESSAGES, BY UNIT. The jobs below (the list, the
+   * search for an empty slot, a send, a pick) are one piece of code for an
+   * Axe-Fx III and an AM4; what differs is the bytes of four messages, and
+   * these are each unit's own (lib/nam-install, lib/am4-nam). The upload
+   * itself is the same on both, at the unit's model byte.
+   */
+  const NX = am4
+    ? { slots: AM4_NAM_SLOTS, blocks: AM4_NAM_BLOCKS, slotQuery: (slot) => am4NamSlotQuery(slot), readSlot: (f) => readAm4NamSlot(f), busy: (on) => am4NamBusyFrame(on), busyAnswer: (f) => am4NamBusyAnswer(f), pick: (eid, slot) => am4NamPickFrame(eid, slot), readPick: (f, eid) => readAm4NamPick(f, eid) }
+    : { slots: NAM_SLOTS, blocks: NAM_BLOCKS, slotQuery: (slot) => namSlotQuery(model, slot), readSlot: (f) => readNamSlot(f, model), busy: (on) => namBusyFrame(model, on), busyAnswer: (f) => namBusyAnswer(f, model), pick: (eid, slot) => namPickFrame(model, eid, slot), readPick: (f, eid) => readNamPick(f, model, eid) }
   let capturing = null
   let captureBusy = false
   let captureTurn = false
@@ -987,7 +1006,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn())
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null))
     : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
 
   const handlers = new Set()
@@ -2212,7 +2231,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * all that is known: after a slot asked twice, which asking it answers
      * is not.
      */
-    if (!am4 && namQuietUntil > now && readNamSlot(f, model)) {
+    if (namQuietUntil > now && NX.readSlot(f)) {
       say(`a capture slot’s answer came with no question waiting, ${Math.round(now - namAskedAt)} ms after a slot was last asked: dropped`)
       return
     }
@@ -5063,7 +5082,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * took the answer (found in the second review, with a scene tapped in
      * the quiet, before it went out).
      */
-    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true, sent: (at) => (namAskedAt = at) })
+    const got = await ex(NX.slotQuery(slot), { match: (f) => NX.readSlot(f) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true, sent: (at) => (namAskedAt = at) })
     if (rejected(got)) throw failure(`The ${spec.name} would not say what is in capture slot ${namSlotSaid(slot)} (${rejectedWords(got.rejected)}). Its firmware may be older than the NAM block.`, 502)
     if (!got) {
       namQuietUntil = time.now() + LATE_MS
@@ -5228,11 +5247,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * held back for it (a list read never sets captureBusy).
    */
   function namHeads(from, count) {
-    if (!Number.isInteger(from) || from < 0 || from >= NAM_SLOTS) throw badInput('There is no such capture slot.')
+    if (!Number.isInteger(from) || from < 0 || from >= NX.slots) throw badInput('There is no such capture slot.')
     if (!Number.isInteger(count) || count < 1 || count > NAM_HEADS_MOST) throw badInput(`The list is read ${NAM_HEADS_MOST} slots at a time at most.`)
     return captureRun({ list: true }, async () => {
       const heads = []
-      for (let slot = from; slot < Math.min(NAM_SLOTS, from + count); slot++) {
+      for (let slot = from; slot < Math.min(NX.slots, from + count); slot++) {
         let head
         try {
           head = await namSlotHead(slot)
@@ -5252,9 +5271,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!Array.isArray(words) || words.length !== NAM_RECORD_WORDS || !words.every((w) => Number.isInteger(w) && w >= 0 && w <= 0xffffffff)) throw badInput('That isn’t a capture’s record.')
     const said = namSlotSaid(slot)
     const frames = namUploadFrames(model, slot, words)
-    const on = namBusyFrame(model, true)
-    const off = namBusyFrame(model, false)
-    const busy = (f) => (namBusyAnswer(f, model) ? true : undefined)
+    const on = NX.busy(true)
+    const off = NX.busy(false)
+    const busy = (f) => (NX.busyAnswer(f) ? true : undefined)
     return captureRun({ list: true, frames: [on, off, ...frames] }, async () => {
       /* What is left of the quiet after a slot said nothing is waited out BEFORE the hold is taken: nothing is going to the unit during it, and a tap should not be refused for it. No other slot question can start a new quiet meanwhile: this run has the capture tools. */
       await namQuiet()
@@ -5386,14 +5405,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   function namPick(eid, body) {
     const slot = body?.slot
-    if (!NAM_BLOCKS.includes(eid)) throw badInput('Only a NAM block plays a capture.')
-    if (!Number.isInteger(slot) || slot < 0 || slot >= NAM_SLOTS) throw badInput('There is no such capture slot.')
-    const which = `NAM ${NAM_BLOCKS.indexOf(eid) + 1}`
+    if (!NX.blocks.includes(eid)) throw badInput('Only a NAM block plays a capture.')
+    if (!Number.isInteger(slot) || slot < 0 || slot >= NX.slots) throw badInput('There is no such capture slot.')
+    const which = `NAM ${NX.blocks.indexOf(eid) + 1}`
     return captureRun({ pick: { block: eid, slot } }, async () => {
-      const list = await statusNow('editRead')
+      const list = am4 ? await am4Placed() : await statusNow('editRead')
       if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
       if (!list.some((b) => b.effectId === eid)) throw failure(`${which} isn’t in the preset the ${spec.name} is on now.`, 409)
-      const got = await ex(namPickFrame(model, eid, slot), { match: (f) => readNamPick(f, model, eid) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `${which} pointed at capture slot ${namSlotSaid(slot)}`, priority: 'write', capture: true })
+      const got = await ex(NX.pick(eid, slot), { match: (f) => NX.readPick(f, eid) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `${which} pointed at capture slot ${namSlotSaid(slot)}`, priority: 'write', capture: true })
       /* Whatever came back, the block's kept read is no longer to be trusted: a pick with no answer may still have landed, and Edit's next read must be the unit's. */
       forgetEdits(eid)
       if (rejected(got)) throw failure(`The ${spec.name} refused it (${rejectedWords(got.rejected)}).`, 502)

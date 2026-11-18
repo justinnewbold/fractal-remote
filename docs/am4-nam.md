@@ -78,7 +78,10 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
 
 - 2.0.9: the block is named and switched on Play over Bluetooth, his
   account only (`AM4_NAM_FOR_EVERYONE`).
-- Next: the capture list (action 0x45, read as above), the pick (setting
-  10), and the sender (the III's, at model 0x15, with setting 0x5C round
-  it). Each frame held at the AM4's way out to the one job in hand, as on
-  the III: an AM4 froze once on a message it did not expect.
+- 2.1.0: the Bluetooth wire answers the capture tools' routes for an AM4
+  (the list, the first empty slot, a send, a pick), his account only, with
+  mobile/src/lib/am4-nam.js holding the AM4's own four messages. No screen
+  reaches them yet.
+- Next: the screens (the TONE3000 page and its words by unit, the door on a
+  held NAM block, a capture picker for a block with no knobs), then the
+  same through the computer (ForgeFX), then the block's knobs.
