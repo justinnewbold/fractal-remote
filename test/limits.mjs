@@ -3140,10 +3140,10 @@ export function run(test) {
     assert.doesNotMatch(code, /appStoreVersionSubmissions|reviewSubmissions/, 'the job can send a version for review')
     /* Pictures go only when he asks for a whole new set, and only the iPhone's row: one DELETE, behind its own flag, on that row's pictures. */
     assert.equal(code.split("method: 'DELETE'").length - 1, 1, 'there is more than one way to take a picture away')
-    assert.match(code, /if \(clear\) \{\n    const set = sets\.find\(\(s\) => s\.type === DEVICES\.iphone\.type\)[\s\S]{0,400}if \(apply && set\) \{\n      for \(const p of set\.shots\) \{\n        await asc\(`\/v1\/appScreenshots\/\$\{p\.id\}`, \{ method: 'DELETE' \}\)/, 'a picture can be taken away without the flag, without Write it, or from another row')
-    assert.match(code, /const clear = process\.argv\.includes\('--clear-iphone'\)/)
+    assert.match(code, /for \(const device of clear\) \{\n    const set = sets\.find\(\(s\) => s\.type === DEVICES\[device\]\.type\)[\s\S]{0,400}if \(apply && set\) \{\n      for \(const p of set\.shots\) \{\n        await asc\(`\/v1\/appScreenshots\/\$\{p\.id\}`, \{ method: 'DELETE' \}\)/, 'a picture can be taken away without the flag, without Write it, or from another row')
+    assert.match(code, /const clear = \['iphone', 'ipad'\]\.filter\(\(d\) => process\.argv\.includes\(`--clear-\$\{d\}`\)\)/, 'a row with no flag of its own (the watch’s) can be emptied')
     assert.match(code, /if \(total > MOST\) throw/, 'a set can be filled past Apple’s ten')
-    assert.match(read('.github/workflows/store-text.yml'), /if: \$\{\{ inputs\.release != '' && inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-shots\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\} \$\{\{ inputs\.clear_iphone && '--clear-iphone' \|\| '' \}\}/)
+    assert.match(read('.github/workflows/store-text.yml'), /if: \$\{\{ inputs\.release != '' && inputs\.shots \}\}[\s\S]{0,400}run: node scripts\/store-shots\.mjs "\$RELEASE" \$\{\{ inputs\.apply && '--apply' \|\| '' \}\} \$\{\{ inputs\.clear_iphone && '--clear-iphone' \|\| '' \}\} \$\{\{ inputs\.clear_ipad && '--clear-ipad' \|\| '' \}\}/)
   })
 
   test('a new App Store version’s texts: the review notes are changed in place, never printed, and nothing presses Add for Review', async () => {

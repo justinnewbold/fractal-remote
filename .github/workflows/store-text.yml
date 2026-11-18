@@ -36,7 +36,11 @@ on:
         default: false
 
       clear_iphone:
-        description: With Screenshots, first remove every iPhone picture on that version (the iPad's and the watch's stay). Only when Justin has asked for a whole new set
+        description: With Screenshots, first remove every iPhone picture on that version. Only when Justin has asked for a whole new set
+        type: boolean
+        default: false
+      clear_ipad:
+        description: With Screenshots, first remove every iPad picture on that version. Only when Justin has asked for a whole new set
         type: boolean
         default: false
 
@@ -94,7 +98,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           RELEASE: ${{ inputs.release }}
-        run: node scripts/store-shots.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }} ${{ inputs.clear_iphone && '--clear-iphone' || '' }}
+        run: node scripts/store-shots.mjs "$RELEASE" ${{ inputs.apply && '--apply' || '' }} ${{ inputs.clear_iphone && '--clear-iphone' || '' }} ${{ inputs.clear_ipad && '--clear-ipad' || '' }}
 
       - name: The key is gone
         if: always()

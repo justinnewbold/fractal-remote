@@ -7,8 +7,8 @@
  * name order. Added AFTER the ones already there, never in their place, and
  * only to a version that can still be edited. It never sends a version for
  * review. One thing takes pictures away, and only when asked for by name:
- * --clear-iphone empties the iPhone's row first (the iPad's and the watch's
- * are never touched), for when he wants a whole new set.
+ * --clear-iphone or --clear-ipad empties that row first (the watch's is never
+ * touched), for when he wants a whole new set.
  *
  *   node scripts/store-shots.mjs 2.0.0           what is there, and what would be added
  *   node scripts/store-shots.mjs 2.0.0 --apply   adds them, then reads the set back
@@ -51,7 +51,8 @@ async function main() {
   const version = process.argv[2]
   const apply = process.argv.includes('--apply')
   /* "Just remove all of them and I'll give you all the new screenshots I want" (Justin, 17 November 2026): the iPhone's row only, on his word, each time. */
-  const clear = process.argv.includes('--clear-iphone')
+  /* And, the same day, "Remove the iPad ones also. I submit new ones for that as well": a row is named to be emptied, never guessed. The watch's has no flag. */
+  const clear = ['iphone', 'ipad'].filter((d) => process.argv.includes(`--clear-${d}`))
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('which version? e.g. 2.0.0')
   const shots = shotsFor(version)
   const { ASC_KEY_ID: keyId, ASC_ISSUER_ID: issuerId, ASC_KEY_PATH: keyPath } = process.env
@@ -100,9 +101,9 @@ async function main() {
   console.log(`Version ${version} (${state}), ${locale.attributes.locale}, now:`)
   show(sets)
 
-  if (clear) {
-    const set = sets.find((s) => s.type === DEVICES.iphone.type)
-    console.log(`\n${DEVICES.iphone.type}: ${apply ? 'removing' : 'would remove'} all ${set?.shots.length ?? 0} picture(s) there now. The iPad's and the watch's are left alone.`)
+  for (const device of clear) {
+    const set = sets.find((s) => s.type === DEVICES[device].type)
+    console.log(`\n${DEVICES[device].type}: ${apply ? 'removing' : 'would remove'} all ${set?.shots.length ?? 0} picture(s) there now. Every other row is left alone.`)
     if (apply && set) {
       for (const p of set.shots) {
         await asc(`/v1/appScreenshots/${p.id}`, { method: 'DELETE' })
