@@ -2783,8 +2783,8 @@ unit: read the log first.
   engine cannot read them either). A VP4 gets none of it: its wire sends no
   SysEx.
 
-**NAM on an AM4: asked for 18 November 2026, AND NOT BUILT YET. It waits
-on his AM4's own answer.**
+**NAM on an AM4: asked for 18 November 2026. Named and switched on Play
+over Bluetooth since 2.0.9, HIS ACCOUNT ONLY; the rest is not built.**
 
 > "Fractal just announced NAM support for AM4, so please research that and
 > let's get the support built in as well." (18 November 2026, the day Apple
@@ -2816,8 +2816,37 @@ on his AM4's own answer.**
   them." (once for each set of them on a connection). THAT LINE, from his
   AM4 on the 3.00 beta with a NAM block in a preset, over Bluetooth, is the
   first thing needed. Through the computer the engine's own log has it.
-- *Then, in order:* the block named, with its on and off and channels on
-  Play (the phone's list and ForgeFX's, a new pin and a computer release);
+- *HIS AM4 SAID IT, 18 November 2026: the NAM Player is block 0xD1 (209).*
+  His log, an AM4 on the 3.00 beta through a WIDI Jack, app 2.0.8: "blocks
+  this app has no name for yet on the AM4, preset Y04: slot 2 holds 0xd1
+  (209)". Everything else on that preset answered as before, so 3.00 left
+  the AM4's other messages alone there.
+- *Since 2.0.9, HIS ACCOUNT ONLY, over Bluetooth or the unit's USB cable:*
+  the block is named NAM on Play, with its on and off and its channel read
+  and written by the messages every AM4 block gets (lib/fractal-sysex
+  `AM4_NEW_BLOCKS`, kept apart from `AM4_BLOCKS` so it is never a block a
+  slot is GIVEN and never one Edit has knobs for; `am4Block` says
+  `own: true`). The switch is `AM4_NAM_FOR_EVERYONE` in features.js, false
+  (lib/bluetooth `am4NamOverBluetooth`, the wire's `am4Nam`, bleWire
+  `am4Known`): closed, it is a number asked nothing, as before, and the way
+  out (am4Sender `newBlocks`) refuses any frame at that block. Edit opens
+  it on its on and off alone (`knobs: false`). A second NAM block is taken
+  to be 0xD2. NOTHING HAS BEEN SENT TO THAT BLOCK ON A UNIT: his first
+  tap is the check, and if the AM4 freezes, switching it off and on cured
+  it before. No TONE3000 door and no capture picker there (those are the
+  III's two block ids). Through the computer it is still unnamed: that is
+  ForgeFX, a new pin and a computer release.
+- *HIS RECORDING OF AM4-EDIT LOADING A CAPTURE CAME THE SAME DAY, AND IT IS
+  THE III'S UPLOAD AT MODEL 0x15* (docs/am4-nam.md has all of it; the
+  recording is not in the repository). The same record, word for word in
+  its layout, and the phone's own `namUploadFrames(0x15, 1, words)`
+  rebuilds all 130 recorded messages byte for byte. Round it the AM4
+  writes setting 0x5C of block 1 (the III: setting 114). 129 slots, asked
+  with action 0x45 (their 327-byte answers are NOT unpacked yet). A block
+  is pointed at a slot by writing its setting 10 (the III: setting 0). A
+  second NAM block IS 0xD2: AM4-Edit read it.
+- *Then, in order:* the same through the computer (ForgeFX's list, a new
+  pin and a computer release);
   its knobs (the AM4's settings are not the III's by number: read off the
   unit, as the III's were, or from a newer codec); the capture list and
   pick; and sending a capture from TONE3000, which needs a recording of

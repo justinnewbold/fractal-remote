@@ -524,14 +524,36 @@ export const AM4_BLOCKS = {
   gate: 0x92
 }
 
-/** {slug, base, copy} for a block code the AM4 reports, or null for none or one nobody has seen. */
+/**
+ * BLOCKS A NEWER FIRMWARE BROUGHT, read off a unit and in no table of the
+ * codec's. Kept apart from AM4_BLOCKS on purpose: that list is also what a
+ * slot may be GIVEN (lib/am4-chain AM4_PALETTE) and what Edit has knobs for,
+ * and neither is known for these. A block here is named, switched and has
+ * its channel changed where it already is, and nothing more.
+ *
+ * nam, 0xD1 (209): the NAM Player of AM4 firmware 3.00, off his AM4's own
+ * log on the 3.00 beta (18 November 2026: "slot 2 holds 0xd1 (209)"). A
+ * second NAM block is taken to be one above it, as every AM4 block's second
+ * copy is; nobody has seen one.
+ */
+export const AM4_NEW_BLOCKS = { nam: 0xd1 }
+
+/**
+ * {slug, base, copy} for a block code the AM4 reports, or null for none or
+ * one nobody has seen. One of AM4_NEW_BLOCKS also says `own: true`, which is
+ * what the wire asks before it sends that block anything.
+ */
 export function am4Block(code) {
   if (!Number.isInteger(code) || code <= 0) return null
   let best = null
   for (const [slug, base] of Object.entries(AM4_BLOCKS)) {
     if (code >= base && code < base + 4 && (!best || base > best.base)) best = { slug, base, copy: code - base }
   }
-  return best
+  if (best) return best
+  for (const [slug, base] of Object.entries(AM4_NEW_BLOCKS)) {
+    if (code >= base && code < base + 4) return { slug, base, copy: code - base, own: true }
+  }
+  return null
 }
 
 /** The AM4's own name for a stored location, as its display shows it: A01 to Z04. */
@@ -685,7 +707,7 @@ export const AM4_ALLOWED = [
 
 const pidLowFits = (want, got) => {
   if (want === 'block') return !!am4Block(got)
-  if (want === 'base') return Object.values(AM4_BLOCKS).includes(got)
+  if (want === 'base') return Object.values(AM4_BLOCKS).includes(got) || Object.values(AM4_NEW_BLOCKS).includes(got)
   return want === got
 }
 
