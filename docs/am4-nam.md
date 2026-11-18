@@ -76,6 +76,14 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
 
 ## What is built, and what is next
 
+- 2.1.4: the block's knobs in Edit over Bluetooth (read one setting at a
+  time, AM4-Edit's own question; `AM4_NAM_EDIT_FOR_EVERYONE`), and all of
+  it through the computer (ForgeFX 68a7ffb, src/am4Nam.ts;
+  `AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE`). His account only; not run on a
+  unit. The settings: 0 Level, 11 Input Gain, 12 Phase Invert, 13 Tone Stack
+  Location, 14 Tone Stack Type, 15/16/17 Bass, Mid, Treble, 19 Bright, by
+  what AM4-Edit read and the III's NAM block's names and ranges.
+
 - 2.1.3: all of the below is open to every account (`AM4_NAM_FOR_EVERYONE`,
   true), on his word after his AM4 kept a capture sent from the app over
   a WIDI Jack (35.4 s, 130 messages, kept first try, played in NAM 1).

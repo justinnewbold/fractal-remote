@@ -2814,6 +2814,59 @@ Its knobs, and all of it through the computer, are not built.**
 > let's get the support built in as well." (18 November 2026, the day Apple
 > approved 2.0.0)
 
+- *ITS KNOBS IN EDIT, AND ALL OF IT THROUGH THE COMPUTER: built 18 November
+  2026 (2.1.4), HIS ACCOUNT ONLY, and NONE OF IT HAS RUN ON A UNIT.* "And go
+  ahead and build it out for the computer and the raspberry pie and do the
+  knobs and edit" (the same day).
+  - *The knobs* (mobile/src/lib/am4-own-knobs.js, hand-written as the III's
+    own are; the codec's catalog has no NAM): Level (setting 0), Input Gain
+    (11), Bass, Mid, Treble (15, 16, 17), Bright (19), and three switches,
+    Phase Invert (12), Tone Stack Location (13), Tone Stack Type (14). FROM
+    HIS RECORDING: AM4-Edit read those settings of block 0xD1 one at a time
+    (action 0x0D), and each answer has the value and the AM4's own words
+    ("0.0 dB" at 0.8 of the travel, "0.00 dB" at half, "POST" as 1, "ACTIVE"
+    as 0, "5.00" at half). THE NAMES AND RANGES ARE THE AXE-FX III'S NAM
+    BLOCK'S, which fit every one of those; the AM4 does not say a name and
+    one point does not prove a range. So EVERY READ LOGS THE AM4'S WORDS
+    BESIDE THE APP'S NUMBER ("read the nam’s settings one at a time …, as
+    the AM4 words them: Level “0.0 dB”, …"), and "THE APP’S RANGE IS WRONG
+    for …" where they differ. READ THOSE LINES FIRST in his first log. The
+    switches' other choices (INVERT, PRE, OFF, eleven tone stacks) are the
+    III's numbering, never seen on an AM4. Left out: 10 (the capture, the
+    pick's alone), 3 (the on and off), 18 and 20 (not read by AM4-Edit),
+    42 ("8 Band", not understood).
+  - *READ ONE SETTING AT A TIME, never whole.* Every other AM4 block is
+    read as a register (fn 0x1F). Nobody has seen this block answer that,
+    so it is asked AM4-Edit's own question for each setting on the list
+    (am4-edit `readEach`, `buildAm4ReadOne`, bleWire `am4EachParams`), and
+    the way out refuses the whole-register read of it. Nine short reads;
+    the capture it plays is read with them, so Edit draws the Capture
+    button over the knobs. A knob is written as every AM4 knob is (its
+    place along the travel), a switch as its number; never a setting not
+    on the list.
+  - *The switch* is `AM4_NAM_EDIT_FOR_EVERYONE` in features.js, false
+    (lib/bluetooth `am4NamKnobsOverBluetooth`, the wire's `am4NamKnobs`,
+    bleWire `am4KnobsShut`). Shut, the block is what it is for everybody
+    since 2.1.3: its on and off and channels, TONE3000 and Capture on a
+    hold, and no read or write of Edit's reaches it. With the knobs up the
+    hold pop-up has them and TONE3000; the Capture button is then Edit's.
+  - *Through the computer or a Raspberry Pi* (ForgeFX 68a7ffb,
+    server/src/am4Nam.ts, in the computer release that came with 2.1.4).
+    The engine sends the block with NO SLUG (it sent "0xd1"), reads its on
+    and off from it, writes its channel, answers its knobs the same one at
+    a time, and answers the captures' routes for an AM4, with GET
+    /nam/blocks/:eid/slot. The phone names it (lib/ownBlocks `nameAm4Nam`,
+    by its two codes, on an AM4 only), `fixed` so the chain editor never
+    moves or removes it, `turns` where his account has the knobs. The
+    switch is `AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE`, false. FOR EVERY
+    OTHER ACCOUNT, through that computer app, the block is a held "New
+    block" (it was a tile called 0xd1). am4Nam.ts AND THE PHONE'S
+    am4-nam.js / am4-own-knobs.js ARE CHANGED TOGETHER; each is held to the
+    recording's frames by its own test. COMPUTER_NEEDED did not move. His
+    Pis take the release by themselves (his account skips the day's wait)
+    once nobody has used them for half an hour, or Check for updates.
+  - *To open either:* its switch to true and a What's new line, on his
+    word, after his log shows the AM4's words agreeing with the app's.
 - *What is known* (Fractal's forum, read through search results only: its
   pages and the wiki refuse a cloud session). AM4 firmware 3.00 is in beta
   ("AM4 Firmware V3.00 Beta 4" is pinned in the AM4 forum) and brings a NAM

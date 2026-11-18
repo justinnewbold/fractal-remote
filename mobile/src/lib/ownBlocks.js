@@ -120,6 +120,32 @@ export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
  * and everything else still see the block as they did.
  */
 
+/*
+ * AN AM4'S NAM PLAYER BLOCK THROUGH THE COMPUTER (firmware 3.00). The
+ * computer app that knows the block (ForgeFX src/am4Nam.ts) sends it with
+ * no slug, as it sends an Axe-Fx III's own blocks, so an app older than the
+ * block holds it as a New block; this names it, by its two codes, for an
+ * account it is open to. `knobs` true where the computer answers its knobs
+ * and this account has them (`turns`); else its on and off alone.
+ *
+ * `fixed: true`: THE CHAIN EDITOR NEVER MOVES OR REMOVES IT (ownInChainEditor
+ * leaves it held). Nobody has seen an AM4 slot GIVEN this block from here
+ * (lib/am4-chain says the same of Bluetooth).
+ */
+export const AM4_NAM_CODES = Object.freeze([0xd1, 0xd2])
+const isAm4 = (deviceSlug) => String(deviceSlug || '').toLowerCase() === 'am4'
+export function nameAm4Nam(blocks, deviceSlug, open, knobs = false) {
+  if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
+  let named = false
+  const out = blocks.map((b) => {
+    if (!b || b.unknown !== true || b.slug || !AM4_NAM_CODES.includes(b.effectId)) return b
+    named = true
+    const called = { ...b, slug: 'nam', family: 'NAM', name: b.effectId === AM4_NAM_CODES[0] ? 'NAM' : 'NAM 2', onPlay: true, fixed: true }
+    return knobs === true ? { ...called, turns: true } : { ...called, knobs: false }
+  })
+  return named ? out : blocks
+}
+
 /** The computer's list of blocks to add, with this unit's own blocks added where the list lacks them. The same list back when there is nothing to add or the account is not offered them. */
 export function ownInPalette(list, deviceSlug, open) {
   if (open !== true || !Array.isArray(list) || !list.length) return list
@@ -151,7 +177,7 @@ export function ownInChainEditor(blocks, open) {
   if (open !== true || !Array.isArray(blocks)) return blocks
   let any = false
   const out = blocks.map((b) => {
-    if (!b || b.unknown !== true || b.onPlay !== true || !OWN_FAMILIES.includes(b.slug) || !Number.isInteger(b.effectId)) return b
+    if (!b || b.unknown !== true || b.onPlay !== true || b.fixed === true || !OWN_FAMILIES.includes(b.slug) || !Number.isInteger(b.effectId)) return b
     any = true
     return { ...b, unknown: false }
   })

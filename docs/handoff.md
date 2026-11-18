@@ -44,8 +44,10 @@ His AM4 on the 3.00 beta said the block's code: 0xD1 (209). Since 2.0.9 it
 is named NAM on Play over Bluetooth with on/off and channels, his account
 first, and with TONE3000 and the Capture button on a held block every
 account's since 2.1.3 (`AM4_NAM_FOR_EVERYONE`, true), after his AM4 kept a
-capture sent from the app. Next: the same through the computer (ForgeFX), knobs, captures (needs
-a MIDI Monitor recording of AM4-Edit loading one). CLAUDE.md has it.
+capture sent from the app. Since 2.1.4, his account only and not run on a
+unit: its knobs in Edit over Bluetooth, and all of it through the computer
+(ForgeFX 68a7ffb). CLAUDE.md has it; his first log's "as the AM4 words
+them" line is the check.
 
 ## Shipped (all merged to main unless it says open)
 

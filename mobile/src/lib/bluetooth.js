@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2581,7 +2581,8 @@ export function openWire() {
     cabs: () => cabPickerOverBluetooth(),
     footswitches: () => footswitchesOverBluetooth(),
     /* The AM4's NAM Player block (firmware 3.00) named and switched (lib/fractal-sysex AM4_NEW_BLOCKS): every account since lib/features AM4_NAM_FOR_EVERYONE went true (2.1.3); asked at every request and every send. */
-    am4Nam: () => am4NamOverBluetooth()
+    am4Nam: () => am4NamOverBluetooth(),
+    am4NamKnobs: () => am4NamKnobsOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2784,6 +2785,8 @@ export const footswitchesOverBluetooth = (unit = saved.unit) => (allUnits === tr
 
 /** Whether this account's AM4 has its NAM Player block named and switched (lib/features AM4_NAM_FOR_EVERYONE): his account, or the switch. */
 export const am4NamOverBluetooth = () => allUnits === true || AM4_NAM_FOR_EVERYONE
+/** Whether this account's AM4 NAM block has its knobs in Edit (lib/features AM4_NAM_EDIT_FOR_EVERYONE): his account, or the switch. */
+export const am4NamKnobsOverBluetooth = () => allUnits === true || AM4_NAM_EDIT_FOR_EVERYONE
 
 /**
  * WHAT THE METRONOME ASKS IN PLACE OF "IS THIS BLUETOOTH?": whether this is

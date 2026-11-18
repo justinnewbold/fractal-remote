@@ -866,3 +866,29 @@ export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = true
  * AM4 NAM block for everybody. Back to false and it is his account's again.
  */
 export const AM4_NAM_FOR_EVERYONE = true
+
+/**
+ * THE AM4'S NAM BLOCK'S KNOBS IN EDIT (lib/am4-own-knobs.js), over Bluetooth
+ * or a USB cable: Level, Input Gain, Bass, Mid, Treble, Bright and three
+ * tone-stack and phase switches, with the Capture button over them.
+ *
+ * "And go ahead and build it out for the computer and the raspberry pie and
+ * do the knobs and edit" (Justin, 18 November 2026). His account first: the
+ * names and ranges are the Axe-Fx III's NAM block's, matched to what his
+ * AM4 told AM4-Edit, and NO KNOB OF THIS BLOCK HAS BEEN READ OR TURNED FROM
+ * THE APP ON A UNIT. It opens when he says so, with its What's new line.
+ */
+export const AM4_NAM_EDIT_FOR_EVERYONE = false
+
+/**
+ * THE AM4'S NAM BLOCK THROUGH THE COMPUTER OR A RASPBERRY PI: named on Play
+ * with its on and off and its channels, TONE3000 and the Capture button on a
+ * held block (lib/ownBlocks nameAm4Nam; the computer app that carries
+ * ForgeFX src/am4Nam.ts sends the block with no slug and answers the
+ * captures' routes for an AM4).
+ *
+ * His account first: NOTHING OF IT HAS RUN ON A UNIT THROUGH A COMPUTER.
+ * Through a computer app older than that release the block is what it was
+ * (a number). It opens when he says so, with its What's new line.
+ */
+export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = false

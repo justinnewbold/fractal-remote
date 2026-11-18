@@ -3341,7 +3341,7 @@ export function run(test) {
 
     /* Open to every account since the switch said so (2.0.0, 17 November 2026; his alone before), asked at every read, and set in one place. */
     const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
-    assert.match(here, /setChainNamer\(\(blocks\) => nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel\(bluetoothAdmin\(\) === true\)\)\)/)
+    assert.match(here, /setChainNamer\(\(blocks\) => nameAm4Nam\(nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel\(bluetoothAdmin\(\) === true\)\), /)
     assert.match(read('mobile/src/lib/features.js'), /export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = true\n/, 'the phone’s own names through a computer are closed to customers on 2.0.0 (open since 17 November 2026)')
     assert.equal((read('mobile/App.js').match(/^import '\.\/src\/lib\/ownBlocksHere'$/gm) || []).length, 1)
     assert.equal(read('mobile/src/lib/ownBlocks.js').match(/^import .*$/gm).join('\n'), "import { catalogFor } from './gen3Catalog.js'")
@@ -3355,6 +3355,48 @@ export function run(test) {
     for (const f of ['shared/new-block.mjs', 'shared/grid-plan.mjs']) assert.ok(!/\bonPlay\b|\bownBlocks\b|nameOwnBlocks/.test(read(f)), f)
   })
 
+
+  test('an AM4’s NAM block through the computer is named by the phone from its two codes, only on an AM4 and only where it is open, and the chain editor never moves it', async () => {
+    const { nameAm4Nam, ownInChainEditor, AM4_NAM_CODES } = await import('../mobile/src/lib/ownBlocks.js')
+    const { markNewBlocks, isNewBlock } = await import('../shared/new-block.mjs')
+    const { deviceSlug } = await import('../mobile/src/lib/device-slug.js')
+    const feats = await import('../mobile/src/lib/features.js')
+    assert.equal(feats.AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE, false)
+    assert.deepEqual([...AM4_NAM_CODES], [0xd1, 0xd2])
+    /* As the computer app that knows the block sends it: no slug, its code, its place, its on and off. */
+    const sent = () => markNewBlocks([
+      { slug: 'amp', name: 'amp', effectId: 58, row: 0, col: 0, bypassed: false, channel: 'A' },
+      { slug: '', name: 'NAM 1', effectId: 0xd1, row: 0, col: 1, bypassed: true, channel: 'B' },
+      { slug: '', name: 'NAM 2', effectId: 0xd2, row: 0, col: 2, bypassed: false, channel: 'A' },
+      { slug: '', name: '0xd5', effectId: 0xd5, row: 0, col: 3, bypassed: null, channel: null }
+    ])
+    const am4 = deviceSlug('AM4')
+    const marked = sent()
+    const named = nameAm4Nam(marked, am4, true)
+    assert.deepEqual(named.map((b) => [b.effectId, b.slug, b.name, b.onPlay === true, b.knobs, b.turns === true, b.fixed === true, b.bypassed, b.channel]), [
+      [58, 'amp', 'amp', false, undefined, false, false, false, 'A'],
+      [0xd1, 'nam', 'NAM', true, false, false, true, true, 'B'],
+      [0xd2, 'nam', 'NAM 2', true, false, false, true, false, 'A'],
+      [0xd5, '', '0xd5', false, undefined, false, false, null, null]
+    ])
+    /* With its knobs the computer's to answer: `turns`, never `knobs: false`. */
+    assert.deepEqual(nameAm4Nam(marked, am4, true, true).filter((b) => b.onPlay).map((b) => [b.turns, b.knobs]), [[true, undefined], [true, undefined]])
+    /* Still a New block to everything that moves or edits the chain, and the chain editor's own list leaves it held. */
+    for (const b of nameAm4Nam(marked, am4, true, true)) if (b.onPlay) assert.equal(isNewBlock(b), true)
+    const forEditor = ownInChainEditor(nameAm4Nam(marked, am4, true, true), true)
+    assert.ok(forEditor.filter((b) => b.onPlay).every((b) => b.unknown === true), 'the chain editor was handed an AM4 NAM block to move')
+    /* Closed, another unit, a block the computer named itself, or one with another code: the very list back. */
+    assert.equal(nameAm4Nam(marked, am4, false, true), marked)
+    assert.equal(nameAm4Nam(marked, am4, undefined), marked)
+    for (const slug of ['fm3', 'fm9', 'axefxiii', 'vp4', 'device', '', null]) assert.equal(nameAm4Nam(marked, slug, true), marked, String(slug))
+    const old = [{ slug: '0xd1', name: '0xd1', effectId: 0xd1 }]
+    assert.equal(nameAm4Nam(markNewBlocks(old), am4, true)[0].slug, '0xd1', 'an older computer app’s block was renamed')
+    assert.equal(nameAm4Nam(null, am4, true), null)
+    /* The wiring: his account or the switch, and the knobs by the switch they have over Bluetooth. */
+    const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
+    assert.match(here, /const am4NamHere = \(\) => bluetoothAdmin\(\) === true \|\| AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE/)
+    assert.match(here, /setChainNamer\(\(blocks\) => nameAm4Nam\(nameOwnBlocks\(.*\), getState\(\)\.deviceSlug, am4NamHere\(\), am4NamKnobsOverBluetooth\(\)\)\)/)
+  })
   test('through the computer, a III’s NAM the phone has named is on Play and switches by its own id, and is still a New block to Edit and the chain', async () => {
     const { nameOwnBlocks } = await import('../mobile/src/lib/ownBlocks.js')
     const { rig, device, asked, log } = await rigOnTheBench({ short: 'Axe-Fx III', blocks: III_FROM_THE_COMPUTER() })

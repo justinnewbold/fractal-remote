@@ -106,7 +106,7 @@ import {
   toHex
 } from './fractal-sysex.mjs'
 import { outlineChain } from './chain-outline.js'
-import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, modelFrame, modelsOf, readAllCollector, readsOf } from './am4-edit.js'
+import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, buildAm4ReadOne, chunksFromEach, editBlock, knobFrame, modelFrame, modelsOf, readAllCollector, readAm4One, readEach, readsOf, settingsOf } from './am4-edit.js'
 import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
@@ -784,7 +784,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.footswitches]  whether the Footswitches page's reads are answered from this device (lib/gen3-tools; lib/features FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); only a unit whose switches the computer reads live (an FM3)
  * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam, am4NamKnobs } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -879,6 +879,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const cabOn = () => !!tools?.cab && editOn() && typeof cabs === 'function' && cabs() === true
   /* The AM4's NAM Player block (fractal-sysex AM4_NEW_BLOCKS), named and switched only for an account it is open to (lib/features AM4_NAM_FOR_EVERYONE); asked at every request and every send. */
   const am4NamOn = () => typeof am4Nam === 'function' && am4Nam() === true
+  /*
+   * AND ITS KNOBS IN EDIT (lib/am4-own-knobs.js), a switch of their own
+   * (lib/features AM4_NAM_EDIT_FOR_EVERYONE), asked at every request and
+   * every send. Shut, the block is what it was: `knobs: false`, its on and
+   * off and its channel, and no read or write of Edit's reaches it.
+   */
+  const am4NamKnobsOn = () => am4NamOn() && typeof am4NamKnobs === 'function' && am4NamKnobs() === true
+  const am4KnobsShut = (code) => am4Block(code)?.own === true && !am4NamKnobsOn()
   /* The block at this code as this account's AM4 knows it: one a newer firmware brought only where it is open. */
   const am4Known = (code) => {
     const b = am4Block(code)
@@ -1006,7 +1014,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null))
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? (Array.isArray(editPlaced) ? editPlaced.filter((c) => !am4KnobsShut(c)) : editPlaced) : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null))
     : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
 
   const handlers = new Set()
@@ -3935,7 +3943,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         bypassed: typeof off === 'boolean' ? off : null,
         channel: Number.isInteger(ch) ? channelLetter(ch) : null,
         /* A block Edit has no knobs for (a newer firmware's, fractal-sysex AM4_NEW_BLOCKS): Edit opens it on its on and off alone, as it does a gen-3 unit's (knobsSaid). */
-        ...(block.own ? { knobs: false } : {})
+        ...(block.own && am4KnobsShut(code) ? { knobs: false } : {})
       })
     }
     const line = strangers.join(', ')
@@ -4180,8 +4188,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   async function am4Params(eid) {
     const code = blockNumber(eid)
-    const b = editBlock(code)
+    const b = am4KnobsShut(code) ? null : editBlock(code)
     if (!b) throw badInput(`The app can’t open block ${toHex([code])} from here yet.`)
+    if (readEach(code)) return am4EachParams(code, b)
     /* Kept from a moment ago (editKept): nothing to send, or only the registers written since. */
     const kept = editKept.get(code)
     const fresh = !!kept && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS
@@ -4225,6 +4234,62 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /*
+   * A BLOCK READ ONE SETTING AT A TIME (lib/am4-own-knobs.js: the NAM
+   * Player). AM4-Edit's own question for each setting on its list, the only
+   * read of that block ever recorded; never the read of the whole register.
+   * Each answer has the value and the AM4's own words for it, and THE LOG
+   * LAYS THOSE WORDS BESIDE WHAT THE APP WORKS OUT, since the ranges are the
+   * Axe-Fx III's and one point does not prove them. Which capture the block
+   * plays comes with it where the capture tools are open (its own question,
+   * lib/am4-nam), so Edit draws its Capture button.
+   */
+  async function am4EachParams(code, b) {
+    const kept = editKept.get(code)
+    const fresh = !!kept && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS
+    if (fresh && !kept.stale.size) return blockParamsOf(code, kept.chunks, { channel: kept.channel, bypassed: kept.bypassed, capture: kept.capture })
+    const at = moves
+    await placedHere(code)
+    const started = time.now()
+    const ch = await am4ChannelNow(code, 'editRead')
+    const off = await am4BypassNow(code, 'editRead')
+    const got = new Map()
+    const words = []
+    const odd = []
+    for (const p of settingsOf(b.slug)) {
+      const a = await ask(buildAm4ReadOne(code, p.pidHigh), (f) => readAm4One(f, code, p.pidHigh), WAIT.am4Bypass, `the ${b.slug}’s ${p.label}`, { priority: 'editRead' })
+      if (rejected(a)) throw refusedBy(a.rejected)
+      if (!a || a === SKIPPED) throw failure(`The AM4 didn’t send the ${b.slug}’s ${p.label}. Try again.`, 504)
+      got.set(p.pidHigh, a.wire)
+      words.push(`${p.label} “${a.text}”`)
+    }
+    const chunks = chunksFromEach(code, got)
+    const channel = Number.isInteger(ch) ? ch : 0
+    const bypassed = typeof off === 'boolean' ? off : undefined
+    /* Which capture it plays: the captures' own read, only where they are open, and never a fault of this read. */
+    let capture
+    if (captureOn() && typeof NX.pickRead === 'function' && NX.blocks.includes(code)) {
+      try {
+        const which = await captureRun({ pick: { block: code, slot: 0 } }, () => ex(NX.pickRead(code), { match: (f) => NX.readPick(f, code) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `which capture the ${b.slug} plays`, priority: 'editRead', capture: true }))
+        if (which && !rejected(which) && Number.isInteger(which.slot)) capture = { slot: which.slot }
+      } catch {
+        capture = undefined
+      }
+    }
+    if (moves === at) editKept.set(code, { at: time.now(), whole: time.now(), channel, bypassed, chunks, capture, stale: new Set() })
+    const out = blockParamsOf(code, chunks, { channel, bypassed, capture })
+    /* The app's number beside the AM4's words, where the words are a number and the two differ. */
+    for (const k of out.named) {
+      const p = settingsOf(b.slug).find((q) => q.label === k.name)
+      const said = words.find((w) => w.startsWith(`${k.name} “`))
+      const n = said ? parseFloat(said.slice(k.name.length + 2)) : NaN
+      if (p && Number.isFinite(n) && Math.abs(n - k.value) > 0.051) odd.push(`${k.name}: the AM4 says ${n}, the app worked out ${k.value}`)
+    }
+    say(`read the ${b.slug}’s settings one at a time in ${((time.now() - started) / 1000).toFixed(1)} s, channel ${Number.isInteger(ch) ? CH[ch] : 'A (not read)'}, as the AM4 words them: ${words.join(', ')}${capture ? `; capture slot ${capture.slot}` : ''}`)
+    if (odd.length) say(`THE APP’S RANGE IS WRONG for ${odd.join('; ')}`)
+    return out
+  }
+
+  /*
    * PUT /preset/blocks/<code>/params/<id>: one knob or switch, the frame the
    * computer sends for it. Answered ok when it went; Edit reads the block
    * back to see whether it took, as it does over the computer.
@@ -4232,7 +4297,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function am4WriteKnob(eid, id, body) {
     const at = moves
     const code = blockNumber(eid)
-    if (!editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} from here yet.`)
+    if (am4KnobsShut(code) || !editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} from here yet.`)
     const made = knobFrame(code, Number(id), body)
     if (made.refused) throw badInput(made.refused)
     await placedHere(code)
