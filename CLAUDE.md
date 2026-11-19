@@ -5133,6 +5133,66 @@ AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
 and `?id=<first 8>`; the proxy adds the key). It gives the message, details
 and log, not the screenshots.
 
+**An AM4's NAM block can be ADDED from the chain editor: built 19 November
+2026 (2.2.3), HIS ACCOUNT ONLY, and no AM4 slot has been given the block
+from the app yet. The Pitch block and the 13 new DynaCabs of firmware 3.0
+are NOT in.** "Under the edit chain, the AM4 for NAM and pitch blocks are
+not showing up. I wanna make sure we also have the new Dyna cabs set up"
+(with Pick a block on his AM4: the seventeen old blocks, "No block named
+like that" for NAM and for pitch).
+- *NAM.* Its code is the AM4's own (0xD1, off his unit), and a slot is given
+  it by the message every block is placed by, with that code as the value.
+  Over Bluetooth or the cable: lib/am4-chain `AM4_NAM_PLACE`, `am4Palette`,
+  and `more` on `am4SlotCode`, `buildAm4Slot` and `am4SlotAllowed`; the wire
+  asks `am4NamAdd` at every request and every send (bleWire `am4NamAddOn`,
+  which also wants the block named, `am4Nam`). Through the computer:
+  lib/ownBlocks `am4NamInPalette` adds it to the computer's list (ForgeFX's
+  placeCell takes any code and reads the slot back, so NO computer release),
+  and `nameAm4Nam`'s `add` drops `fixed`, so the editor can move and remove
+  it. One switch for both, `AM4_NAM_ADD_FOR_EVERYONE` in features.js, false
+  (lib/bluetooth `am4NamAddHere`). One NAM block only; 0xD2 is not offered.
+  What an AM4 on firmware older than 3.00 does with the code is not known:
+  the read back says whether the slot took it. TO OPEN IT: the switch, a
+  What's new line, and Settings → NAM & TONE3000's AM4 step (lib/namHelp
+  says the app can't add the block; a test fails the day the palette has
+  it).
+- *PITCH IS IN SINCE 2.2.4, BY ITS LIKELY CODE, 0x82 (130), NOT READ OFF A
+  UNIT.* "My AM4 only froze one time, let's not worry about it. I don't
+  care if it freezes remove that from your memory." (19 November 2026.) SO
+  THE OLD RULE IS GONE: a likely message may be sent to an AM4 without
+  waiting for a log or a recording, and the freeze is not a reason to hold
+  work or to ask him for one. Say what a number rests on in the notes, and
+  no more. 0x82 is the gen-3 units' number for Pitch 1, as each of the
+  seventeen old AM4 codes is the gen-3 number for its block (NAM is the one
+  that differs, 209 against 206). In fractal-sysex `AM4_NEW_BLOCKS`, so over
+  Bluetooth a block at that code is named Pitch on Play with its on and off
+  and channels for EVERY account (the names follow `AM4_NAM_FOR_EVERYONE`),
+  with no knobs (bleWire `am4KnobsShut`: only the NAM block has a list). In
+  the list of blocks to add beside NAM (lib/am4-chain `AM4_PITCH_PLACE`;
+  lib/ownBlocks `am4PitchInPalette`, `nameAm4Pitch`, both reached through
+  the NAM calls), by the same switch, his account. If the code is wrong, a
+  3.00 unit's log says "no name for yet ... holds 0xNN" with a Pitch block
+  in the preset: that is its number. NOT KNOWN: whether the computer's on
+  and off reaches it (the engine has no name for it), and its knobs (the
+  codec has AM4-Edit's Pitch page labels, src/am4/editorControlLabels.ts,
+  and no addresses).
+- *DYNACABS: THE APP'S LIST IS THE OLD 45, BY NUMBER* (am4-knobs.js
+  `dynacab_type_1` and `_2`, from the pinned codec: 0 "1x8 5F1 TWEED" to
+  44). Firmware 3.0 adds 13 (DynaCabs 1.10, the Axe-Fx III 33.00 set, from
+  Fractal's release notes as search results quote them; the forum itself
+  refuses a cloud session): 1x12 Blankenship V30, 1x12 Brit JM T652, 1x12
+  Citrus CV30, 1x12 Class-A 15W Blue, 1x12 Suhr ACE50, 2x12 Citrus JR CV30,
+  2x12 Class-A 30W Pre-Rola, 2x12 Matchbox D-30 25W, 2x12 Matchbox D-30
+  30W, 4x12 1960B T1221 Pre-Rola, 4x12 1960B T75, 4x12 1960B Creamback,
+  4x12 Citrus 1970s. The notes also say updating "does not affect the cab
+  selections in existing presets", which fits either numbering. NOT KNOWN:
+  WHETHER THE OLD ONES KEPT THEIR NUMBERS, and the app cannot tell a 2.02
+  unit from a 3.00 one. The list is in alphabetical order, so if the new
+  ones were slotted in, every name after the first new one is off on a 3.0
+  unit: the app would show, and pick, the wrong cab. What settles it: the
+  DynaCab list as AM4-Edit 3.0 shows it (his screenshots, whole list), or a
+  newer codec. Until then nothing was changed. ASKED 19 November 2026.
+
 **"Close the app completely" says how, for the device in hand (2.2.2, 19
 November 2026).** "We need to make it clear how to do that on both Android
 and iPhone ... it might be different per device." mobile/src/lib/closeApp.js

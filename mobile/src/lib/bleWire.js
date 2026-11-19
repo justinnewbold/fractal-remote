@@ -155,7 +155,7 @@ import {
   parseGridDump,
   parseGridLive
 } from './gen3-grid.js'
-import { AM4_PALETTE, AM4_SLOTS, am4SlotAllowed, buildAm4Slot } from './am4-chain.js'
+import { AM4_PALETTE, AM4_SLOTS, am4Palette, am4SlotAllowed, buildAm4Slot } from './am4-chain.js'
 import { createVp4Wire } from './bleVp4.js'
 
 /* ------------------------------------------------------------------ */
@@ -580,7 +580,7 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null, newBlocks = () => false, capturing = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null, slotting = () => null, naming = () => null, newBlocks = () => false, capturing = () => null, placesNam = () => false) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
     /* A block a newer firmware brought (fractal-sysex AM4_NEW_BLOCKS: the NAM Player) is sent nothing for an account it is not open to, whatever the lists below say. */
@@ -606,7 +606,7 @@ export function am4Sender(send, log = () => {}, learned = () => null, placed = (
         ? saveAllowed(bytes, MODELS.am4, saving())
         : nameShaped(bytes, MODELS.am4)
           ? nameAllowed(bytes, naming())
-          : am4Allowed(bytes) || am4EditAllowed(bytes, placed()) || am4SlotAllowed(bytes, slotting())
+          : am4Allowed(bytes) || am4EditAllowed(bytes, placed()) || am4SlotAllowed(bytes, slotting(), placesNam() === true)
       : am4ShortAllowed(bytes, learned())
     if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
@@ -784,7 +784,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.footswitches]  whether the Footswitches page's reads are answered from this device (lib/gen3-tools; lib/features FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); only a unit whose switches the computer reads live (an FM3)
  * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam, am4NamKnobs } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam, am4NamKnobs, am4NamAdd } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -886,7 +886,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * off and its channel, and no read or write of Edit's reaches it.
    */
   const am4NamKnobsOn = () => am4NamOn() && typeof am4NamKnobs === 'function' && am4NamKnobs() === true
-  const am4KnobsShut = (code) => am4Block(code)?.own === true && !am4NamKnobsOn()
+  /* The NAM Player as a block a slot may be GIVEN (lib/am4-chain AM4_NAM_PLACE): only where the block is named at all, and this account may add it (lib/features AM4_NAM_ADD_FOR_EVERYONE); asked at every request and every send. */
+  const am4NamAddOn = () => am4NamOn() && typeof am4NamAdd === 'function' && am4NamAdd() === true
+  const am4KnobsShut = (code) => am4Block(code)?.own === true && (!am4NamKnobsOn() || am4Block(code).slug !== 'nam')
   /* The block at this code as this account's AM4 knows it: one a newer firmware brought only where it is open. */
   const am4Known = (code) => {
     const b = am4Block(code)
@@ -1014,7 +1016,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? (Array.isArray(editPlaced) ? editPlaced.filter((c) => !am4KnobsShut(c)) : editPlaced) : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null))
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? (Array.isArray(editPlaced) ? editPlaced.filter((c) => !am4KnobsShut(c)) : editPlaced) : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null), () => am4NamAddOn())
     : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
 
   const handlers = new Set()
@@ -4826,7 +4828,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const at = moves
     const slot = body?.col
     const code = body?.blockId
-    const out = buildAm4Slot(slot, code)
+    const out = buildAm4Slot(slot, code, am4NamAddOn())
     if (!out) throw badInput(Number.isInteger(slot) && slot >= 1 && slot <= AM4_SLOTS ? `Block ${code} is not one the app places on the AM4.` : `The AM4 has no slot ${slot}.`)
     const what = code === 0 ? `slot ${slot} emptied` : `${am4Named(code)} into slot ${slot}`
     chainSeen(what)
@@ -6358,7 +6360,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     /* The chain read as a grid and changed from here, only where it is open to this account (chainOn): his alone so far. Nobody else is ever answered, and a wire made without `chain` answers these as it always did, "not over Bluetooth". */
     if (chainOn()) {
-      if (method === 'GET' && path === '/blocks') return editRoute(async () => (am4 ? AM4_PALETTE.map((b) => ({ ...b })) : gen3Palette()))
+      if (method === 'GET' && path === '/blocks') return editRoute(async () => (am4 ? am4Palette(am4NamAddOn()).map((b) => ({ ...b })) : gen3Palette()))
       if (method === 'GET' && path === '/preset/grid') return editRoute(() => (am4 ? am4Grid() : gen3Grid(opts?.onProgress, opts?.kept === true && chainEditorOn() ? PLACED_FRESH_MS : STRUCTURE_FRESH_MS)))
       if (method === 'PUT' && path === '/preset/grid/cell') return editRoute(() => (am4 ? am4PlaceSlot(body) : gen3PlaceCell(body)))
       if (method === 'POST' && path === '/preset/grid/cable' && !am4) return editRoute(() => gen3Cable(body))

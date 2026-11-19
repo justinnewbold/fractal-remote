@@ -535,8 +535,16 @@ export const AM4_BLOCKS = {
  * log on the 3.00 beta (18 November 2026: "slot 2 holds 0xd1 (209)"). A
  * second NAM block is taken to be one above it, as every AM4 block's second
  * copy is; nobody has seen one.
+ *
+ * pitch, 0x82 (130): the Pitch block of the same firmware. NOT READ OFF A
+ * UNIT: it is the gen-3 units' own number for Pitch 1, as every one of the
+ * seventeen above is the gen-3 number for its block. "I don't care if it
+ * freezes" (Justin, 19 November 2026, of sending an AM4 a likely number in
+ * place of waiting for a log). If a 3.00 unit's log ever says "no name for
+ * yet ... holds 0xNN" with a Pitch block in the preset, that is its number
+ * and this one is wrong.
  */
-export const AM4_NEW_BLOCKS = { nam: 0xd1 }
+export const AM4_NEW_BLOCKS = { nam: 0xd1, pitch: 0x82 }
 
 /**
  * {slug, base, copy} for a block code the AM4 reports, or null for none or
