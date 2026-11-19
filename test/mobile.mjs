@@ -3361,7 +3361,7 @@ export function run(test) {
     const { markNewBlocks, isNewBlock } = await import('../shared/new-block.mjs')
     const { deviceSlug } = await import('../mobile/src/lib/device-slug.js')
     const feats = await import('../mobile/src/lib/features.js')
-    assert.equal(feats.AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE, false)
+    assert.equal(feats.AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE, true)
     assert.deepEqual([...AM4_NAM_CODES], [0xd1, 0xd2])
     /* As the computer app that knows the block sends it: no slug, its code, its place, its on and off. */
     const sent = () => markNewBlocks([

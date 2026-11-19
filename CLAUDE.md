@@ -2815,7 +2815,12 @@ Its knobs, and all of it through the computer, are not built.**
 > approved 2.0.0)
 
 - *ITS KNOBS IN EDIT, AND ALL OF IT THROUGH THE COMPUTER: built 18 November
-  2026 (2.1.4), HIS ACCOUNT ONLY, and NONE OF IT HAS RUN ON A UNIT.* "And go
+  2026 (2.1.4), OPEN TO EVERY ACCOUNT SINCE 2.1.5 THE SAME DAY ("open them up
+  to everyone"; both switches true, one What's new line), and NONE OF IT
+  HAD RUN ON A UNIT WHEN IT OPENED. Read "false" and "his account" below as
+  "until 2.1.5". If one has to be shut again, its switch goes back to false
+  in an update: tell him first. Through a computer it needs computer app
+  2.1.4 or later; on an older one the block is the number it was.* "And go
   ahead and build it out for the computer and the raspberry pie and do the
   knobs and edit" (the same day).
   - *The knobs* (mobile/src/lib/am4-own-knobs.js, hand-written as the III's

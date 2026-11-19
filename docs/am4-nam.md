@@ -76,6 +76,9 @@ Then the preset was saved (`action 0x1B`, the save the phone already has).
 
 ## What is built, and what is next
 
+- 2.1.5: the knobs and the computer side are open to every account, on his
+  word, before either had run on a unit.
+
 - 2.1.4: the block's knobs in Edit over Bluetooth (read one setting at a
   time, AM4-Edit's own question; `AM4_NAM_EDIT_FOR_EVERYONE`), and all of
   it through the computer (ForgeFX 68a7ffb, src/am4Nam.ts;

@@ -878,7 +878,8 @@ export const AM4_NAM_FOR_EVERYONE = true
  * AM4 told AM4-Edit, and NO KNOB OF THIS BLOCK HAS BEEN READ OR TURNED FROM
  * THE APP ON A UNIT. It opens when he says so, with its What's new line.
  */
-export const AM4_NAM_EDIT_FOR_EVERYONE = false
+/* OPEN TO EVERY ACCOUNT SINCE 2.1.5 (18 November 2026): "open them up to everyone" (Justin). Not yet read or turned on a unit when it opened. */
+export const AM4_NAM_EDIT_FOR_EVERYONE = true
 
 /**
  * THE AM4'S NAM BLOCK THROUGH THE COMPUTER OR A RASPBERRY PI: named on Play
@@ -891,4 +892,5 @@ export const AM4_NAM_EDIT_FOR_EVERYONE = false
  * Through a computer app older than that release the block is what it was
  * (a number). It opens when he says so, with its What's new line.
  */
-export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = false
+/* OPEN TO EVERY ACCOUNT SINCE 2.1.5 (18 November 2026): "open them up to everyone" (Justin). Needs computer app 2.1.4 or later; not yet run on a unit through a computer when it opened. */
+export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = true

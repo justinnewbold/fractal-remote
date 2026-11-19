@@ -4,9 +4,9 @@
   "days": [
     {
       "date": "2026-11-18",
-      "version": "2.1.3",
+      "version": "2.1.5",
       "lines": [
-        "From version 2.0.0, on an AM4 with firmware 3.00 over Bluetooth or a USB cable: the new NAM block is a pedal on Play, with its on and off and its channels. Hold it to pick one of the captures on the unit, or to browse TONE3000 and send one. Every capture sent stays in a slot on the AM4.",
+        "From version 2.0.0, on an AM4 with firmware 3.00: the new NAM block is a pedal on Play, and it opens in Edit with its knobs and a Capture button. Hold it to pick a capture, or to browse TONE3000 and send one, which stays in a slot on the AM4. Over Bluetooth, a USB cable, or a computer (computer app 2.1.4 or later).",
         "From version 2.0.0 of the app, over Bluetooth or a USB cable on an AM4, FM3, FM9 or Axe-Fx III: Edit chain moves, adds and removes blocks. Over a Bluetooth adapter the FM3, FM9 and Axe-Fx III are read again after each change, which takes up to a minute.",
         "From version 2.0.0, over Bluetooth or a USB cable: Rename preset and scenes, Copy a scene onto another and Copy channel are in Edit, as they are through a computer.",
         "From version 2.0.0, the tuner on an FM9 or Axe-Fx III over Bluetooth no longer needs Send Realtime Sysex switched on at the unit: when the unit sends no readings, the app asks it for the pitch.",
