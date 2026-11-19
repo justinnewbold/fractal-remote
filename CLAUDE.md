@@ -5133,6 +5133,39 @@ AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
 and `?id=<first 8>`; the proxy adds the key). It gives the message, details
 and log, not the screenshots.
 
+**ON AN iPHONE THE APP CAN FAIL TO SEE AN ADAPTER THAT IS CONNECTED, UNTIL
+IT IS CLOSED AND OPENED AGAIN (19 November 2026, his third log that
+morning, pasted). NOT FIXED: the fix is native.** "Force closing the app and
+restarting fixed it." What the log shows: in the old run, six trips through
+Apple's screen (26, 5, 6, 29, 2.5 and 3.4 seconds) each ended "ports after
+Apple's Bluetooth screen — WIDI Master Bluetooth [offline]" and nothing
+else. The new run, 30 seconds after the old one's last line, listed "WIDI
+Uhost Bluetooth" 2.4 seconds after Connect, with no ", new" beside it: it
+was connected BEFORE that screen opened, so it had been connected while the
+old run could not see it. The app's list is read live from the module
+(lib/bluetooth adapterDevices calls `devices()` each time; the module walks
+MIDIGetNumberOfDestinations), so the stale view was CoreMIDI's in that
+process, not a copy the app kept. The same reading fits reports bf90bfd6
+and d9a2f5fe (only the Master ever listed), and may be what 16 November's
+"stuck link" on his FM3 was. WHY the process's view goes stale is NOT KNOWN
+(the process had been alive, mostly in the background, since the evening
+before).
+- *What an update does (2.2.0):* after Apple's screen has closed twice in a
+  row with nothing connected that the app can see, the page says
+  `SEEN_NOT_HERE` (lib/offerWords): close the app completely, open it
+  again, tap Connect. An iPhone or iPad only.
+- *What would mend it, and is a BUILD:* in FractalBleMidiModule.swift, when
+  Apple's screen closes and the list has nothing new, make CoreMIDI look
+  again (`MIDIRestart()`, or a fresh client and ports) before the list is
+  read. Not written, not tried; it moves the ios line (the android one only
+  if anything shared moves). His yes first.
+- *A FRESH RUN IS IN THE LOG:* a run starts with "[fold] Fold sensor" and
+  "[app] kept from the run before — N lines, last written …", and the runs
+  before it are under "THE RUN BEFORE THIS ONE". The log cannot tell a
+  force close from iOS ending the app in the background; half a minute
+  between the last line and the new run, with him at the phone, is a force
+  close.
+
 **Switch unit in one tap while Bluetooth is on, and a unit's own adapter
 that is only away is named (2.1.9, 19 November 2026), for every account.**
 "Users need to be able to switch almost immediately from Bluetooth device to

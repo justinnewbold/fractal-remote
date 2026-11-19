@@ -155,7 +155,7 @@ import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Tabs from '../components/Tabs'
-import { OFFER_LOOK, offerNote, ownAwayNote } from '../lib/offerWords'
+import { OFFER_LOOK, SEEN_NOT_HERE, SEEN_NOT_HERE_AFTER, offerNote, ownAwayNote } from '../lib/offerWords'
 import { SWITCH_UNIT, SWITCH_UNIT_HINT } from '../lib/unitSwitch'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
@@ -493,6 +493,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const [wanted, setWanted] = useState(() => (connectOwedUntil() !== null && !b.adapter ? b.unit : null))
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
+  /* How many times in a row it has: the second on an iPhone says to close the app and open it again (lib/offerWords SEEN_NOT_HERE). */
+  const [misses, setMisses] = useState(0)
   /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
   const his = useBluetoothAdmin()
   const paid = mayDriveBluetooth(purchase, his)
@@ -510,7 +512,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     setMissed(false)
     setWanted(b.unit)
     const pick = await findAdapters({ cableFirst })
-    if (ios && !pick && !adapterDevices().some((d) => !d.offline)) setMissed(true)
+    const none = ios && !pick && !adapterDevices().some((d) => !d.offline)
+    if (none) setMissed(true)
+    setMisses((n) => (none ? n + 1 : 0))
   }
   /*
    * Another adapter: forget this one, then the same as the first time, with
@@ -1087,6 +1091,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             {'No adapter was connected. Check Bluetooth is on and allowed for Fractal Remote, then tap Connect again.'}
           </Text>
         ) : null}
+        {/* The second time running: the adapter may be connected and the app not seeing it, which closing the app cured (report of 19 November 2026). */}
+        {!b.on && missed && !b.adapter && !b.trouble && !b.said && ios && misses >= SEEN_NOT_HERE_AFTER ? <Note tone="warn">{SEEN_NOT_HERE}</Note> : null}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said && onReport ? <ReportThis onPress={() => onReport('No adapter was connected.')} /> : null}
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
         {b.said && onReport ? <ReportThis onPress={() => onReport(b.said)} /> : null}

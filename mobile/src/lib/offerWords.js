@@ -35,3 +35,17 @@ export const OFFER_LOOK = 'Look for a different adapter'
  */
 export const ownAwayNote = (own, unit, noun = 'phone') =>
   `${own || 'Its adapter'}, your ${unit || 'unit'}’s adapter, isn’t connected to this ${noun}. Tap Connect and choose it. If it isn’t there, it is switched off, or another phone, tablet or computer is connected to it.`
+
+/*
+ * APPLE'S SCREEN CLOSED TWICE WITH NOTHING THE APP CAN SEE (19 November
+ * 2026, his third report that morning). His FM3's WIDI Uhost was connected
+ * to the iPhone and the app's list never had it, through six trips to
+ * Apple's screen; the app closed and opened again listed it at once, already
+ * connected. So after a second miss in a row on an iPhone the page says the
+ * step that worked. "Sometimes", because that is all that is known: why the
+ * list goes stale is not, and mending it is native work.
+ */
+export const SEEN_NOT_HERE =
+  'If the adapter says Connected in that screen, close the app completely (swipe it away) and open it again, then tap Connect. The app sometimes can’t see an adapter that was connected while it was open.'
+/** How many times in a row Apple's screen has to close with nothing connected before that is said. */
+export const SEEN_NOT_HERE_AFTER = 2
