@@ -4101,7 +4101,9 @@ export function run(test) {
 
   test('the AM4’s NAM Player block (0xD1, firmware 3.00) is named, switched and has its channel changed where it is open, and is a number asked nothing where it is not', async () => {
     const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
-    assert.deepEqual(sx.AM4_NEW_BLOCKS, { nam: 0xd1 })
+    /* And the Pitch block of the same firmware, by the gen-3 units' number for it: likely, not read off a unit (19 November 2026, "I don't care if it freezes"). */
+    assert.deepEqual(sx.AM4_NEW_BLOCKS, { nam: 0xd1, pitch: 0x82 })
+    assert.deepEqual(sx.am4Block(0x82), { slug: 'pitch', base: 0x82, copy: 0, own: true })
     assert.deepEqual(sx.am4Block(0xd1), { slug: 'nam', base: 0xd1, copy: 0, own: true })
     assert.deepEqual(sx.am4Block(0xd2), { slug: 'nam', base: 0xd1, copy: 1, own: true })
     assert.equal(sx.am4Block(0xd0), null)
@@ -23964,8 +23966,11 @@ export function run(test) {
     /* Open: named, and this account may add it. */
     const t = await onTheLine('am4', { ...CHAIN_OPEN, nam: true, am4Nam: () => true, am4NamAdd: () => true })
     const list = await t.get('/blocks')
-    assert.deepEqual(list.slice(0, -1), chain.AM4_PALETTE.map((b) => ({ ...b })))
-    assert.deepEqual(list.at(-1), { ...chain.AM4_NAM_PLACE })
+    assert.deepEqual(list.slice(0, -2), chain.AM4_PALETTE.map((b) => ({ ...b })))
+    assert.deepEqual(list.slice(-2), [{ ...chain.AM4_NAM_PLACE }, { ...chain.AM4_PITCH_PLACE }])
+    assert.deepEqual({ ...chain.AM4_PITCH_PLACE }, { slug: 'pitch', family: 'pitch', instance: 1, name: 'Pitch', page: 0x82 })
+    assert.equal(chain.buildAm4Slot(3, 0x82), null, 'the Pitch block’s code can be built with nothing said')
+    assert.deepEqual(chain.readAm4Slot(chain.buildAm4Slot(3, 0x82, true)), { slot: 3, code: 0x82 })
     await t.get('/preset/grid')
     t.sent.length = 0
     assert.deepEqual(await sendTo(t, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0xd1 }), { ok: true })
@@ -23973,6 +23978,21 @@ export function run(test) {
     assert.deepEqual(t.unit.state.slots, [0x3a, 0x76, 0x77, 0xd1])
     assert.ok(t.logs.some((l) => l === 'nam into slot 4: the AM4 says so'), t.logs.join(' | '))
     assert.ok(!t.logs.some((l) => /refused to send/.test(l)))
+    /* The Pitch block the same way, by its likely code; then Play names it, with its on and off and no knobs. */
+    {
+      const p = await onTheLine('am4', { ...CHAIN_OPEN, nam: true, am4Nam: () => true, am4NamAdd: () => true, am4NamKnobs: () => true })
+      await p.get('/preset/grid')
+      p.sent.length = 0
+      assert.deepEqual(await sendTo(p, 'PUT', '/preset/grid/cell', { row: 1, col: 4, blockId: 0x82 }), { ok: true })
+      assert.equal(hex(p.frames()[0]), hex(chain.buildAm4Slot(4, 0x82, true)))
+      assert.deepEqual(p.unit.state.slots, [0x3a, 0x76, 0x77, 0x82])
+      const drawn = (await p.get('/preset/blocks')).find((b) => b.effectId === 0x82)
+      assert.equal(drawn.slug, 'pitch')
+      assert.equal(drawn.knobs, false, 'Edit is offered knobs the app does not have for the Pitch block')
+      assert.equal(drawn.bypassed, false)
+      assert.ok(!p.logs.some((l) => /refused to send|no name for yet/.test(l)), p.logs.join(' | '))
+      assert.ok(!p.unit.state.frozen)
+    }
     /* Every way it is shut: not listed, refused in words, and not one byte of it sent. */
     for (const shut of [{}, { am4Nam: () => true }, { am4NamAdd: () => true }, { am4Nam: () => false, am4NamAdd: () => true }, { am4Nam: () => true, am4NamAdd: () => false }]) {
       const c = await onTheLine('am4', { ...CHAIN_OPEN, nam: true, ...shut })

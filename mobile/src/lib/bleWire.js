@@ -888,7 +888,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const am4NamKnobsOn = () => am4NamOn() && typeof am4NamKnobs === 'function' && am4NamKnobs() === true
   /* The NAM Player as a block a slot may be GIVEN (lib/am4-chain AM4_NAM_PLACE): only where the block is named at all, and this account may add it (lib/features AM4_NAM_ADD_FOR_EVERYONE); asked at every request and every send. */
   const am4NamAddOn = () => am4NamOn() && typeof am4NamAdd === 'function' && am4NamAdd() === true
-  const am4KnobsShut = (code) => am4Block(code)?.own === true && !am4NamKnobsOn()
+  const am4KnobsShut = (code) => am4Block(code)?.own === true && (!am4NamKnobsOn() || am4Block(code).slug !== 'nam')
   /* The block at this code as this account's AM4 knows it: one a newer firmware brought only where it is open. */
   const am4Known = (code) => {
     const b = am4Block(code)

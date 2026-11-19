@@ -3362,11 +3362,17 @@ export function run(test) {
     {
       const { am4NamInPalette } = await import('../mobile/src/lib/ownBlocks.js')
       const computers = [{ page: 0x3a, name: 'Amp', slug: 'amp' }]
-      assert.deepEqual(am4NamInPalette(computers, 'am4', true), [...computers, { page: 0xd1, name: 'NAM', slug: 'nam', family: 'NAM' }])
+      assert.deepEqual(am4NamInPalette(computers, 'am4', true), [...computers, { page: 0xd1, name: 'NAM', slug: 'nam', family: 'NAM' }, { page: 0x82, name: 'Pitch', slug: 'pitch', family: 'pitch' }])
+      /* The Pitch block the computer sends with no name: named, on Play with no knobs, and the editor's to move and remove; only where this account may add it. */
+      const pitch = [{ effectId: 0x82, unknown: true, row: 0, col: 2 }]
+      assert.deepEqual(nameAm4Nam(pitch, 'am4', true, false, true)[0], { effectId: 0x82, unknown: true, row: 0, col: 2, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, knobs: false, movable: true })
+      assert.equal(ownInChainEditor(nameAm4Nam(pitch, 'am4', true, false, true), true)[0].unknown, false)
+      assert.equal(nameAm4Nam(pitch, 'am4', true, false), pitch)
+      assert.equal(nameAm4Nam(pitch, 'fm3', true, false, true), pitch)
       assert.equal(am4NamInPalette(computers, 'am4', false), computers)
       assert.equal(am4NamInPalette(computers, 'fm3', true), computers)
       assert.equal(am4NamInPalette([], 'am4', true).length, 0, 'a list that could not be read is given a block')
-      const had = [...computers, { page: 0xd1, name: 'NAM' }]
+      const had = [...computers, { page: 0xd1, name: 'NAM' }, { page: 0x82, name: 'Pitch' }]
       assert.equal(am4NamInPalette(had, 'am4', true), had, 'listed twice')
       const sent = [{ effectId: 0xd1, unknown: true, row: 0, col: 1 }]
       assert.equal(nameAm4Nam(sent, 'am4', true, false)[0].fixed, true)

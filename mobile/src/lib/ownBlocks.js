@@ -133,9 +133,12 @@ export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
  * (lib/am4-chain says the same of Bluetooth).
  */
 export const AM4_NAM_CODES = Object.freeze([0xd1, 0xd2])
+export const AM4_PITCH_CODE = 0x82
 const isAm4 = (deviceSlug) => String(deviceSlug || '').toLowerCase() === 'am4'
 export function nameAm4Nam(blocks, deviceSlug, open, knobs = false, add = false) {
   if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
+  /* Where this account may add the new blocks, the Pitch block is named with it (nameAm4Pitch, below). */
+  if (add === true) blocks = nameAm4Pitch(blocks, deviceSlug, open)
   let named = false
   const out = blocks.map((b) => {
     if (!b || b.unknown !== true || b.slug || !AM4_NAM_CODES.includes(b.effectId)) return b
@@ -158,8 +161,33 @@ export function nameAm4Nam(blocks, deviceSlug, open, knobs = false, add = false)
  */
 export function am4NamInPalette(list, deviceSlug, open) {
   if (open !== true || !Array.isArray(list) || !list.length || !isAm4(deviceSlug)) return list
-  if (list.some((b) => b?.page === AM4_NAM_CODES[0])) return list
-  return [...list, { page: AM4_NAM_CODES[0], name: 'NAM', slug: 'nam', family: 'NAM' }]
+  const more = am4PitchInPalette(list, deviceSlug, open)
+  if (more.some((b) => b?.page === AM4_NAM_CODES[0])) return more
+  return [...more.filter((b) => b?.page !== AM4_PITCH_CODE), { page: AM4_NAM_CODES[0], name: 'NAM', slug: 'nam', family: 'NAM' }, ...more.filter((b) => b?.page === AM4_PITCH_CODE)]
+}
+
+/**
+ * And the AM4's Pitch block (firmware 3.00), through the computer: in the
+ * list of blocks to add, and named where the computer sends it with no
+ * slug. By its likely code (lib/fractal-sysex AM4_NEW_BLOCKS says what that
+ * rests on). On Play with its on and off and channels, no knobs; `movable`
+ * so the chain editor can move and remove it. Whether the computer's on and
+ * off reaches a block it has no name for has not been seen.
+ */
+export function am4PitchInPalette(list, deviceSlug, open) {
+  if (open !== true || !Array.isArray(list) || !list.length || !isAm4(deviceSlug)) return list
+  if (list.some((b) => b?.page === AM4_PITCH_CODE)) return list
+  return [...list, { page: AM4_PITCH_CODE, name: 'Pitch', slug: 'pitch', family: 'pitch' }]
+}
+export function nameAm4Pitch(blocks, deviceSlug, open) {
+  if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
+  let named = false
+  const out = blocks.map((b) => {
+    if (!b || b.unknown !== true || b.slug || b.effectId !== AM4_PITCH_CODE) return b
+    named = true
+    return { ...b, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, knobs: false, movable: true }
+  })
+  return named ? out : blocks
 }
 
 /** The computer's list of blocks to add, with this unit's own blocks added where the list lacks them. The same list back when there is nothing to add or the account is not offered them. */
@@ -193,7 +221,7 @@ export function ownInChainEditor(blocks, open) {
   if (open !== true || !Array.isArray(blocks)) return blocks
   let any = false
   const out = blocks.map((b) => {
-    if (!b || b.unknown !== true || b.onPlay !== true || b.fixed === true || !OWN_FAMILIES.includes(b.slug) || !Number.isInteger(b.effectId)) return b
+    if (!b || b.unknown !== true || b.onPlay !== true || b.fixed === true || !(OWN_FAMILIES.includes(b.slug) || b.movable === true) || !Number.isInteger(b.effectId)) return b
     any = true
     return { ...b, unknown: false }
   })

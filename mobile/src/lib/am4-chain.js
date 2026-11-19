@@ -60,16 +60,19 @@ export const AM4_PALETTE = Object.freeze(Object.entries(AM4_BLOCKS).map(([slug, 
  * what it does with the code is not known, and the read back says whether
  * the slot took it.
  *
- * NOT HERE: the Pitch block the same firmware brought. Its code has not
- * been read off a unit, and a guessed code is never sent to an AM4.
+ * The Pitch block the same firmware brought is offered beside it
+ * (AM4_PITCH_PLACE), by a code that is likely and not read off a unit.
  */
 export const AM4_NAM_PLACE = Object.freeze({ slug: 'nam', family: 'NAM', instance: 1, name: 'NAM', page: AM4_NEW_BLOCKS.nam })
+/** And the Pitch block, by its likely code (fractal-sysex AM4_NEW_BLOCKS says what that rests on). */
+export const AM4_PITCH_PLACE = Object.freeze({ slug: 'pitch', family: 'pitch', instance: 1, name: 'Pitch', page: AM4_NEW_BLOCKS.pitch })
+const MORE = Object.freeze([AM4_NAM_PLACE, AM4_PITCH_PLACE])
 
 /** The blocks offered: the palette, with the NAM Player after it where `more` is true. */
-export const am4Palette = (more = false) => (more === true ? [...AM4_PALETTE, AM4_NAM_PLACE] : AM4_PALETTE)
+export const am4Palette = (more = false) => (more === true ? [...AM4_PALETTE, ...MORE] : AM4_PALETTE)
 
 /** Whether `code` is one a slot may be sent: a block the palette names, or 0 for empty; the NAM Player's too where `more` is true. */
-export const am4SlotCode = (code, more = false) => code === 0 || AM4_PALETTE.some((b) => b.page === code) || (more === true && code === AM4_NAM_PLACE.page)
+export const am4SlotCode = (code, more = false) => code === 0 || AM4_PALETTE.some((b) => b.page === code) || (more === true && MORE.some((b) => b.page === code))
 
 /** Put `code` in slot 1 to 4 (0 empties it). Null for a slot or a code that is never sent. */
 export function buildAm4Slot(slot, code, more = false) {
