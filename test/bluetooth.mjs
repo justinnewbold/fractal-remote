@@ -9745,7 +9745,7 @@ export function run(test) {
     assert.match(page, /<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
-    assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
+    assert.match(page, /tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
     assert.match(flat('mobile/src/components/Tabs.js'), /on=\{it\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
     assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 3, 'a unit chip somewhere can be changed while connected')
@@ -11378,7 +11378,7 @@ export function run(test) {
       '{said.line}',
       '<Heading>1 · Pick your unit</Heading>',
       '<Heading>2 · Connect</Heading>',
-      "label={b.looking ? 'Looking…' : 'Connect'}",
+      "label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}",
       '<Press label="Setup guide"',
       '<Press label="How to connect my Bluetooth device"',
       '<Press label="Troubleshooting"',
@@ -12012,7 +12012,9 @@ export function run(test) {
     /*
      * IN THE LOG, NEVER IN THE DETAILS. lib/reports context goes with every
      * report, a suggestion too, and the privacy page and the form's small
-     * print list exactly what is in it. Nothing about Bluetooth goes in it.
+     * print list exactly what is in it. Nothing about Bluetooth goes in it
+     * but the one word for the way it is connected (lib/linkWay, test/reports.mjs),
+     * which the privacy page lists: never the adapter, the unit picked or the topic.
      */
     const ctx = code('mobile/src/lib/reports.js')
     const body = ctx.slice(ctx.indexOf('export function context('), ctx.indexOf('export function logPreview('))
@@ -12132,7 +12134,7 @@ export function run(test) {
     assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.trouble !== 'bluetooth-off' && b\.phase !== 'locked' && !!onReport/)
     /* Turn on Bluetooth and Switch to between the line's own button and Report this, since 7 November 2026. */
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{offOnAndroid \? <Press label=\{TURN_ON_BLUETOOTH\} tone="live" height=\{52\} onPress=\{turnOn\} \/> : null\} \{offOnAndroid \? <Hint>\{bluetoothOffHint\(b\.on && !!b\.adapter, waitingOn\)\}<\/Hint> : null\} \{offerSwitch \? <Press label=\{SWITCH_TO\(b\.answeredAs\)\} sub=\{SWITCH_TO_SUB\(adapterName\(b\.adapter\), b\.answeredAs\)\} tone="live" height=\{52\} onPress=\{switchUnit\} \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
-    assert.match(page, /\{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet && !fixing \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
+    assert.match(page, /\{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{howToClose\(Platform\.OS\)\}<\/Hint> : null\} \{reportable && quiet && !fixing \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
     assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
     assert.equal((drawn.match(/<ReportThis /g) || []).length, 4, 'Report this is drawn somewhere else, or twice for one line')
@@ -18997,7 +18999,7 @@ export function run(test) {
      * the top bar's (test/independent.mjs), and none when Connect reaches the
      * unit by USB cable.
      */
-    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : 'Connect'\} icon=\{cable \|\| takes\.length \? null : bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
+    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : offerMain \? OFFER_LOOK : 'Connect'\} icon=\{cable \|\| takes\.length \|\| offerMain \? null : bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{offerMain \? undefined : font\.lead\} height=\{offerMain \? 52 : 64\} tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
     assert.match(src('mobile/src/screens/Bluetooth.js'), /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     const press = flat('mobile/src/components/Press.js')
     assert.match(press, /const wordInk = inkColor && !on && !disabled \? inkColor : ink/, 'Press’s own colour is not kept for lit or disabled')
@@ -20091,7 +20093,7 @@ export function run(test) {
     assert.ok(cut > 0, 'the on/off ternary could not be split')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
     assert.ok(onPart.includes('{differentButton}') && onPart.indexOf('{differentButton}') < onPart.indexOf('<Press label={stop.label}'), 'no Use a different adapter while it is trying the one kept, or it is under Stop')
-    assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={b.looking ? 'Looking…' : 'Connect'}"), 'no Use a different adapter under Connect')
+    assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}"), 'no Use a different adapter under Connect')
     assert.ok(!/A different adapter is Troubleshooting['’]s/.test(page), 'the page still says a different adapter is Troubleshooting’s')
   })
 
@@ -24294,7 +24296,7 @@ export function run(test) {
     assert.match(lib, /const back = sameAdapterBack\(was, dev\) cameBack = back \? \{ from: was\.id, to: dev\.id \} : null if \(back\) \{ logDebug\('ble', `[^`]*`\) carryHeard\(was\.id, dev\.id\) \}/)
   })
 
-  test('another unit’s adapter is offered right under Connect as “Use WIDI Uhost for your FM3?”, and one tap moves it', async () => {
+  test('another unit’s adapter is offered FIRST, over Connect, as “Use WIDI Uhost for your FM3?”, and one tap moves it', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gear.takeFromOther('WIDI Uhost', 'fm3'), 'Use WIDI Uhost for your FM3?')
     assert.equal(gear.takeFromOther('WIDI Jack Bluetooth', 'am4'), 'Use WIDI Jack for your AM4?')
@@ -24302,11 +24304,48 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const offerFromOther = !b\.on && !b\.adapter && !!b\.offer && canStart && b\.offer\.unit !== b\.unit/)
     assert.match(page, /const takeOffer = \(\) => \{ if \(!canStart \|\| !takeOffered\(\)\) return arm\(\) setWanted\(b\.unit\) \}/)
-    const press = '{offerFromOther ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} tone="live" height={52} disabled={b.looking} onPress={takeOffer} /> : null}'
-    assert.ok(page.includes(press), 'the offer is not drawn as one tap with its words')
-    /* Right under Connect and its line, before anything else under it. */
-    const connect = page.indexOf("<Press label={b.looking ? 'Looking…' : 'Connect'}")
-    assert.ok(connect > 0 && page.indexOf(press) > connect && page.indexOf(press) < page.indexOf('{cableButtons}', connect), 'the offer is not right under Connect')
+    /*
+     * THE BIG BUTTON, OVER CONNECT, WITH A SENTENCE OVER IT (19 November
+     * 2026, report bf90bfd6): Justin tapped Connect eight times with the one
+     * tap that moves the adapter drawn smaller under Connect's hint. The
+     * offer is Connect's size and has the Bluetooth mark; Connect under it
+     * is smaller, unlit, and says what it does then.
+     */
+    const press = '{offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}'
+    assert.ok(page.includes(press), 'the offer is not drawn as one big tap with its words')
+    assert.equal(page.split('onPress={takeOffer}').length - 1, 2, 'the offer is not drawn once big and once small')
+    const note = '{offerMain ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}'
+    const connect = page.indexOf("<Press label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}")
+    assert.ok(connect > 0, 'Connect does not say what it does while another unit’s adapter is offered')
+    assert.ok(page.indexOf(note) > 0 && page.indexOf(note) < page.indexOf(press) && page.indexOf(press) < connect, 'the sentence, the offer and Connect are not in that order')
+    assert.ok(page.slice(connect, page.indexOf('/>', connect)).includes("height={offerMain ? 52 : 64} tone={offerMain ? undefined : 'live'}"), 'Connect is as big and as lit as the offer over it')
+    const w = await import('../mobile/src/lib/offerWords.js')
+    assert.equal(
+      w.offerNote('WIDI Master Bluetooth', 'FM3', 'Axe-Fx III', 'iPad'),
+      'WIDI Master Bluetooth is the only adapter connected to this iPad, and it was set up for your Axe-Fx III. If it is plugged into your FM3 now, use it here.'
+    )
+    assert.equal(w.OFFER_LOOK, 'Look for a different adapter')
+    /*
+     * AND NOT THE BIG BUTTON WHERE THIS UNIT HAS AN ADAPTER OF ITS OWN THAT IS
+     * ONLY AWAY (report d9a2f5fe): his FM3's WIDI Uhost was not connected to
+     * the iPhone, Connect had let go of it to look again, and the Axe-Fx
+     * III's WIDI Master was offered as if the FM3 had none. He took it and
+     * the app asked an Axe-Fx III to be an FM3. Then: the unit's own adapter
+     * named in red over Connect, Connect the big button, the offer small.
+     */
+    assert.match(page, /const offerMain = offerFromOther && !b\.offer\.own/)
+    const away = '{offerFromOther && !offerMain ? <Note tone="fault">{ownAwayNote(b.offer.own, unitName(b.unit), deviceNoun())}</Note> : null}'
+    const small = '{offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={b.looking} onPress={takeOffer} /> : null}'
+    assert.ok(page.indexOf(away) > 0 && page.indexOf(away) < connect && page.indexOf(small) > connect && page.indexOf(small) < page.indexOf('{cableButtons}', connect), 'the unit’s own adapter is not said over Connect with the offer small under it')
+    assert.equal(
+      w.ownAwayNote('WIDI Uhost Bluetooth', 'FM3', 'iPhone'),
+      'WIDI Uhost Bluetooth, your FM3’s adapter, isn’t connected to this iPhone. Tap Connect and choose it. If it isn’t there, it is switched off, or another phone, tablet or computer is connected to it.'
+    )
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.match(lib, /const mine = forgot && forgot\.unit === saved\.unit \? adapterName\(forgot\.adapter\) \|\| '' : ''/)
+    assert.match(lib, /const own = mine && mine\.toLowerCase\(\) !== \(adapterName\(why\.dev\) \|\| ''\)\.toLowerCase\(\) \? mine : null/)
+    assert.match(lib, /noteBluetooth\(\{ offer: \{ \.\.\.keptAdapter\(why\.dev\), unit: whose, \.\.\.\(own \? \{ own \} : \{\}\) \} \}\)/)
+    assert.doesNotMatch(code('mobile/src/lib/offerWords.js'), /this phone/, 'the words name the device by a fixed word')
     /* The 7 November rule stands: nothing kept for another unit is chosen by itself. */
     const { pickAdapter, whyNotPicked } = await import('../mobile/src/lib/bleAdapters.js')
     const one = { id: 'u1', name: 'WIDI Uhost', driver: 'com.apple.AppleMIDIBluetoothDriver', offline: false }
@@ -24534,7 +24573,9 @@ export function run(test) {
       RESET_RECONNECT: gear.RESET_RECONNECT,
       REPORT_BUTTON: gear.REPORT_BUTTON,
       RESET_STILL: gear.RESET_STILL,
-      RESET_STILL_SUB: gear.RESET_STILL_SUB
+      RESET_STILL_SUB: gear.RESET_STILL_SUB,
+      howToClose: (await import('../mobile/src/lib/closeApp.js')).howToClose,
+      Platform: { OS: 'ios' }
     })
     const go = () => 'reconnect'
     const still = () => 'still'

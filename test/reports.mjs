@@ -96,7 +96,8 @@ async function phone(b, use) {
     `,
     'version.js': "export const APP_VERSION = '1.87.48'\n",
     'thisDevice.js': "export const deviceFacts = () => ({ os: 'ios', osVersion: '27.0.1', model: 'iPhone' })\n",
-    'link.js': "export const linkState = () => ({ link: 'connected', hostVersion: '1.87.47' })\nexport const linkVia = () => 'computer'\n",
+    'link.js': "export const linkState = () => ({ link: 'connected', hostVersion: '1.87.47' })\nexport const linkVia = () => globalThis.__reportsBench.via || 'computer'\n",
+    'bluetooth.js': "export const cableNow = () => Boolean(globalThis.__reportsBench.cable)\n",
     'clip.js': `
       const b = globalThis.__reportsBench
       export const hasImageAsync = async () => Boolean(b.has)
@@ -165,6 +166,7 @@ async function phone(b, use) {
         }
       }
     `,
+    'linkWay.js': esm(read('mobile/src/lib/linkWay.js')),
     'reports.js': esm(read('mobile/src/lib/reports.js'))
       .replace("from 'react-native'", "from './rn.js'")
       .replace(/import\('@supabase\/supabase-js'\)/g, "import('./supa.js')"),
@@ -460,6 +462,33 @@ const LOG = [
 ].join('\n')
 
 export function run(test) {
+  /*
+   * WHICH WAY IT WAS CONNECTED GOES WITH EVERY REPORT. "Can't tell if this
+   * was on a computer or Bluetooth." (Justin, 19 November 2026, of a
+   * customer's report: "role: connected" and nothing of the road.) The way
+   * only: a computer, Bluetooth, a USB cable or the demo, never the
+   * adapter's or the cable's name, which the privacy page keeps to the log.
+   */
+  test('a report’s details say which way the app was connected, and never an adapter’s name', async () => {
+    for (const [via, cable, word] of [['computer', false, 'computer'], ['bluetooth', false, 'Bluetooth'], ['bluetooth', true, 'USB cable'], ['demo', false, 'demo'], ['computer', true, 'computer']]) {
+      await phone({ user: USER, via, cable }, async ({ reports, bench }) => {
+        const details = reports.context({ deviceName: 'Axe-Fx III' })
+        assert.equal(details.connection, word, `${via}${cable ? ' on a cable' : ''} is said as ${details.connection}`)
+        assert.equal(details.role, 'connected', 'the link’s own word went')
+        /* With a suggestion and with the log turned off too: those are the reports that have nothing else to say it. */
+        await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: details })
+        await reports.sendReport({ kind: 'bug', message: 'It froze', context: details, withLog: false })
+        for (const { row } of bench.inserts) assert.equal(row.context.connection, word)
+      })
+    }
+    /* The words are four and no more, and the file that says them knows no name to put beside them. */
+    const src = read('mobile/src/lib/linkWay.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
+    assert.deepEqual([...src.matchAll(/'([^']+)'/g)].map((m) => m[1]).filter((w) => !w.startsWith('./')).sort(), ['Bluetooth', 'USB cable', 'bluetooth', 'computer', 'computer', 'demo', 'demo'].sort())
+    assert.ok(!/adapterName|saved\.|bluetoothSettings|unitName/.test(src), 'the way’s word reaches for a name')
+    /* And the privacy page's list for a report names it. */
+    assert.match(read('public/privacy.html'), /how the app is connected/)
+  })
+
   /*
    * WHAT LAST WENT WRONG GOES WITH THE LOG AND NEVER WITHOUT IT (review of
    * 25 October 2026). Every fault the screen shows is a line in the log now

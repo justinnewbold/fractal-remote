@@ -1204,7 +1204,7 @@ export function run(test) {
     assert.match(bar, /function BluetoothMark\(\{ state \}\) \{[^}]*source=\{bluetoothIcon\}/, 'the top bar’s Bluetooth lamp is not the Bluetooth symbol')
     assert.match(read('mobile/src/components/Walk.js'), /adapter: bluetoothIcon,/, 'the Bluetooth adapter’s card is not the Bluetooth symbol')
     const page = read('mobile/src/screens/Bluetooth.js')
-    assert.match(page, /icon=\{cable \|\| takes\.length \? null : bluetoothIcon\}/, 'Connect is not the Bluetooth symbol, or wears it for a USB cable')
+    assert.match(page, /icon=\{cable \|\| takes\.length \|\| offerMain \? null : bluetoothIcon\}/, 'Connect is not the Bluetooth symbol, or wears it for a USB cable')
     assert.match(read('mobile/src/components/UnitCard.js'), /<Image source=\{bluetoothIcon\}/, 'Connect over Bluetooth on Phone & computer is not the Bluetooth symbol')
     /* And never on a USB cable: the bar's mark is the wireless way's only, and a cable's chain has no adapter card. */
     assert.match(bar, /const wireless = bluetooth && !cable/)

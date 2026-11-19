@@ -385,3 +385,24 @@ export function cablePlugIn(list, { open = false, mode = null, kept = null, unit
   const [{ cable, unit: key, again }] = here
   return { act: again || (mode === 'adapter' && key === unit) ? 'switch' : 'offer', cable, unit: key }
 }
+
+/*
+ * SWITCH UNIT IN ONE TAP (lib/unitSwitch has why): what a tap on another unit
+ * does once Bluetooth has stopped.
+ */
+/**
+ * What a tap on another unit does after Bluetooth has stopped: 'on' (connect
+ * straight away through that unit's own adapter) or 'off' (stay stopped,
+ * with the unit picked, for Connect).
+ * @param using   the adapter just in use, or null
+ * @param kept    the adapter kept for the unit tapped, or null
+ * @param devices what the device lists now: [{ id, offline }]
+ * @param cable   whether `kept` is a unit on a USB cable
+ */
+export function switchPlan({ using = null, kept = null, devices = [], cable = false } = {}) {
+  if (!kept?.id || cable) return 'off'
+  if (using?.id && using.id === kept.id) return 'off'
+  const here = (Array.isArray(devices) ? devices : []).find((d) => d?.id === kept.id)
+  return here && !here.offline ? 'on' : 'off'
+}
+

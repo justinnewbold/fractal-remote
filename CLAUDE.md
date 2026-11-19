@@ -5109,8 +5109,132 @@ click-pad.wav) were the wheel's too and stay, being the metronome's first.
 Do not offer the wheel again; if he asks for another way through the
 presets, start from what he says then, not from this.
 
-**Settings → Help → NAM & TONE3000 says how to use them (2.1.6, 19
-November 2026), for every account.** "Can we put something in the app that
+**Another unit's adapter, the only one connected, is the FIRST thing on
+the Bluetooth page (2.1.8, 19 November 2026), for every account.** "I can't
+switch over Bluetooth either. See log I just submitted" (report bf90bfd6,
+his iPhone on 2.1.6). He stopped Bluetooth on his AX3 (WIDI Master), picked
+the AM4 and then the FM3, and tapped Connect eight times. Each time Apple's
+screen showed the one adapter connected, the app would not take another
+unit's adapter without a tap (the 7 November rule, which stands), wrote
+"WIDI Master Bluetooth is offered for the FM3, on a tap", and the tap that
+moves it was a smaller button UNDER Connect and its hint, never pressed. A
+customer the same morning, one adapter and two units: "couldn't find an
+option to change device". Now, with such an offer up, the page says it in a
+sentence (mobile/src/lib/offerWords.js `offerNote`), the offer is Connect's
+size with the Bluetooth mark and comes first, and Connect under it is
+smaller, unlit and says Look for a different adapter (`OFFER_LOOK`). Still
+never taken by itself. The words are the phone's own, not shared/bluetooth-gear's,
+so no computer release. NOT SEEN ON A PHONE. In that log the FM3's own
+adapter (WIDI Uhost) was not connected to the iPhone at all, so if the WIDI
+Master was still on the AX3, using it for the FM3 connects to nothing: the
+page's "isn't answering" and Use a different adapter are what follow.
+AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
+(`curl https://biznwrqeckviawjuhvyg.supabase.co/functions/v1/read-reports?latest=5`,
+and `?id=<first 8>`; the proxy adds the key). It gives the message, details
+and log, not the screenshots.
+
+**"Close the app completely" says how, for the device in hand (2.2.2, 19
+November 2026).** "We need to make it clear how to do that on both Android
+and iPhone ... it might be different per device." mobile/src/lib/closeApp.js
+`howToClose(os)`: an iPhone or iPad swipes up from the bottom edge and stops
+halfway, then swipes the app up (a Home button pressed twice in place of the
+first swipe); Android shows the open apps by a swipe up and hold OR the
+square or three-lines button, then swipes it off. Each is told its own way
+only. It is one more line UNDER the sentences that say "close the app" on
+the Bluetooth page (the close-and-reopen hint, the reset card's step, the
+note for an adapter the app cannot see), which are in files the computer app
+shares and are left word for word. Not yet under Troubleshooting's list of
+the same steps, nor the purchase and update pages' "close the app fully".
+
+**ON AN iPHONE THE APP CAN FAIL TO SEE AN ADAPTER THAT IS CONNECTED, UNTIL
+IT IS CLOSED AND OPENED AGAIN (19 November 2026, his third log that
+morning, pasted). NOT FIXED: the fix is native.** "Force closing the app and
+restarting fixed it." What the log shows: in the old run, six trips through
+Apple's screen (26, 5, 6, 29, 2.5 and 3.4 seconds) each ended "ports after
+Apple's Bluetooth screen — WIDI Master Bluetooth [offline]" and nothing
+else. The new run, 30 seconds after the old one's last line, listed "WIDI
+Uhost Bluetooth" 2.4 seconds after Connect, with no ", new" beside it: it
+was connected BEFORE that screen opened, so it had been connected while the
+old run could not see it. The app's list is read live from the module
+(lib/bluetooth adapterDevices calls `devices()` each time; the module walks
+MIDIGetNumberOfDestinations), so the stale view was CoreMIDI's in that
+process, not a copy the app kept. The same reading fits reports bf90bfd6
+and d9a2f5fe (only the Master ever listed), and may be what 16 November's
+"stuck link" on his FM3 was. WHY the process's view goes stale is NOT KNOWN
+(the process had been alive, mostly in the background, since the evening
+before).
+- *What an update does (2.2.0):* after Apple's screen has closed twice in a
+  row with nothing connected that the app can see, the page says
+  `SEEN_NOT_HERE` (lib/offerWords): close the app completely, open it
+  again, tap Connect. An iPhone or iPad only.
+- *What would mend it, and is a BUILD:* in FractalBleMidiModule.swift, when
+  Apple's screen closes and the list has nothing new, make CoreMIDI look
+  again (`MIDIRestart()`, or a fresh client and ports) before the list is
+  read. Not written, not tried; it moves the ios line (the android one only
+  if anything shared moves). His yes first.
+- *A FRESH RUN IS IN THE LOG:* a run starts with "[fold] Fold sensor" and
+  "[app] kept from the run before — N lines, last written …", and the runs
+  before it are under "THE RUN BEFORE THIS ONE". The log cannot tell a
+  force close from iOS ending the app in the background; half a minute
+  between the last line and the new run, with him at the phone, is a force
+  close.
+
+**Switch unit in one tap while Bluetooth is on, and a unit's own adapter
+that is only away is named (2.1.9, 19 November 2026), for every account.**
+"Users need to be able to switch almost immediately from Bluetooth device to
+a new Bluetooth device" (report d9a2f5fe, minutes after bf90bfd6). WHAT THAT
+LOG SHOWED: every list after Apple's screen held ONE port, WIDI Master
+Bluetooth, the AX3's. The FM3's own WIDI Uhost was never a port on the
+iPhone, though he wrote "I'm also connected to the WIDI UHost" (where he saw
+that was not said; WHY the iPhone did not have it is NOT KNOWN: switched
+off, held by his iPad or Mac, or two WIDIs paired to each other all fit).
+Connect lets go of a kept adapter that is not connected so it can be looked
+for again (forgetAdapter `forgot`), which made the FM3 look like a unit with
+no adapter, so the Master was offered to it; he forgot the AX3's keeping by
+hand, the Master was then "the only one here" and was taken, and the app
+asked an Axe-Fx III to be an FM3 ("The WIDI Master is on an Axe-Fx III, not
+your FM3", which was true). Two changes:
+- *A unit's own adapter, away, is named* (lib/bluetooth offerFromOther
+  `own`, lib/offerWords `ownAwayNote`): "WIDI Uhost Bluetooth, your FM3's
+  adapter, isn't connected to this iPhone. Tap Connect and choose it. If it
+  isn't there, it is switched off, or another phone, tablet or computer is
+  connected to it." in red over Connect, which stays the big button; the
+  other unit's adapter is offered small under it. The big offer (2.1.8,
+  below) is only for a unit with no adapter of its own.
+- *Switch unit* on the page that is up while Bluetooth is on (lib/unitSwitch,
+  lib/bluetooth `switchUnitNow`, test/unit-switch.mjs): the units as tabs,
+  and a tap on another STOPS BLUETOOTH FIRST, always (the reason step 1's
+  chips are shut while it is on stands: a new unit's messages to whatever is
+  on the adapter froze an AM4), switches, and turns it straight back on only
+  through that unit's OWN adapter where it is another adapter than the one
+  just used, a Bluetooth one, and connected now (`switchPlan`). Anything
+  else lands on Connect with the unit picked. Never carried: the last
+  unit's adapter stays the last unit's.
+- NOT SEEN ON A PHONE, either of them, and the stop-then-on in one tap has
+  not run against a real link (it is what Stop and Connect do, back to back).
+- WHAT AN UPDATE CANNOT DO: on an iPhone an adapter becomes usable only once
+  it is connected in Apple's Bluetooth MIDI screen, which no app can do for
+  the player. With both adapters connected there, switching is the one tap
+  above. An app connecting an adapter itself (its own Bluetooth code, as on
+  Android) would be native work and a build pair: offered, not asked for.
+
+**A report's details say which way the app was connected (2.1.7, 19
+November 2026).** "Can't tell if this was on a computer or Bluetooth." (of a
+customer's report whose details said "role: connected" and no more.) `role`
+is the link's state, not its road. So the phone's details carry
+`connection`: computer, Bluetooth, USB cable or demo (mobile/src/lib/linkWay.js,
+added in lib/reports `context` beside what shared/report-rules `contextFrom`
+makes, so the shared file, and the computer app with it, did not change).
+THE WAY ONLY, NEVER THE ADAPTER'S OR THE CABLE'S NAME: the privacy page's
+list for a report says "how the app is connected" and keeps names to the
+log. The report's email prints every detail, so nothing on the server
+changed. The browser's reports do not say it (a browser is always through a
+computer).
+
+**Settings → NAM & TONE3000 says how to use them (2.1.6, 19 November
+2026), for every account. ITS OWN BUTTON ON THE FRONT OF SETTINGS, under
+Amp & pedal names, since 2.2.1: "Move the NAM and tone 3000 help section to
+the main settings screen" (the same day; it was a row inside Help).** "Can we put something in the app that
 explains people how to use tone 3000 and NAM? Some people might not know
 how to add a block for NAM. or to access the tone 3000 section to add a NAM
 block." TONE3000's two ways in are both on a NAM block already in the

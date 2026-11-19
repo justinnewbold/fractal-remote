@@ -774,6 +774,20 @@ export default function Settings({
             </GlassCard>
           ) : null}
 
+          {/*
+            NAM & TONE3000, ITS OWN BUTTON ON THE FRONT, under Amp & pedal
+            names. "Can we put something in the app that explains people how
+            to use tone 3000 and NAM?" and then "Move the NAM and tone 3000
+            help section to the main settings screen" (Justin, 19 November
+            2026): it was a row inside Help. TONE3000's two ways in are both
+            on a NAM block already in the preset, so somebody without one saw
+            neither and nothing said why. Always drawn: it is read before a
+            unit is linked too.
+          */}
+          <GlassCard clip bare>
+            <SetupRow title={NAM_HELP_TITLE} status={NAM_HELP_LINE} onPress={() => setPage('nam-help')} />
+          </GlassCard>
+
           <Group title="My rig" hint={pairStatus}>
             {/*
               CONNECT YOUR UNIT, FIRST, since 10 November 2026: "easier for a
@@ -916,16 +930,6 @@ export default function Settings({
                 Siri." The phrases, the one rule, the shortcuts and how to
                 turn it off; on Android, the links for Tasker. */}
             {siriOpen ? <SetupRow title={SIRI_TITLE} status={siriStatus} onPress={() => setPage('siri')} /> : null}
-            {/*
-              NAM & TONE3000, HOW TO USE THEM. "Can we put something in the app
-              that explains people how to use tone 3000 and NAM? Some people
-              might not know how to add a block for NAM. or to access the tone
-              3000 section to add a NAM block" (Justin, 19 November 2026).
-              TONE3000's two ways in are both on a NAM block already in the
-              preset, so somebody without one saw neither and nothing said
-              why. Always drawn: it is read before a unit is linked too.
-            */}
-            <SetupRow title={NAM_HELP_TITLE} status={NAM_HELP_LINE} onPress={() => setPage('nam-help')} />
           </Group>
 
           <Group title="About" hint={updates.phase === 'ready' ? 'Update ready' : `v${APP_VERSION}`}>

@@ -1,5 +1,5 @@
 /**
- * SETTINGS → HELP → NAM & TONE3000 (mobile/src/lib/namHelp.js,
+ * SETTINGS → NAM & TONE3000 (mobile/src/lib/namHelp.js,
  * components/NamHelp.js, and its row and page in screens/Settings.js).
  *
  * "Can we put something in the app that explains people how to use tone
@@ -101,11 +101,17 @@ export function run(test) {
     assert.match(rig, /title=\{T3K_ROW_TITLE\}/)
   })
 
-  test('NAM help: its row is under Help for everybody, and its page goes back to Settings', async () => {
+  test('NAM help: its own button on the front of Settings, under Amp & pedal names, for everybody, and its page goes back to Settings', async () => {
     const settings = read('mobile/src/screens/Settings.js')
-    const help = settings.slice(settings.indexOf('<Group title="Help"'), settings.indexOf('<Group title="About"'))
-    assert.match(help, /<SetupRow title=\{NAM_HELP_TITLE\} status=\{NAM_HELP_LINE\} onPress=\{\(\) => setPage\('nam-help'\)\} \/>/)
-    assert.doesNotMatch(help, /\? <SetupRow title=\{NAM_HELP_TITLE\}/, 'the row is behind a condition')
+    /* "Move the NAM and tone 3000 help section to the main settings screen" (19 November 2026): a card of its own, in no section. */
+    const row = "<GlassCard clip bare> <SetupRow title={NAM_HELP_TITLE} status={NAM_HELP_LINE} onPress={() => setPage('nam-help')} /> </GlassCard>"
+    const flatSet = settings.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    assert.equal(flatSet.split(row).length - 1, 1, 'the button is not drawn once, in a card of its own')
+    const gear = flatSet.indexOf('<SetupRow title="Amp & pedal names"')
+    const rig = flatSet.indexOf('<Group title="My rig"')
+    assert.ok(gear > 0 && flatSet.indexOf(row) > gear && flatSet.indexOf(row) < rig, 'the button is not between Amp & pedal names and My rig')
+    const help = flatSet.slice(flatSet.indexOf('<Group title="Help"'), flatSet.indexOf('<Group title="About"'))
+    assert.ok(!help.includes('NAM_HELP_TITLE'), 'the row is still inside Help')
     assert.match(settings, /\{page === 'nam-help' \? \(\s*<>\s*\{head\(NAM_HELP_TITLE, 'back'\)\}\s*<NamHelp deviceName=\{deviceName\} \/>/)
     assert.doesNotMatch(settings, /'nam-help':/, 'the page has a parent: it comes off the front of Settings')
 

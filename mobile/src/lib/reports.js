@@ -48,6 +48,7 @@ import { DEFAULT_PROJECT, remoteRequest, supabaseClient } from './relay'
 import { APP_VERSION } from './version'
 import { formatLine, formatMacDiag, getDebugLog, logDebug } from './debugLog'
 import { linkState, linkVia } from './link'
+import { connectionWord } from './linkWay'
 import { deviceFacts } from './thisDevice'
 
 export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog, shotsLostWords, videoLostWords }
@@ -62,7 +63,7 @@ export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog, shotsLostWords, videoLostWo
 export function context({ deviceName } = {}) {
   const link = linkState()
   const win = Dimensions.get('window')
-  return contextFrom({
+  const details = contextFrom({
     version: APP_VERSION,
     /* The computer's version as well. "The phone is on 7.344 and the Mac is on
        7.191" is the answer to a surprising number of reports, and it is the one
@@ -85,6 +86,10 @@ export function context({ deviceName } = {}) {
     screen: win?.width ? `${Math.round(win.width)}x${Math.round(win.height)}` : undefined,
     lastError: lastErrorFrom(getDebugLog())
   })
+  /* Which way it is connected (lib/linkWay): `role` above is the link's state, and "connected" did not say whether
+     that was a computer or an adapter. The way only, never a name. Left out where it is not known. */
+  const way = connectionWord()
+  return way ? { ...details, connection: way } : details
 }
 
 /**

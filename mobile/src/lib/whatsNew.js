@@ -12,10 +12,26 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-19",
     "day": "19 November 2026",
-    "version": "2.1.6",
+    "version": "2.2.2",
     "lines": [
       {
-        "text": "From version 2.0.0: Settings → Help → NAM & TONE3000 shows how to put a NAM block in a preset, open TONE3000 from it, and preview and get captures, with the steps for an Axe-Fx III and for an AM4.",
+        "text": "From version 2.0.0, on an iPhone or iPad: when Apple’s Bluetooth screen has connected an adapter and the app still can’t see it, the Bluetooth page now says what fixes it: close the app completely and open it again.",
+        "only": "ios"
+      },
+      {
+        "text": "From version 2.0.0: wherever the Bluetooth page says to close the app completely, it now says how to do that on your device.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0: while Bluetooth is on, the Bluetooth page has Switch unit. Tap another unit and Bluetooth stops, then connects again by itself when that unit’s own adapter is connected.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0: when the only adapter connected was set up for another unit, the Bluetooth page says so and offers it in one tap. When your unit’s own adapter isn’t connected, it names that adapter instead.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0: Settings → NAM & TONE3000 shows how to put a NAM block in a preset, open TONE3000 from it, and preview and get captures, with the steps for an Axe-Fx III and for an AM4.",
         "only": null
       }
     ]

@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bl
 import { createJoiner } from './fractal-sysex.mjs'
 import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
-import { BLUETOOTH_DRIVER, cablesFirst, cablesFor, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords, whyNotPicked } from './bleAdapters'
+import { BLUETOOTH_DRIVER, cablesFirst, cablesFor, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords, switchPlan, whyNotPicked } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -1058,6 +1058,27 @@ export function setBluetoothUnit(key, { carry = false } = {}) {
   return key
 }
 
+/**
+ * ANOTHER UNIT, IN ONE TAP, WHILE BLUETOOTH IS ON (lib/unitSwitch, 19
+ * November 2026). Bluetooth stops first, always: nothing of the new unit's
+ * is ever sent to the adapter the last one was on. Then the unit, with its
+ * own adapter (setBluetoothUnit), and Bluetooth straight back on only where
+ * that adapter is another one, a Bluetooth one, and connected now
+ * (switchPlan). 'on' when it is connecting, 'off' when the page's Connect is
+ * next, null when nothing was switched.
+ */
+export function switchUnitNow(key) {
+  if (!UNIT_KEYS.includes(key) || !offered(key) || key === saved.unit) return null
+  const using = saved.adapter
+  setBluetooth(false)
+  if (setBluetoothUnit(key) !== key) return null
+  const kept = saved.adapter
+  const plan = switchPlan({ using, kept, devices: adapterDevices(), cable: !!kept && isCable(kept) })
+  logDebug('ble', plan === 'on' ? `switched to the ${unitName(key)}: its own adapter, ${adapterName(kept) || 'the one kept for it'}, is connected, so Bluetooth comes straight back on` : `switched to the ${unitName(key)}: ${kept ? `its own adapter, ${adapterName(kept) || 'the one kept for it'}, is not connected now` : 'no adapter is kept for it'}, so Connect is next`)
+  if (plan !== 'on') return 'off'
+  return setBluetooth(true) ? 'on' : 'off'
+}
+
 /** The unit another adapter is kept for, by its id, or null: the page's list says whose it is. */
 export function adapterKeptFor(id) {
   for (const [key, a] of Object.entries(byUnit)) if (key !== saved.unit && a?.id === id) return key
@@ -1460,8 +1481,20 @@ function sayWhyNotPicked(list, just) {
 function offerFromOther(why) {
   const whose = why?.taken && why.dev && !saved.adapter ? adapterKeptFor(why.dev.id) : null
   if (!whose) return
-  logDebug('ble', `${adapterName(why.dev) || 'the adapter'} is offered for the ${unitName(saved.unit)}, on a tap: it is the ${unitName(whose)}’s`)
-  noteBluetooth({ offer: { ...keptAdapter(why.dev), unit: whose } })
+  /*
+   * THIS UNIT HAS AN ADAPTER OF ITS OWN, AWAY JUST NOW (`own`, 19 November
+   * 2026, report d9a2f5fe). Connect lets go of one that is not connected so
+   * that it can be looked for again (forgetAdapter `forgot`), which made the
+   * unit look like one with no adapter, so the Axe-Fx III's WIDI Master was
+   * offered to an FM3 whose own WIDI Uhost was simply not connected to the
+   * iPhone. He took it, and the app then asked an Axe-Fx III to be an FM3.
+   * The offer still stands (he may have moved the adapter), but the page
+   * says first which adapter is this unit's and that it is not connected.
+   */
+  const mine = forgot && forgot.unit === saved.unit ? adapterName(forgot.adapter) || '' : ''
+  const own = mine && mine.toLowerCase() !== (adapterName(why.dev) || '').toLowerCase() ? mine : null
+  logDebug('ble', `${adapterName(why.dev) || 'the adapter'} is offered for the ${unitName(saved.unit)}, on a tap: it is the ${unitName(whose)}’s${own ? ` (the ${unitName(saved.unit)}’s own, ${own}, is not connected)` : ''}`)
+  noteBluetooth({ offer: { ...keptAdapter(why.dev), unit: whose, ...(own ? { own } : {}) } })
 }
 
 /*

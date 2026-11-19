@@ -302,7 +302,9 @@ export function run(test) {
     assert.equal(hook.slice(0, whole.length + 1).trim(), whole, 'the adapter tab does something other than keep what was tapped')
     /* And the only thing the adapter row's tap is given is that setter, on both pages. */
     assert.equal((bare.match(/<Tabs name="Your adapter" items=\{tabs\} picked=\{tab\} onPick=\{setTab\} \/>/g) || []).length, 2)
-    assert.equal((bare.match(/<Tabs /g) || []).length, 3, 'a row of tabs somewhere that these tests do not know')
+    /* Three that only look or pick with Bluetooth off, and Switch unit's, which stops Bluetooth before it changes anything (test/unit-switch.mjs). */
+    assert.equal((bare.match(/<Tabs /g) || []).length, 4, 'a row of tabs somewhere that these tests do not know')
+    assert.equal((bare.match(/<Tabs name=\{SWITCH_UNIT\} /g) || []).length, 1)
     /* The unit row is the one row that changes something: the unit, through the app's own rule for it. */
     assert.match(bare, /function UnitChips\(\{ units, picked, disabled \}\) \{ return <Tabs name="Your unit" items=\{units\.map\(\(u\) => \(\{ key: u\.key, label: u\.name \}\)\)\} picked=\{picked\} disabled=\{disabled\} onPick=\{\(key\) => setBluetoothUnit\(key\)\} \/> \}/)
     assert.ok(page.includes('<Tabs name="Your unit"'))
