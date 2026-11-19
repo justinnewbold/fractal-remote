@@ -65,9 +65,26 @@ export function run(test) {
     assert.match(said('am4', 0), /AM4-Edit/)
     assert.match(said('am4', 0), /can’t put a NAM block in a slot/)
     for (const not of ['Edit chain', 'Quick build', EMPTY_SPACE]) assert.ok(!said('am4', 0).includes(not), `an AM4 is told to add its NAM block with ${not}, which cannot`)
-    /* Which holds only while the app has no message that gives an AM4 slot a NAM block. */
-    const { AM4_BLOCKS, AM4_NEW_BLOCKS } = await import('../mobile/src/lib/fractal-sysex.mjs')
-    assert.ok(!Object.values(AM4_BLOCKS).includes(AM4_NEW_BLOCKS.nam), 'the app can give an AM4 slot a NAM block now: the AM4’s first step is out of date')
+    /* That is what an account the app cannot add the block for is told (AM4_NAM_ADD_FOR_EVERYONE shut). One it can add it for is told the app's own way, by the buttons' names, and never that the app can't. */
+    const adds = h.namHelpPage('am4', { am4Adds: true })
+    const told = adds[0].lines.join(' ')
+    assert.match(told, /firmware 3\.00/)
+    for (const has of ['Edit chain', 'Remove', EMPTY_SPACE, 'Quick build', 'AM4-Edit']) assert.ok(told.includes(has), `an AM4 the app adds NAM to is not told ${has}`)
+    assert.ok(!/can’t put/.test(told))
+    assert.ok(!told.includes('Axe-Fx III'))
+    assert.match(adds[4].lines[0], /no NAM block yet/)
+    assert.deepEqual(h.namHelpPage('axefx3', { am4Adds: true }), h.namHelpPage('axefx3'))
+    /* And the page asks the same two gates the palette does, so the words and the list of blocks open together. */
+    const drawn = read('mobile/src/components/NamHelp.js').replace(/\s+/g, ' ')
+    assert.match(drawn, /const am4Adds = am4AddsHere\(\)/)
+    assert.match(read('mobile/src/lib/namHelpHere.js'), /export const am4AddsHere = \(\) => am4NamOverBluetooth\(\) && am4NamAddHere\(\)/)
+    assert.match(drawn, /namHelpPage\(unit, \{ am4Adds \}\)/)
+    assert.match(read('mobile/src/lib/am4-chain.js'), /export const AM4_NAM_PLACE/)
+
+    /* Quick build's result card goes straight to Edit's Rename, only where Edit offers Rename and something was built. */
+    const qb = read('mobile/src/components/QuickBuild.js').replace(/\s+/g, ' ')
+    assert.match(qb, /\{onRename && done\.landed\.tone !== 'fault' \? \( <Press label=\{NAME_PRESET\} sub=\{NAME_PRESET_SUB\} disabled=\{!!busy\} onPress=\{\(\) => \{ setOpen\(false\) onRename\(\) \}\} \/> \) : null\}/)
+    assert.match(read('mobile/src/screens/Edit.js'), /onRename=\{renameHere \? \(\) => openTool\('rename'\) : null\}/)
 
     /* Each unit's page names that unit where a capture goes, and never the other. */
     for (const i of [2, 3]) {
@@ -117,7 +134,7 @@ export function run(test) {
 
     /* The component draws the lib's words and asks nothing of a unit. */
     const comp = read('mobile/src/components/NamHelp.js')
-    for (const drawn of ['NAM_HELP_INTRO', 'namHelpPage(unit).map', '<Tabs items={NAM_HELP_UNITS} picked={unit} onPick={setUnit}', 'useState(() => namHelpTab(deviceName))']) {
+    for (const drawn of ['NAM_HELP_INTRO', 'namHelpPage(unit, { am4Adds }).map', '<Tabs items={NAM_HELP_UNITS} picked={unit} onPick={setUnit}', 'useState(() => namHelpTab(deviceName))']) {
       assert.ok(comp.includes(drawn), `the page does not draw ${drawn}`)
     }
     for (const reach of ['lib/device', 'lib/rig', 'lib/bluetooth', 'lib/tone3000']) assert.ok(!comp.includes(reach), `a help page reaches ${reach}`)

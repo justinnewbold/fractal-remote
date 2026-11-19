@@ -42,8 +42,19 @@ export const namHelpTab = (deviceName) => (String(deviceName || '').trim() === A
 export const NAM_HELP_INTRO =
   'A NAM block plays a capture: a model of a real amp, pedal or whole rig. TONE3000 is a library of captures you can search and send to your unit from the app. The Axe-Fx III and the AM4 are the units with a NAM block.'
 
-const add = (unit) =>
-  unit === 'am4'
+/* An AM4 where the app itself gives a slot the NAM block (lib/am4-chain AM4_NAM_PLACE, behind AM4_NAM_ADD_FOR_EVERYONE): the chain editor and Quick build, by their buttons' names. An AM4 has four slots and no empty space until one is emptied, so Remove comes first. */
+const addOnAm4 = Object.freeze([
+  'The AM4 needs firmware 3.00 or later. Older firmware has no NAM block.',
+  'Open Edit, tap More (the three dots beside Done) and choose Edit chain.',
+  'If all four slots are full, tap the block you can do without and tap Remove. Then, under Put a block in an empty space, pick NAM. It goes straight into the empty slot.',
+  'On an empty preset, Quick build is quicker: tap Quick build and pick up to four blocks in order, with NAM among them.',
+  'A NAM block added on the AM4 itself or in AM4-Edit works the same. Either way it shows on Play as a pedal called NAM.'
+])
+
+const add = (unit, am4Adds) =>
+  unit === 'am4' && am4Adds
+    ? addOnAm4
+    : unit === 'am4'
     ? Object.freeze([
         'The AM4 needs firmware 3.00 or later. Older firmware has no NAM block.',
         'Add the block on the AM4 itself or in AM4-Edit: put NAM in one of the preset’s four slots. The app can’t put a NAM block in a slot on an AM4.',
@@ -80,10 +91,10 @@ const onUnit = (unit) =>
     'Tap one to play it in that block. Nothing is sent again, so it is quick.'
   ])
 
-const missing = (unit) =>
+const missing = (unit, am4Adds) =>
   Object.freeze([
     unit === 'am4'
-      ? 'No NAM pedal on Play: the preset has no NAM block, or the AM4 is on firmware older than 3.00.'
+      ? `No NAM pedal on Play: the preset has no NAM block${am4Adds ? ' yet' : ''}, or the AM4 is on firmware older than 3.00.`
       : 'No NAM pedal on Play: the preset has no NAM block yet. Add one first.',
     'No TONE3000 button when you hold the pedal: through a computer, update the computer app to the newest version.',
     'If a capture stops part-way, tap Preview or Get again.'
@@ -92,14 +103,15 @@ const missing = (unit) =>
 /**
  * The page for one unit: its sections in order, each a title and its lines.
  * @param {'axefx3'|'am4'} unit
+ * @param {{am4Adds?: boolean}} [o] whether the app itself can put a NAM block in an AM4's slot for this account (lib/bluetooth am4NamAddHere)
  */
-export function namHelpPage(unit) {
+export function namHelpPage(unit, { am4Adds = false } = {}) {
   const key = unit === 'am4' ? 'am4' : 'axefx3'
   return Object.freeze([
-    Object.freeze({ title: '1. Put a NAM block in your preset', lines: add(key) }),
+    Object.freeze({ title: '1. Put a NAM block in your preset', lines: add(key, am4Adds === true) }),
     Object.freeze({ title: '2. Open TONE3000', lines: open() }),
     Object.freeze({ title: '3. Preview and Get', lines: get(key) }),
     Object.freeze({ title: 'Captures already on the unit', lines: onUnit(key) }),
-    Object.freeze({ title: 'If something is missing', lines: missing(key) })
+    Object.freeze({ title: 'If something is missing', lines: missing(key, am4Adds === true) })
   ])
 }

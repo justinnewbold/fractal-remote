@@ -39,3 +39,7 @@ export const takeQuickBuildAsk = (now = Date.now()) => {
   askedAt = 0
   return fresh
 }
+
+/** On Quick build's result card: straight to Edit's Rename, so a preset just built out of an empty one gets its name without a hunt through More. */
+export const NAME_PRESET = 'Name this preset'
+export const NAME_PRESET_SUB = 'And its scenes'

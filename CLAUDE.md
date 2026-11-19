@@ -5168,6 +5168,10 @@ block out directly to a NAM block. Build that for AX3 and AM4."
 - test/amp-to-nam.mjs holds the rules, the order of the calls and the pins
   in Stage; the screens are not run.
 
+**Quick build's result has Name this preset, and the AM4's help follows what the app can do (2.2.7, 19 November 2026).** "Adding the nam blocked we're good. However, we need to update the instructions.. also we need an easier way to rename it if it's an empty preset using Quik build." (his AM4 through the Raspberry Pi 3: Quick build put Drive, NAM, Chorus and Delay in, "4 in, 0 not", a capture kept in slot 004 on the first try and played in NAM 1.) SO AN AM4 SLOT HAS BEEN GIVEN A NAM BLOCK FROM THE APP, by Quick build through the computer; not yet seen: the chain editor's own Add of it, Pitch, over Bluetooth.
+- *Name this preset* (lib/quickBuild `NAME_PRESET`; QuickBuild's `onRename`): on the result card under Back to Play, for every account, wherever Edit offers Rename (`renameHere`) and the build was not a failure. It closes the sheet and opens Edit's own Rename preset and scenes (`openTool('rename')`). Nothing new is sent.
+- *The AM4's first step in Settings → NAM & TONE3000* is two wordings (lib/namHelp `namHelpPage(unit, { am4Adds })`): where the app adds the block for the account (lib/namHelpHere `am4AddsHere`, the palette's own two gates), Edit chain, Remove, Put a block in an empty space and Quick build; otherwise the old "add it on the AM4 or in AM4-Edit". So today the new words are his account's, and they reach everybody the day `AM4_NAM_ADD_FOR_EVERYONE` opens, with nothing more to change on that page. The page still imports nothing that talks to a unit (a test holds it).
+
 **An AM4's NAM block can be ADDED from the chain editor: built 19 November
 2026 (2.2.3), HIS ACCOUNT ONLY, and no AM4 slot has been given the block
 from the app yet. The Pitch block and the 13 new DynaCabs of firmware 3.0
