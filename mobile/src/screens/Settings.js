@@ -84,6 +84,7 @@ import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import BlockReader from '../components/BlockReader'
 import Tone3000Test from '../components/Tone3000Test'
+import { NAM_HELP_LINE, NAM_HELP_TITLE } from '../lib/namHelp'
 import { useTone3000SignedIn } from '../lib/useTone3000SignedIn'
 import { T3K_KEEP, T3K_ROW_TITLE, T3K_SIGN_OUT, T3K_SIGN_OUT_ASK, T3K_SIGN_OUT_FAILED, t3kRowLine, t3kSignOutBody } from '../lib/tone3000Words'
 import AccessTool from '../components/AccessTool'
@@ -109,6 +110,7 @@ import mailIcon from '../../assets/icons/mail.png'
 import phoneIcon from '../../assets/icons/phone.png'
 import sendIcon from '../../assets/icons/send.png'
 import setupIcon from '../../assets/icons/setup.png'
+import NamHelp from '../components/NamHelp'
 import Note from '../components/Note'
 import HostUpdate, { HostCardLine } from '../components/HostUpdate'
 import { GlassCard } from '../components/Glass'
@@ -914,6 +916,16 @@ export default function Settings({
                 Siri." The phrases, the one rule, the shortcuts and how to
                 turn it off; on Android, the links for Tasker. */}
             {siriOpen ? <SetupRow title={SIRI_TITLE} status={siriStatus} onPress={() => setPage('siri')} /> : null}
+            {/*
+              NAM & TONE3000, HOW TO USE THEM. "Can we put something in the app
+              that explains people how to use tone 3000 and NAM? Some people
+              might not know how to add a block for NAM. or to access the tone
+              3000 section to add a NAM block" (Justin, 19 November 2026).
+              TONE3000's two ways in are both on a NAM block already in the
+              preset, so somebody without one saw neither and nothing said
+              why. Always drawn: it is read before a unit is linked too.
+            */}
+            <SetupRow title={NAM_HELP_TITLE} status={NAM_HELP_LINE} onPress={() => setPage('nam-help')} />
           </Group>
 
           <Group title="About" hint={updates.phase === 'ready' ? 'Update ready' : `v${APP_VERSION}`}>
@@ -2206,6 +2218,13 @@ export default function Settings({
         <>
           {head(SIRI_TITLE, 'back')}
           <SiriHelp os={Platform.OS} kind={deviceKind()} native={siriNative} noun={deviceNoun()} version={Platform.Version} />
+        </>
+      ) : null}
+
+      {page === 'nam-help' ? (
+        <>
+          {head(NAM_HELP_TITLE, 'back')}
+          <NamHelp deviceName={deviceName} />
         </>
       ) : null}
 

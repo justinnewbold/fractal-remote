@@ -5109,6 +5109,22 @@ click-pad.wav) were the wheel's too and stay, being the metronome's first.
 Do not offer the wheel again; if he asks for another way through the
 presets, start from what he says then, not from this.
 
+**Settings → Help → NAM & TONE3000 says how to use them (2.1.6, 19
+November 2026), for every account.** "Can we put something in the app that
+explains people how to use tone 3000 and NAM? Some people might not know
+how to add a block for NAM. or to access the tone 3000 section to add a NAM
+block." TONE3000's two ways in are both on a NAM block already in the
+preset, so somebody without one saw neither. The page (mobile/src/lib/namHelp.js
+for every word, components/NamHelp.js, test/nam-help.mjs) is the steps in
+order, in a tab for each unit, opening on the linked unit's: put a NAM
+block in, open TONE3000 from it (hold the pedal on Play, or Capture in
+Edit), Preview and Get, the captures already on the unit, and what to check
+when something is missing. AN AM4 IS TOLD TO ADD THE BLOCK ON THE UNIT OR IN
+AM4-EDIT, because the app has no message that gives an AM4 slot a NAM block
+(a test fails the day it has one, so the words get changed then). It is the
+phone's only (`ONE_END` in test/both-ends.mjs), reads and sends nothing,
+and KEEP IT TRUE whenever a button it names is renamed or moved.
+
 **Amp & pedal names is its own button on the front of Settings, right
 under the profile, at both ends** (12 November 2026): "Let's move the amp
 and pedal button out of the Help menu and make it its own button in the

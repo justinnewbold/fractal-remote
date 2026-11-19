@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-19",
+      "day": "19 November 2026",
+      "version": "2.1.6",
+      "lines": [
+        {
+          "text": "From version 2.0.0: Settings → Help → NAM & TONE3000 shows how to put a NAM block in a preset, open TONE3000 from it, and preview and get captures, with the steps for an Axe-Fx III and for an AM4.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-18",
       "day": "18 November 2026",
       "version": "2.1.5",
@@ -267,37 +278,6 @@
         },
         {
           "text": "From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels, and a unit on a USB cable does the same. Changes play right away; save on the unit to keep them.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-08",
-      "day": "8 November 2026",
-      "version": "1.89.77",
-      "lines": [
-        {
-          "text": "On an Axe-Fx III over Bluetooth or a USB cable, Play now shows the NAM blocks from firmware 33 (NAM and NAM 2) and the IR Player block, and turns them on and off like your other effects.",
-          "only": null
-        },
-        {
-          "text": "Play’s Edit button no longer goes missing on Bluetooth or a USB cable: tap it and it tells you why it needs a computer there. In the demo, the VP4’s Edit no longer has knobs, chain editing, Modifiers or renaming, like a real VP4. And through a computer, an AM4’s Edit no longer shows a Modifiers section it can’t use.",
-          "only": null
-        },
-        {
-          "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead. Through a computer, an FM3’s Footswitches page also shows what each switch picks.",
-          "only": null
-        },
-        {
-          "text": "In the phone app, the Unlock page now shows the free trial and Unlock before the list of what it unlocks, so there’s less to scroll. Where the free 7-day trial is offered, it’s now also on the walkthrough’s Connect my real rig card and on the demo’s card on Play.",
-          "only": null
-        },
-        {
-          "text": "Your first and last name are now optional when you make an account; add them any time under Settings → your account in the phone app, where the reset link now names the email it goes to. The walkthrough’s last button now says Let’s go, and the glass circles behind the top buttons sit centered on their icons.",
-          "only": null
-        },
-        {
-          "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with download buttons. Tap Computer for the computer way. Forgot password? now works: its email opens a page to choose a new password.",
           "only": null
         }
       ]
