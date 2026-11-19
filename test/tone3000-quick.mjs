@@ -114,7 +114,7 @@ export function run(test) {
     assert.match(sheet, /if \(browsing && library\.offered\) \{/)
     /* Twice: over the knobs, and over the channels of the pop-up that has no knobs, where only an AM4's NAM block is offered it (lib/tone3000Quick doorBlock). */
     assert.equal((sheet.match(/\{libraryDoor\}/g) || []).length, 2)
-    assert.match(sheet, /note="Channel"> \{libraryDoor\} <View/)
+    assert.match(sheet, /note="Channel"> \{ampDoor\} \{libraryDoor\} <View/)
     /* Over the knobs, in the pop-up that has them: "on top of it have it say tone 3000". */
     assert.match(sheet, /\{libraryDoor\} <PopKnobs block=\{block\} onScrollLock=\{setHeld\} \/>/)
     /* The page is in the SAME pop-up (same title, same way out, open on the same condition), with the channels put away while it is up. */
@@ -124,7 +124,7 @@ export function run(test) {
     assert.match(sheetSrc, /<ScrollView key=\{scrollKey\} contentContainerStyle=/)
     assert.match(sheetSrc, /still = false, scrollKey = undefined, locked = false, children \}\)/)
     /* Another block held, or the pop-up closed, starts on the knobs with nothing said. */
-    assert.match(sheet, /useEffect\(\(\) => \{ setBrowsing\(false\) setCame\(''\) \}, \[library\.id\]\)/)
+    assert.match(sheet, /useEffect\(\(\) => \{ const straight = openOn\.current !== null && openOn\.current === library\.id if \(library\.id !== null\) openOn\.current = null setBrowsing\(straight\) setCame\(''\) \}, \[library\.id\]\)/)
     /* And what the block said it is playing is over the knobs when a Get hands them back. */
     assert.match(sheet, /\{came \? <NowPlayingCard line=\{came\} unit=\{library\.unit\} \/> : null\}/)
     /* Play's own file holds the door and nothing of TONE3000's: no client, no card, no words of its own. */

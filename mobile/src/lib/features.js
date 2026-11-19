@@ -878,6 +878,17 @@ export const AM4_NAM_FOR_EVERYONE = true
 export const AM4_NAM_ADD_FOR_EVERYONE = false
 
 /**
+ * A held amp's pop-up offers Swap for a NAM block (lib/ampToNam,
+ * components/AmpToNam), on an Axe-Fx III and an AM4: "holding the amp button
+ * down shows TONE3000 just like the NAM block ... and you can switch out the
+ * amp block out directly to a NAM block" (Justin, 19 November 2026). His
+ * account only: no amp has been swapped on a unit yet. On an AM4 over
+ * Bluetooth it also wants AM4_NAM_ADD_FOR_EVERYONE (the wire places a NAM
+ * block only where that is open), so open the two together.
+ */
+export const AMP_TO_NAM_FOR_EVERYONE = false
+
+/**
  * THE AM4'S NAM BLOCK'S KNOBS IN EDIT (lib/am4-own-knobs.js), over Bluetooth
  * or a USB cable: Level, Input Gain, Bass, Mid, Treble, Bright and three
  * tone-stack and phase switches, with the Capture button over them.
