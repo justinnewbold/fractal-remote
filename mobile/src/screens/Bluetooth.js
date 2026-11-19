@@ -157,6 +157,7 @@ import Press from '../components/Press'
 import Tabs from '../components/Tabs'
 import { OFFER_LOOK, SEEN_NOT_HERE, SEEN_NOT_HERE_AFTER, offerNote, ownAwayNote } from '../lib/offerWords'
 import { SWITCH_UNIT, SWITCH_UNIT_HINT } from '../lib/unitSwitch'
+import { howToClose } from '../lib/closeApp'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
@@ -962,6 +963,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               completely (shared/bluetooth-gear CLOSE_AND_REOPEN).
             */}
             {!fixing && (b.phase === 'connecting' || (quiet && !footswitch)) ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
+            {!fixing && (b.phase === 'connecting' || (quiet && !footswitch)) ? <Hint>{howToClose(Platform.OS)}</Hint> : null}
             {reportable && quiet && !fixing ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {/* A unit on a USB cable: unplugged is said as unplugged, and it connects by itself when it is back (lib/bluetooth cableAway). */}
             {b.phase === 'connecting' && cable ? <Hint>{cableAway() ? CABLE_AWAY : CABLE_CONNECTING_HINT}</Hint> : null}
@@ -1093,6 +1095,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         ) : null}
         {/* The second time running: the adapter may be connected and the app not seeing it, which closing the app cured (report of 19 November 2026). */}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said && ios && misses >= SEEN_NOT_HERE_AFTER ? <Note tone="warn">{SEEN_NOT_HERE}</Note> : null}
+        {!b.on && missed && !b.adapter && !b.trouble && !b.said && ios && misses >= SEEN_NOT_HERE_AFTER ? <Hint>{howToClose(Platform.OS)}</Hint> : null}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said && onReport ? <ReportThis onPress={() => onReport('No adapter was connected.')} /> : null}
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
         {b.said && onReport ? <ReportThis onPress={() => onReport(b.said)} /> : null}
@@ -1239,6 +1242,8 @@ function ResetCard({ unit, steps, at, reconnect = null, onStill, onSettings = nu
           {line}
         </Text>
       ))}
+      {/* Closing the app is this step: how, for this kind of device (lib/closeApp). */}
+      {step.key === 'reopen' ? <Hint>{howToClose(Platform.OS)}</Hint> : null}
       {onSettings && (step.key === 'bluetooth' || step.key === 'forget') ? <Press label={OPEN_BLUETOOTH_SETTINGS} height={44} onPress={onSettings} /> : null}
       {reconnect && reconnects ? <Press label={RESET_RECONNECT} sub={reconnect.sub} tone="live" height={52} onPress={reconnect.go} /> : null}
       {last ? (onReport ? <Press label={REPORT_BUTTON} height={52} onPress={onReport} /> : null) : <Press label={RESET_STILL} sub={RESET_STILL_SUB} height={52} onPress={onStill} />}

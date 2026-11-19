@@ -20,6 +20,34 @@ const flat = (s) => code(s).replace(/\s+/g, ' ')
 
 export function run(test) {
   /*
+   * HOW TO CLOSE THE APP, SAID FOR THE DEVICE IN HAND. "We need to make it
+   * clear how to do that on both Android and iPhone ... it might be
+   * different per device" (Justin, 19 November 2026).
+   */
+  test('wherever the Bluetooth page says to close the app, it says how, for this kind of device and no other', async () => {
+    const { howToClose } = await import('../mobile/src/lib/closeApp.js')
+    const ios = howToClose('ios')
+    const android = howToClose('android')
+    assert.match(ios, /swipe up from the bottom edge of the screen and stop halfway/)
+    assert.match(ios, /swipe Fractal Remote up off the screen/)
+    assert.match(ios, /Home button/)
+    assert.match(android, /swipe up from the bottom of the screen and hold, or tap the square or three-lines button/)
+    assert.match(android, /swipe Fractal Remote off the screen/)
+    /* Neither names the other's phones, nor the device in hand by a fixed word; and each fits under a button. */
+    for (const words of [ios, android]) {
+      assert.doesNotMatch(words, /Android|iPhone|iPad|this phone/)
+      assert.ok(words.length <= 240, `${words.length} characters`)
+    }
+    assert.equal(howToClose('web'), android, 'anything that is not an iPhone gets no steps')
+    const page = flat(read('mobile/src/screens/Bluetooth.js'))
+    assert.equal(page.split('<Hint>{howToClose(Platform.OS)}</Hint>').length - 1, 3, 'a place that says close the app does not say how')
+    /* Under the page's own close-and-reopen hint, on the reset card's step, and under the note for an adapter the app cannot see. */
+    assert.ok(page.includes("<Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null} {!fixing && (b.phase === 'connecting' || (quiet && !footswitch)) ? <Hint>{howToClose(Platform.OS)}</Hint> : null}"))
+    assert.ok(page.includes("{step.key === 'reopen' ? <Hint>{howToClose(Platform.OS)}</Hint> : null}"))
+    assert.ok(page.includes('<Note tone="warn">{SEEN_NOT_HERE}</Note> : null} {!b.on && missed && !b.adapter && !b.trouble && !b.said && ios && misses >= SEEN_NOT_HERE_AFTER ? <Hint>{howToClose(Platform.OS)}</Hint> : null}'))
+  })
+
+  /*
    * AN ADAPTER CONNECTED THAT THE APP CANNOT SEE. His third report of 19
    * November 2026: the FM3's WIDI Uhost connected to the iPhone, six trips
    * through Apple's screen with the app listing only the WIDI Master,

@@ -5133,6 +5133,19 @@ AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
 and `?id=<first 8>`; the proxy adds the key). It gives the message, details
 and log, not the screenshots.
 
+**"Close the app completely" says how, for the device in hand (2.2.2, 19
+November 2026).** "We need to make it clear how to do that on both Android
+and iPhone ... it might be different per device." mobile/src/lib/closeApp.js
+`howToClose(os)`: an iPhone or iPad swipes up from the bottom edge and stops
+halfway, then swipes the app up (a Home button pressed twice in place of the
+first swipe); Android shows the open apps by a swipe up and hold OR the
+square or three-lines button, then swipes it off. Each is told its own way
+only. It is one more line UNDER the sentences that say "close the app" on
+the Bluetooth page (the close-and-reopen hint, the reset card's step, the
+note for an adapter the app cannot see), which are in files the computer app
+shares and are left word for word. Not yet under Troubleshooting's list of
+the same steps, nor the purchase and update pages' "close the app fully".
+
 **ON AN iPHONE THE APP CAN FAIL TO SEE AN ADAPTER THAT IS CONNECTED, UNTIL
 IT IS CLOSED AND OPENED AGAIN (19 November 2026, his third log that
 morning, pasted). NOT FIXED: the fix is native.** "Force closing the app and

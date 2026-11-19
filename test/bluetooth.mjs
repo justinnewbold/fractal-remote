@@ -12134,7 +12134,7 @@ export function run(test) {
     assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.trouble !== 'bluetooth-off' && b\.phase !== 'locked' && !!onReport/)
     /* Turn on Bluetooth and Switch to between the line's own button and Report this, since 7 November 2026. */
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{offOnAndroid \? <Press label=\{TURN_ON_BLUETOOTH\} tone="live" height=\{52\} onPress=\{turnOn\} \/> : null\} \{offOnAndroid \? <Hint>\{bluetoothOffHint\(b\.on && !!b\.adapter, waitingOn\)\}<\/Hint> : null\} \{offerSwitch \? <Press label=\{SWITCH_TO\(b\.answeredAs\)\} sub=\{SWITCH_TO_SUB\(adapterName\(b\.adapter\), b\.answeredAs\)\} tone="live" height=\{52\} onPress=\{switchUnit\} \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
-    assert.match(page, /\{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet && !fixing \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
+    assert.match(page, /\{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{!fixing && \(b\.phase === 'connecting' \|\| \(quiet && !footswitch\)\) \? <Hint>\{howToClose\(Platform\.OS\)\}<\/Hint> : null\} \{reportable && quiet && !fixing \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
     assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
     assert.equal((drawn.match(/<ReportThis /g) || []).length, 4, 'Report this is drawn somewhere else, or twice for one line')
@@ -24573,7 +24573,9 @@ export function run(test) {
       RESET_RECONNECT: gear.RESET_RECONNECT,
       REPORT_BUTTON: gear.REPORT_BUTTON,
       RESET_STILL: gear.RESET_STILL,
-      RESET_STILL_SUB: gear.RESET_STILL_SUB
+      RESET_STILL_SUB: gear.RESET_STILL_SUB,
+      howToClose: (await import('../mobile/src/lib/closeApp.js')).howToClose,
+      Platform: { OS: 'ios' }
     })
     const go = () => 'reconnect'
     const still = () => 'still'
