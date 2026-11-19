@@ -12909,6 +12909,8 @@ export function run(test) {
       'debugLog.js': read('mobile/src/lib/debugLog.js'),
       /* The computer's deadline shortened, so the case where it passes costs no real time. */
       'report-rules.js': read('mobile/src/lib/report-rules.js').replace('export const COMPUTER_WAIT_MS = 5000', 'export const COMPUTER_WAIT_MS = 40'),
+      'bluetooth.js': 'export const cableNow = () => false\n',
+      'linkWay.js': esm(read('mobile/src/lib/linkWay.js')),
       'reports.js': esm(read('mobile/src/lib/reports.js')).replace("from 'react-native'", "from './rn.js'")
     }
     try {

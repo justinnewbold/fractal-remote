@@ -5109,6 +5109,19 @@ click-pad.wav) were the wheel's too and stay, being the metronome's first.
 Do not offer the wheel again; if he asks for another way through the
 presets, start from what he says then, not from this.
 
+**A report's details say which way the app was connected (2.1.7, 19
+November 2026).** "Can't tell if this was on a computer or Bluetooth." (of a
+customer's report whose details said "role: connected" and no more.) `role`
+is the link's state, not its road. So the phone's details carry
+`connection`: computer, Bluetooth, USB cable or demo (mobile/src/lib/linkWay.js,
+added in lib/reports `context` beside what shared/report-rules `contextFrom`
+makes, so the shared file, and the computer app with it, did not change).
+THE WAY ONLY, NEVER THE ADAPTER'S OR THE CABLE'S NAME: the privacy page's
+list for a report says "how the app is connected" and keeps names to the
+log. The report's email prints every detail, so nothing on the server
+changed. The browser's reports do not say it (a browser is always through a
+computer).
+
 **Settings → Help → NAM & TONE3000 says how to use them (2.1.6, 19
 November 2026), for every account.** "Can we put something in the app that
 explains people how to use tone 3000 and NAM? Some people might not know

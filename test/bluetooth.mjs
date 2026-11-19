@@ -12012,7 +12012,9 @@ export function run(test) {
     /*
      * IN THE LOG, NEVER IN THE DETAILS. lib/reports context goes with every
      * report, a suggestion too, and the privacy page and the form's small
-     * print list exactly what is in it. Nothing about Bluetooth goes in it.
+     * print list exactly what is in it. Nothing about Bluetooth goes in it
+     * but the one word for the way it is connected (lib/linkWay, test/reports.mjs),
+     * which the privacy page lists: never the adapter, the unit picked or the topic.
      */
     const ctx = code('mobile/src/lib/reports.js')
     const body = ctx.slice(ctx.indexOf('export function context('), ctx.indexOf('export function logPreview('))
