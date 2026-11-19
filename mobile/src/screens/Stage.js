@@ -36,6 +36,7 @@ import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
 import HeldCapture from '../components/HeldCapture'
+import { AmpSwapDoor, useAmpSwap } from '../components/AmpToNam'
 import PopKnobs from '../components/PopKnobs'
 import { Tone3000Door, Tone3000InPop, useTone3000Door } from '../components/Tone3000Quick'
 import StageView from '../components/StageView'
@@ -2081,6 +2082,7 @@ export default function Stage({
           setPicking(null)
         }}
         knobs={popKnobs}
+        onSwapped={(id) => setPicking(id)}
       />
 
       <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
@@ -2573,7 +2575,7 @@ const FOOT_ROW = { flexDirection: 'row', gap: space.sm }
  *
  * The same words the browser uses, because they are the same fact.
  */
-function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
+function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapped = null }) {
   const name = block?.name || block?.slug || ''
   /*
    * WITH THE BLOCK'S KNOBS OVER THE CHANNELS (`knobs`, from Stage's popKnobs;
@@ -2605,8 +2607,13 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   const library = useTone3000Door(withKnobs ? block : null, withKnobs ? null : block)
   const [browsing, setBrowsing] = useState(false)
   const [came, setCame] = useState('')
+  /* A held amp swapped for a NAM block (components/AmpToNam): the pop-up becomes that block's, and opens on its captures. */
+  const swapHere = useAmpSwap(block) && typeof onSwapped === 'function'
+  const openOn = useRef(null)
   useEffect(() => {
-    setBrowsing(false)
+    const straight = openOn.current !== null && openOn.current === library.id
+    if (library.id !== null) openOn.current = null
+    setBrowsing(straight)
     setCame('')
   }, [library.id])
   if (browsing && library.offered) {
@@ -2624,6 +2631,15 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
       </Sheet>
     )
   }
+  const ampDoor = swapHere ? (
+    <AmpSwapDoor
+      block={block}
+      onSwapped={(id, note) => {
+        openOn.current = id
+        onSwapped(id, note)
+      }}
+    />
+  ) : null
   const libraryDoor = library.offered ? (
     <>
       <Tone3000Door n={library.n} onPress={() => setBrowsing(true)} />
@@ -2658,6 +2674,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
           </View>
         }
       >
+        {ampDoor}
         {libraryDoor}
         <PopKnobs block={block} onScrollLock={setHeld} />
         <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
@@ -2670,6 +2687,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   }
   return (
     <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
+      {ampDoor}
       {libraryDoor}
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
         {(channels || []).map((ch) => (

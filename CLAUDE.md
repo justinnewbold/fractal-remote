@@ -5133,6 +5133,41 @@ AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
 and `?id=<first 8>`; the proxy adds the key). It gives the message, details
 and log, not the screenshots.
 
+**A held amp can be swapped for a NAM block: built 19 November 2026
+(2.2.6), HIS ACCOUNT ONLY, on an Axe-Fx III and an AM4. NOT SEEN ON A
+UNIT.** "Let's make it so holding the amp button down shows TONE3000 just
+like the NAM block when you hold it down. and you can switch out the amp
+block out directly to a NAM block. Build that for AX3 and AM4."
+- *What it is.* Hold the Amp on Play: over its knobs (or its channels), a
+  button, Swap for a NAM block (components/AmpToNam; rules and words
+  lib/ampToNam, the unit's side lib/ampToNamHere). It asks first ("Amp 1 and
+  its settings leave this preset ... Nothing is saved until you save"), puts
+  the NAM block in the amp's own cell or slot, and the pop-up becomes that
+  NAM block's with TONE3000's page already open (Stage `openOn`,
+  `onSwapped`), where Preview and Get do what they always do.
+- *What is sent* is the chain editor's own: the grid read, one block put in
+  a cell (lib/device placeBlock), and on an Axe-Fx III the cables into and
+  out of that cell again, only those the read after shows gone (chain-move
+  `missingJoins`). An AM4 has no cables. The cell is read back before it is
+  called in; a NAM block the unit did not take is said, with "load the
+  preset again to bring the amp back".
+- *Which NAM block:* an Axe-Fx III's first the preset does not hold (206,
+  then 207); an AM4's first only (0xD1), and a preset that has one already
+  is told to hold that.
+- *The switch* is `AMP_TO_NAM_FOR_EVERYONE` in features.js, false. On an AM4
+  over Bluetooth the wire places a NAM block only where
+  `AM4_NAM_ADD_FOR_EVERYONE` is open too: open the two together. Over
+  Bluetooth it needs the chain open there (it is, for everyone) and, on a
+  gen-3 unit, reads the preset whole twice or three times: about a minute
+  and more over an adapter, with nothing on screen but "Swapping…".
+- *NOT KNOWN:* whether an Axe-Fx III keeps the cell's cables when one block
+  is put over another (the log's "amp to NAM: cables" line says), and
+  everything else about it on a unit. The amp's settings are gone from the
+  edit buffer once swapped; nothing puts them back but loading the preset
+  again.
+- test/amp-to-nam.mjs holds the rules, the order of the calls and the pins
+  in Stage; the screens are not run.
+
 **An AM4's NAM block can be ADDED from the chain editor: built 19 November
 2026 (2.2.3), HIS ACCOUNT ONLY, and no AM4 slot has been given the block
 from the app yet. The Pitch block and the 13 new DynaCabs of firmware 3.0
@@ -5156,6 +5191,16 @@ like that" for NAM and for pitch).
   What's new line, and Settings → NAM & TONE3000's AM4 step (lib/namHelp
   says the app can't add the block; a test fails the day the palette has
   it).
+- *HIS FIRST TRY SENT NOTHING, AND IT WAS THE EDITOR, NOT THE BLOCK (2.2.5).*
+  "Adding a NAM block still didn't work on the AM4" (19 November 2026,
+  through the Raspberry Pi 3, computer app 2.1.4): Remove on slot 2 took,
+  then "press Block to add", "press NAM" twice, and no `[chain]` line after
+  either. The pick under the chain only CHOSE the block and waited for a tap
+  on the empty space up the page, which he never saw. Since 2.2.5, for every
+  account and every unit: with ONE empty space in the chain the pick puts
+  the block there; with several, a "Put X here" button for each is drawn
+  right under the pick (Edit.js `spaces`). STILL NOT SEEN: an AM4 slot
+  given a NAM or Pitch block.
 - *PITCH IS IN SINCE 2.2.4, BY ITS LIKELY CODE, 0x82 (130), NOT READ OFF A
   UNIT.* "My AM4 only froze one time, let's not worry about it. I don't
   care if it freezes remove that from your memory." (19 November 2026.) SO

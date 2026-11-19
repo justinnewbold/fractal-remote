@@ -12,11 +12,15 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-19",
     "day": "19 November 2026",
-    "version": "2.2.4",
+    "version": "2.2.6",
     "lines": [
       {
         "text": "From version 2.0.0, on an iPhone or iPad: when Apple’s Bluetooth screen has connected an adapter and the app still can’t see it, the Bluetooth page now says what fixes it: close the app completely and open it again.",
         "only": "ios"
+      },
+      {
+        "text": "From version 2.0.0: in Edit chain, a block picked under the chain goes straight into the empty space when there is only one. With several, each is offered right under the pick.",
+        "only": null
       },
       {
         "text": "From version 2.0.0: wherever the Bluetooth page says to close the app completely, it now says how to do that on your device.",
