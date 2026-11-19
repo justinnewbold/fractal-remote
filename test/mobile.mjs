@@ -3358,6 +3358,27 @@ export function run(test) {
 
   test('an AM4’s NAM block through the computer is named by the phone from its two codes, only on an AM4 and only where it is open, and the chain editor never moves it', async () => {
     const { nameAm4Nam, ownInChainEditor, AM4_NAM_CODES } = await import('../mobile/src/lib/ownBlocks.js')
+    /* And in the list of blocks to ADD, with the editor free to move and remove it, only where this account may add one (19 November 2026). */
+    {
+      const { am4NamInPalette } = await import('../mobile/src/lib/ownBlocks.js')
+      const computers = [{ page: 0x3a, name: 'Amp', slug: 'amp' }]
+      assert.deepEqual(am4NamInPalette(computers, 'am4', true), [...computers, { page: 0xd1, name: 'NAM', slug: 'nam', family: 'NAM' }])
+      assert.equal(am4NamInPalette(computers, 'am4', false), computers)
+      assert.equal(am4NamInPalette(computers, 'fm3', true), computers)
+      assert.equal(am4NamInPalette([], 'am4', true).length, 0, 'a list that could not be read is given a block')
+      const had = [...computers, { page: 0xd1, name: 'NAM' }]
+      assert.equal(am4NamInPalette(had, 'am4', true), had, 'listed twice')
+      const sent = [{ effectId: 0xd1, unknown: true, row: 0, col: 1 }]
+      assert.equal(nameAm4Nam(sent, 'am4', true, false)[0].fixed, true)
+      assert.equal('fixed' in nameAm4Nam(sent, 'am4', true, false, true)[0], false)
+      assert.equal(ownInChainEditor(nameAm4Nam(sent, 'am4', true, false, true), true)[0].unknown, false, 'the editor cannot move or remove a NAM block it may add')
+      assert.equal(ownInChainEditor(nameAm4Nam(sent, 'am4', true, false), true)[0].unknown, true)
+      const here = read('mobile/src/lib/ownBlocksHere.js')
+      assert.ok(here.includes('am4NamInPalette(ownInPalette(list, getState().deviceSlug, openHere()), getState().deviceSlug, am4NamHere() && am4NamAddHere())'))
+      assert.ok(here.includes('am4NamHere(), am4NamKnobsOverBluetooth(), am4NamAddHere()))'))
+      assert.match(read('mobile/src/lib/features.js'), /export const AM4_NAM_ADD_FOR_EVERYONE = false/)
+      assert.ok(read('mobile/src/lib/bluetooth.js').includes('export const am4NamAddHere = () => allUnits === true || AM4_NAM_ADD_FOR_EVERYONE'))
+    }
     const { markNewBlocks, isNewBlock } = await import('../shared/new-block.mjs')
     const { deviceSlug } = await import('../mobile/src/lib/device-slug.js')
     const feats = await import('../mobile/src/lib/features.js')
@@ -3395,7 +3416,7 @@ export function run(test) {
     /* The wiring: his account or the switch, and the knobs by the switch they have over Bluetooth. */
     const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
     assert.match(here, /const am4NamHere = \(\) => bluetoothAdmin\(\) === true \|\| AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE/)
-    assert.match(here, /setChainNamer\(\(blocks\) => nameAm4Nam\(nameOwnBlocks\(.*\), getState\(\)\.deviceSlug, am4NamHere\(\), am4NamKnobsOverBluetooth\(\)\)\)/)
+    assert.match(here, /setChainNamer\(\(blocks\) => nameAm4Nam\(nameOwnBlocks\(.*\), getState\(\)\.deviceSlug, am4NamHere\(\), am4NamKnobsOverBluetooth\(\), am4NamAddHere\(\)\)\)/)
   })
   test('through the computer, a III’s NAM the phone has named is on Play and switches by its own id, and is still a New block to Edit and the chain', async () => {
     const { nameOwnBlocks } = await import('../mobile/src/lib/ownBlocks.js')
@@ -3578,7 +3599,7 @@ export function run(test) {
     const flatCode = (f) => read(f).replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     const here = flatCode('mobile/src/lib/ownBlocksHere.js')
     assert.match(here, /const openHere = \(\) => bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE/)
-    assert.match(here, /export const ownPaletteHere = \(list\) => ownInPalette\(list, getState\(\)\.deviceSlug, openHere\(\)\)/)
+    assert.match(here, /export const ownPaletteHere = \(list\) => am4NamInPalette\(ownInPalette\(list, getState\(\)\.deviceSlug, openHere\(\)\), getState\(\)\.deviceSlug, am4NamHere\(\) && am4NamAddHere\(\)\)/)
     assert.match(here, /export const ownChainHere = \(blocks\) => ownInChainEditor\(blocks, openHere\(\)\)/)
     const edit = flatCode('mobile/src/screens/Edit.js')
     assert.match(edit, /const list = ownPaletteHere\(await blockCatalog\(\)\) if \(!stop\) setPalette\(list\)/)

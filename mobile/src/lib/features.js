@@ -868,6 +868,16 @@ export const FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE = true
 export const AM4_NAM_FOR_EVERYONE = true
 
 /**
+ * An AM4's NAM block in the chain editor's list of blocks to ADD, on either
+ * connection (lib/am4-chain AM4_NAM_PLACE, lib/ownBlocks am4NamInPalette).
+ * "Under the edit chain, the AM4 for NAM and pitch blocks are not showing
+ * up" (Justin, 19 November 2026). His account only: no AM4 slot has been
+ * GIVEN this block from the app yet. Opens on his word, with its What's new
+ * line and Settings → NAM & TONE3000's AM4 step changed (lib/namHelp).
+ */
+export const AM4_NAM_ADD_FOR_EVERYONE = false
+
+/**
  * THE AM4'S NAM BLOCK'S KNOBS IN EDIT (lib/am4-own-knobs.js), over Bluetooth
  * or a USB cable: Level, Input Gain, Bass, Mid, Treble, Bright and three
  * tone-stack and phase switches, with the Capture button over them.

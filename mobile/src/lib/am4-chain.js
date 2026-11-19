@@ -32,7 +32,7 @@
  * reads the preset back and says whether the slot holds the block, as the
  * computer does.
  */
-import { AM4, AM4_BLOCKS, am4Float, am4Frame, am4ReadFloat, checksumOk, decode14, isFractal, MODELS, FN } from './fractal-sysex.mjs'
+import { AM4, AM4_BLOCKS, AM4_NEW_BLOCKS, am4Float, am4Frame, am4ReadFloat, checksumOk, decode14, isFractal, MODELS, FN } from './fractal-sysex.mjs'
 
 /** The first slot's address in the preset's register; the fourth is three above it. */
 export const AM4_SLOT_FIRST = 0x000f
@@ -45,12 +45,35 @@ const labelOf = (slug) => NAMES[slug] ?? `${slug[0].toUpperCase()}${slug.slice(1
 /** The blocks an AM4's slot can be given, as the computer app lists them (GET /blocks): one of each, `page` its code. */
 export const AM4_PALETTE = Object.freeze(Object.entries(AM4_BLOCKS).map(([slug, page]) => Object.freeze({ slug, family: slug, instance: 1, name: labelOf(slug), page })))
 
-/** Whether `code` is one a slot may be sent: a block the palette names, or 0 for empty. */
-export const am4SlotCode = (code) => code === 0 || AM4_PALETTE.some((b) => b.page === code)
+/**
+ * THE NAM PLAYER (AM4 firmware 3.00), AS A BLOCK A SLOT MAY BE GIVEN.
+ *
+ * "Under the edit chain, the AM4 for NAM and pitch blocks are not showing
+ * up" (Justin, 19 November 2026). Its code, 0xD1, is the AM4's own: read off
+ * his unit's slots on the 3.00 beta, and AM4-Edit's recording reads the
+ * block at it (docs/am4-nam.md). The message is the one every block is
+ * placed by, with that code as its value. NOBODY HAS SEEN A SLOT GIVEN THIS
+ * BLOCK FROM HERE: it is offered and sent only where `more` is true, which
+ * the wire answers per account (lib/features AM4_NAM_ADD_FOR_EVERYONE), and
+ * the slot is read back like any other. One of it, as of every block: a
+ * second (0xD2) is not offered. An AM4 on older firmware has no such block;
+ * what it does with the code is not known, and the read back says whether
+ * the slot took it.
+ *
+ * NOT HERE: the Pitch block the same firmware brought. Its code has not
+ * been read off a unit, and a guessed code is never sent to an AM4.
+ */
+export const AM4_NAM_PLACE = Object.freeze({ slug: 'nam', family: 'NAM', instance: 1, name: 'NAM', page: AM4_NEW_BLOCKS.nam })
+
+/** The blocks offered: the palette, with the NAM Player after it where `more` is true. */
+export const am4Palette = (more = false) => (more === true ? [...AM4_PALETTE, AM4_NAM_PLACE] : AM4_PALETTE)
+
+/** Whether `code` is one a slot may be sent: a block the palette names, or 0 for empty; the NAM Player's too where `more` is true. */
+export const am4SlotCode = (code, more = false) => code === 0 || AM4_PALETTE.some((b) => b.page === code) || (more === true && code === AM4_NAM_PLACE.page)
 
 /** Put `code` in slot 1 to 4 (0 empties it). Null for a slot or a code that is never sent. */
-export function buildAm4Slot(slot, code) {
-  if (!Number.isInteger(slot) || slot < 1 || slot > AM4_SLOTS || !am4SlotCode(code)) return null
+export function buildAm4Slot(slot, code, more = false) {
+  if (!Number.isInteger(slot) || slot < 1 || slot > AM4_SLOTS || !am4SlotCode(code, more)) return null
   return am4Frame({ pidLow: AM4.PRESET_REG, pidHigh: AM4_SLOT_FIRST + slot - 1, action: AM4.SET, hdr4: 4, payload: am4Float(code) })
 }
 
@@ -70,10 +93,10 @@ export function readAm4Slot(f) {
  * build (a slot of the four, a code of the palette or nought) AND is, byte
  * for byte, a frame the wire is sending for a slot at this moment (`now`).
  */
-export function am4SlotAllowed(f, now) {
+export function am4SlotAllowed(f, now, more = false) {
   const said = readAm4Slot(f)
   if (!said || !Array.isArray(now)) return false
-  const made = buildAm4Slot(said.slot, said.code)
+  const made = buildAm4Slot(said.slot, said.code, more)
   if (!made || made.length !== f.length || !made.every((b, i) => b === f[i])) return false
   return now.some((n) => Array.isArray(n) && n.length === f.length && n.every((b, i) => b === f[i]))
 }

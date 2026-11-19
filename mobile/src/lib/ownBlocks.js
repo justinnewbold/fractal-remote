@@ -134,16 +134,32 @@ export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
  */
 export const AM4_NAM_CODES = Object.freeze([0xd1, 0xd2])
 const isAm4 = (deviceSlug) => String(deviceSlug || '').toLowerCase() === 'am4'
-export function nameAm4Nam(blocks, deviceSlug, open, knobs = false) {
+export function nameAm4Nam(blocks, deviceSlug, open, knobs = false, add = false) {
   if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
   let named = false
   const out = blocks.map((b) => {
     if (!b || b.unknown !== true || b.slug || !AM4_NAM_CODES.includes(b.effectId)) return b
     named = true
-    const called = { ...b, slug: 'nam', family: 'NAM', name: b.effectId === AM4_NAM_CODES[0] ? 'NAM' : 'NAM 2', onPlay: true, fixed: true }
+    const called = { ...b, slug: 'nam', family: 'NAM', name: b.effectId === AM4_NAM_CODES[0] ? 'NAM' : 'NAM 2', onPlay: true, ...(add === true ? {} : { fixed: true }) }
     return knobs === true ? { ...called, turns: true } : { ...called, knobs: false }
   })
   return named ? out : blocks
+}
+
+/**
+ * An AM4's list of blocks to add, with the NAM Player in it (19 November
+ * 2026: "the AM4 for NAM and pitch blocks are not showing up"). The
+ * computer's list is the codec's seventeen; its route that puts a block in
+ * a slot takes any code (ForgeFX am4.ts placeCell) and reads the slot back,
+ * so nothing changes on the computer. Only where `open` is true (the block
+ * named for this account AND lib/features AM4_NAM_ADD_FOR_EVERYONE or his
+ * account), and then nameAm4Nam's `add` lets the editor move and remove it.
+ * Not the Pitch block: its code has not been read off a unit.
+ */
+export function am4NamInPalette(list, deviceSlug, open) {
+  if (open !== true || !Array.isArray(list) || !list.length || !isAm4(deviceSlug)) return list
+  if (list.some((b) => b?.page === AM4_NAM_CODES[0])) return list
+  return [...list, { page: AM4_NAM_CODES[0], name: 'NAM', slug: 'nam', family: 'NAM' }]
 }
 
 /** The computer's list of blocks to add, with this unit's own blocks added where the list lacks them. The same list back when there is nothing to add or the account is not offered them. */
