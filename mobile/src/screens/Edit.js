@@ -723,7 +723,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       {emptyNoteShown ? <Note>This preset is empty.</Note> : null}
       {/* Quick build and the starter chains, on an empty preset (mock-up 1); its sheet stays up past the build it ends. */}
       {quickBuildShown ? (
-        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} takesLong={gridReadTakesLong(caps, onCable)} onSave={saveFromQuickBuild} onPlay={onBack} />
+        <QuickBuild bare={bareNow} caps={caps} chain={chainAll} pending={pending} saves={!viaBle || caps?.supportsSave === true} takesLong={gridReadTakesLong(caps, onCable)} onSave={saveFromQuickBuild} onPlay={onBack} onRename={renameHere ? () => openTool('rename') : null} />
       ) : null}
 
       {/*

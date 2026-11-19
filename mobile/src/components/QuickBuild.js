@@ -11,7 +11,7 @@ import { blockColor } from '../lib/blockColors'
 import { blockIconOwn } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { ownCellNameHere, ownPaletteHere } from '../lib/ownBlocksHere'
-import { takeQuickBuildAsk } from '../lib/quickBuild'
+import { NAME_PRESET, NAME_PRESET_SUB, takeQuickBuildAsk } from '../lib/quickBuild'
 import { addStarterHere, adoptUnlinkedHere, keepPaletteHere, roomForStarterHere, useStarterChains } from '../lib/starterChainsHere'
 import {
   BACK_TO_PLAY,
@@ -371,7 +371,7 @@ const startFrom = (blocks, palette, room) => {
  * lib/bleSwitch gridReadTakesLong: this file never asks which wire it is
  * on), so it is said before the tap and under the card.
  */
-export default function QuickBuild({ bare, caps, chain, pending = false, saves = true, takesLong = false, onSave, onPlay }) {
+export default function QuickBuild({ bare, caps, chain, pending = false, saves = true, takesLong = false, onSave, onPlay, onRename = null }) {
   const starters = useStarterChains()
   const unitName = useRig(ofDeviceName)
   const [palette, setPalette] = useState(null)
@@ -835,6 +835,17 @@ export default function QuickBuild({ bare, caps, chain, pending = false, saves =
                 onPlay?.()
               }}
             />
+            {onRename && done.landed.tone !== 'fault' ? (
+              <Press
+                label={NAME_PRESET}
+                sub={NAME_PRESET_SUB}
+                disabled={!!busy}
+                onPress={() => {
+                  setOpen(false)
+                  onRename()
+                }}
+              />
+            ) : null}
             {done.undo ? <Press label={busy ? UNDO_BUSY : UNDO_LABEL} sub={undoSub(done.count)} disabled={!!busy} busy={!!busy} onPress={runUndo} /> : null}
             {undoSaid ? <Note tone={undoSaid.bad ? 'fault' : 'hint'}>{undoSaid.text}</Note> : null}
             {pending && onSave ? (
