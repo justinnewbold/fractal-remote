@@ -26,3 +26,12 @@ export const offerNote = (adapter, unit, other, noun = 'phone') =>
 
 /** Connect's own label while the offer is up: what a tap on it does then. */
 export const OFFER_LOOK = 'Look for a different adapter'
+
+/**
+ * This unit has an adapter of its own and it is not connected (report
+ * d9a2f5fe: an FM3 whose WIDI Uhost the iPhone did not have, offered the
+ * Axe-Fx III's WIDI Master). Said in the fault's colour over Connect, which
+ * stays the big button; the other unit's adapter is offered small, under it.
+ */
+export const ownAwayNote = (own, unit, noun = 'phone') =>
+  `${own || 'Its adapter'}, your ${unit || 'unit'}’s adapter, isn’t connected to this ${noun}. Tap Connect and choose it. If it isn’t there, it is switched off, or another phone, tablet or computer is connected to it.`

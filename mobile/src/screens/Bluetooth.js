@@ -62,6 +62,7 @@ import {
   setMethods,
   stopPageWait,
   switchAdapter,
+  switchUnitNow,
   takeOffered,
   turnOnBluetooth,
   unitName,
@@ -154,7 +155,8 @@ import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Tabs from '../components/Tabs'
-import { OFFER_LOOK, offerNote } from '../lib/offerWords'
+import { OFFER_LOOK, offerNote, ownAwayNote } from '../lib/offerWords'
+import { SWITCH_UNIT, SWITCH_UNIT_HINT } from '../lib/unitSwitch'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
@@ -740,6 +742,11 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const answeredKey = connected && b.answeredAs ? units.find((u) => u.name === b.answeredAs)?.key || null : null
   /* Any unit that answered, an FM3 too since 15 November 2026 (it was offered only on a WIDI Uhost: no adapter is ruled out for an FM3 any more, and its warning is drawn in red under this). */
   const offerSwitch = !!answeredKey && !cable && canStart
+  /* Another unit tapped while it is on: stopped, switched, and on again where its own adapter is here (switchUnitNow). */
+  const switchTo = (key) => {
+    if (!canStart || key === b.unit) return
+    if (switchUnitNow(key) === 'on') arm()
+  }
   const switchUnit = () => {
     if (!offerSwitch) return
     arm()
@@ -804,6 +811,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * taken without the tap.
    */
   const offerFromOther = !b.on && !b.adapter && !!b.offer && canStart && b.offer.unit !== b.unit
+  /* The big button, unless this unit has an adapter of its own that is only away (lib/bluetooth offer `own`): then Connect stays the big one and the offer is small under it. */
+  const offerMain = offerFromOther && !b.offer.own
   const takeOffer = () => {
     if (!canStart || !takeOffered()) return
     arm()
@@ -975,6 +984,21 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             {differentButton}
             {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. Tap Stop to change it.`}</Hint> : null}
+            {/*
+              OR ANOTHER UNIT IN ONE TAP (19 November 2026: "Users need to be
+              able to switch almost immediately from Bluetooth device to a new
+              Bluetooth device"). Bluetooth stops first, always, and comes
+              straight back on only through that unit's OWN adapter where it
+              is connected now (lib/bluetooth switchUnitNow, lib/unitSwitch);
+              otherwise the page is on Connect with the unit picked.
+            */}
+            {b.unit && units.length > 1 ? (
+              <View style={{ gap: space.sm }}>
+                <Heading>{SWITCH_UNIT}</Heading>
+                <SwitchUnits units={units} picked={b.unit} onPick={switchTo} />
+                <Hint>{SWITCH_UNIT_HINT}</Hint>
+              </View>
+            ) : null}
             {/* Said for what is connected now (lib/cableWords leaveWords): never "Stop using" a cable that isn't plugged in, or an adapter that isn't there. */}
             <Press label={stop.label} sub={stop.sub} height={52} onPress={() => setBluetooth(false)} />
           </View>
@@ -1020,9 +1044,11 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 the big one; Connect under it says what it does then. Still
                 never taken without the tap (offerFromOther, lib/offerWords).
               */}
-              {offerFromOther ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}
-              {offerFromOther ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}
-              <Press label={b.looking ? 'Looking…' : offerFromOther ? OFFER_LOOK : 'Connect'} icon={cable || takes.length || offerFromOther ? null : bluetoothIcon} inkColor={color.ble} labelSize={offerFromOther ? undefined : font.lead} height={offerFromOther ? 52 : 64} tone={offerFromOther ? undefined : 'live'} disabled={!canStart || b.looking} onPress={start} />
+              {offerMain ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}
+              {offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}
+              {/* This unit's own adapter is only away (report d9a2f5fe): said in red over Connect, which stays the big button. */}
+              {offerFromOther && !offerMain ? <Note tone="fault">{ownAwayNote(b.offer.own, unitName(b.unit), deviceNoun())}</Note> : null}
+              <Press label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'} icon={cable || takes.length || offerMain ? null : bluetoothIcon} inkColor={color.ble} labelSize={offerMain ? undefined : font.lead} height={offerMain ? 52 : 64} tone={offerMain ? undefined : 'live'} disabled={!canStart || b.looking} onPress={start} />
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
@@ -1046,6 +1072,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
+              {/* And the other unit's adapter small, under Connect's line, for somebody who did move it. */}
+              {offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={b.looking} onPress={takeOffer} /> : null}
               {cableButtons}
               {differentButton}
               {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
@@ -1136,6 +1164,11 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
 /* The units of step 1, on this page, on How to connect and on Troubleshooting: the same pick, the same rule (not while it is on), drawn as tabs (components/Tabs). */
 function UnitChips({ units, picked, disabled }) {
   return <Tabs name="Your unit" items={units.map((u) => ({ key: u.key, label: u.name }))} picked={picked} disabled={disabled} onPick={(key) => setBluetoothUnit(key)} />
+}
+
+/* The same units while Bluetooth is on: a tap switches (lib/bluetooth switchUnitNow), which stops Bluetooth first. Never step 1's chips, which change the unit with it running. */
+function SwitchUnits({ units, picked, onPick }) {
+  return <Tabs name={SWITCH_UNIT} items={Array.from(units, (u) => ({ key: u.key, label: u.name }))} picked={picked} onPick={onPick} />
 }
 
 /*

@@ -5133,6 +5133,45 @@ AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
 and `?id=<first 8>`; the proxy adds the key). It gives the message, details
 and log, not the screenshots.
 
+**Switch unit in one tap while Bluetooth is on, and a unit's own adapter
+that is only away is named (2.1.9, 19 November 2026), for every account.**
+"Users need to be able to switch almost immediately from Bluetooth device to
+a new Bluetooth device" (report d9a2f5fe, minutes after bf90bfd6). WHAT THAT
+LOG SHOWED: every list after Apple's screen held ONE port, WIDI Master
+Bluetooth, the AX3's. The FM3's own WIDI Uhost was never a port on the
+iPhone, though he wrote "I'm also connected to the WIDI UHost" (where he saw
+that was not said; WHY the iPhone did not have it is NOT KNOWN: switched
+off, held by his iPad or Mac, or two WIDIs paired to each other all fit).
+Connect lets go of a kept adapter that is not connected so it can be looked
+for again (forgetAdapter `forgot`), which made the FM3 look like a unit with
+no adapter, so the Master was offered to it; he forgot the AX3's keeping by
+hand, the Master was then "the only one here" and was taken, and the app
+asked an Axe-Fx III to be an FM3 ("The WIDI Master is on an Axe-Fx III, not
+your FM3", which was true). Two changes:
+- *A unit's own adapter, away, is named* (lib/bluetooth offerFromOther
+  `own`, lib/offerWords `ownAwayNote`): "WIDI Uhost Bluetooth, your FM3's
+  adapter, isn't connected to this iPhone. Tap Connect and choose it. If it
+  isn't there, it is switched off, or another phone, tablet or computer is
+  connected to it." in red over Connect, which stays the big button; the
+  other unit's adapter is offered small under it. The big offer (2.1.8,
+  below) is only for a unit with no adapter of its own.
+- *Switch unit* on the page that is up while Bluetooth is on (lib/unitSwitch,
+  lib/bluetooth `switchUnitNow`, test/unit-switch.mjs): the units as tabs,
+  and a tap on another STOPS BLUETOOTH FIRST, always (the reason step 1's
+  chips are shut while it is on stands: a new unit's messages to whatever is
+  on the adapter froze an AM4), switches, and turns it straight back on only
+  through that unit's OWN adapter where it is another adapter than the one
+  just used, a Bluetooth one, and connected now (`switchPlan`). Anything
+  else lands on Connect with the unit picked. Never carried: the last
+  unit's adapter stays the last unit's.
+- NOT SEEN ON A PHONE, either of them, and the stop-then-on in one tap has
+  not run against a real link (it is what Stop and Connect do, back to back).
+- WHAT AN UPDATE CANNOT DO: on an iPhone an adapter becomes usable only once
+  it is connected in Apple's Bluetooth MIDI screen, which no app can do for
+  the player. With both adapters connected there, switching is the one tap
+  above. An app connecting an adapter itself (its own Bluetooth code, as on
+  Android) would be native work and a build pair: offered, not asked for.
+
 **A report's details say which way the app was connected (2.1.7, 19
 November 2026).** "Can't tell if this was on a computer or Bluetooth." (of a
 customer's report whose details said "role: connected" and no more.) `role`

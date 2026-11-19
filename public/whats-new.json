@@ -3,10 +3,14 @@
     {
       "date": "2026-11-19",
       "day": "19 November 2026",
-      "version": "2.1.8",
+      "version": "2.1.9",
       "lines": [
         {
-          "text": "From version 2.0.0: moving one Bluetooth adapter between two units is one clear tap. When the only adapter connected was set up for another unit, the Bluetooth page says so and its main button uses that adapter for the unit you picked.",
+          "text": "From version 2.0.0: while Bluetooth is on, the Bluetooth page has Switch unit. Tap another unit and Bluetooth stops, then connects again by itself when that unit’s own adapter is connected.",
+          "only": null
+        },
+        {
+          "text": "From version 2.0.0: when the only adapter connected was set up for another unit, the Bluetooth page says so and offers it in one tap. When your unit’s own adapter isn’t connected, it names that adapter instead.",
           "only": null
         },
         {
