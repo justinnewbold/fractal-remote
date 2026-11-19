@@ -2835,6 +2835,8 @@ function ChainEditor({ blocks, caps, overWire = false, slow = false, unit = '', 
   const used = new Set((blocks || []).map((b) => idOf(b)).filter(Number.isInteger))
   const kinds = nextOfEachKind(palette || [], used)
   const picked = (palette || []).find((b) => b.page === Number(choice))
+  /* Every empty space of the chain, in the order it is drawn: for the pick under the chain. */
+  const spaces = lanes.flatMap((lane) => laneItems(lane).filter((it) => it.kind === 'gap').map((item) => ({ row: lane.row, item })))
 
   /*
    * THE LIST, AS A MENU THAT OPENS AND SCROLLS (components/BlockMenu, and
@@ -3064,11 +3066,28 @@ function ChainEditor({ blocks, caps, overWire = false, slow = false, unit = '', 
       <View style={{ gap: space.sm }}>
         <Label>{EMPTY_SPACE}</Label>
         {blockMenu(
-          /* A tap on the one already picked puts it down again, as it always did. */
-          (b) => setChoice(b.page === Number(choice) ? null : b.page),
-          picked ? `Now tap an empty space to put ${picked.name} in it.` : 'Pick a block, then tap an empty space.',
-          { title: 'Pick a block', note: 'Then tap an empty space to put it there.', chosen: choice }
+          /* A tap on the one already picked puts it down again, as it always did. With ONE empty space in the chain there is nothing to choose, so the pick puts the block there (19 November 2026: a NAM picked twice on an AM4 and never placed, the space to tap being up the page). */
+          (b) => {
+            if (b.page === Number(choice)) return setChoice(null)
+            setChoice(b.page)
+            if (spaces.length === 1 && !busy) add(spaces[0].row, spaces[0].item.col, b.page)
+          },
+          picked ? (spaces.length > 1 ? `Now choose where ${picked.name} goes.` : `Now tap an empty space to put ${picked.name} in it.`) : spaces.length === 1 ? 'Pick a block and it goes in the empty space.' : 'Pick a block, then choose its space.',
+          { title: 'Pick a block', note: spaces.length === 1 ? 'It goes in the empty space.' : 'Then choose which empty space it goes in.', chosen: choice }
         )}
+        {/* With several, each is offered right here under the pick, as well as in its place up the chain. */}
+        {picked && spaces.length > 1
+          ? spaces.slice(0, 8).map((sp) => (
+              <Press
+                key={`put${sp.row}:${sp.item.col}`}
+                caption={whereGap(sp.row, sp.item)}
+                label={`Put ${picked.name} here`}
+                disabled={busy}
+                height={48}
+                onPress={() => add(sp.row, sp.item.col)}
+              />
+            ))
+          : null}
       </View>
     </View>
   )

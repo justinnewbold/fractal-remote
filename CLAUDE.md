@@ -5156,6 +5156,16 @@ like that" for NAM and for pitch).
   What's new line, and Settings → NAM & TONE3000's AM4 step (lib/namHelp
   says the app can't add the block; a test fails the day the palette has
   it).
+- *HIS FIRST TRY SENT NOTHING, AND IT WAS THE EDITOR, NOT THE BLOCK (2.2.5).*
+  "Adding a NAM block still didn't work on the AM4" (19 November 2026,
+  through the Raspberry Pi 3, computer app 2.1.4): Remove on slot 2 took,
+  then "press Block to add", "press NAM" twice, and no `[chain]` line after
+  either. The pick under the chain only CHOSE the block and waited for a tap
+  on the empty space up the page, which he never saw. Since 2.2.5, for every
+  account and every unit: with ONE empty space in the chain the pick puts
+  the block there; with several, a "Put X here" button for each is drawn
+  right under the pick (Edit.js `spaces`). STILL NOT SEEN: an AM4 slot
+  given a NAM or Pitch block.
 - *PITCH IS IN SINCE 2.2.4, BY ITS LIKELY CODE, 0x82 (130), NOT READ OFF A
   UNIT.* "My AM4 only froze one time, let's not worry about it. I don't
   care if it freezes remove that from your memory." (19 November 2026.) SO

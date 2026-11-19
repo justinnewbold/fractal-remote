@@ -162,11 +162,11 @@ export function run(test) {
     assert.equal((editor.match(/setListUp\(/g) || []).length, 1, 'something else brings a card’s list up')
     assert.equal((editor.match(/\bsetListUp\b/g) || []).length, 3, 'setListUp is handed somewhere this test does not know')
 
-    /* THE OTHER WAY, under the chain: its own menu, which keeps itself, and says the block picked on its button. */
-    assert.match(
-      editor,
-      /<Label>\{EMPTY_SPACE\}<\/Label> \{blockMenu\( \(b\) => setChoice\(b\.page === Number\(choice\) \? null : b\.page\), picked \? `Now tap an empty space to put \$\{picked\.name\} in it\.` : 'Pick a block, then tap an empty space\.', \{ title: 'Pick a block', note: 'Then tap an empty space to put it there\.', chosen: choice \} \)\}/
-    )
+    /* THE OTHER WAY, under the chain: its own menu, which keeps itself, and says the block picked on its button. With ONE empty space the pick puts the block there (19 November 2026: a NAM picked twice on an AM4 and never placed); with several, each is offered right under the pick. */
+    assert.ok(editor.includes("<Label>{EMPTY_SPACE}</Label> {blockMenu( (b) => { if (b.page === Number(choice)) return setChoice(null) setChoice(b.page) if (spaces.length === 1 && !busy) add(spaces[0].row, spaces[0].item.col, b.page) },"), 'the pick under the chain does something else')
+    assert.ok(editor.includes("{ title: 'Pick a block', note: spaces.length === 1 ? 'It goes in the empty space.' : 'Then choose which empty space it goes in.', chosen: choice } )}"))
+    assert.ok(editor.includes("const spaces = lanes.flatMap((lane) => laneItems(lane).filter((it) => it.kind === 'gap').map((item) => ({ row: lane.row, item })))"))
+    assert.ok(editor.includes("{picked && spaces.length > 1 ? spaces.slice(0, 8).map((sp) => ( <Press key={`put${sp.row}:${sp.item.col}`} caption={whereGap(sp.row, sp.item)} label={`Put ${picked.name} here`} disabled={busy} height={48} onPress={() => add(sp.row, sp.item.col)} /> )) : null}"), 'the spaces are not offered under the pick')
 
     /* BOTH ARE THE ONE MENU, handed the unit's whole list, one of each kind, the find box's look and what a pick does; shut while the editor is sending. */
     assert.match(
