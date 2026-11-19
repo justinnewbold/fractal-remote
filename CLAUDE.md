@@ -5109,6 +5109,30 @@ click-pad.wav) were the wheel's too and stay, being the metronome's first.
 Do not offer the wheel again; if he asks for another way through the
 presets, start from what he says then, not from this.
 
+**Another unit's adapter, the only one connected, is the FIRST thing on
+the Bluetooth page (2.1.8, 19 November 2026), for every account.** "I can't
+switch over Bluetooth either. See log I just submitted" (report bf90bfd6,
+his iPhone on 2.1.6). He stopped Bluetooth on his AX3 (WIDI Master), picked
+the AM4 and then the FM3, and tapped Connect eight times. Each time Apple's
+screen showed the one adapter connected, the app would not take another
+unit's adapter without a tap (the 7 November rule, which stands), wrote
+"WIDI Master Bluetooth is offered for the FM3, on a tap", and the tap that
+moves it was a smaller button UNDER Connect and its hint, never pressed. A
+customer the same morning, one adapter and two units: "couldn't find an
+option to change device". Now, with such an offer up, the page says it in a
+sentence (mobile/src/lib/offerWords.js `offerNote`), the offer is Connect's
+size with the Bluetooth mark and comes first, and Connect under it is
+smaller, unlit and says Look for a different adapter (`OFFER_LOOK`). Still
+never taken by itself. The words are the phone's own, not shared/bluetooth-gear's,
+so no computer release. NOT SEEN ON A PHONE. In that log the FM3's own
+adapter (WIDI Uhost) was not connected to the iPhone at all, so if the WIDI
+Master was still on the AX3, using it for the FM3 connects to nothing: the
+page's "isn't answering" and Use a different adapter are what follow.
+AND REPORTS CAN BE READ FROM A CLOUD SESSION NOW: the read-only door answers
+(`curl https://biznwrqeckviawjuhvyg.supabase.co/functions/v1/read-reports?latest=5`,
+and `?id=<first 8>`; the proxy adds the key). It gives the message, details
+and log, not the screenshots.
+
 **A report's details say which way the app was connected (2.1.7, 19
 November 2026).** "Can't tell if this was on a computer or Bluetooth." (of a
 customer's report whose details said "role: connected" and no more.) `role`

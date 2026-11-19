@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-19",
     "day": "19 November 2026",
-    "version": "2.1.6",
+    "version": "2.1.8",
     "lines": [
+      {
+        "text": "From version 2.0.0: moving one Bluetooth adapter between two units is one clear tap. When the only adapter connected was set up for another unit, the Bluetooth page says so and its main button uses that adapter for the unit you picked.",
+        "only": null
+      },
       {
         "text": "From version 2.0.0: Settings → Help → NAM & TONE3000 shows how to put a NAM block in a preset, open TONE3000 from it, and preview and get captures, with the steps for an Axe-Fx III and for an AM4.",
         "only": null

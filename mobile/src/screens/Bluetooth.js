@@ -154,6 +154,7 @@ import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Tabs from '../components/Tabs'
+import { OFFER_LOOK, offerNote } from '../lib/offerWords'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
@@ -1011,7 +1012,17 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 one plugged in now is what Connect takes): no picture then,
                 since a cable is not Bluetooth.
               */}
-              <Press label={b.looking ? 'Looking…' : 'Connect'} icon={cable || takes.length ? null : bluetoothIcon} inkColor={color.ble} labelSize={font.lead} height={64} tone="live" disabled={!canStart || b.looking} onPress={start} />
+              {/*
+                ANOTHER UNIT'S ADAPTER, THE ONLY ONE CONNECTED, IS THE FIRST
+                THING HERE (19 November 2026, report bf90bfd6: eight taps on
+                Connect with the one tap that moves it sitting smaller under
+                the hint). Said in a sentence, with the button that uses it
+                the big one; Connect under it says what it does then. Still
+                never taken without the tap (offerFromOther, lib/offerWords).
+              */}
+              {offerFromOther ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}
+              {offerFromOther ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}
+              <Press label={b.looking ? 'Looking…' : offerFromOther ? OFFER_LOOK : 'Connect'} icon={cable || takes.length || offerFromOther ? null : bluetoothIcon} inkColor={color.ble} labelSize={offerFromOther ? undefined : font.lead} height={offerFromOther ? 52 : 64} tone={offerFromOther ? undefined : 'live'} disabled={!canStart || b.looking} onPress={start} />
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
@@ -1035,8 +1046,6 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
-              {/* Another unit's adapter, the only one here: one tap moves it to this unit (offerFromOther). */}
-              {offerFromOther ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} tone="live" height={52} disabled={b.looking} onPress={takeOffer} /> : null}
               {cableButtons}
               {differentButton}
               {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
