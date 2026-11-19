@@ -6,7 +6,7 @@ import { color, font, space } from '../lib/theme'
 import Tabs from './Tabs'
 
 /**
- * SETTINGS → HELP → NAM & TONE3000, DRAWN: lib/namHelp's sections, in the
+ * SETTINGS → NAM & TONE3000, DRAWN: lib/namHelp's sections, in the
  * Siri page's own materials (a heading in Settings' small capitals, lines of
  * plain text), under a tab for each unit that has a NAM block.
  *

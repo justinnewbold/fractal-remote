@@ -5218,8 +5218,10 @@ log. The report's email prints every detail, so nothing on the server
 changed. The browser's reports do not say it (a browser is always through a
 computer).
 
-**Settings → Help → NAM & TONE3000 says how to use them (2.1.6, 19
-November 2026), for every account.** "Can we put something in the app that
+**Settings → NAM & TONE3000 says how to use them (2.1.6, 19 November
+2026), for every account. ITS OWN BUTTON ON THE FRONT OF SETTINGS, under
+Amp & pedal names, since 2.2.1: "Move the NAM and tone 3000 help section to
+the main settings screen" (the same day; it was a row inside Help).** "Can we put something in the app that
 explains people how to use tone 3000 and NAM? Some people might not know
 how to add a block for NAM. or to access the tone 3000 section to add a NAM
 block." TONE3000's two ways in are both on a NAM block already in the

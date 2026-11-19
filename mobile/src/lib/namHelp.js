@@ -1,5 +1,5 @@
 /*
- * SETTINGS → HELP → NAM & TONE3000: HOW TO USE THEM, IN ORDER. Pure: a test
+ * SETTINGS → NAM & TONE3000: HOW TO USE THEM, IN ORDER. Pure: a test
  * runs it.
  *
  * "Can we put something in the app that explains people how to use tone
