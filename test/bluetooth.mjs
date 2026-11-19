@@ -4214,7 +4214,7 @@ export function run(test) {
     const own = await import('../mobile/src/lib/am4-own-knobs.js')
     const a = await import('../mobile/src/lib/am4-nam.js')
     const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
-    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_EDIT_FOR_EVERYONE, false)
+    assert.equal((await import('../mobile/src/lib/features.js')).AM4_NAM_EDIT_FOR_EVERYONE, true)
     /* The list: only what the recording showed, the capture never among it. */
     const rows = own.AM4_OWN_KNOBS.nam.params
     assert.deepEqual(rows.map((r) => r[3]).sort((x, y) => x - y), [0, 11, 12, 13, 14, 15, 16, 17, 19])

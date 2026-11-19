@@ -18057,10 +18057,10 @@ test('the computer app carries the device server that answers for an AM4’s NAM
   assert.ok(mods.includes('| Answer for an AM4\'s NAM Player block'), 'licences/MODIFICATIONS.md has no row for the AM4’s NAM block')
   assert.ok(mods.indexOf('| Answer for an AM4\'s NAM Player block') > mods.indexOf('| Put 0x60 in the 32nd byte'), 'the row is not the newest, last')
   assert.match(readSrc(new URL('../shared/versions.mjs', import.meta.url), 'utf8'), /export const COMPUTER_NEEDED = '1\.87\.23'/)
-  /* His account only, both switches, until he says. */
+  /* Open to every account since 2.1.5, both switches, on his word. */
   const feats = await import('../mobile/src/lib/features.js')
-  assert.equal(feats.AM4_NAM_EDIT_FOR_EVERYONE, false)
-  assert.equal(feats.AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE, false)
+  assert.equal(feats.AM4_NAM_EDIT_FOR_EVERYONE, true)
+  assert.equal(feats.AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE, true)
 })
 
 /*
