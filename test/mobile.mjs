@@ -3382,7 +3382,7 @@ export function run(test) {
       const here = read('mobile/src/lib/ownBlocksHere.js')
       assert.ok(here.includes('am4NamInPalette(ownInPalette(list, getState().deviceSlug, openHere()), getState().deviceSlug, am4NamHere() && am4NamAddHere())'))
       assert.ok(here.includes('am4NamHere(), am4NamKnobsOverBluetooth(), am4NamAddHere()))'))
-      assert.match(read('mobile/src/lib/features.js'), /export const AM4_NAM_ADD_FOR_EVERYONE = false/)
+      assert.match(read('mobile/src/lib/features.js'), /export const AM4_NAM_ADD_FOR_EVERYONE = true/)
       assert.ok(read('mobile/src/lib/bluetooth.js').includes('export const am4NamAddHere = () => allUnits === true || AM4_NAM_ADD_FOR_EVERYONE'))
     }
     const { markNewBlocks, isNewBlock } = await import('../shared/new-block.mjs')
