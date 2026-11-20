@@ -10,6 +10,21 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-20",
+    "day": "20 November 2026",
+    "version": "2.2.8",
+    "lines": [
+      {
+        "text": "From version 2.0.0, on an AM4 with firmware 3.00: the app can add a NAM or Pitch block itself. In Edit chain, pick it under Put a block in an empty space, or include it in a Quick build. Settings → NAM & TONE3000 has the steps.",
+        "only": null
+      },
+      {
+        "text": "From version 2.0.0, on an Axe-Fx III or an AM4: hold the Amp on Play and tap Swap for a NAM block. The NAM block takes the amp’s place and TONE3000 opens, ready to preview and get a capture. Nothing is saved until you save the preset.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-19",
     "day": "19 November 2026",
     "version": "2.2.7",

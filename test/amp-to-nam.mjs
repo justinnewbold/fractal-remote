@@ -31,7 +31,7 @@ export function run(test) {
     assert.equal(m.ampToNamFor(true, { slug: 'drive' }, 'axefxiii'), false)
     assert.equal(m.ampToNamFor(true, null, 'axefxiii'), false)
     /* His account first. */
-    assert.match(read('mobile/src/lib/features.js'), /export const AMP_TO_NAM_FOR_EVERYONE = false/)
+    assert.match(read('mobile/src/lib/features.js'), /export const AMP_TO_NAM_FOR_EVERYONE = true/)
     assert.ok(flat(read('mobile/src/lib/ampToNamHere.js')).includes('export const useAmpToNam = () => { const his = useBluetoothAdmin() return AMP_TO_NAM_FOR_EVERYONE || his }'))
   })
 

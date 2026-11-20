@@ -871,22 +871,23 @@ export const AM4_NAM_FOR_EVERYONE = true
  * An AM4's NAM block in the chain editor's list of blocks to ADD, on either
  * connection (lib/am4-chain AM4_NAM_PLACE, lib/ownBlocks am4NamInPalette).
  * "Under the edit chain, the AM4 for NAM and pitch blocks are not showing
- * up" (Justin, 19 November 2026). His account only: no AM4 slot has been
- * GIVEN this block from the app yet. Opens on his word, with its What's new
- * line and Settings → NAM & TONE3000's AM4 step changed (lib/namHelp).
+ * up" (Justin, 19 November 2026). OPEN TO EVERY ACCOUNT SINCE 2.2.8 (20
+ * November 2026: "Yes, open those to everyone now"); his account's until
+ * then. Settings → NAM & TONE3000's AM4 step follows it (lib/namHelpHere).
  */
-export const AM4_NAM_ADD_FOR_EVERYONE = false
+export const AM4_NAM_ADD_FOR_EVERYONE = true
 
 /**
  * A held amp's pop-up offers Swap for a NAM block (lib/ampToNam,
  * components/AmpToNam), on an Axe-Fx III and an AM4: "holding the amp button
  * down shows TONE3000 just like the NAM block ... and you can switch out the
- * amp block out directly to a NAM block" (Justin, 19 November 2026). His
- * account only: no amp has been swapped on a unit yet. On an AM4 over
+ * amp block out directly to a NAM block" (Justin, 19 November 2026). OPEN TO
+ * EVERY ACCOUNT SINCE 2.2.8 (20 November 2026, on his word; his account's
+ * until then). No amp had been swapped on a unit when it opened. On an AM4 over
  * Bluetooth it also wants AM4_NAM_ADD_FOR_EVERYONE (the wire places a NAM
  * block only where that is open), so open the two together.
  */
-export const AMP_TO_NAM_FOR_EVERYONE = false
+export const AMP_TO_NAM_FOR_EVERYONE = true
 
 /**
  * THE AM4'S NAM BLOCK'S KNOBS IN EDIT (lib/am4-own-knobs.js), over Bluetooth
