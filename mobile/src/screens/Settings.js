@@ -61,6 +61,7 @@ import {
 } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
+import { BIG_FOUR_LABEL, BIG_FOUR_SUB, loadBigFour, saveBigFour } from '../lib/bigFour'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
@@ -714,7 +715,8 @@ export default function Settings({
     <ScrollView
       ref={scroller}
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: space.xxl }}
+      /* The front page's cards sit close (FRONT_GAP): "put each section closer together so we can fit more on the screen ... but still clear that they're separate sections" (Justin, 21 November 2026). Every page inside keeps its own roomier gap. */
+      contentContainerStyle={{ padding: space.lg, gap: page === null ? FRONT_GAP : space.xl, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
       /* Where each page is scrolled to, for coming back up to it (above). */
@@ -2416,6 +2418,7 @@ function TileSize({ onScrollLock }) {
   const now = loadSize(sync)
   const fit = loadFit(sync, true)
   const icons = loadIcons(sync)
+  const bigFour = loadBigFour(sync)
   const layout = loadSceneLayout(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
@@ -2458,6 +2461,8 @@ function TileSize({ onScrollLock }) {
         sub="The whole rig on one screen, no scrolling. Overrides the size above."
         onPress={() => saveFit(!fit, sync)}
       />
+      {/* "If we can make that a setting, the user can change in settings as well" (lib/bigFour). */}
+      <Choice on={bigFour} label={BIG_FOUR_LABEL} sub={BIG_FOUR_SUB} onPress={() => saveBigFour(!bigFour, sync)} />
       {/* "Is it something that could be turned on and off?" */}
       <Choice
         on={icons}
@@ -2625,6 +2630,9 @@ const deleteCosts = (from) => {
  * nothing moves, and it cuts the rows to its corner. In Classic it is the
  * plain stack it was (GlassCard `bare`).
  */
+/* Between the cards on the front of Settings: each still its own card with its own rim, a thumb's sliver apart. */
+const FRONT_GAP = space.sm
+
 function Group({ title, hint, children }) {
   const [open, setOpen] = useState(() => OPEN_GROUPS.has(title))
   const toggle = () => {

@@ -133,7 +133,7 @@ export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
  * (lib/am4-chain says the same of Bluetooth).
  */
 export const AM4_NAM_CODES = Object.freeze([0xd1, 0xd2])
-export const AM4_PITCH_CODE = 0x82
+export const AM4_PITCH_CODE = 0x6e
 const isAm4 = (deviceSlug) => String(deviceSlug || '').toLowerCase() === 'am4'
 export function nameAm4Nam(blocks, deviceSlug, open, knobs = false, add = false) {
   if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks

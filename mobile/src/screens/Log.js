@@ -197,17 +197,28 @@ export default function Log({ onBack }) {
           gap: space.md
         }}
       >
-        <View style={{ flexShrink: 1 }}>
-          <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>
+        {/*
+          BACK ON THE LEFT, THE NAME IN THE MIDDLE, SEND LOGS WHERE DONE WAS.
+          "It's not clear how to send the logs to the developer, and most
+          people will click the done button. Change where the done button is
+          to "send logs" then move where it says help and fixes to the middle
+          of the screen, then put a back button on the top left" (Justin, 21
+          November 2026). The button a thumb goes to first now sends; it is
+          the foot's own Send (the same `send`, never twice at once), and
+          what it said is still under the foot's button.
+        */}
+        <Press label="‹ Back" height={40} accessibilityLabel="Back" onPress={onBack} />
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={{ color: color.silk, fontSize: font.title, fontWeight: '700', textAlign: 'center' }}>
             Help & fixes
           </Text>
-          <Text style={{ color: color.silkDim, fontSize: font.small }}>
+          <Text style={{ color: color.silkDim, fontSize: font.small, textAlign: 'center' }}>
             {`${lines.length} line${lines.length === 1 ? '' : 's'} in the log${
               before.length ? ` · ${before[0].lines.length} kept from the run before` : ''
             }`}
           </Text>
         </View>
-        <Press label="Done" height={40} onPress={onBack} />
+        <Press label={sending ? 'Sending…' : 'Send logs'} tone="signal" height={40} disabled={sending || !sendable} accessibilityLabel="Send logs to developer" onPress={send} />
       </View>
 
       <View style={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.sm }}>
