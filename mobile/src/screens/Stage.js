@@ -38,6 +38,7 @@ import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdP
 import BlockSide from '../components/BlockSide'
 import HeldCapture from '../components/HeldCapture'
 import { AmpSwapDoor, useAmpSwap } from '../components/AmpToNam'
+import { logDebug } from '../lib/debugLog'
 import { SwapBlockDoor, useSwapBlock } from '../components/SwapBlock'
 import PopKnobs from '../components/PopKnobs'
 import { Tone3000Door, Tone3000InPop, useTone3000Door } from '../components/Tone3000Quick'
@@ -2612,6 +2613,26 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
     if (!withKnobs) setHeld(false)
   }, [withKnobs])
   /*
+   * AND LET GO OF WHEN THE LAST FINGER LIFTS, whoever had it. "This isn't
+   * letting me swipe down to see what's below it" (Justin, 21 November 2026,
+   * a reverb's pop-up that would not scroll). A knob asks for the hold as a
+   * finger lands on it and hands it back when it lets go; a touch it never
+   * got to finish (taken from it, or never granted) left the hold on, and
+   * the sheet still for as long as it stayed open. The log says when this
+   * had to do it.
+   */
+  const heldNow = useRef(false)
+  heldNow.current = held
+  const fingersOff = useCallback(() => {
+    if (!heldNow.current) return
+    /* After the knob's own release, which runs first where it runs at all. */
+    setTimeout(() => {
+      if (!heldNow.current) return
+      logDebug('play', 'the hold pop-up was still held with no finger on it', 'let go, so it scrolls')
+      setHeld(false)
+    }, 0)
+  }, [])
+  /*
    * A NAM BLOCK'S POP-UP OFFERS ITS CAPTURES' LIBRARY (components/
    * Tone3000Quick, which says where and for whom): a button over the knobs,
    * and the library's page in the knobs' place, in this same sheet, until a
@@ -2681,6 +2702,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
         head={keep.notes}
         tall
         still={held}
+        onTouchesOver={fingersOff}
         foot={
           <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
             {(channels || []).map((ch) => (

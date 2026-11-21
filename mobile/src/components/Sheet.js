@@ -80,7 +80,7 @@ let lastFrame = null
  * as not available, so it does not look like a way out that has frozen.
  * False, which every other sheet is, and the ✕ is as it always was.
  */
-export default function Sheet({ open, onClose, title, note, beside = null, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children }) {
+export default function Sheet({ open, onClose, title, note, beside = null, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, onTouchesOver = null, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -229,6 +229,9 @@ export default function Sheet({ open, onClose, title, note, beside = null, head,
               /* In a sheet that fills the screen, a drag on the rows puts the keyboard down, so the rows under it can be reached. */
               keyboardDismissMode={fill ? 'on-drag' : 'none'}
               scrollEnabled={!still}
+              /* `onTouchesOver`: told when the last finger has left the scrolling part, however the touch ended. The hold pop-up lets go of `still` on it, so a knob's hold that was never handed back cannot leave the sheet unable to scroll. */
+              onTouchEnd={onTouchesOver ? (e) => e.nativeEvent.touches.length === 0 && onTouchesOver() : undefined}
+              onTouchCancel={onTouchesOver ? () => onTouchesOver() : undefined}
             >
               {children}
             </ScrollView>

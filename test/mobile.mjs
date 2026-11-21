@@ -4766,7 +4766,7 @@ export function run(test) {
   test('a sheet that cannot be closed just now says so: Quick build’s ✕ is faded while it builds, and every other sheet’s is as it was', () => {
     /* Report 913f344a: the ✕ did nothing while a build ran and still looked live, one more thing that read as frozen. */
     const sheet = read('mobile/src/components/Sheet.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
-    assert.match(sheet, /scrollKey = undefined, locked = false, children \}\) \{/)
+    assert.match(sheet, /scrollKey = undefined, locked = false, onTouchesOver = null, children \}\) \{/)
     assert.match(sheet, /<View style=\{locked \? LOCKED_LOOK : undefined\}> <Pressable accessibilityRole="button" accessibilityState=\{locked \? \{ disabled: true \} : undefined\} disabled=\{locked\} accessibilityLabel="Close" onPress=\{onClose\}/)
     assert.match(sheet, /const LOCKED_LOOK = \{ opacity: 0\.4 \}/)
     /* Quick build alone asks for it, and only while it runs. */

@@ -154,7 +154,7 @@ export function run(test) {
 
     /* WITH THEM: the knobs scroll in the sheet, the channels are its foot (always on screen), and it holds still under a held knob. */
     const withKnobs = sheet.slice(sheet.indexOf('if (withKnobs) {'), sheet.lastIndexOf('return ('))
-    assert.match(withKnobs, /<Sheet\s+open=\{!!block && channels\?\.length > 1\}\s+onClose=\{onClose\}\s+title=\{name\}\s+note="Knobs and channel"\s+beside=\{keep\.button\}\s+head=\{keep\.notes\}\s+tall\s+still=\{held\}\s+foot=\{/)
+    assert.match(withKnobs, /<Sheet\s+open=\{!!block && channels\?\.length > 1\}\s+onClose=\{onClose\}\s+title=\{name\}\s+note="Knobs and channel"\s+beside=\{keep\.button\}\s+head=\{keep\.notes\}\s+tall\s+still=\{held\}\s+onTouchesOver=\{fingersOff\}\s+foot=\{/)
     const foot = withKnobs.slice(withKnobs.indexOf('foot={'), withKnobs.indexOf('<PopKnobs'))
     assert.match(foot, /accessibilityRole="radiogroup"/)
     assert.match(foot, /<Press\s+key=\{ch\}\s+grow\s+label=\{ch\}\s+height=\{POP_CHANNEL_TALL\}\s+tone="live"\s+on=\{block\?\.channel === ch\}\s+accessibilityLabel=\{`Channel \$\{ch\}`\}\s+onPress=\{\(\) => onPick\(ch\)\}\s+\/>/, 'the channels under the knobs are not the same buttons, doing the same thing')
@@ -164,8 +164,8 @@ export function run(test) {
 
     /* The sheet itself: `still` stops its scroll and nothing else, and a sheet without it scrolls as it did. */
     const shared = flat(read('mobile/src/components/Sheet.js'))
-    assert.match(shared, /export default function Sheet\(\{ open, onClose, title, note, beside = null, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children \}\)/)
-    assert.match(shared, /<ScrollView key=\{scrollKey\} contentContainerStyle=\{\{ padding: space\.lg, paddingTop: head \? space\.sm : space\.lg, gap: space\.md \}\} keyboardShouldPersistTaps="handled" keyboardDismissMode=\{fill \? 'on-drag' : 'none'\} scrollEnabled=\{!still\} > \{children\} <\/ScrollView>/)
+    assert.match(shared, /export default function Sheet\(\{ open, onClose, title, note, beside = null, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, onTouchesOver = null, children \}\)/)
+    assert.match(shared, /<ScrollView key=\{scrollKey\} contentContainerStyle=\{\{ padding: space\.lg, paddingTop: head \? space\.sm : space\.lg, gap: space\.md \}\} keyboardShouldPersistTaps="handled" keyboardDismissMode=\{fill \? 'on-drag' : 'none'\} scrollEnabled=\{!still\} onTouchEnd=\{onTouchesOver \? \(e\) => e\.nativeEvent\.touches\.length === 0 && onTouchesOver\(\) : undefined\} onTouchCancel=\{onTouchesOver \? \(\) => onTouchesOver\(\) : undefined\} > \{children\} <\/ScrollView>/)
     assert.equal((code(read('mobile/src/components/Sheet.js')).match(/\bstill\b/g) || []).length, 2, '`still` does something more than hold the scroll')
   })
 
