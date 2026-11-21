@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-21",
+    "day": "21 November 2026",
+    "version": "2.2.9",
+    "lines": [
+      {
+        "text": "From version 2.0.0, over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III: the “?” under a knob in Edit says what that knob does, as it does through a computer.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-20",
     "day": "20 November 2026",
     "version": "2.2.8",
