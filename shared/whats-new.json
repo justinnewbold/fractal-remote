@@ -4,14 +4,14 @@
   "days": [
     {
       "date": "2026-11-21",
-      "version": "2.3.0",
+      "version": "2.3.1",
       "lines": [
         "From version 2.0.0, over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III: the “?” under a knob in Edit says what that knob does, as it does through a computer.",
-        "Fixed on an AM4: a Pitch block added from the app did not appear on the unit, and could turn into another block after a save. The app now adds the real Pitch block.",
+        "Fixed on an AM4: a Pitch block added from the app now appears on the unit, and a slow Rate knob (a chorus’s or a tremolo’s) shows two decimal places instead of jumping back as if it didn’t take. And the front of Settings sits closer together, so more fits on one screen.",
         "On an AM4, hold the NAM block and get a capture from TONE3000: there is now a Save button at the top, beside the block’s name, with the warning that it overwrites the preset. The same on an Axe-Fx III, and after a knob is turned in any block’s hold pop-up. The AM4’s NAM block is also spelled NAM in that pop-up’s title.",
         "Help & fixes: the button at the top right is now Send logs, which sends the log with your note in one tap. Back is at the top left.",
-        "Fixed on an AM4: a slow Rate knob (a chorus’s or a tremolo’s) showed as a whole number, so 2.2 Hz read as 2, jumped back, and the app said it didn’t take. It took; it now shows two decimal places. And the front of Settings sits closer together, so more of it fits on one screen.",
-        "On an AM4 or a VP4, with a phone held upright: the four pedals are now two by two, the same size as the scenes, and the tiles fill the screen. To go back to one row, switch off Big pedals, two by two in Settings, Play screen, Tiles & scenes."
+        "On an AM4 or a VP4, with a phone held upright: the four pedals are now two by two, the same size as the scenes, and the tiles fill the screen. To go back to one row, switch off Big pedals, two by two in Settings, Play screen, Tiles & scenes.",
+        "Edit chain has Clear this preset at the bottom: it takes every block out in one go, leaving the Input and Output, so you can start fresh with Quick build. It asks first, and nothing is saved until you save."
       ]
     },
     {
@@ -26,7 +26,10 @@
       "date": "2026-11-19",
       "version": "2.2.7",
       "lines": [
-        { "text": "From version 2.0.0, on an iPhone or iPad: when Apple’s Bluetooth screen has connected an adapter and the app still can’t see it, the Bluetooth page now says what fixes it: close the app completely and open it again.", "only": "ios" },
+        {
+          "text": "From version 2.0.0, on an iPhone or iPad: when Apple’s Bluetooth screen has connected an adapter and the app still can’t see it, the Bluetooth page now says what fixes it: close the app completely and open it again.",
+          "only": "ios"
+        },
         "From version 2.0.0: in Edit chain, a block picked under the chain goes straight into the empty space when there is only one. With several, each is offered right under the pick. And after a Quick build, Name this preset takes you straight to naming the preset and its scenes.",
         "From version 2.0.0: wherever the Bluetooth page says to close the app completely, it now says how to do that on your device.",
         "From version 2.0.0: while Bluetooth is on, the Bluetooth page has Switch unit. Tap another unit and Bluetooth stops, then connects again by itself when that unit’s own adapter is connected.",
@@ -55,7 +58,10 @@
         "From version 2.0.0, on an FM3, FM9 or Axe-Fx III over Bluetooth or a USB cable: your blocks show in the unit’s own order, Edit’s knobs follow a knob turned on the unit, and the volume button and each scene’s level are there. And Edit shows a block’s list settings, such as Bypass Mode, under its knobs.",
         "From version 2.0.0, on an Axe-Fx III: a Capture button on the NAM block in Edit picks which capture it plays, and holding a NAM block on Play offers TONE3000, to browse captures, preview one through your own rig and get it onto your unit. Through a computer, Play names the NAM, IR Player and other newer blocks.",
         "From version 2.0.0, Settings → Metronome has a flash round the edge of the screen with or without sound, a choice of where the click sounds, and Line up the light and click. On every version, its light now sits a little in from the edge, so its corners are no longer cut off where the screen is rounded.",
-        { "text": "From version 2.0.0, on Apple Watch: choose which pages it shows and their order in Settings → Apple Watch, a new Tempo page with Tap, and hold a pedal for its channels and knobs, turned with the Digital Crown. And Apple’s Bluetooth screen has its Done button back.", "only": "ios" },
+        {
+          "text": "From version 2.0.0, on Apple Watch: choose which pages it shows and their order in Settings → Apple Watch, a new Tempo page with Tap, and hold a pedal for its channels and knobs, turned with the Digital Crown. And Apple’s Bluetooth screen has its Done button back.",
+          "only": "ios"
+        },
         "In the chain editor on an FM3, FM9 or Axe-Fx III, dragging blocks along a row now joins the row up again and checks it. Where it can’t, it says why, and a row it finds cut offers Join the row wherever the app can join it.",
         "The computer app on a Raspberry Pi now puts in its own updates. It waits until nobody has used the Pi for half an hour (no phone connected, nobody touching its screen, nothing changed on the unit) and until a new version has been out for a day. From version 2.0.0, Phone & computer has Update now."
       ]
@@ -89,7 +95,10 @@
       "version": "1.90.72",
       "lines": [
         "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM block has its own picture on Play: a small neural network in rainbow colors.",
-        { "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.", "only": "ios" },
+        {
+          "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.",
+          "only": "ios"
+        },
         "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
         "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had."
       ]
@@ -98,11 +107,14 @@
       "date": "2026-11-13",
       "version": "1.90.53",
       "lines": [
-        { "text": "On an iPhone or iPad, when your Bluetooth adapter has dropped off, Look for the adapter again now shows straight away instead of after fifteen seconds.", "only": "ios" },
+        {
+          "text": "On an iPhone or iPad, when your Bluetooth adapter has dropped off, Look for the adapter again now shows straight away instead of after fifteen seconds.",
+          "only": "ios"
+        },
         "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time.",
         "On an Axe-Fx III over Bluetooth or a USB cable, Edit now has the NAM block’s knobs: Input Gain, Bass, Mid, Treble, Bright, Bright Cap and Level. The capture is still chosen on the unit.",
         "In Edit, tapping the number under a knob now highlights it, so you can type a new number straight over it.",
-  "When Bluetooth won’t connect, the app now says the first thing to try: unplug the Bluetooth adapter for a few seconds and plug it back in.",
+        "When Bluetooth won’t connect, the app now says the first thing to try: unplug the Bluetooth adapter for a few seconds and plug it back in.",
         "Over Bluetooth or a USB cable on an Axe-Fx III, Play now shows the Crossover, Vocoder, Tone Match and Dynamic Distortion blocks, and turns them on and off like your other effects. On an FM9, the Crossover, Vocoder and Tone Match too."
       ]
     },
@@ -159,7 +171,10 @@
         "Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself (or tap Connect again), each unit remembers its own adapter, the app tells you when an adapter is plugged into a different unit, and no computer warnings show while you're on Bluetooth.",
         "Getting started is quicker: after you sign up, start the trial or buy, one card asks how you connect, Bluetooth adapter first or a computer. Connect over Bluetooth shows while the app looks for your computer, with far less to read. The website's welcome now says Bluetooth is in the phone and tablet apps.",
         "Reports now take up to five pictures plus one video. And in the phone app, Settings → your account → tap your email lets you add your name and a profile photo. The photo shows in a little circle beside Live at the top, and tapping the circle takes you straight there.",
-        { "text": "Start 7-day free trial on an iPhone or iPad whose Apple ID already bought the full version now says so: the full version moves to the account you're signed in to, and no trial starts.", "only": "ios" },
+        {
+          "text": "Start 7-day free trial on an iPhone or iPad whose Apple ID already bought the full version now says so: the full version moves to the account you're signed in to, and no trial starts.",
+          "only": "ios"
+        },
         "Tablets: held upright, Play is the phone's own layout, just bigger; on its side, your scenes sit on the left with the pedals two across beside them, row for row. Smaller tablets now get this too.",
         "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited."
       ]
@@ -192,7 +207,10 @@
         "The computer app now notices within a couple of seconds when your unit is switched off and on, or its USB cable is unplugged and plugged back in, and reconnects by itself, so you no longer have to restart the computer app.",
         "In the phone app, buttons, bars and pop-ups have a new frosted glass look, with rounder buttons and a soft light along the top. Prefer the old look? Choose Classic under Settings → Colors → Style. Sunlight keeps the glass solid for bright stages, and in Light mode the small gray labels are easier to read.",
         "On the website and the computer app, Tuner, Edit and Tap at the bottom of Play are now the phone app’s taller buttons, with the tempo under Tap.",
-        { "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.", "only": "ios" },
+        {
+          "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.",
+          "only": "ios"
+        },
         "The Bluetooth page now has Use a different adapter, so you can switch adapters even while it’s still trying the one from last time. When that one isn’t answering, it names another adapter it can see, with a button to use it, and Forget the adapter under Troubleshooting works with Bluetooth on too."
       ]
     },
@@ -215,9 +233,18 @@
         "Settings → About opens straight onto its rows, the Bluetooth page’s three help pages open properly again, and Phone & computer has its Connect over Bluetooth button back and checks again for your computers and their units each time it opens.",
         "Stars and setlists you make while trying the demo now stay in the demo, never changing your real ones or your account’s. The end of the demo walkthrough and the sign-in screen say you can connect with a computer or, with no computer, by Bluetooth, and that the computer is the best way.",
         "Restore a purchase, tapped while signed out, says first that the purchase belongs to the account you bought it with, and offers to sign in to it. On a VP4, the purchase page and the demo say presets and scenes go as the messages a MIDI foot controller sends, and the FM3 warning on the Bluetooth page reads more plainly.",
-        { "text": "On an iPhone or iPad set to another language, the Bluetooth page no longer mistakes its own Wi-Fi MIDI connection for your adapter. With no adapter connected, it now says so.", "only": "ios" },
-        { "text": "Settings → Siri shows the newer way to stop Siri using the app on iOS 27.2 and later, and the Apple Watch tips say plainly to keep your iPhone unlocked on Play for every tap to land, and to tap again if the first one after a long pause doesn’t.", "only": "ios" },
-        { "text": "The back button inside Settings goes up one page instead of jumping straight to Play, and on the feedback screen it asks before throwing away what you wrote.", "only": "android" }
+        {
+          "text": "On an iPhone or iPad set to another language, the Bluetooth page no longer mistakes its own Wi-Fi MIDI connection for your adapter. With no adapter connected, it now says so.",
+          "only": "ios"
+        },
+        {
+          "text": "Settings → Siri shows the newer way to stop Siri using the app on iOS 27.2 and later, and the Apple Watch tips say plainly to keep your iPhone unlocked on Play for every tap to land, and to tap again if the first one after a long pause doesn’t.",
+          "only": "ios"
+        },
+        {
+          "text": "The back button inside Settings goes up one page instead of jumping straight to Play, and on the feedback screen it asks before throwing away what you wrote.",
+          "only": "android"
+        }
       ]
     },
     {
@@ -270,8 +297,14 @@
       "lines": [
         "New: Bluetooth, from version 1.89.0. With the full version and a Bluetooth MIDI adapter on your unit, control an AM4, FM3, FM9, Axe-Fx III or VP4 with no computer (on a VP4, presets and scenes). The computer is still the best way: Bluetooth has more lag and fewer features. Settings → My rig → Bluetooth.",
         "Report a Bluetooth problem, on the Bluetooth page, sends a report straight from the app.",
-        { "text": "On a tablet, the app turns sideways with the screen.", "only": "android" },
-        { "text": "On the Apple Watch, an AM4’s or VP4’s scenes and pedals fill the screen.", "only": "ios" },
+        {
+          "text": "On a tablet, the app turns sideways with the screen.",
+          "only": "android"
+        },
+        {
+          "text": "On the Apple Watch, an AM4’s or VP4’s scenes and pedals fill the screen.",
+          "only": "ios"
+        },
         "Previous and Next, and the names under them, are drawn smaller rather than cut off."
       ]
     },
@@ -282,7 +315,10 @@
         "Scene names are as big as their tiles have room for, one size across the whole grid.",
         "Play’s top bar says which unit you are on, and on which computer. Tap it to switch.",
         "A problem report can carry a screenshot.",
-        { "text": "On the Apple Watch, an AM4 amp’s pedal says Boost on, Boost off or Amp off.", "only": "ios" }
+        {
+          "text": "On the Apple Watch, an AM4 amp’s pedal says Boost on, Boost off or Amp off.",
+          "only": "ios"
+        }
       ]
     }
   ]

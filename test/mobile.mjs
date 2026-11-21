@@ -2496,7 +2496,7 @@ export function run(test) {
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
-    assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 4, 'not every chain write (move, add, remove, Join the row) is bracketed')
+    assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 5, 'not every chain write (move, add, remove, Join the row, Clear this preset) is bracketed')
     assert.match(edit, /useKeepAwake\(\)/, 'the Edit screen lets the phone lock mid-write')
 
     /* A unit mid-switch reports slot -1, and nothing is filed under it. */
