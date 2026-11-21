@@ -715,7 +715,8 @@ export default function Settings({
     <ScrollView
       ref={scroller}
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: space.xxl }}
+      /* The front page's cards sit close (FRONT_GAP): "put each section closer together so we can fit more on the screen ... but still clear that they're separate sections" (Justin, 21 November 2026). Every page inside keeps its own roomier gap. */
+      contentContainerStyle={{ padding: space.lg, gap: page === null ? FRONT_GAP : space.xl, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
       /* Where each page is scrolled to, for coming back up to it (above). */
@@ -2629,6 +2630,9 @@ const deleteCosts = (from) => {
  * nothing moves, and it cuts the rows to its corner. In Classic it is the
  * plain stack it was (GlassCard `bare`).
  */
+/* Between the cards on the front of Settings: each still its own card with its own rim, a thumb's sliver apart. */
+const FRONT_GAP = space.sm
+
 function Group({ title, hint, children }) {
   const [open, setOpen] = useState(() => OPEN_GROUPS.has(title))
   const toggle = () => {

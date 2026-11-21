@@ -22,7 +22,7 @@
           "only": null
         },
         {
-          "text": "Fixed on an AM4: a slow Rate knob (a chorus’s or a tremolo’s) showed as a whole number, so 2.2 Hz read as 2, jumped back, and the app said it didn’t take. It took; it now shows two decimal places.",
+          "text": "Fixed on an AM4: a slow Rate knob (a chorus’s or a tremolo’s) showed as a whole number, so 2.2 Hz read as 2, jumped back, and the app said it didn’t take. It took; it now shows two decimal places. And the front of Settings sits closer together, so more of it fits on one screen.",
           "only": null
         },
         {
