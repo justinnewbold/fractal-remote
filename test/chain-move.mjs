@@ -1797,7 +1797,7 @@ export function run(test) {
     }
     /* THE SCREENS: the phone marks the chain written from `starting` only; the browser records a change only where a join was sent, and a read otherwise. */
     const phone = flat(code(read('mobile/src/screens/Edit.js')))
-    const mend = phone.slice(phone.indexOf('const mendRow = async'), phone.indexOf('const remove = async'))
+    const mend = phone.slice(phone.indexOf('const mendRow = async'), phone.indexOf('const clearAll = async'))
     assert.match(mend, /const r = await joinRow\(\{[^}]*onPreset: presetHeld\(n\), starting: \(\) => beginChainWrite\(\) \}\)/, 'the phone: Join the row does not mark the chain written as its first join goes')
     assert.equal(mend.split('beginChainWrite()').length - 1, 1, 'the phone: Join the row marks the chain written before anything is sent')
     const web = flat(code(read('src/components/GridEditor.jsx')))

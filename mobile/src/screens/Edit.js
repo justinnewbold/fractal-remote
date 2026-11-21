@@ -63,6 +63,7 @@ import {
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
+import { CLEAR_ASK_TITLE, CLEAR_LABEL, CLEAR_SUB, clearAsk, clearSaid, clearable, heldCount } from '../lib/clearPreset'
 import { addedWords, addHint, addOutcome, EMPTY_SPACE, freeAfter, movedWords, noRoomAfter, NOT_SENT, otherWords, removableAfter, roomAnywhere, saidInRun } from '../lib/chainAdd'
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
@@ -2773,6 +2774,73 @@ function ChainEditor({ blocks, caps, overWire = false, slow = false, unit = '', 
     }
   }
 
+  /*
+   * CLEAR THIS PRESET (lib/clearPreset): Remove, once for each block but
+   * the Input and the Output, each held to the preset it was begun on where
+   * the editor holds its writes, then the chain read once and what is left
+   * said under the button. Nothing is saved by it.
+   */
+  const [cleared, setCleared] = useState(null)
+  const clearAll = async () => {
+    const cells = clearable(lanes)
+    if (!cells.length) return
+    const n = getState().preset?.number
+    const hold = presetHeld(n)
+    chainUndo.clear()
+    setBusy(true)
+    setIssue(null)
+    setTold(null)
+    setCleared(null)
+    setActing(null)
+    setAddAfter(null)
+    logDebug('chain', `${CLEAR_LABEL} tapped`, `${cells.length} block${cells.length === 1 ? '' : 's'}: ${cells.map((c) => c.name).join(', ')}`)
+    let sent = 0
+    let stopped = null
+    let read = true
+    beginChainWrite()
+    try {
+      for (const c of cells) {
+        if (hold) {
+          const at = await hold()
+          if (at !== 'same') {
+            stopped = at
+            break
+          }
+        }
+        const r = await clearCell(c.row, c.col)
+        sent++
+        logDebug('chain', `clear: ${c.name} out of ${where(c.row, c.col)}`, refusedAnswer(r) ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
+      }
+      endChainWrite({ refresh: false })
+      if (stopped) followPresetAfterChainWrite()
+      else {
+        try {
+          await refreshBlocks({ quiet: true })
+        } catch {
+          read = false
+        }
+      }
+      const left = stopped || !read ? [] : cells.filter((c) => holds(c.row, c.col))
+      const said = clearSaid({ asked: cells.length, sent, left, stopped, read, held: heldCount(lanes) })
+      logDebug('chain', 'clear: what the read after shows', stopped ? `stopped (${stopped}) after ${sent}` : !read ? 'not read' : left.length ? `still there: ${left.map((c) => c.name).join(', ')}` : `all ${cells.length} out`)
+      setCleared({ ...said, n })
+    } catch (err) {
+      setCleared({ tone: 'warn', text: sent ? `Stopped after ${sent} block${sent === 1 ? '' : 's'}: ${err.message}` : err.message, n })
+      onError(err.message)
+    } finally {
+      endChainWrite()
+      setBusy(false)
+    }
+  }
+  const askClear = () => {
+    const n = clearable(lanes).length
+    if (!n) return
+    Alert.alert(CLEAR_ASK_TITLE, clearAsk(n, caps?.supportsSave !== false), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: clearAll }
+    ])
+  }
+
   const remove = async (row, col) => {
     chainUndo.clear()
     setBusy(true)
@@ -3089,6 +3157,28 @@ function ChainEditor({ blocks, caps, overWire = false, slow = false, unit = '', 
             ))
           : null}
       </View>
+
+      {/* ------------------------------------------------- start fresh */}
+      {/* What a clear said is the preset's it was made on: gone at the next one. */}
+      {clearable(lanes).length || (cleared && cleared.n === getState().preset?.number) ? (
+        <View style={{ gap: space.sm }}>
+          {clearable(lanes).length ? (
+            <Press
+              label={CLEAR_LABEL}
+              sub={CLEAR_SUB}
+              height={48}
+              disabled={busy}
+              onPress={askClear}
+              style={{ borderColor: color.fault, backgroundColor: tint(color.fault, 0.16) }}
+            />
+          ) : null}
+          {cleared && cleared.n === getState().preset?.number ? (
+            <Note tone={cleared.tone === 'ok' ? 'hint' : 'warn'} onDismiss={() => setCleared(null)}>
+              {cleared.text}
+            </Note>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
