@@ -4141,7 +4141,7 @@ export function run(test) {
     let on = true
     const t = await onTheLine('am4', { am4Nam: () => on })
     withNam(t)
-    assert.deepEqual((await t.get('/preset/blocks'))[1], { slug: 'nam', name: 'nam', effectId: 0xd1, row: 1, col: 2, fromRows: [], bypassed: true, channel: 'C', knobs: false })
+    assert.deepEqual((await t.get('/preset/blocks'))[1], { slug: 'nam', name: 'NAM', effectId: 0xd1, row: 1, col: 2, fromRows: [], bypassed: true, channel: 'C', knobs: false })
     assert.ok(!t.logs.some((l) => /no name for yet/.test(l)))
     await t.post('/preset/blocks/209/bypass', { bypassed: false })
     assert.ok(sameFrame(t.frames().at(-1), sx.buildAm4Bypass(0xd1, false)))

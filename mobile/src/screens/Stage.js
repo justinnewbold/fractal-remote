@@ -98,6 +98,7 @@ import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-
 import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
 import Note from '../components/Note'
+import { useSaveAfterGet } from '../components/SaveAfterGet'
 import NoComputerWords from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
 import { fixById, fixFor } from '../lib/troubleshooting'
@@ -2607,6 +2608,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
   const library = useTone3000Door(withKnobs ? block : null, withKnobs ? null : block)
   const [browsing, setBrowsing] = useState(false)
   const [came, setCame] = useState('')
+  /* Save beside the title once a Get has handed the pop-up back (components/SaveAfterGet). */
+  const keep = useSaveAfterGet(came)
   /* A held amp swapped for a NAM block (components/AmpToNam): the pop-up becomes that block's, and opens on its captures. */
   const swapHere = useAmpSwap(block) && typeof onSwapped === 'function'
   const openOn = useRef(null)
@@ -2655,6 +2658,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
         onClose={onClose}
         title={name}
         note="Knobs and channel"
+        beside={keep.button}
+        head={keep.notes}
         tall
         still={held}
         foot={
@@ -2686,7 +2691,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
     )
   }
   return (
-    <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
+    <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel" beside={keep.button} head={keep.notes}>
       {ampDoor}
       {libraryDoor}
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
