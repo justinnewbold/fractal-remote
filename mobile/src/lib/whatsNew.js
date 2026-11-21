@@ -12,10 +12,14 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-21",
     "day": "21 November 2026",
-    "version": "2.2.9",
+    "version": "2.3.0",
     "lines": [
       {
         "text": "From version 2.0.0, over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III: the “?” under a knob in Edit says what that knob does, as it does through a computer.",
+        "only": null
+      },
+      {
+        "text": "Fixed on an AM4: a Pitch block added from the app did not appear on the unit, and could turn into another block after a save. The app now adds the real Pitch block.",
         "only": null
       }
     ]
