@@ -491,13 +491,13 @@ export function run(test) {
     /* It imports nothing, so this test is the whole of it. */
     assert.ok(!/\bimport\b|require\(/.test(code(read('mobile/src/lib/captureReread.js'))))
   })
-  test('tone3000 quick: after a Get the pop-up has Save beside its title, the app’s own Save with its warning, and nothing before one', () => {
+  test('tone3000 quick: after a Get the pop-up has Save beside its title, the app’s own Save with its warning, as after any change made in the pop-up', () => {
     const stage = flat(read('mobile/src/screens/Stage.js'))
     assert.match(stage, /const keep = useSaveAfterGet\(came\)/, 'Save is not keyed to what a Get handed back')
     assert.match(stage, /note="Knobs and channel" beside=\{keep\.button\} head=\{keep\.notes\}/, 'Save is not beside the title of the pop-up with the knobs')
     const hook = flat(read('mobile/src/components/SaveAfterGet.js'))
     assert.match(hook, /useEffect\(\(\) => \{ if \(came\) noteEdited\(\) \}, \[came\]\)/, 'a Get does not mark the preset changed')
-    assert.match(hook, /const pending = !!came && !!unsaved && unsaved\.number === preset\?\.number/, 'Save is offered before a Get, or for another preset')
+    assert.match(hook, /const pending = !!unsaved && unsaved\.number === preset\?\.number/, 'Save is offered for another preset, or not after a knob turned in the pop-up')
     assert.match(hook, /<SaveButton s=\{saveTo\} waiting \/>/)
     assert.match(hook, /<SaveNotes s=\{saveTo\} \/>/, 'the warning that it overwrites the preset is not the app’s own')
     assert.ok(read('mobile/src/components/SaveToSlot.js').includes('This will overwrite the current preset'))

@@ -23,7 +23,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "On an AM4, hold the NAM block and get a capture from TONE3000: there is now a Save button at the top, beside the block’s name, with the warning that it overwrites the preset. The same on an Axe-Fx III. The AM4’s NAM block is also spelled NAM in that pop-up’s title.",
+        "text": "On an AM4, hold the NAM block and get a capture from TONE3000: there is now a Save button at the top, beside the block’s name, with the warning that it overwrites the preset. The same on an Axe-Fx III, and after a knob is turned in any block’s hold pop-up. The AM4’s NAM block is also spelled NAM in that pop-up’s title.",
         "only": null
       },
       {
