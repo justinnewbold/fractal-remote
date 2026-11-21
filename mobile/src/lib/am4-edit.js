@@ -282,10 +282,21 @@ function fromInternal(p, internal) {
   return min + internal * (max - min)
 }
 
+/*
+ * A SLOW RATE KEEPS TWO PLACES. The codec rounds every Hz to a whole number,
+ * which is right for a tone's frequency (20 to 20,000) and wrong for a
+ * chorus's or a tremolo's Rate (0.1 to 10): his AM4 took Rate 2.245 Hz and
+ * 0.423 Hz, the app read them back as 2 and 0, said the knob did not take,
+ * sent it again and put the knob back (21 November 2026, "Control knob
+ * changes didn't save to unit"). On purpose unlike the pinned codec, which
+ * rounds the same way through a computer.
+ */
+export const placesOf = (p) => (p.unit === 'hz' && typeof p.max === 'number' && p.max <= 20 ? 2 : PRECISION[p.unit])
+
 /* forgefx-midi roundDisplayValue: to the places the AM4 shows, and never -0. */
 function rounded(p, v) {
   if (typeof v !== 'number' || p.unit === 'enum') return v
-  const factor = 10 ** PRECISION[p.unit]
+  const factor = 10 ** placesOf(p)
   const r = Math.round(v * factor) / factor
   return Object.is(r, -0) ? 0 : r
 }

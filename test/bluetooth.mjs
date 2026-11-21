@@ -4099,6 +4099,18 @@ export function run(test) {
     assert.ok(!plain.logs.some((l) => /no name for yet on the AM4/.test(l)))
   })
 
+  test('an AM4 rate that runs from a fraction of a hertz reads back with two places, so a Rate of 2.245 Hz is not read as 2 and called not taken', async () => {
+    const e = await import('../mobile/src/lib/am4-edit.js')
+    const rate = { unit: 'hz', min: 0.1, max: 10, log: true }
+    /* His log, 21 November 2026: sent 0.6756 for 2.245 Hz and 0.3132 for 0.423 Hz; the app read 2 and 0. */
+    assert.equal(e.shown(rate, Math.round(0.6756 * 65534)), 2.24)
+    assert.equal(e.shown(rate, Math.round(0.3132 * 65534)), 0.42)
+    /* A tone's frequency is still a whole number, as the codec and AM4-Edit show it. */
+    assert.equal(e.placesOf({ unit: 'hz', min: 20, max: 20000 }), 0)
+    assert.equal(e.placesOf({ unit: 'hz', min: 0.2, max: 20 }), 2)
+    assert.equal(e.placesOf({ unit: 'db', min: -80, max: 20 }), 1)
+  })
+
   test('the AM4’s NAM Player block (0xD1, firmware 3.00) is named, switched and has its channel changed where it is open, and is a number asked nothing where it is not', async () => {
     const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
     /* And the Pitch block of the same firmware, by the gen-3 units' number for it: likely, not read off a unit (19 November 2026, "I don't care if it freezes"). */

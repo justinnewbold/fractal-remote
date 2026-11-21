@@ -29,6 +29,10 @@ export const WHATS_NEW = [
       {
         "text": "Help & fixes: the button at the top right is now Send logs, which sends the log with your note in one tap. Back is at the top left.",
         "only": null
+      },
+      {
+        "text": "Fixed on an AM4: a slow Rate knob (a chorus’s or a tremolo’s) showed as a whole number, so 2.2 Hz read as 2, jumped back, and the app said it didn’t take. It took; it now shows two decimal places.",
+        "only": null
       }
     ]
   },
