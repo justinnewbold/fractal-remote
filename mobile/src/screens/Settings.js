@@ -61,6 +61,7 @@ import {
 } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
+import { BIG_FOUR_LABEL, BIG_FOUR_SUB, loadBigFour, saveBigFour } from '../lib/bigFour'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
@@ -2416,6 +2417,7 @@ function TileSize({ onScrollLock }) {
   const now = loadSize(sync)
   const fit = loadFit(sync, true)
   const icons = loadIcons(sync)
+  const bigFour = loadBigFour(sync)
   const layout = loadSceneLayout(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
@@ -2458,6 +2460,8 @@ function TileSize({ onScrollLock }) {
         sub="The whole rig on one screen, no scrolling. Overrides the size above."
         onPress={() => saveFit(!fit, sync)}
       />
+      {/* "If we can make that a setting, the user can change in settings as well" (lib/bigFour). */}
+      <Choice on={bigFour} label={BIG_FOUR_LABEL} sub={BIG_FOUR_SUB} onPress={() => saveBigFour(!bigFour, sync)} />
       {/* "Is it something that could be turned on and off?" */}
       <Choice
         on={icons}

@@ -24,6 +24,10 @@
         {
           "text": "Fixed on an AM4: a slow Rate knob (a chorus’s or a tremolo’s) showed as a whole number, so 2.2 Hz read as 2, jumped back, and the app said it didn’t take. It took; it now shows two decimal places.",
           "only": null
+        },
+        {
+          "text": "On an AM4 or a VP4, with a phone held upright: the four pedals are now two by two, the same size as the scenes, and the tiles fill the screen. To go back to one row, switch off Big pedals, two by two in Settings, Play screen, Tiles & scenes.",
+          "only": null
         }
       ]
     },
