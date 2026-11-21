@@ -27,7 +27,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "Help & fixes: the button at the top right is now Send logs, which sends the log to the developer in one tap. Back is at the top left.",
+        "text": "Help & fixes: the button at the top right is now Send logs, which sends the log with your note in one tap. Back is at the top left.",
         "only": null
       }
     ]
