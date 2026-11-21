@@ -38,6 +38,7 @@ import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdP
 import BlockSide from '../components/BlockSide'
 import HeldCapture from '../components/HeldCapture'
 import { AmpSwapDoor, useAmpSwap } from '../components/AmpToNam'
+import { SwapBlockDoor, useSwapBlock } from '../components/SwapBlock'
 import PopKnobs from '../components/PopKnobs'
 import { Tone3000Door, Tone3000InPop, useTone3000Door } from '../components/Tone3000Quick'
 import StageView from '../components/StageView'
@@ -2097,6 +2098,8 @@ export default function Stage({
         }}
         knobs={popKnobs}
         onSwapped={(id) => setPicking(id)}
+        blocks={blocks}
+        elsewhere={chainNow.elsewhere}
       />
 
       <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
@@ -2589,7 +2592,7 @@ const FOOT_ROW = { flexDirection: 'row', gap: space.sm }
  *
  * The same words the browser uses, because they are the same fact.
  */
-function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapped = null }) {
+function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapped = null, blocks = null, elsewhere = false }) {
   const name = block?.name || block?.slug || ''
   /*
    * WITH THE BLOCK'S KNOBS OVER THE CHANNELS (`knobs`, from Stage's popKnobs;
@@ -2626,6 +2629,9 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
   /* A held amp swapped for a NAM block (components/AmpToNam): the pop-up becomes that block's, and opens on its captures. */
   const swapHere = useAmpSwap(block) && typeof onSwapped === 'function'
   const openOn = useRef(null)
+  /* Any held pedal swapped for another from a list (components/SwapBlock): the pop-up becomes the new block's. Under the knobs, which come first. */
+  const swapAny = useSwapBlock(block, elsewhere) && typeof onSwapped === 'function'
+  const swapDoor = swapAny ? <SwapBlockDoor key={block ? idOf(block) : 'none'} block={block} blocks={blocks} onSwapped={onSwapped} /> : null
   useEffect(() => {
     const straight = openOn.current !== null && openOn.current === library.id
     if (library.id !== null) openOn.current = null
@@ -2700,6 +2706,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
           Each channel keeps its own model and settings; the scene remembers which one this block
           plays.
         </Text>
+        {swapDoor}
       </Sheet>
     )
   }
@@ -2726,6 +2733,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
         Each channel keeps its own model and settings; the scene remembers which one this block
         plays.
       </Text>
+      {swapDoor}
     </Sheet>
   )
 }
