@@ -6879,7 +6879,7 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './am4-nam.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './am4-nam.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-help.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js'])
     /* The chain's messages (test/gen3-grid.mjs): the frame helpers and nothing else, so they reach a unit only through the wire that builds them. */
     assert.deepEqual(imports(read('gen3-grid.js')), ['./fractal-sysex.mjs'], 'the grid’s messages import something')
     assert.deepEqual(imports(read('am4-chain.js')), ['./fractal-sysex.mjs'], 'the AM4’s slot message imports something')
@@ -6890,6 +6890,7 @@ export function run(test) {
     /* The looper's and the unit click's messages (lib/bleTools): the frame helpers and nothing else. The tables for modifiers, cabs and footswitches (lib/gen3-tools, generated from ForgeFX itself) are plain data with no imports, and the metronome's shared rule (for the unit's own number of its Metronome switch) imports only the device's name for its words. */
     assert.deepEqual(imports(read('bleTools.js')), ['./fractal-sysex.mjs'], 'the looper’s and the click’s messages import something')
     assert.deepEqual(imports(read('gen3-tools.js')), [], 'the tools’ tables import something')
+    assert.deepEqual(imports(read('gen3-help.js')), [], 'the knob help imports something')
     assert.deepEqual(imports(read('metronome-rules.js')), ['./device-word.js'], 'the metronome’s shared rule imports something that sends')
     /* The block lists, for the ids that are not blocks (NOT_BLOCKS): the FM3's list and nothing that sends. */
     assert.deepEqual(imports(read('gen3Catalog.js')), ['../data/blocks.json'], 'the block lists import something')
@@ -22398,6 +22399,43 @@ export function run(test) {
     assert.match(gen, /export \{ createGen3Driver \} from/)
     assert.match(gen, /if \(head\(engine\) !== pins\.forgefx\) throw/)
     assert.match(gen, /if \(head\(codec\) !== pins\.codec\) throw/)
+  })
+
+  /*
+   * WHAT EACH KNOB DOES, OVER BLUETOOTH (lib/gen3-help, scripts/gen3-help.mjs).
+   * Through the computer the "?" under a knob in Edit is ForgeFX's answer to
+   * GET /help/blocks/<slug>; over Bluetooth nothing answered it ("not over
+   * Bluetooth: GET /help/blocks/drive" in his logs), so the "?" was not
+   * there. The phone carries the engine's own answers now.
+   */
+  test('what each knob does is answered over Bluetooth on an FM3, FM9 and Axe-Fx III from the computer app’s own help, and nothing is sent to the unit for it', async () => {
+    const help = await import('../mobile/src/lib/gen3-help.js')
+    const lock = JSON.parse(src('desktop/forgefx.lock.json'))
+    assert.deepEqual(help.GEN3_HELP_FROM, { forgefx: lock.forgefx.commit, codec: lock['forgefx-midi'].commit }, 'the knob help is not from the pinned engine and codec: run scripts/gen3-help.mjs')
+    const gen = src('scripts/gen3-help.mjs')
+    assert.match(gen, /export \{ helpIndex \} from/)
+    assert.match(gen, /if \(head\(engine\) !== pins\.forgefx\) throw/)
+    assert.match(gen, /if \(head\(codec\) !== pins\.codec\) throw/)
+    for (const kind of ['fm3', 'fm9', 'axefx3']) {
+      /* Every block has words for settings the unit's own catalog names, and every piece is a sentence. */
+      const blocks = help.GEN3_HELP[kind]
+      assert.ok(Object.keys(blocks).length >= 15, kind)
+      for (const [slug, params] of Object.entries(blocks)) for (const i of Object.values(params)) assert.ok(typeof help.HELP_TEXTS[i]?.blurb === 'string' && help.HELP_TEXTS[i].blurb.length > 8, `${kind} ${slug}`)
+      const t = await pretendLine(kind)
+      await advance(t.clock, 6000)
+      t.sent.length = 0
+      const amp = await t.get('/help/blocks/amp')
+      assert.deepEqual(JSON.parse(JSON.stringify(amp)), help.gen3BlockHelp(kind, 'amp'))
+      assert.ok(Object.keys(amp.params).length >= 10 && Object.values(amp.params).every((h) => typeof h.blurb === 'string'))
+      /* A block it has none for is the computer's own "not found", which Edit takes as no "?". */
+      await assert.rejects(t.get('/help/blocks/nam'), (e) => e.status === 404)
+      assert.equal(t.sent.length, 0, `${kind}: something was sent to the unit for help`)
+    }
+    /* The units' numbers differ (an amp's Gain is setting 7, 11 and 1), and the same words are under each. */
+    assert.equal(help.gen3BlockHelp('zz', 'amp'), null)
+    assert.equal(help.gen3BlockHelp('fm3', 'nope'), null)
+    /* Never an AM4: the engine has no help for one either, and its wire answers as it always did. */
+    assert.match(src('mobile/src/lib/bleWire.js'), /if \(!am4 && method === 'GET' && part\.length === 3 && part\[0\] === 'help' && part\[1\] === 'blocks'\) \{/)
   })
 
   test('modifiers, a cab by name and the Footswitches page over Bluetooth: against the same pretend unit the phone sends what ForgeFX’s own driver sends and answers what it answers, on every unit', async () => {

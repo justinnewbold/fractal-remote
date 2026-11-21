@@ -29,6 +29,7 @@ import { SAVE_NOT_OPEN, buildSave, saveAllowed, saveElsewhere, saveShaped } from
 import { buildPresetName, buildSceneName, cleanName, nameAllowed, nameShaped } from './bleNames.js'
 import { GLOBAL_BLOCK, LOOPER_BUTTONS, buildFcRead, buildLooperButton, buildLooperPosition, buildLooperWave, buildUnitClick, buildUnitClickRead, readFcValue, readLooperPosition, readLooperWave, readUnitClick, toolAllowed, toolShaped } from './bleTools.js'
 import { BLOCK_OF, GEN3_TOOLS, IR_BANKS } from './gen3-tools.js'
+import { gen3BlockHelp } from './gen3-help.js'
 import { unitMetronome } from './metronome-rules.js'
 import {
   AM4,
@@ -6394,6 +6395,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (clickOn() && part[0] === 'preset' && part[1] === 'blocks' && part[2] === String(GLOBAL_BLOCK)) {
       if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4])) return () => gen3WriteClick(Number(part[4]), body)
       if (method === 'POST' && part.length === 4 && part[3] === 'readrange') return editRoute(() => gen3ReadClick(body))
+    }
+    /* What each knob does, the "?" under a knob in Edit (lib/gen3-help, the computer app's own answers carried on the phone): words only, nothing is asked of the unit. A block or a unit it has none for is the computer's own "not found". */
+    if (!am4 && method === 'GET' && part.length === 3 && part[0] === 'help' && part[1] === 'blocks') {
+      return async () => {
+        const help = gen3BlockHelp(unit, part[2])
+        if (!help) throw Object.assign(new Error(`no help for block "${part[2]}"`), { status: 404 })
+        return help
+      }
     }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect
