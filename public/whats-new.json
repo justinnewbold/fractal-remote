@@ -16,6 +16,10 @@
         {
           "text": "On an AM4, hold the NAM block and get a capture from TONE3000: there is now a Save button at the top, beside the block’s name, with the warning that it overwrites the preset. The same on an Axe-Fx III. The AM4’s NAM block is also spelled NAM in that pop-up’s title.",
           "only": null
+        },
+        {
+          "text": "Help & fixes: the button at the top right is now Send logs, which sends the log to the developer in one tap. Back is at the top left.",
+          "only": null
         }
       ]
     },
