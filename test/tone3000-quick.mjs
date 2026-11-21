@@ -122,7 +122,7 @@ export function run(test) {
     /* It is one sheet, so each of its two pages starts at its own top: left where a long list was scrolled to, the knobs came up blank. */
     const sheetSrc = flat(code(read('mobile/src/components/Sheet.js')))
     assert.match(sheetSrc, /<ScrollView key=\{scrollKey\} contentContainerStyle=/)
-    assert.match(sheetSrc, /still = false, scrollKey = undefined, locked = false, children \}\)/)
+    assert.match(sheetSrc, /still = false, scrollKey = undefined, locked = false, onTouchesOver = null, children \}\)/)
     /* Another block held, or the pop-up closed, starts on the knobs with nothing said. */
     assert.match(sheet, /useEffect\(\(\) => \{ const straight = openOn\.current !== null && openOn\.current === library\.id if \(library\.id !== null\) openOn\.current = null setBrowsing\(straight\) setCame\(''\) \}, \[library\.id\]\)/)
     /* And what the block said it is playing is over the knobs when a Get hands them back. */
