@@ -890,6 +890,16 @@ export const AM4_NAM_ADD_FOR_EVERYONE = true
 export const AMP_TO_NAM_FOR_EVERYONE = true
 
 /**
+ * A held pedal's pop-up offers Swap for another pedal (lib/swapBlock,
+ * components/SwapBlock): any block for any other the unit can add, in its
+ * own cell, wherever the chain editor is. "It would be nice to be able to
+ * swap pedals out from the screen as well ... pulls up a list" (Justin's
+ * report 9361e16b, 21 November 2026). HIS ACCOUNT ONLY until he says: no
+ * block has been swapped on a unit.
+ */
+export const SWAP_BLOCK_FOR_EVERYONE = false
+
+/**
  * THE AM4'S NAM BLOCK'S KNOBS IN EDIT (lib/am4-own-knobs.js), over Bluetooth
  * or a USB cable: Level, Input Gain, Bass, Mid, Treble, Bright and three
  * tone-stack and phase switches, with the Capture button over them.

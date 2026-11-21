@@ -107,7 +107,7 @@ export function run(test) {
     const bare = code(stage)
     /* Nobody gets knobs in the pop-up unless App says so. */
     assert.match(bare, /onCloseKnobs = null,\s+popKnobs = false,\n/)
-    assert.match(bare, /<ChannelSheet\s+block=\{chainNow\.elsewhere \|\| chainNow\.outline \? null : blocks\.find\(\(b\) => sameBlock\(b, picking\)\) \|\| null\}\s+channels=\{channels\}\s+onClose=\{\(\) => setPicking\(null\)\}\s+onPick=\{\(ch\) => \{\s+writeChannel\(picking, ch\)\s+setPicking\(null\)\s+\}\}\s+knobs=\{popKnobs\}\s+onSwapped=\{\(id\) => setPicking\(id\)\}\s+\/>/, 'a channel picked no longer writes it and closes the pop-up, or the knobs are not handed to it')
+    assert.match(bare, /<ChannelSheet\s+block=\{chainNow\.elsewhere \|\| chainNow\.outline \? null : blocks\.find\(\(b\) => sameBlock\(b, picking\)\) \|\| null\}\s+channels=\{channels\}\s+onClose=\{\(\) => setPicking\(null\)\}\s+onPick=\{\(ch\) => \{\s+writeChannel\(picking, ch\)\s+setPicking\(null\)\s+\}\}\s+knobs=\{popKnobs\}\s+onSwapped=\{\(id\) => setPicking\(id\)\}\s+blocks=\{blocks\}\s+elsewhere=\{chainNow\.elsewhere\}\s+\/>/, 'a channel picked no longer writes it and closes the pop-up, or the knobs are not handed to it')
     /* The hold that opens it is the one it always was: the panel where that opens, else the pop-up. */
     assert.match(bare, /\? \(\) => \(knobsHere \? holdForKnobs\(idOf\(block\)\) : setPicking\(picking === idOf\(block\) \? null : idOf\(block\)\)\)/)
     /* And it still closes on another preset, and while the chain is another preset's: a sheet left open would be over the new song's block. */
@@ -115,7 +115,7 @@ export function run(test) {
     assert.match(bare, /useEffect\(\(\) => setPicking\(null\), \[chainNow\.number\]\)/)
 
     const sheet = bare.slice(bare.indexOf('function ChannelSheet('), bare.indexOf('export const DOWN_DIM'))
-    assert.match(sheet, /^function ChannelSheet\(\{ block, channels, onClose, onPick, knobs = false, onSwapped = null \}\) \{/)
+    assert.match(sheet, /^function ChannelSheet\(\{ block, channels, onClose, onPick, knobs = false, onSwapped = null, blocks = null, elsewhere = false \}\) \{/)
     assert.match(sheet, /const withKnobs = popKnobsFor\(knobs, block\)/)
     assert.match(bare, /import \{ HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor \} from '\.\.\/lib\/holdPop'/)
     assert.match(bare, /import PopKnobs from '\.\.\/components\/PopKnobs'/)
@@ -144,6 +144,7 @@ export function run(test) {
         Each channel keeps its own model and settings; the scene remembers which one this block
         plays.
       </Text>
+      {swapDoor}
     </Sheet>
   )
 }
