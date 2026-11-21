@@ -518,9 +518,15 @@ export const AREAS = [
         why: 'only in the browser — the log is capped at 400 lines, which pastes into a chat whole, so the phone has never needed it'
       },
       {
+        does: 'send the log from the top of the page, where Done used to be (the same send as the button at the foot)',
+        web: null,
+        phone: 'Send logs',
+        why: 'the browser’s log is a panel with its one Send in sight; on the phone most people went for the top right button, which only closed the page (Justin, 21 November 2026)'
+      },
+      {
         does: 'close the log',
         web: null,
-        phone: 'Done',
+        phone: '‹ Back',
         why: 'the browser’s log is a panel in the settings page, with nothing to close'
       }
     ]

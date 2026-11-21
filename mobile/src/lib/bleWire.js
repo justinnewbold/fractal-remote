@@ -547,6 +547,8 @@ const realClock = {
 }
 
 /* What the stage never shows over Bluetooth: no volume, no looper, no input. */
+/* What an AM4's newer blocks are called on screen (fractal-sysex AM4_NEW_BLOCKS has their codes; am4-chain's places spell them the same). */
+const AM4_OWN_NAMES = { nam: 'NAM', pitch: 'Pitch' }
 const OFF_STAGE = ['input', 'output', 'looper']
 
 /*
@@ -3938,7 +3940,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const ch = await am4ChannelNow(code)
       out.push({
         slug: block.slug,
-        name: block.slug,
+        /* A newer firmware's block by its own name, as the list of blocks to add spells it: "Make the word NAM be capitalized" (Justin, 21 November 2026, of the hold pop-up's title, which read "nam"). */
+        name: block.own ? AM4_OWN_NAMES[block.slug] || block.slug : block.slug,
         effectId: code,
         row: 1,
         col: i + 1,

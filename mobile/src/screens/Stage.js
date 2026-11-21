@@ -5,6 +5,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { BIG_FOUR_ACROSS, bigFourOn, bigFourTile, loadBigFour } from '../lib/bigFour'
 import { together } from '../lib/name-fit'
 import { firstFrame } from '../lib/screenShape'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
@@ -98,6 +99,7 @@ import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-
 import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
 import Note from '../components/Note'
+import { useSaveAfterGet } from '../components/SaveAfterGet'
 import NoComputerWords from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
 import { fixById, fixFor } from '../lib/troubleshooting'
@@ -778,7 +780,19 @@ export default function Stage({
   const sceneTall = lined ? cell : tileH
   const pedalTall = lined ? cell : Math.max(tight || fitted ? 44 : TAP, tileH - 12)
   const sceneAcross = lined ? plan.sceneCols : sceneCols
-  const pedalsAcross = lined ? plan.chainCols : fxCols
+  /* Four pedals or fewer on a phone held upright: two to a row, as big as the scenes, filling the screen (lib/bigFour, a choice in Settings). */
+  const big = bigFourOn({ on: loadBigFour(sync), plain: !lined && !inSide && !shape.wide, scenes: scenes.hasScenes ? scenes.count : 0, pedals: fitBlocks })
+  const pedalsAcross = lined ? plan.chainCols : big ? BIG_FOUR_ACROSS : fxCols
+  const bigTall = big
+    ? bigFourTile({
+        room: viewport > 0 && content > 0 ? viewport - chrome : 0,
+        sceneRows: scenes.hasScenes ? Math.ceil(scenes.count / Math.max(1, sceneAcross)) : 0,
+        pedalRows: Math.ceil(fitBlocks / BIG_FOUR_ACROSS),
+        gap: space.sm,
+        least: fitOn ? 44 : sceneTall,
+        wide: tileWidth(row, BIG_FOUR_ACROSS) || 0
+      })
+    : 0
   /*
    * PLAY'S TILES FILL THE SCREEN ON A BIG SCREEN (lib/squarePlay): "it should
    * be taking full advantage of the iPad screen and all scenarios" (Justin, 9
@@ -951,10 +965,10 @@ export default function Stage({
   const fillScenes = fill && fill.sceneCols > 0 ? fill.scene : null
   const fillPedals = fill && fill.chainCols > 0 ? fill.pedal : null
   /* A pedal's name a size up on a big tile: by the tile's shorter side, so a long tile's name is never stretched with it. */
-  const pedalWords = fillPedals ? linedName({ height: fillPedals.high, width: fillPedals.wide }) : lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
+  const pedalWords = fillPedals ? linedName({ height: fillPedals.high, width: fillPedals.wide }) : lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : big ? linedName({ height: bigTall, width: tileWidth(row, BIG_FOUR_ACROSS) }) : undefined
   /** Each tile's height and width as drawn: the plan's, or as they always were. */
-  const sceneHigh = fillScenes ? fillScenes.high : sceneTall
-  const pedalHigh = fillPedals ? fillPedals.high : pedalTall
+  const sceneHigh = fillScenes ? fillScenes.high : big ? bigTall : sceneTall
+  const pedalHigh = fillPedals ? fillPedals.high : big ? bigTall : pedalTall
   const sceneWide = fillScenes ? fillScenes.wide : tileWidth(laneRow, sceneAcross)
   const pedalWide = fillPedals ? fillPedals.wide : tileWidth(laneRow, pedalsAcross)
   /** Each half's box: its tiles' own width, lined up's half, or the phone's column. */
@@ -2607,6 +2621,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
   const library = useTone3000Door(withKnobs ? block : null, withKnobs ? null : block)
   const [browsing, setBrowsing] = useState(false)
   const [came, setCame] = useState('')
+  /* Save beside the title once a Get has handed the pop-up back (components/SaveAfterGet). */
+  const keep = useSaveAfterGet(came)
   /* A held amp swapped for a NAM block (components/AmpToNam): the pop-up becomes that block's, and opens on its captures. */
   const swapHere = useAmpSwap(block) && typeof onSwapped === 'function'
   const openOn = useRef(null)
@@ -2655,6 +2671,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
         onClose={onClose}
         title={name}
         note="Knobs and channel"
+        beside={keep.button}
+        head={keep.notes}
         tall
         still={held}
         foot={
@@ -2686,7 +2704,7 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
     )
   }
   return (
-    <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
+    <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel" beside={keep.button} head={keep.notes}>
       {ampDoor}
       {libraryDoor}
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">

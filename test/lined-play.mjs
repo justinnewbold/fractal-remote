@@ -188,8 +188,8 @@ export function run(test) {
     assert.match(stage, /const sceneTall = lined \? cell : tileH\n/)
     assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\n/)
     assert.match(stage, /const sceneAcross = lined \? plan\.sceneCols : sceneCols\n/)
-    assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/)
-    assert.match(stage, /const pedalWords = fillPedals \? linedName\(\{ height: fillPedals\.high, width: fillPedals\.wide \}\) : lined \? linedName\(\{ height: cell, width: tileWidth\(laneRow, pedalsAcross\) \}\) : undefined\n/)
+    assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : big \? BIG_FOUR_ACROSS : fxCols\n/)
+    assert.match(stage, /const pedalWords = fillPedals \? linedName\(\{ height: fillPedals\.high, width: fillPedals\.wide \}\) : lined \? linedName\(\{ height: cell, width: tileWidth\(laneRow, pedalsAcross\) \}\) : big \? linedName\(\{ height: bigTall, width: tileWidth\(row, BIG_FOUR_ACROSS\) \}\) : undefined\n/)
     assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport \+ footSpare, across: playWidth \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
     assert.match(stage, /const plan = linedPlan\(\{ scenes: scenes\.hasScenes \? scenes\.count : 0, pedals: fitBlocks \}\)\n/, 'the rows do not count the looper, or the cards while a preset loads')
     /* Both halves start level: each heading the same height. */

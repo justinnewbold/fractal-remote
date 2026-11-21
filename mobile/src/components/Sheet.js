@@ -80,7 +80,7 @@ let lastFrame = null
  * as not available, so it does not look like a way out that has frozen.
  * False, which every other sheet is, and the ✕ is as it always was.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children }) {
+export default function Sheet({ open, onClose, title, note, beside = null, head, foot, tall = false, fill = false, wide = null, still = false, scrollKey = undefined, locked = false, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -194,6 +194,8 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                   <Text style={{ color: color.silkDim, fontSize: font.small }}>{note}</Text>
                 ) : null}
               </View>
+              {/* `beside`: one small thing next to the title, before the ✕ (the hold pop-up's Save after a capture is got). Nothing for every other sheet. */}
+              {beside ? <View style={{ flexGrow: 1, alignItems: 'flex-end' }}>{beside}</View> : null}
               {/* Faded as a whole while the sheet is `locked`, its own look untouched: every other sheet's ✕ is the one it was, in both looks (test/glass-classic). */}
               <View style={locked ? LOCKED_LOOK : undefined}>
                 <Pressable

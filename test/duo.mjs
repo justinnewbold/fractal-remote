@@ -1454,9 +1454,11 @@ export function run(test) {
     assert.equal(pedalName({ slug: '0x7e', name: '0x7e' }), '')
     assert.equal(pedalName({ slug: 'drive', name: '0X7E' }), '')
     assert.equal(pedalName(null), '')
+    /* A newer firmware's block comes with its own name (bleWire AM4_OWN_NAMES), and that is shown. */
+    assert.equal(pedalName({ slug: 'nam', name: 'NAM' }), 'NAM')
     /* Exactly as bleWire names an AM4's blocks: by slug, and by code for one it does not know. */
     const ble = read('mobile/src/lib/bleWire.js')
-    assert.match(ble, /slug: block\.slug,\s*name: block\.slug,/, 'the AM4 over Bluetooth names its blocks some other way now; check pedalName against it')
+    assert.match(ble, /name: block\.own \? AM4_OWN_NAMES\[block\.slug\] \|\| block\.slug : block\.slug,/, 'the AM4 over Bluetooth names its blocks some other way now; check pedalName against it')
     assert.match(ble, /const name = `0x\$\{code\.toString\(16\)\}`/)
     /* Whole: in one or two lines, broken only between words, every word drawn. */
     assert.equal(laidWhole('Drive', [{ text: 'Drive' }]), true)

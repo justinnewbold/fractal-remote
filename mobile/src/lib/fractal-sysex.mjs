@@ -536,15 +536,18 @@ export const AM4_BLOCKS = {
  * second NAM block is taken to be one above it, as every AM4 block's second
  * copy is; nobody has seen one.
  *
- * pitch, 0x82 (130): the Pitch block of the same firmware. NOT READ OFF A
- * UNIT: it is the gen-3 units' own number for Pitch 1, as every one of the
- * seventeen above is the gen-3 number for its block. "I don't care if it
- * freezes" (Justin, 19 November 2026, of sending an AM4 a likely number in
- * place of waiting for a log). If a 3.00 unit's log ever says "no name for
- * yet ... holds 0xNN" with a Pitch block in the preset, that is its number
- * and this one is wrong.
+ * pitch, 0x6E (110): the Pitch block of the same firmware. NOT READ OFF A
+ * UNIT: it is the gen-3 units' own number for Pitch 1 (forgefx-midi
+ * gen3/axe-fx-iii/blockTypes.ts, firstId 110), as every one of the seventeen
+ * above is the gen-3 number for its block, and it is the one gap in that
+ * run (tremolo 0x6A, then filter 0x72). Until 2.3.0 this said 0x82 (130),
+ * which is the gen-3 SYNTH, a block an AM4 does not have: his AM4 took the
+ * slot write, showed no Pitch, never answered its on and off, and after a
+ * save the slot was a Chorus (21 November 2026). If a 3.00 unit's log ever
+ * says "no name for yet ... holds 0xNN" with a Pitch block in the preset,
+ * that is its number and this one is wrong.
  */
-export const AM4_NEW_BLOCKS = { nam: 0xd1, pitch: 0x82 }
+export const AM4_NEW_BLOCKS = { nam: 0xd1, pitch: 0x6e }
 
 /**
  * {slug, base, copy} for a block code the AM4 reports, or null for none or
