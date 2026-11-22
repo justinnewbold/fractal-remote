@@ -86,7 +86,18 @@ export function compareWithBuild(recorded, now, { strict = false } = {}) {
  * apart, so this is the lock for the day it does not (an independent read,
  * before the 2.0.0 pair). It stops the publish in both modes.
  */
-export const sameAsStores = (stores, now) => ['ios', 'android'].filter((p) => stores?.[p] && stores[p] === now[p])
+export const sameAsStores = (stores, now, only = null) => ONE_PHONE(only).filter((p) => stores?.[p] && stores[p] === now[p])
+
+/*
+ * A BUILD OF ONE PHONE ALONE (next-store.json `"only": "ios"`, the iPhone
+ * build of 22 November 2026, whose patch is Swift and moves nothing on
+ * Android). The other phone's fingerprint with docs/pending in IS the store
+ * copies' own, rightly, so it is not asked here; and the testers' update is
+ * published for that one phone only (mobile.yml reads `only` for
+ * `eas update --platform`), so nothing of it is published under the other
+ * phone's fingerprint at all.
+ */
+export const ONE_PHONE = (only) => (only === 'ios' || only === 'android' ? [only] : ['ios', 'android'])
 
 const hashFor = (root, platform) => {
   const out = execFileSync('npx', ['@expo/fingerprint', 'fingerprint:generate', '--platform', platform], {
@@ -122,7 +133,7 @@ const main = () => {
   const { reaches, lines } = compareWithBuild(recorded, now, { strict })
   for (const { level, text } of lines) console.log(`::${level}::${text}`)
   const stores = JSON.parse(execFileSync('git', ['show', 'HEAD:mobile/fingerprint.json'], { cwd: root, encoding: 'utf8' }))
-  const same = sameAsStores(stores, now)
+  const same = sameAsStores(stores, now, recorded.only)
   if (same.length) {
     console.log(`::error::With docs/pending in, ${same.join(' and ')} is ${same.map((p) => now[p]).join(' and ')}, the store copies' own, so the testers' update would reach every customer. Nothing is published for the testers.`)
     process.exit(1)

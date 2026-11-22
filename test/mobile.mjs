@@ -940,7 +940,8 @@ export function run(test) {
       const next = JSON.parse(read('docs/pending/next-store.json'))
       assert.equal(storeVersionProblem(next.version, null), null, `docs/pending/next-store.json names ${next.version}, which no store build can be`)
       for (const p of ['ios', 'android', 'watch']) assert.match(String(next[p]), /^[0-9a-f]{40}$/, `docs/pending/next-store.json has no ${p} ${p === 'watch' ? 'hash' : 'fingerprint'}`)
-      assert.deepEqual(Object.keys(next).sort(), ['android', 'ios', 'version', 'watch'], 'docs/pending/next-store.json holds something nothing reads')
+      assert.deepEqual(Object.keys(next).filter((k) => k !== 'only').sort(), ['android', 'ios', 'version', 'watch'], 'docs/pending/next-store.json holds something nothing reads')
+      if ('only' in next) assert.ok(['ios', 'android'].includes(next.only), 'docs/pending/next-store.json names a phone that is neither')
     }
 
     /*
@@ -1010,8 +1011,13 @@ export function run(test) {
     const stores = { ios: 'a'.repeat(40), android: '9'.repeat(40), watch: rec.watch }
     assert.deepEqual(sameAsStores(stores, now), ['ios'], 'a testers’ update with the store copies’ iPhone fingerprint is let through, and every App Store customer would take the waiting patches’ code')
     assert.deepEqual(sameAsStores({ ios: '8'.repeat(40), android: '9'.repeat(40) }, now), [], 'a testers’ update unlike the store copies is held back')
+    /* A build of one phone alone: the other phone's is the store copies' own and is not asked, the built one's still is, and its update goes out for that phone only. */
+    assert.deepEqual(sameAsStores({ ios: '8'.repeat(40), android: now.android }, now, 'ios'), [], 'an iPhone-only build is stopped by Android’s unchanged fingerprint')
+    assert.deepEqual(sameAsStores({ ios: now.ios, android: now.android }, now, 'ios'), ['ios'], 'an iPhone-only build whose iPhone fingerprint is the store copies’ own is let through')
+    assert.deepEqual(sameAsStores({ ios: now.ios, android: '9'.repeat(40) }, now, 'sideways'), ['ios'], 'an only that names no phone switches the lock off')
+    assert.match(read('.github/workflows/mobile.yml'), /only="\$\(node -p "require\('\.\/docs\/pending\/next-store\.json'\)\.only \|\| 'all'"\)"\n\s+case "\$only" in ios\|android\|all\) ;; \*\) [^\n]+exit 1 ;; esac\n\s+cd mobile\n\s+eas update \\\n\s+--branch production \\\n\s+--platform "\$only" \\\n/, 'the testers’ update of a one-phone build is published for both phones')
     const ns = read('scripts/next-store.mjs')
-    assert.match(ns, /const same = sameAsStores\(stores, now\)\n  if \(same\.length\) \{\n[^\n]+\n    process\.exit\(1\)\n  \}\n[^]*?\n  if \(!reaches\) process\.exit\(strict \? 1 : NOT_THE_BUILD\)/, 'a testers’ update that would reach the store copies is not stopped in both modes, before anything else is asked')
+    assert.match(ns, /const same = sameAsStores\(stores, now, recorded\.only\)\n  if \(same\.length\) \{\n[^\n]+\n    process\.exit\(1\)\n  \}\n[^]*?\n  if \(!reaches\) process\.exit\(strict \? 1 : NOT_THE_BUILD\)/, 'a testers’ update that would reach the store copies is not stopped in both modes, before anything else is asked')
     assert.match(ns, /execFileSync\('git', \['show', 'HEAD:mobile\/fingerprint\.json'\]/, 'the store copies’ fingerprint is not read from the commit as it was before the patches went in')
     /* Its watch hash is scripts/fingerprint.mjs's, word for word, or the two would disagree about one watch. */
     const body = (src, head) => {

@@ -590,9 +590,15 @@ jobs:
           check=0
           node scripts/next-store.mjs || check=$?
           if [ "$check" -ne 0 ] && [ "$check" -ne 3 ]; then exit "$check"; fi
+          # A build of one phone alone (next-store.json "only") gets its
+          # update for that phone alone: the other phone's fingerprint with
+          # the patches in is the store copies' own.
+          only="$(node -p "require('./docs/pending/next-store.json').only || 'all'")"
+          case "$only" in ios|android|all) ;; *) echo "::error::docs/pending/next-store.json has an only that is not ios or android"; exit 1 ;; esac
           cd mobile
           eas update \
             --branch production \
+            --platform "$only" \
             --message "next store version, ${GITHUB_REF_NAME}@$(git rev-parse --short HEAD): $(git log -1 --pretty=%s | cut -c1-60)" \
             --non-interactive
           if [ "$check" -eq 3 ]; then
