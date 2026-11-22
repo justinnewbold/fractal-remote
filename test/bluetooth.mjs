@@ -1371,6 +1371,7 @@ async function linkOnABench(t) {
       export const noteBluetooth = (patch) => { bench.notes.push(patch) }
       export const onAdapter = (name, fn) => { bench.listeners.set(name, fn); return () => bench.listeners.delete(name) }
       export const refreshKeptAdapter = () => { bench.refreshed++; return false }
+      export const rejoinAdapter = () => false
       /* The iPhone's adapter kept, back under a new id (lib/bluetooth adapterBackUnderNewId): bench.rekey() says whether it was, and chooses it. */
       export const adapterBackUnderNewId = () => bench.rekey()
       /* Whether lib/bluetooth chose the adapter as the same one back under a new id (adapterCameBack): bench.cameBack, every question kept in bench.cameAsked. */
@@ -7641,7 +7642,7 @@ export function run(test) {
      * and says so under itself whenever it will (test 'Reconnect' holds the
      * words).
      */
-    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/)
+    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{findAgain\} \/>/)
     /*
      * AND ON AN IPHONE WHOSE ADAPTER HAS GONE IT DOES NOT WAIT FIFTEEN
      * SECONDS. A customer's report of 13 November 2026: back at the rig
@@ -7654,7 +7655,7 @@ export function run(test) {
      * under the note.
      */
     assert.match(waking, /const gone = useAdapterGone\(\)/)
-    const early = "{gone && link.link !== 'connected' ? ( <Press label=\"Look for the adapter again\" sub={appleScreenOpens()} tone=\"live\" style={{ alignSelf: 'stretch' }} onPress={() => lookForAdapterAgain(onRetry)} /> ) : null}"
+    const early = "{gone && link.link !== 'connected' ? ( <Press label=\"Look for the adapter again\" sub={appleScreenOpens()} tone=\"live\" style={{ alignSelf: 'stretch' }} onPress={findAgain} /> ) : null}"
     assert.ok(waking.includes(early), 'the waiting screen does not offer Look for the adapter again at once on an iPhone whose adapter has gone')
     assert.ok(waking.indexOf(early) < waking.indexOf('<Press label="Use the computer instead"'), 'the way to get the adapter back is under the way back to the computer')
     assert.ok(waking.indexOf(early) < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the early Look again waits for the note')
@@ -7673,7 +7674,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
-    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, appleScreenOpens, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useAdapterGone, useBluetoothNoClick, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, adapterAway, adapterInsteadOfCable, allowBluetooth, appleScreenOpens, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useAdapterGone, useBluetoothUnit, useBluetoothNoClick, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -9635,7 +9636,7 @@ export function run(test) {
     assert.match(page, /: away \? `The adapter isn’t connected to this \$\{deviceNoun\(\)\} now\. Check it is plugged in and lit, then tap Reconnect\.`/)
     /* The waiting screen's Look again, and Phone & computer's. */
     const waking = flat('mobile/App.js').slice(flat('mobile/App.js').indexOf('function Waking('))
-    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/, 'the waiting screen’s Look again opens Apple’s screen without saying so')
+    assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\} onPress=\{findAgain\} \/>/, 'the waiting screen’s Look again opens Apple’s screen without saying so')
     /* On a USB cable, the unit, looked for again by the link's poke alone (opensApplesScreen is false for one, held below). */
     assert.match(flat('mobile/src/screens/Settings.js'), /label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? appleScreenOpens\(\) : undefined\}/, 'Phone & computer’s Look again opens Apple’s screen without saying so')
     /* Never for a watch tap or anything that is not a hand on a screen: link.js's own poke is untouched. */
@@ -10583,7 +10584,8 @@ export function run(test) {
 
     const swift = src('mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift')
     assert.match(swift, /Name\("FractalBleMidi"\)/)
-    assert.match(swift, /Events\("onBytes", "onDevices", "onState"\)/)
+    /* "onRejoin" with docs/pending/rejoin-adapter in (the build that connects the adapter itself); without it, the three. */
+    assert.match(swift, /Events\("onBytes", "onDevices", "onState"(, "onRejoin")?\)/)
     /*
      * Apple's Bluetooth MIDI screen (CoreAudioKit) is not in the simulator.
      * Every line that touches it has to be on the device side of a guard:
@@ -10930,7 +10932,16 @@ export function run(test) {
      * question, and every customer who never opens Bluetooth would get it.
      */
     const swiftCode = swift.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, '')
-    assert.ok(!/CBCentralManager|CBPeripheralManager/.test(swiftCode), 'the module makes a Bluetooth manager, which asks the question')
+    /*
+     * The one place a manager may be made is the Rejoiner (docs/pending/
+     * rejoin-adapter), which is started only by `rejoin`, asked by the
+     * JavaScript only with Bluetooth on in the app and an adapter kept
+     * (lib/bluetooth rejoinAdapter, held below). Nothing outside it makes one.
+     */
+    assert.ok(!/CBCentralManager|CBPeripheralManager/.test(swiftCode.split('final class Rejoiner')[0]), 'the module makes a Bluetooth manager, which asks the question')
+    assert.ok(!/CBPeripheralManager/.test(swiftCode), 'the module makes a peripheral manager')
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.ok(lib.includes("export function rejoinAdapter() { if (!saved.on || !saved.adapter?.name || isCable(saved.adapter) || !rejoinsHere()) return false"), 'the build is asked to connect an adapter with Bluetooth off, with none kept, or on a cable')
     /* The pod needs 16.4, past the 13.1 the property arrived in. */
     const pod = src('mobile/modules/fractal-ble-midi/ios/FractalBleMidi.podspec')
     assert.match(pod, /s\.platforms\s*=\s*\{ :ios => '16\.4' \}/)

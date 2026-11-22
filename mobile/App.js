@@ -18,6 +18,7 @@ import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
 import { useNoComputer } from './src/lib/useNoComputer'
 import { isPairAccount } from './src/lib/pairing'
 import Note from './src/components/Note'
+import AdapterStillAway from './src/components/AdapterStillAway'
 import Press from './src/components/Press'
 import NoComputerWords from './src/components/NoComputer'
 import SendLinkButton from './src/components/SendLinkButton'
@@ -64,11 +65,12 @@ import { keepSetlistsInStep } from './src/lib/cloudSetlists'
 import { keepVp4SetupIn, vp4Here } from './src/lib/device'
 import { clearLinkFault, useRig, writeTuner } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
-import { installCrashCapture } from './src/lib/debugLog'
+import { installCrashCapture, logDebug } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo, useDemoUnit } from './src/lib/demo'
 import {
   ALLOW_WORDS,
   RESTRICTED_WORDS,
+  adapterAway,
   adapterInsteadOfCable,
   allowBluetooth,
   appleScreenOpens,
@@ -80,6 +82,7 @@ import {
   setBluetooth,
   turnOnBluetooth,
   useAdapterGone,
+  useBluetoothUnit,
   useBluetoothNoClick,
   useBluetoothOn,
   useBluetoothTrouble,
@@ -2647,6 +2650,25 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
   const cable = bluetooth && cableKept
   /* An iPhone whose Bluetooth adapter has gone, once a try has missed it (lib/bluetooth useAdapterGone): Look again is offered at once, below. */
   const gone = useAdapterGone()
+  /*
+   * A LOOK THAT DID NOT BRING THE ADAPTER BACK (report 934e02be, 22 November
+   * 2026: three trips to Apple's screen, each closed with nothing connected,
+   * under a screen that offered only the same button). Counted here, and what
+   * to try is said under the button (components/AdapterStillAway). Gone as
+   * soon as the adapter is there.
+   */
+  const [lookMisses, setLookMisses] = useState(0)
+  /* The unit alone, never the whole Bluetooth snapshot: that is a new object at every scan result, and the app would redraw for each. */
+  const keptUnit = useBluetoothUnit()
+  const findAgain = async () => {
+    const opened = opensApplesScreen()
+    await lookForAdapterAgain(onRetry)
+    if (!opened) return
+    if (adapterAway()) {
+      setLookMisses((n) => n + 1)
+      logDebug('ble', 'looked for the adapter again, and it is still not connected', 'the steps to try are on the screen')
+    } else setLookMisses(0)
+  }
   const said =
     link.link === 'connected'
       ? 'Asking your unit what it is\u2026'
@@ -2793,9 +2815,10 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           sub={appleScreenOpens()}
           tone="live"
           style={{ alignSelf: 'stretch' }}
-          onPress={() => lookForAdapterAgain(onRetry)}
+          onPress={findAgain}
         />
       ) : null}
+      {gone && link.link !== 'connected' && lookMisses > 0 ? <AdapterStillAway adapter={link.macName} unit={keptUnit} misses={lookMisses} /> : null}
       {bluetooth ? (
         <View style={{ alignSelf: 'stretch' }}>
           <Press label="Use the computer instead" onPress={() => setBluetooth(false)} />
@@ -2872,7 +2895,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               <Press
                 label={cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again'}
                 sub={opensApplesScreen() ? appleScreenOpens() : undefined}
-                onPress={() => lookForAdapterAgain(onRetry)}
+                onPress={findAgain}
               />
             )
           ) : (

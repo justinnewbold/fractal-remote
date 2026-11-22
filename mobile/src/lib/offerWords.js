@@ -1,3 +1,5 @@
+import { adapterKind, restartWords } from './bluetooth-gear.js'
+
 /*
  * ANOTHER UNIT'S ADAPTER, THE ONLY ONE CONNECTED: the words that make the
  * offer the first thing on the page. Pure: a test runs it.
@@ -49,3 +51,39 @@ export const SEEN_NOT_HERE =
   'If the adapter says Connected in that screen, close the app completely (swipe it away) and open it again, then tap Connect. The app sometimes can’t see an adapter that was connected while it was open.'
 /** How many times in a row Apple's screen has to close with nothing connected before that is said. */
 export const SEEN_NOT_HERE_AFTER = 2
+
+/*
+ * LOOK FOR THE ADAPTER AGAIN, AND IT IS STILL NOT THERE (22 November 2026,
+ * report 934e02be: "After update it can't connect.", an FM9 through a
+ * Yamaha MD-BT01 on an iPhone). The adapter had answered for half an hour;
+ * the app went to the background for twenty minutes, and from then on three
+ * trips to Apple's screen each closed with no adapter connected to the
+ * iPhone at all. The waiting screen said only "Finding MD-BT01 Bluetooth…"
+ * and offered the same button again: the steps that have brought an adapter
+ * back (restart it by what powers it, close the app, forget the pairing)
+ * were on the Bluetooth page's card, which is only drawn for an adapter that
+ * IS connected and silent.
+ *
+ * So after a look that ends with the adapter still away, the waiting screen
+ * says what to try, in the order that costs least. WHY the adapter would not
+ * come back is not known from the log (not listed in Apple's screen, listed
+ * and not connecting, or connected and not seen by the app all end the same
+ * way), so the steps cover the three.
+ */
+
+/** Over the steps. */
+export const stillAwayHead = (adapter, noun = 'phone') => `${adapter || 'The adapter'} still isn’t connected to this ${noun}. Try these in order, then look again:`
+
+/**
+ * The steps, as { key, text }. `misses` is how many looks in a row have
+ * ended with the adapter away: closing the app comes first from the second,
+ * since by then Apple's screen has been through twice.
+ */
+export function stillAwaySteps({ adapter = null, unit = null, misses = 1 } = {}) {
+  const kind = adapterKind(adapter)
+  const restart = { key: 'restart', text: `${restartWords(unit, kind, adapter ? `the ${String(adapter).replace(/\s+Bluetooth$/i, '')}` : 'the adapter').long} Check the unit is switched on.` }
+  const close = { key: 'close', text: 'If it said Connected in Apple’s screen, close the app completely and open it again.' }
+  const forget = { key: 'forget', text: 'Still nothing: open Settings, then Bluetooth, tap the ⓘ beside the adapter and Forget This Device. Then look again and tap it in Apple’s screen.' }
+  const taken = { key: 'taken', text: 'An adapter connects to one device at a time: if a tablet, a computer or another phone nearby has used it, turn Bluetooth off there.' }
+  return misses >= 2 ? [close, restart, forget, taken] : [restart, close, forget, taken]
+}

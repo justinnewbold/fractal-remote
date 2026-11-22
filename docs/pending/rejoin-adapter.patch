@@ -1,0 +1,273 @@
+diff --git a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
+index 8c933a1..18105e6 100644
+--- a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
++++ b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
+@@ -78,6 +78,8 @@ public class FractalBleMidiModule: Module {
+   private var pairPromise: Promise?
+   private var pairSheetGone: SheetGone?
+   private var lastLogged = ""
++  /* The adapter kept connected without Apple's screen (Rejoiner, below). */
++  private var rejoiner: Rejoiner?
+ 
+   /* CoreMIDI reports one change several times over; wait this long for it to finish. */
+   private static let SETTLE_SECONDS: Double = 0.3
+@@ -88,7 +90,7 @@ public class FractalBleMidiModule: Module {
+   public func definition() -> ModuleDefinition {
+     Name("FractalBleMidi")
+ 
+-    Events("onBytes", "onDevices", "onState")
++    Events("onBytes", "onDevices", "onState", "onRejoin")
+ 
+     OnDestroy {
+       self.teardown()
+@@ -167,6 +169,32 @@ public class FractalBleMidiModule: Module {
+     Function("send") { (bytes: [Int]) -> Bool in
+       self.send(bytes)
+     }
++
++    /* Whether this build connects a known adapter by itself (Rejoiner).
++       Builds before this one have no such function, and the JavaScript
++       asks only if it is there. */
++    Function("rejoins") { () -> Bool in
++      #if targetEnvironment(simulator)
++      return false
++      #else
++      return true
++      #endif
++    }
++
++    /* Keep the adapter of this name connected to the iPhone, from now until
++       stopRejoin: found and connected with no screen, and connected again
++       whenever it comes back. Asked only once Bluetooth is on in the app
++       for an adapter the player chose, since it is what makes iOS ask for
++       Bluetooth where it has not yet. */
++    AsyncFunction("rejoin") { (name: String) -> Bool in
++      self.rejoin(name)
++    }.runOnQueue(.main)
++
++    AsyncFunction("stopRejoin") { () -> Bool in
++      self.rejoiner?.stop()
++      self.rejoiner = nil
++      return true
++    }.runOnQueue(.main)
+   }
+ 
+   // MARK: - The client, made on first use
+@@ -204,9 +232,40 @@ public class FractalBleMidiModule: Module {
+     return true
+   }
+ 
++  /* Main queue. One adapter at a time: asked for another, the last one is
++     let go of. Asked for the one already kept, nothing changes. */
++  private func rejoin(_ name: String) -> Bool {
++    let wanted = Rejoiner.plain(name)
++    if wanted.isEmpty { return false }
++    if let now = rejoiner, now.wanted == wanted {
++      now.look()
++      return true
++    }
++    rejoiner?.stop()
++    let next = Rejoiner(
++      wanted: wanted,
++      said: { [weak self] what in
++        NSLog("FractalBleMidi rejoin: %@", what)
++        self?.sendEvent("onRejoin", ["said": what])
++      },
++      changed: { [weak self] in
++        /* CoreMIDI says so itself when the port turns up; this is for the
++           case where it was there already and only came back online. */
++        self?.refreshSoon()
++      }
++    )
++    rejoiner = next
++    next.start()
++    return true
++  }
++
+   /* The app is reloading or closing: let go of the adapter and the ports.
+      The client is kept, as above. */
+   private func teardown() {
++    DispatchQueue.main.async { [rejoiner] in
++      rejoiner?.stop()
++    }
++    rejoiner = nil
+     disconnect()
+     lock.lock()
+     let ports = [inPort, outPort]
+@@ -782,3 +841,176 @@ final class SheetGone: NSObject, UIAdaptivePresentationControllerDelegate {
+     gone()
+   }
+ }
++
++// MARK: - A known adapter, connected with no screen
++
++/*
++ * THE ADAPTER, CONNECTED BY THE APP ITSELF AND KEPT CONNECTED.
++ *
++ * "We need to do better than just telling people to restart their phone and
++ * look for connectors and things like that. They should connect
++ * automatically every time." (Justin, 22 November 2026, after a customer's
++ * MD-BT01 dropped off an iPhone while the app was in the background and
++ * three trips to Apple's Bluetooth screen did not bring it back.)
++ *
++ * Until now the only way an adapter reached this iPhone was Apple's own
++ * screen (pair): tap the adapter, wait for Connected, close the screen, and
++ * again every time iOS let the link go, which it does a few minutes after
++ * nobody is using it. This connects the adapter with CoreBluetooth instead.
++ * A Bluetooth MIDI adapter is an ordinary Bluetooth LE device that offers
++ * the MIDI service; once an app has connected one, iOS's own Bluetooth MIDI
++ * driver gives it its CoreMIDI port, the same port Apple's screen makes, and
++ * everything else in this file carries on as before.
++ *
++ * WHAT IT DOES. Asked for an adapter by name, it looks three ways at once:
++ * the one it connected last time under that name (kept by its identifier),
++ * any the iPhone already has connected, and a scan for the MIDI service.
++ * The first whose name matches is connected. A connect asked of iOS has no
++ * time limit: it waits, for as long as the app is in front, until the
++ * adapter is in range and switched on, and then connects. When the link
++ * drops, the same is asked again at once. So an adapter that was switched
++ * off and on, went out of range and came back, or was dropped by iOS while
++ * the phone was in a pocket is connected again with nothing tapped.
++ *
++ * WHAT IT DOES NOT DO. It never disconnects an adapter that is connected
++ * (stop only gives up a connect still waiting): the link is the system's,
++ * and another app may be using it. It connects nothing while the app is in
++ * the background (that needs a background mode this app does not ask for);
++ * the waiting connect is taken up the moment the app is in front again.
++ * And it reads and writes nothing itself: MIDI still goes through CoreMIDI.
++ *
++ * THE NAME. CoreMIDI calls the port "MD-BT01 Bluetooth"; the device calls
++ * itself "MD-BT01". Both are put in small letters with a closing
++ * " bluetooth" taken off (plain) before they are compared.
++ *
++ * NOT SEEN ON A PHONE when this was written: that an adapter connected this
++ * way gets its CoreMIDI port by itself is how every account of it reads,
++ * and has not been watched on a device here. Apple's screen is still there
++ * (pair), and is what the page falls back to.
++ *
++ * Main queue only, all of it.
++ */
++final class Rejoiner: NSObject, CBCentralManagerDelegate {
++  /* The Bluetooth LE MIDI service, from the MIDI Association's specification. */
++  static let MIDI_SERVICE = CBUUID(string: "03B80E5A-EDE8-4B33-A751-6CE34EC4C700")
++  /* UserDefaults: the identifier of the adapter last connected under each name. */
++  private static let KEPT = "fractal.blemidi.rejoin"
++
++  let wanted: String
++  private let said: (String) -> Void
++  private let changed: () -> Void
++  private var central: CBCentralManager?
++  private var held: CBPeripheral?
++  private var stopped = false
++
++  static func plain(_ name: String?) -> String {
++    var n = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
++    if n.hasSuffix(" bluetooth") { n = String(n.dropLast(" bluetooth".count)) }
++    return n.trimmingCharacters(in: .whitespacesAndNewlines)
++  }
++
++  init(wanted: String, said: @escaping (String) -> Void, changed: @escaping () -> Void) {
++    self.wanted = wanted
++    self.said = said
++    self.changed = changed
++    super.init()
++  }
++
++  func start() {
++    stopped = false
++    /* Making the manager is what brings up iOS's question the first time. */
++    central = CBCentralManager(delegate: self, queue: .main)
++  }
++
++  func stop() {
++    stopped = true
++    central?.stopScan()
++    /* Only a connect still waiting is given up: a connected adapter is left connected. */
++    if let p = held, p.state == .connecting {
++      central?.cancelPeripheralConnection(p)
++    }
++    held = nil
++    central?.delegate = nil
++    central = nil
++  }
++
++  /* Asked again for the adapter already wanted: look again, in case it is in range now. */
++  func look() {
++    guard !stopped, let central = central, central.state == .poweredOn else { return }
++    if let p = held, p.state == .connected { return }
++    if let text = (UserDefaults.standard.dictionary(forKey: Self.KEPT) as? [String: String])?[wanted],
++       let id = UUID(uuidString: text),
++       let p = central.retrievePeripherals(withIdentifiers: [id]).first {
++      join(p, why: "the one connected before")
++    }
++    for p in central.retrieveConnectedPeripherals(withServices: [Self.MIDI_SERVICE]) where Self.plain(p.name) == wanted {
++      join(p, why: "already connected to this device")
++    }
++    if !central.isScanning {
++      central.scanForPeripherals(withServices: [Self.MIDI_SERVICE], options: nil)
++    }
++  }
++
++  private func join(_ p: CBPeripheral, why: String) {
++    guard !stopped, let central = central else { return }
++    if let now = held, now.identifier != p.identifier, now.state == .connecting {
++      central.cancelPeripheralConnection(now)
++    }
++    held = p
++    var kept = (UserDefaults.standard.dictionary(forKey: Self.KEPT) as? [String: String]) ?? [:]
++    kept[wanted] = p.identifier.uuidString
++    UserDefaults.standard.set(kept, forKey: Self.KEPT)
++    if p.state == .connected {
++      said("\(wanted) is connected (\(why))")
++      changed()
++      return
++    }
++    if p.state != .connecting {
++      said("asking iOS to connect \(wanted) (\(why)); it waits until the adapter is in range")
++      central.connect(p, options: nil)
++    }
++  }
++
++  func centralManagerDidUpdateState(_ central: CBCentralManager) {
++    switch central.state {
++    case .poweredOn:
++      look()
++    case .poweredOff:
++      said("Bluetooth is off on this device")
++    case .unauthorized:
++      said("Bluetooth is not allowed for this app")
++    default:
++      break
++    }
++  }
++
++  func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
++    let advertised = advertisementData[CBAdvertisementDataLocalNameKey] as? String
++    guard Self.plain(peripheral.name) == wanted || Self.plain(advertised) == wanted else { return }
++    central.stopScan()
++    join(peripheral, why: "found nearby")
++  }
++
++  func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
++    guard peripheral.identifier == held?.identifier else { return }
++    central.stopScan()
++    said("\(wanted) connected with no screen")
++    changed()
++  }
++
++  func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
++    guard !stopped, peripheral.identifier == held?.identifier else { return }
++    said("\(wanted) would not connect: \(error?.localizedDescription ?? "no reason given"); trying again")
++    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
++      guard let self = self, !self.stopped, self.held?.identifier == peripheral.identifier else { return }
++      self.central?.connect(peripheral, options: nil)
++    }
++  }
++
++  func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
++    guard !stopped, peripheral.identifier == held?.identifier else { return }
++    said("\(wanted) dropped: \(error?.localizedDescription ?? "no reason given"); asked to connect again when it is back")
++    changed()
++    central.connect(peripheral, options: nil)
++  }
++}

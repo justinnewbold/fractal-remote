@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-22",
+    "day": "22 November 2026",
+    "version": "2.3.4",
+    "lines": [
+      {
+        "text": "On an iPhone or iPad over Bluetooth: when Look for the adapter again doesn’t bring your adapter back, the screen now says what to try, in order, instead of only offering the same button.",
+        "only": "ios"
+      }
+    ]
+  },
+  {
     "date": "2026-11-21",
     "day": "21 November 2026",
     "version": "2.3.3",

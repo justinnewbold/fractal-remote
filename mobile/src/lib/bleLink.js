@@ -17,6 +17,7 @@ import {
   onAdapter,
   openWire,
   refreshKeptAdapter,
+  rejoinAdapter,
   releaseAdapter,
   subscribeBluetooth,
   unitAnswered,
@@ -368,6 +369,8 @@ async function tryConnect() {
      * USB cable on either phone: one not plugged in is not asked.
      */
     const here = (Platform.OS !== 'ios' && !isCable(s.adapter)) || adapterDevices().some((d) => d.id === s.adapter.id && !d.offline)
+    /* Not there on an iPhone: a build that connects the adapter itself is asked to (lib/bluetooth rejoinAdapter); the port turns up in the list when it has. */
+    if (!here) rejoinAdapter()
     if (here) {
       touched = true
       const asked = Date.now()
