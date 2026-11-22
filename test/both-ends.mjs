@@ -1138,6 +1138,9 @@ export function run(test) {
       /* STARTERS_TITLE: "Starter chains" (shared/starter-chains.mjs). */
       STARTERS_TITLE:
         'phone only, for now: the chains Quick build offers on an empty preset, built on 15 November 2026 for his account and open to every account since 2.0.0 (QUICK_BUILD_FOR_EVERYONE, mobile/src/lib/features.js; the row follows useQuickBuild). The browser comes in a later change: importing the shared file there would make a computer release',
+      /* BACKUPS_TITLE: "Backups" (mobile/src/lib/backups.js). */
+      BACKUPS_TITLE:
+        'phone only as a Settings row: the computer’s snapshots of a preset listed, played, put back and taken, each asked of the computer app, built on 22 November 2026 for his account (BACKUPS_FOR_EVERYONE, mobile/src/lib/features.js; the row follows useBackups). The browser has had the same snapshots for months in another place, under Presets (src/components/Versions.jsx), so it has no Settings row to match',
       /* NAM_HELP_TITLE: "NAM & TONE3000" (mobile/src/lib/namHelp.js). */
       NAM_HELP_TITLE:
         'phone only: how to put a NAM block in a preset and open TONE3000 from it, from 2.1.6, 19 November 2026. TONE3000 and the capture tools are the phone app’s alone, so a browser has nothing for the page to point at',

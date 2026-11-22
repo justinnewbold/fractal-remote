@@ -926,3 +926,14 @@ export const AM4_NAM_EDIT_FOR_EVERYONE = true
  */
 /* OPEN TO EVERY ACCOUNT SINCE 2.1.5 (18 November 2026): "open them up to everyone" (Justin). Needs computer app 2.1.4 or later; not yet run on a unit through a computer when it opened. */
 export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = true
+
+/**
+ * BACKUPS ON THE PHONE (lib/backups, components/Backups), 22 November 2026:
+ * "Yes, build the backups screen through the computer". Settings → My rig
+ * → Backups: the computer's snapshots of a preset listed, one played or put
+ * back, and a copy of the preset taken now, each asked of the computer app
+ * (which carries it out) through its store. His account only until he says:
+ * a Put back writes over a slot, and none of it has run on a unit from the
+ * phone. Backing up from the phone needs a computer app that knows the ask.
+ */
+export const BACKUPS_FOR_EVERYONE = false
