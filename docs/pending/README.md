@@ -1450,3 +1450,13 @@ Still true from the work it carried:
   The fix needs their block numbers, which are not in this repository and
   nobody here has either unit to check them against; a wrong guess could put
   an output block on the pedal board.
+
+**And the app's view of MIDI made afresh (added the same day).** Justin's own
+log: a copy open since the day before listed no adapter through six trips to
+Apple's screen, and the copy opened after a force close listed it at once.
+The patch adds `renews` and `renew(hard)` to the module: a new MIDI client and
+ports, and with `hard` a `MIDIRestart()` too. The phone's half (lib/bluetooth
+`renewMidi`, merged and inert) asks for it when Apple's screen closes with
+nothing connected that the app can see. Whether either brings a port back in
+a process whose view has gone stale is not known; the log line "MIDI made
+afresh" says what each did.

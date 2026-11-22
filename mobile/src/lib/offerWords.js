@@ -48,9 +48,9 @@ export const ownAwayNote = (own, unit, noun = 'phone') =>
  * list goes stale is not, and mending it is native work.
  */
 export const SEEN_NOT_HERE =
-  'If the adapter says Connected in that screen, close the app completely (swipe it away) and open it again, then tap Connect. The app sometimes can’t see an adapter that was connected while it was open.'
+  'First, close the app completely (swipe it away) and open it again, then tap Connect. That usually brings the adapter back.'
 /** How many times in a row Apple's screen has to close with nothing connected before that is said. */
-export const SEEN_NOT_HERE_AFTER = 2
+export const SEEN_NOT_HERE_AFTER = 1
 
 /*
  * LOOK FOR THE ADAPTER AGAIN, AND IT IS STILL NOT THERE (22 November 2026,
@@ -82,8 +82,9 @@ export const stillAwayHead = (adapter, noun = 'phone') => `${adapter || 'The ada
 export function stillAwaySteps({ adapter = null, unit = null, misses = 1 } = {}) {
   const kind = adapterKind(adapter)
   const restart = { key: 'restart', text: `${restartWords(unit, kind, adapter ? `the ${String(adapter).replace(/\s+Bluetooth$/i, '')}` : 'the adapter').long} Check the unit is switched on.` }
-  const close = { key: 'close', text: 'If it said Connected in Apple’s screen, close the app completely and open it again.' }
+  const close = { key: 'close', text: 'Close the app completely and open it again. That usually brings the adapter back.' }
   const forget = { key: 'forget', text: 'Still nothing: open Settings, then Bluetooth, tap the ⓘ beside the adapter and Forget This Device. Then look again and tap it in Apple’s screen.' }
   const taken = { key: 'taken', text: 'An adapter connects to one device at a time: if a tablet, a computer or another phone nearby has used it, turn Bluetooth off there.' }
-  return misses >= 2 ? [close, restart, forget, taken] : [restart, close, forget, taken]
+  /* Closing the app is first, always: "the first thing to try should be force closing the app, that usually fixes it for me" (Justin, 22 November 2026). */
+  return [close, restart, forget, taken]
 }
