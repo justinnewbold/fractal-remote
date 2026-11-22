@@ -1371,6 +1371,7 @@ async function linkOnABench(t) {
       export const noteBluetooth = (patch) => { bench.notes.push(patch) }
       export const onAdapter = (name, fn) => { bench.listeners.set(name, fn); return () => bench.listeners.delete(name) }
       export const refreshKeptAdapter = () => { bench.refreshed++; return false }
+      export const rejoinAdapter = () => false
       /* The iPhone's adapter kept, back under a new id (lib/bluetooth adapterBackUnderNewId): bench.rekey() says whether it was, and chooses it. */
       export const adapterBackUnderNewId = () => bench.rekey()
       /* Whether lib/bluetooth chose the adapter as the same one back under a new id (adapterCameBack): bench.cameBack, every question kept in bench.cameAsked. */
@@ -10583,7 +10584,8 @@ export function run(test) {
 
     const swift = src('mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift')
     assert.match(swift, /Name\("FractalBleMidi"\)/)
-    assert.match(swift, /Events\("onBytes", "onDevices", "onState"\)/)
+    /* "onRejoin" with docs/pending/rejoin-adapter in (the build that connects the adapter itself); without it, the three. */
+    assert.match(swift, /Events\("onBytes", "onDevices", "onState"(, "onRejoin")?\)/)
     /*
      * Apple's Bluetooth MIDI screen (CoreAudioKit) is not in the simulator.
      * Every line that touches it has to be on the device side of a guard:
@@ -10930,7 +10932,16 @@ export function run(test) {
      * question, and every customer who never opens Bluetooth would get it.
      */
     const swiftCode = swift.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, '')
-    assert.ok(!/CBCentralManager|CBPeripheralManager/.test(swiftCode), 'the module makes a Bluetooth manager, which asks the question')
+    /*
+     * The one place a manager may be made is the Rejoiner (docs/pending/
+     * rejoin-adapter), which is started only by `rejoin`, asked by the
+     * JavaScript only with Bluetooth on in the app and an adapter kept
+     * (lib/bluetooth rejoinAdapter, held below). Nothing outside it makes one.
+     */
+    assert.ok(!/CBCentralManager|CBPeripheralManager/.test(swiftCode.split('final class Rejoiner')[0]), 'the module makes a Bluetooth manager, which asks the question')
+    assert.ok(!/CBPeripheralManager/.test(swiftCode), 'the module makes a peripheral manager')
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.ok(lib.includes("export function rejoinAdapter() { if (!saved.on || !saved.adapter?.name || isCable(saved.adapter) || !rejoinsHere()) return false"), 'the build is asked to connect an adapter with Bluetooth off, with none kept, or on a cable')
     /* The pod needs 16.4, past the 13.1 the property arrived in. */
     const pod = src('mobile/modules/fractal-ble-midi/ios/FractalBleMidi.podspec')
     assert.match(pod, /s\.platforms\s*=\s*\{ :ios => '16\.4' \}/)

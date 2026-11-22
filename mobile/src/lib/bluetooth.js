@@ -1010,6 +1010,7 @@ export function setBluetooth(on) {
   setSwitch({ on: want })
   now = { ...now, phase: want ? 'idle' : 'off' }
   logDebug('ble', want ? `Bluetooth turned on, for the ${unitName(saved.unit)}` : 'Bluetooth turned off')
+  if (!want) stopRejoin()
   keep()
   announce()
   return want
@@ -2409,6 +2410,55 @@ const doneGoneHere = () => {
 export const appleScreenOpens = () => (doneGoneHere() ? APPLE_SCREEN_OPENS_SWIPE : APPLE_SCREEN_OPENS_DONE)
 /** The hint under Connect on the Bluetooth page, on this device. */
 export const appleScreenHint = () => (doneGoneHere() ? APPLE_SCREEN_HINT_SWIPE : APPLE_SCREEN_HINT_DONE)
+
+/*
+ * THE ADAPTER, CONNECTED BY THE APP ITSELF (a build that can: the module's
+ * `rejoins`, docs/pending/rejoin-adapter until a build carries it).
+ *
+ * "They should connect automatically every time." (Justin, 22 November
+ * 2026.) On an iPhone the only way an adapter was connected was Apple's
+ * Bluetooth screen, by hand, again after every drop. A build with the
+ * module's Rejoiner connects the adapter kept for the unit with no screen
+ * and connects it again whenever it comes back; the port then turns up in
+ * CoreMIDI and the link takes it as it always has.
+ *
+ * Asked only while Bluetooth is on in the app with a Bluetooth adapter
+ * kept (never a cable, never for an account or a unit it is off for), and
+ * each time the link looks and the adapter is not there. Every copy out
+ * today has no such function and is asked nothing: there, nothing changes.
+ * What the build says of it goes in the log.
+ */
+let rejoinHeard = false
+export function rejoinsHere() {
+  if (Platform.OS !== 'ios') return false
+  try {
+    return ble()?.rejoins?.() === true
+  } catch {
+    return false
+  }
+}
+export function rejoinAdapter() {
+  if (!saved.on || !saved.adapter?.name || isCable(saved.adapter) || !rejoinsHere()) return false
+  try {
+    if (!rejoinHeard) {
+      rejoinHeard = true
+      ble().addListener('onRejoin', (e) => logDebug('ble', 'connecting the adapter with no screen', String(e?.said || '')))
+    }
+    ble().rejoin(String(saved.adapter.name))
+    return true
+  } catch {
+    return false
+  }
+}
+/** Bluetooth went off in the app: a connect still waiting is given up. A connected adapter is left as it is. */
+export function stopRejoin() {
+  if (!rejoinsHere()) return
+  try {
+    ble().stopRejoin?.()
+  } catch {
+    // Nothing to tell: it only gives up a wait.
+  }
+}
 
 /**
  * LOOK AGAIN, BY HAND: the Bluetooth page's Reconnect and the waiting
