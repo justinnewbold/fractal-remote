@@ -10,17 +10,17 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const flat = (s) => s.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
 
 export function run(test) {
-  test('adapter still away: the steps restart the adapter by what powers it, and closing the app comes first from the second miss', async () => {
+  test('adapter still away: the steps restart the adapter by what powers it, and closing the app comes first, always', async () => {
     const w = await import('../mobile/src/lib/offerWords.js')
     const first = w.stillAwaySteps({ adapter: 'MD-BT01 Bluetooth', unit: 'fm9', misses: 1 })
-    assert.deepEqual(first.map((s) => s.key), ['restart', 'close', 'forget', 'taken'])
-    assert.match(first[0].text, /Pull the MD-BT01’s two plugs out of the FM9, wait 10 seconds/)
-    assert.match(first[0].text, /Check the unit is switched on\./)
+    assert.deepEqual(first.map((s) => s.key), ['close', 'restart', 'forget', 'taken'])
+    assert.match(first[1].text, /Pull the MD-BT01’s two plugs out of the FM9, wait 10 seconds/)
+    assert.match(first[1].text, /Check the unit is switched on\./)
     const second = w.stillAwaySteps({ adapter: 'MD-BT01 Bluetooth', unit: 'fm9', misses: 2 })
     assert.deepEqual(second.map((s) => s.key), ['close', 'restart', 'forget', 'taken'])
     /* A Uhost is restarted by its USB power, never its plugs; an adapter the app has no kind for by the general words. */
-    assert.match(w.stillAwaySteps({ adapter: 'WIDI Uhost Bluetooth', unit: 'fm3' })[0].text, /Unplug the WIDI Uhost’s USB power/)
-    assert.match(w.stillAwaySteps({ adapter: 'Some Box', unit: 'am4' })[0].text, /Switch the adapter off for 10 seconds/)
+    assert.match(w.stillAwaySteps({ adapter: 'WIDI Uhost Bluetooth', unit: 'fm3' })[1].text, /Unplug the WIDI Uhost’s USB power/)
+    assert.match(w.stillAwaySteps({ adapter: 'Some Box', unit: 'am4' })[1].text, /Switch the adapter off for 10 seconds/)
     assert.match(w.stillAwayHead('MD-BT01 Bluetooth', 'iPad'), /^MD-BT01 Bluetooth still isn’t connected to this iPad\./)
     for (const s of [...first, ...second]) assert.doesNotMatch(s.text, /this phone|never|not tried/i)
   })

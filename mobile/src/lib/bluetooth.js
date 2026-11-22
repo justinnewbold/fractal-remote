@@ -1861,7 +1861,9 @@ export async function findAdapters({ cableFirst = true } = {}) {
       noteBluetooth({ said: err?.code === 'E_SIMULATOR' ? 'This needs a real iPhone or iPad.' : `Apple’s Bluetooth screen did not open: ${err?.message || err}` })
       return
     }
-    const list = adapterDevices()
+    let list = adapterDevices()
+    /* Nothing connected that the app can see: a build that can makes its view of MIDI afresh and looks once more (renewMidi). */
+    if (!list.some((d) => !d.offline)) list = (await renewMidi()) || list
     /* Just connected: connected now, and not connected before the screen. */
     fresh = new Set(list.filter((d) => !d.offline && !before.has(d.id)).map((d) => d.id))
     /*
@@ -2450,6 +2452,49 @@ export function rejoinAdapter() {
     return false
   }
 }
+/*
+ * THE APP'S VIEW OF MIDI, MADE AFRESH (a build whose module answers
+ * `renews`; docs/pending/rejoin-adapter until one carries it).
+ *
+ * "The first thing to try should be force closing the app, that usually
+ * fixes it for me ... Which leads me to believe it's the app not the
+ * Bluetooth." (Justin, 22 November 2026, with a log: six trips to Apple's
+ * screen ending "ports — none" in a copy open since the day before, and
+ * the adapter listed 2.5 s after Connect in the copy opened after a force
+ * close.) What a force close replaces is the process's own hold on
+ * CoreMIDI, so where Apple's screen closes with nothing connected that the
+ * app can see, the module is asked for a new client, and if that lists
+ * nothing, to have CoreMIDI restart and look again. What each did is in
+ * the log. NOT SEEN ON A PHONE: whether either brings the port back is
+ * what the first log from such a build says.
+ */
+const RENEW_WAITS = [400, 1500]
+export async function renewMidi() {
+  if (Platform.OS !== 'ios') return null
+  let mod = null
+  try {
+    mod = ble()
+    if (mod?.renews?.() !== true) return null
+  } catch {
+    return null
+  }
+  let list = null
+  for (let i = 0; i < RENEW_WAITS.length; i += 1) {
+    try {
+      const said = await mod.renew(i > 0)
+      await new Promise((done) => setTimeout(done, RENEW_WAITS[i]))
+      list = adapterDevices()
+      const here = list.filter((d) => !d.offline)
+      logDebug('ble', 'nothing was listed after Apple’s screen: MIDI made afresh', `${said}; then ${here.map((d) => d.name || '?').join(', ') || 'still none'}`)
+      if (here.length) break
+    } catch (err) {
+      logDebug('ble', 'MIDI could not be made afresh', String(err?.message || err))
+      break
+    }
+  }
+  return list
+}
+
 /** Bluetooth went off in the app: a connect still waiting is given up. A connected adapter is left as it is. */
 export function stopRejoin() {
   if (!rejoinsHere()) return

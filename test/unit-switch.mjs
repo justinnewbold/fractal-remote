@@ -57,9 +57,9 @@ export function run(test) {
    */
   test('an iPhone whose Apple’s screen closes twice with nothing the app can see is told to close the app and open it again', async () => {
     const w = await import('../mobile/src/lib/offerWords.js')
-    assert.equal(w.SEEN_NOT_HERE_AFTER, 2)
+    assert.equal(w.SEEN_NOT_HERE_AFTER, 1)
     assert.match(w.SEEN_NOT_HERE, /close the app completely \(swipe it away\) and open it again/)
-    assert.match(w.SEEN_NOT_HERE, /sometimes/, 'the page says it always happens, which nobody knows')
+    assert.match(w.SEEN_NOT_HERE, /usually/, 'the page promises it always works, which nobody knows')
     assert.doesNotMatch(w.SEEN_NOT_HERE, /this phone|iPhone/)
     const page = flat(read('mobile/src/screens/Bluetooth.js'))
     assert.match(page, /const none = ios && !pick && !adapterDevices\(\)\.some\(\(d\) => !d\.offline\) if \(none\) setMissed\(true\) setMisses\(\(n\) => \(none \? n \+ 1 : 0\)\)/, 'a miss is not counted, or a find that worked does not start the count again')

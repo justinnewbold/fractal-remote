@@ -1,5 +1,5 @@
 diff --git a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
-index 8c933a1..18105e6 100644
+index 8c933a1..14c06de 100644
 --- a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
 +++ b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
 @@ -78,6 +78,8 @@ public class FractalBleMidiModule: Module {
@@ -20,7 +20,7 @@ index 8c933a1..18105e6 100644
  
      OnDestroy {
        self.teardown()
-@@ -167,6 +169,32 @@ public class FractalBleMidiModule: Module {
+@@ -167,6 +169,51 @@ public class FractalBleMidiModule: Module {
      Function("send") { (bytes: [Int]) -> Bool in
        self.send(bytes)
      }
@@ -50,10 +50,29 @@ index 8c933a1..18105e6 100644
 +      self.rejoiner = nil
 +      return true
 +    }.runOnQueue(.main)
++
++    /* Whether this build can make its view of MIDI afresh (renew, below). */
++    Function("renews") { () -> Bool in
++      true
++    }
++
++    /* THE APP'S VIEW OF MIDI, MADE AFRESH, WITHOUT CLOSING THE APP. A copy
++       of the app that had been open (mostly in the background) since the day
++       before listed no adapter through six trips to Apple's screen, and
++       listed it at once, already connected, when it was closed and opened
++       again (Justin's iPhone, 19 and 22 November 2026). So what had gone
++       stale was this process's own hold on CoreMIDI. The first step is a
++       new client and ports; `hard` also asks CoreMIDI to restart its
++       drivers and look again (MIDIRestart). Which of the two brings a port
++       back is NOT KNOWN: the answer says what each did, for the log.
++       Asked only when Apple's screen has closed with nothing listed. */
++    AsyncFunction("renew") { (hard: Bool) -> String in
++      self.renew(hard)
++    }.runOnQueue(.main)
    }
  
    // MARK: - The client, made on first use
-@@ -204,9 +232,40 @@ public class FractalBleMidiModule: Module {
+@@ -204,18 +251,72 @@ public class FractalBleMidiModule: Module {
      return true
    }
  
@@ -91,10 +110,42 @@ index 8c933a1..18105e6 100644
 +      rejoiner?.stop()
 +    }
 +    rejoiner = nil
++    disconnect()
++    lock.lock()
++    let ports = [inPort, outPort]
++    inPort = 0
++    outPort = 0
++    lock.unlock()
++    for port in ports where port != 0 {
++      MIDIPortDispose(port)
++    }
++  }
++
++  /* Main queue. The old client is let go of and never disposed of (Apple
++     advises against disposing of an app's last client); its block holds
++     this module weakly and only asks for the list again. */
++  private func renew(_ hard: Bool) -> String {
      disconnect()
      lock.lock()
      let ports = [inPort, outPort]
-@@ -782,3 +841,176 @@ final class SheetGone: NSObject, UIAdaptivePresentationControllerDelegate {
+     inPort = 0
+     outPort = 0
++    client = 0
+     lock.unlock()
+     for port in ports where port != 0 {
+       MIDIPortDispose(port)
+     }
++    var said = "a new client"
++    if hard {
++      said += ", MIDIRestart \(MIDIRestart())"
++    }
++    let made = ensure()
++    refreshSoon()
++    return "\(said), \(made ? "made" : "NOT made"), \(MIDIGetNumberOfDestinations()) ports"
+   }
+ 
+   // MARK: - Pairing
+@@ -782,3 +883,176 @@ final class SheetGone: NSObject, UIAdaptivePresentationControllerDelegate {
      gone()
    }
  }
