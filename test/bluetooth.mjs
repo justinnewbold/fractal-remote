@@ -9856,8 +9856,31 @@ export function run(test) {
     assert.equal(ew.NOT_OVER_BLUETOOTH, 'No looper, volume button, unit metronome click or Footswitches page.')
     for (const v of [false, undefined, 1, 'yes', null]) assert.equal(ew.notOverBluetoothLine(v), ew.NOT_OVER_BLUETOOTH, 'anything but a yes takes the volume button out of what is missing')
     assert.equal(ew.notOverBluetoothLine(true), 'No looper, unit metronome click or Footswitches page.')
-    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /\{\[editingLine\(editOpen, saves, here\), \.\.\.DIFFERENT\]\.map\(\(line\) => \(line && !\(cabsHere && line === CAB_WITH_COMPUTER\) \? <Bullet key=\{line\}>\{line\}<\/Bullet> : null\)\)\} \{notOverBluetoothLine\(volume, gone\) \? <Bullet>\{notOverBluetoothLine\(volume, gone\)\}<\/Bullet> : null\}/, 'what is not there over Bluetooth is not the list’s last line')
+    assert.match(src('mobile/src/screens/Bluetooth.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /\{\[editingLine\(editOpen, saves, here\), \.\.\.DIFFERENT\]\.map\(\(line\) => \(said\(line\) \? <Bullet key=\{line\}>\{line\}<\/Bullet> : null\)\)\} \{notOverBluetoothLine\(lacks\.volume, lacks\) \? <Bullet>\{notOverBluetoothLine\(lacks\.volume, lacks\)\}<\/Bullet> : null\}/, 'what is not there over Bluetooth is not the list’s last line')
     assert.match(page.replace(/\s+/g, ' '), /const volume = volumeOverBluetooth\(b\.unit\)/)
+    /*
+     * AND ONLY WHAT A COMPUTER WOULD BRING ON THE UNIT PICKED (22 November
+     * 2026: "it should be able to do everything that the Raspberry Pi can",
+     * with a picture of an AM4's page saying modifiers need the computer and
+     * that there is no looper, volume button, unit metronome click or
+     * Footswitches page, none of which a computer has on an AM4 either).
+     * lib/bluetooth computerHas says what a computer has by unit; the page
+     * takes whatever it has not got as not missing, leaves the cab line and
+     * the modifiers line out where a computer would not bring them, and says
+     * an AM4's own line on an AM4 alone.
+     */
+    const oneLine = page.replace(/\s+/g, ' ')
+    assert.match(src('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' '), /export const computerHas = \(unit = saved\.unit\) => \{ const gen3 = TOOL_UNITS\.includes\(unit\) return \{ volume: gen3, looper: gen3, click: gen3, mods: gen3, cabs: gen3, footswitches: unit === 'fm3', tapAlong: gen3, looperAtEnd: gen3 \} \}/)
+    assert.match(oneLine, /const cabsHere = \(editOpen && cabPickerOverBluetooth\(b\.unit\)\) \|\| !computerHas\(b\.unit\)\.cabs/)
+    assert.match(oneLine, /const theirs = computerHas\(b\.unit\) const lacks = \{ volume: volume \|\| !theirs\.volume, looper: gone\.looper \|\| !theirs\.looper, click: gone\.click \|\| !theirs\.click, footswitches: gone\.footswitches \|\| !theirs\.footswitches \}/)
+    assert.match(oneLine, /const said = \(line\) => !!line && !\(cabsHere && line === CAB_WITH_COMPUTER\) && !\(line === EDITING_LINE_BOTH && !theirs\.mods\) && !\(line === AM4_SCENE_NAMES && b\.unit !== 'am4'\)/)
+    assert.ok(oneLine.includes("const AM4_SCENE_NAMES = 'On the AM4, scene names take a moment the first time a preset is seen.'"))
+    /* The two a computer still has alone on an FM3, FM9 or Axe-Fx III, said there and nowhere else. */
+    assert.ok(oneLine.includes("const COMPUTER_ALONE = 'The metronome’s Tap along, and adding a looper at the end of the chain in one tap, need the computer.'"))
+    assert.match(oneLine, /\{theirs\.tapAlong && theirs\.looperAtEnd \? <Bullet>\{COMPUTER_ALONE\}<\/Bullet> : null\}/)
+    /* An AM4, as the page works it out: every one of the four is "not missing", so the last line is not drawn at all; an FM9 with the looper, the click and the volume button here lacks nothing either, since the Footswitches page is an FM3's on every connection. */
+    assert.equal(ew.notOverBluetoothLine(true, { volume: true, looper: true, click: true, footswitches: true }), null)
+    assert.equal(ew.EDITING_LINE_BOTH, 'Modifiers need the computer.')
     /* After the two steps now: "a lot of different buttons to press" put setting it up first. */
     assert.ok(page.indexOf('2 · Connect') < page.indexOf('What’s different from USB'), 'the list is above the steps again')
     /*
@@ -13411,7 +13434,7 @@ export function run(test) {
     /* And as the button it was: a Preview that stopped still plays when it lands, a Get still does not. Kept by capture, apart from the send in hand, which a Play under another capture takes over. */
     assert.match(bare, /\{halted \? <Press label=\{`Send it again to slot \$\{namSlotSaid\(halted\.again\)\}`\} sub="Over what the stopped send left there" disabled=\{!!busy\} onPress=\{\(\) => sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)\} \/> : null\}/)
     /* The lines under a capture are lib/captureLine's (run whole, below): the page draws what it answers, in order, and nothing else of its own. */
-    assert.match(bare, /\{captureLine\(\{ working, fetching: busy === m\.id, mine, send, at, slotSaid: at \? namSlotSaid\(at\.slot\) : '', name: named, halted \}\)\.map\(\(x, i\) => x\.card \? <SentCard key=\{i\} tone=\{x\.card\} head=\{u\(x\.head\)\} line=\{u\(x\.line\)\} more=\{u\(x\.more\)\} \/> : <Note key=\{i\}>\{u\(x\.note\)\}<\/Note> \)\}/)
+    assert.match(bare, /\{captureLine\(\{ working, fetching: busy === m\.id, mine, send, at, slotSaid: at \? namSlotSaid\(at\.slot\) : '', name: named, halted \}\)\.map\(\(x, i\) => x\.card \? <SentCard key=\{i\} tone=\{x\.card\} head=\{u\(x\.head\)\} line=\{u\(x\.line\)\} more=\{u\(x\.more\)\} sent=\{x\.sent\} of=\{x\.of\} left=\{x\.left\} \/> : <Note key=\{i\}>\{u\(x\.note\)\}<\/Note> \)\}/)
     assert.equal((bare.match(/<SentCard /g) || []).length, 1, 'a card is drawn from somewhere other than the rule')
     /* And a pick that names the slot <EMPTY> takes the send back from "done" and the capture back from "on the unit": its two buttons return, and the two Play buttons, which could only point at the same empty slot, go. */
     assert.match(bare, /so the capture did not stay there\. Send it once more\.` \}\) unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
@@ -13461,6 +13484,35 @@ export function run(test) {
     assert.deepEqual(captureLine({ ...base }), [])
     /* Tapped, and the file is coming: said at once, before anything else is known. */
     assert.deepEqual(captureLine({ ...base, working: true, fetching: true }), [{ card: 'busy', head: 'Getting it from TONE3000…', line: '', more: '' }])
+    /*
+     * BEING SENT, WITH HOW FAR IT HAS GOT ("it does send it 10 things at a
+     * time or something, but it needs to be more prominent on the screen",
+     * 22 November 2026): where the page was told a count, the busy card
+     * carries it, for a bar, the count in large figures and how long is left
+     * (components/SentCard). Never while the file is still being fetched,
+     * never from a send with no count, and a count past the end is the end.
+     */
+    const { secondsLeft, percentSent, sentWords, leftWords } = await import('../mobile/src/lib/captureLine.js')
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, send: { line: 'Sending “MES DRECF” to slot 035: 50 of 130', sent: 50, of: 130, left: 20 } }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'Sending “MES DRECF” to slot 035: 50 of 130', more: '', sent: 50, of: 130, left: 20 }])
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, send: { line: 'x', sent: 2, of: 130, left: null } }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'x', more: '', sent: 2, of: 130, left: null }])
+    assert.deepEqual(captureLine({ ...base, working: true, mine: true, send: { line: 'x', sent: 140, of: 130, left: -3 } })[0], { card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'x', more: '', sent: 130, of: 130, left: null })
+    assert.deepEqual(captureLine({ ...base, working: true, fetching: true, mine: true, send: { line: '', sent: 50, of: 130 } }), [{ card: 'busy', head: 'Getting it from TONE3000…', line: '', more: '' }])
+    assert.deepEqual(captureLine({ ...base, working: true, mine: false, send: { line: 'another’s', sent: 50, of: 130 } }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: '', more: '' }])
+    for (const send of [{ line: 'x', sent: 5 }, { line: 'x', sent: 5, of: 0 }, { line: 'x', sent: '5', of: 130 }, { line: 'x', of: 130 }]) assert.deepEqual(captureLine({ ...base, working: true, mine: true, send }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'x', more: '' }])
+    /* How long is left, by how fast it has gone: his AM4's send was 130 messages in 32 seconds, so 50 in 12.5 leaves 20. Nothing from one or two messages, nothing once it is done, and never nought. */
+    assert.equal(secondsLeft({ sent: 50, of: 130, ms: 12500 }), 20)
+    assert.equal(secondsLeft({ sent: 129, of: 130, ms: 32000 }), 1)
+    for (const far of [{ sent: 2, of: 130, ms: 500 }, { sent: 130, of: 130, ms: 32000 }, { sent: 50, of: 130, ms: 0 }, { sent: 50.5, of: 130, ms: 9 }, { sent: 50, of: 130, ms: NaN }, {}]) assert.equal(secondsLeft(far), null)
+    /* The bar: never full before the last message has gone. */
+    assert.deepEqual([percentSent(0, 130), percentSent(1, 130), percentSent(50, 130), percentSent(129, 130), percentSent(130, 130), percentSent(5, 0), percentSent('5', 130)], [0, 0, 38, 99, 100, 0, 0])
+    assert.equal(sentWords(50, 130), '50 of 130 parts sent')
+    assert.deepEqual([leftWords(20), leftWords(1), leftWords(null), leftWords(0)], ['About 20 seconds left', 'About 1 second left', 'Working out how long is left…', 'Working out how long is left…'])
+    /* The page tells the card every message where they come slowly, no more than one redraw in 120 ms, and always the last; the card draws the bar only while busy with a count. */
+    assert.match(bare, /if \(sent <= 1\) sendBegan = now if \(!alive\.current \|\| \(sent !== of && now - sendDrawn < 120\)\) return sendDrawn = now setSend\(\{ id: m\.id, slot, sent, of, left: secondsLeft\(\{ sent, of, ms: now - sendBegan \}\), line: `Sending “\$\{rec\.name\}” to slot \$\{said\}\$\{how\.second \? ' another way' : ''\}: \$\{sent\} of \$\{of\}` \}\)/)
+    const barCard = src('mobile/src/components/SentCard.js').replace(/\s+/g, ' ')
+    assert.match(barCard, /const going = tone === 'busy' && Number\.isInteger\(of\) && of > 0 && Number\.isInteger\(sent\)/)
+    assert.match(barCard, /<View style=\{\{ width: `\$\{percent\}%`, height: 14, borderRadius: radius\.pill, backgroundColor: look\.ink \}\} \/>/)
+    assert.ok(barCard.includes('{sentWords(sent, of)}') && barCard.includes('{leftWords(left)}') && barCard.includes('{`${percent}%`}'))
     /* Being sent: the head, and how far it has got under it. */
     assert.deepEqual(captureLine({ ...base, working: true, mine: true, send: { line: 'Sending “MES DRECF” to slot 035: 60 of 130' } }), [{ card: 'busy', head: 'Sending to your Axe-Fx III…', line: 'Sending “MES DRECF” to slot 035: 60 of 130', more: '' }])
     /* On the unit, by the unit's word: green, the slot and the name, and the send's own line is not said again under it. */
@@ -13613,8 +13665,9 @@ export function run(test) {
     /* The card's four looks: green and a tick only for 'ok'. */
     const sentCard = src('mobile/src/components/SentCard.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
     assert.match(sentCard, /const LOOKS = \{ ok: \(c\) => \(\{ ink: c\.ok, edge: c\.ok, wash: `\$\{c\.ok\}1f`, mark: '✓ ' \}\), busy: \(c\) => \(\{ ink: c\.live, edge: c\.live, wash: `\$\{c\.live\}1f`, mark: '' \}\), warn: \(c\) => \(\{ ink: c\.signal, edge: c\.signal, wash: `\$\{c\.signal\}1f`, mark: '' \}\), plain: \(c\) => \(\{ ink: c\.silk, edge: c\.rule, wash: 'transparent', mark: '' \}\) \}/)
-    assert.match(sentCard, /export default function SentCard\(\{ head, line = '', more = '', tone = 'ok' \}\) \{ const look = \(LOOKS\[tone\] \|\| LOOKS\.plain\)\(color\)/)
-    assert.match(sentCard, /<Text style=\{\{ color: look\.ink, fontSize: font\.body, fontWeight: '700' \}\}>\{`\$\{look\.mark\}\$\{head\}`\}<\/Text>/)
+    /* `sent`, `of` and `left` are a send's bar, count and time left (22 November 2026, above): the head is larger only while that bar is drawn. */
+    assert.match(sentCard, /export default function SentCard\(\{ head, line = '', more = '', tone = 'ok', sent = undefined, of = undefined, left = undefined \}\) \{ const look = \(LOOKS\[tone\] \|\| LOOKS\.plain\)\(color\)/)
+    assert.match(sentCard, /<Text style=\{\{ color: look\.ink, fontSize: going \? font\.lead : font\.body, fontWeight: '700' \}\}>\{`\$\{look\.mark\}\$\{head\}`\}<\/Text>/)
     assert.match(sentCard, /accessibilityLiveRegion="polite"/)
     /* A tap on Preview or Get is in the log like every other button, and a file that could not be fetched is said under the capture and logged. */
     assert.match(bare, /onPress=\{\(\) => \{ tick\(\) fire\(`press \$\{label\}`, onPress\) \}\}/)
@@ -22828,7 +22881,7 @@ export function run(test) {
     assert.equal(w.notOverBluetoothLine(1, { looper: 'yes', click: 1 }), w.NOT_OVER_BLUETOOTH)
     const page = src('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' ')
     assert.match(page, /const gone = \{ looper: looperOverBluetooth\(b\.unit\), click: unitClickOverBluetooth\(b\.unit\), footswitches: footswitchesOverBluetooth\(b\.unit\) \}/)
-    assert.match(page, /\{notOverBluetoothLine\(volume, gone\) \? <Bullet>\{notOverBluetoothLine\(volume, gone\)\}<\/Bullet> : null\}/)
+    assert.match(page, /\{notOverBluetoothLine\(lacks\.volume, lacks\) \? <Bullet>\{notOverBluetoothLine\(lacks\.volume, lacks\)\}<\/Bullet> : null\}/)
   })
 
   test('the metronome asks whether the unit’s click can be switched over Bluetooth, not whether this is Bluetooth, in every place it asked', async () => {

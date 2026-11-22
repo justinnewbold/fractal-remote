@@ -2883,6 +2883,30 @@ export const editToolsOverBluetooth = () => allUnits === true || EDIT_TOOLS_OVER
 const TOOL_UNITS = ['fm3', 'fm9', 'axefx3']
 
 /**
+ * WHAT A COMPUTER ITSELF BRINGS ON EACH UNIT, for the Bluetooth page's words
+ * alone (screens/Bluetooth BluetoothLimits): "check that what Bluetooth can
+ * do and can't do is updated, as it should be able to do everything that the
+ * Raspberry Pi can" (Justin, 22 November 2026, with a picture of the page on
+ * his AM4: "Modifiers need the computer" and "No looper, volume button, unit
+ * metronome click or Footswitches page"). Not one of those five is a
+ * computer's on an AM4 either: it has no Looper block and lists no Output
+ * block, the app switches its own click on no connection (shared/metronome),
+ * ForgeFX attaches no modifier there (am4.ts `modBind: false`), and the
+ * Footswitches page is an FM3's alone on every connection. So the page was
+ * naming, as what Bluetooth lacks, things no connection has. It names only
+ * what a computer would bring.
+ *
+ * `tapAlong` and `looperAtEnd` are the two the computer still has alone on
+ * an FM3, FM9 or Axe-Fx III: the metronome's Tap along (lib/lineUp
+ * tapAlongHere: closed over the wire) and the chain editor's one-tap looper
+ * at the end (hidden over the wire).
+ */
+export const computerHas = (unit = saved.unit) => {
+  const gen3 = TOOL_UNITS.includes(unit)
+  return { volume: gen3, looper: gen3, click: gen3, mods: gen3, cabs: gen3, footswitches: unit === 'fm3', tapAlong: gen3, looperAtEnd: gen3 }
+}
+
+/**
  * Whether this account has the Looper block's buttons over Bluetooth or a
  * USB cable (lib/bleTools): his, by the sign-in kept on the device, until
  * lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE. On an FM3, FM9 or Axe-Fx

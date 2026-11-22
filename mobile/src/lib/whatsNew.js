@@ -15,6 +15,14 @@ export const WHATS_NEW = [
     "version": "2.3.8",
     "lines": [
       {
+        "text": "Sending a TONE3000 capture to your unit now shows a large progress bar, how many parts have gone and about how long is left, so a send over Bluetooth never looks stuck.",
+        "only": null
+      },
+      {
+        "text": "Settings → Bluetooth → What Bluetooth can’t do now lists only what a computer would add on the unit you picked. An AM4’s page no longer lists a looper, a volume button, modifiers and other things an AM4 has on no connection.",
+        "only": null
+      },
+      {
         "text": "On an iPhone or iPad over Bluetooth: when Look for the adapter again doesn’t bring your adapter back, the screen now says what to try, in order, instead of only offering the same button.",
         "only": "ios"
       },
