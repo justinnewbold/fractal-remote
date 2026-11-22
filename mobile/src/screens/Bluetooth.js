@@ -36,6 +36,7 @@ import {
   unitClickOverBluetooth,
   modifiersOverBluetooth,
   cabPickerOverBluetooth,
+  computerHas,
   footswitchesOverBluetooth,
   findAdapters,
   forgetAdapter,
@@ -71,7 +72,7 @@ import {
   useWaitingForBluetooth
 } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
-import { editingLine, limitsLine, notOverBluetoothLine } from '../lib/editWords'
+import { EDITING_LINE_BOTH, editingLine, limitsLine, notOverBluetoothLine } from '../lib/editWords'
 import {
   AMAZON_DISCLOSURE,
   BLUETOOTH_WAYS,
@@ -314,12 +315,16 @@ const ios = Platform.OS === 'ios'
  */
 /* The list's line about cabs, left out where a cab is picked by name from here (BluetoothLimits `cabsHere`). */
 const CAB_WITH_COMPUTER = 'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.'
+/* An AM4's own line: said on an AM4's page alone (BluetoothLimits), where it once sat on every unit's. */
+const AM4_SCENE_NAMES = 'On the AM4, scene names take a moment the first time a preset is seen.'
+/* What a computer still has alone on an FM3, FM9 or Axe-Fx III (lib/bluetooth computerHas `tapAlong`, `looperAtEnd`). */
+const COMPUTER_ALONE = 'The metronome’s Tap along, and adding a looper at the end of the chain in one tap, need the computer.'
 const DIFFERENT = [
   'Slower to load the preset list.',
   'Footswitch changes may take a moment to show.',
   'About 30 feet of range.',
   'The adapter connects to one thing at a time.',
-  'On the AM4, scene names take a moment the first time a preset is seen.',
+  AM4_SCENE_NAMES,
   /* lib/gen3-edit: there is no cab state over Bluetooth, so a cab is not picked there. An AM4's is. */
   CAB_WITH_COMPUTER
   /* And last, what is not there at all: lib/editWords notOverBluetoothLine, by whether the volume button is (BluetoothLimits). */
@@ -1499,9 +1504,20 @@ export function BluetoothLimits() {
   /* And the chain editor and Edit's smaller tools (his account until lib/features CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE and EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE): the lines name only what is still the computer's. */
   const here = { editor: saves && chainEditorOverBluetooth(), tools: saves && editToolsOverBluetooth(), mods: editOpen && modifiersOverBluetooth(b.unit) }
   /* A cab picked by name (his account until lib/features CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE): the list's line about choosing a cab with the computer is left out where it is. */
-  const cabsHere = editOpen && cabPickerOverBluetooth(b.unit)
+  const cabsHere = (editOpen && cabPickerOverBluetooth(b.unit)) || !computerHas(b.unit).cabs
   /* And the looper and the unit's own click, where they are here (his account until lib/features LOOPER_OVER_BLUETOOTH_FOR_EVERYONE and UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE): the last line names only what is still missing. */
   const gone = { looper: looperOverBluetooth(b.unit), click: unitClickOverBluetooth(b.unit), footswitches: footswitchesOverBluetooth(b.unit) }
+  /*
+   * AND ONLY WHAT A COMPUTER WOULD BRING ON THIS UNIT (lib/bluetooth computerHas): on an AM4 the page said modifiers need the
+   * computer and that there is no looper, volume button, unit metronome click or Footswitches page, and a computer has none of
+   * them there either ("it should be able to do everything that the Raspberry Pi can", 22 November 2026). `lacks` is the
+   * list's last line's, with what no connection has on this unit taken as not missing, and `said` is whether a line of the
+   * list is drawn: not the line that only modifiers need the computer where a computer attaches none, not the line about
+   * choosing a cab where one is picked from here or the unit is not one of the three, and an AM4's own line on an AM4 alone.
+   */
+  const theirs = computerHas(b.unit)
+  const lacks = { volume: volume || !theirs.volume, looper: gone.looper || !theirs.looper, click: gone.click || !theirs.click, footswitches: gone.footswitches || !theirs.footswitches }
+  const said = (line) => !!line && !(cabsHere && line === CAB_WITH_COMPUTER) && !(line === EDITING_LINE_BOTH && !theirs.mods) && !(line === AM4_SCENE_NAMES && b.unit !== 'am4')
   return (
     <View style={{ gap: space.md }}>
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
@@ -1509,9 +1525,11 @@ export function BluetoothLimits() {
         {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves, here)}
       </Text>
       <Heading>What’s different from USB</Heading>
-      {[editingLine(editOpen, saves, here), ...DIFFERENT].map((line) => (line && !(cabsHere && line === CAB_WITH_COMPUTER) ? <Bullet key={line}>{line}</Bullet> : null))}
-      {/* And last, what is not there over Bluetooth at all (lib/editWords): the volume button left out of it where it is there. */}
-      {notOverBluetoothLine(volume, gone) ? <Bullet>{notOverBluetoothLine(volume, gone)}</Bullet> : null}
+      {[editingLine(editOpen, saves, here), ...DIFFERENT].map((line) => (said(line) ? <Bullet key={line}>{line}</Bullet> : null))}
+      {/* And last, what is not there over Bluetooth at all (lib/editWords): the volume button left out of it where it is there, and whatever a computer has not got on this unit either. */}
+      {notOverBluetoothLine(lacks.volume, lacks) ? <Bullet>{notOverBluetoothLine(lacks.volume, lacks)}</Bullet> : null}
+      {/* And the two a computer still has alone on an FM3, FM9 or Axe-Fx III. */}
+      {theirs.tapAlong && theirs.looperAtEnd ? <Bullet>{COMPUTER_ALONE}</Bullet> : null}
       {/* The unit's own: a block Play does not draw yet, when a unit has one (shared/bluetooth-gear missingBlocksLine: none since 1.90.47, so no line). */}
       {missingBlocksLine(b.unit) ? <Bullet>{missingBlocksLine(b.unit)}</Bullet> : null}
       <Hint>{BLUETOOTH_WAYS}</Hint>

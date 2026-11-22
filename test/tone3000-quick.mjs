@@ -71,7 +71,7 @@ export function run(test) {
     /* The page says each of its sentences through that one door, and plays in the unit's own blocks. */
     const card = flat(code(read('mobile/src/components/Tone3000Test.js')))
     assert.match(card, /const NAM_BLOCKS = namBlocksOf\(block\) \|\| namBlocksOf\(firstNamOf\(deviceName\)\) const playIn = NAM_BLOCKS\.includes\(block\) \? block : NAM_BLOCKS\[0\] const unit = unitOfNam\(playIn\) const u = \(text\) => forUnit\(text, unit\)/)
-    assert.match(card, /head=\{u\(x\.head\)\} line=\{u\(x\.line\)\} more=\{u\(x\.more\)\} \/> : <Note key=\{i\}>\{u\(x\.note\)\}<\/Note>/)
+    assert.match(card, /head=\{u\(x\.head\)\} line=\{u\(x\.line\)\} more=\{u\(x\.more\)\} sent=\{x\.sent\} of=\{x\.of\} left=\{x\.left\} \/> : <Note key=\{i\}>\{u\(x\.note\)\}<\/Note>/)
     assert.match(card, /\{said \? <Note>\{u\(said\)\}<\/Note> : null\} \{fault \? <Note tone="warn">\{u\(fault\)\}<\/Note> : null\}/)
     assert.ok(!/Axe-Fx III[^'`]*<\//.test(card.replace(/\{u\('[^']*'\)\}/g, '')), 'a sentence drawn on the page names the Axe-Fx III outright')
   })
