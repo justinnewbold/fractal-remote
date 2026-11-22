@@ -4,7 +4,7 @@
   "days": [
     {
       "date": "2026-11-22",
-      "version": "2.3.8",
+      "version": "2.3.9",
       "lines": [
         "Sending a TONE3000 capture to your unit now shows a large progress bar, how many parts have gone and about how long is left, so a send over Bluetooth never looks stuck.",
         "Settings → Bluetooth → What Bluetooth can’t do now lists only what a computer would add on the unit you picked. An AM4’s page no longer lists a looper, a volume button, modifiers and other things an AM4 has on no connection.",
