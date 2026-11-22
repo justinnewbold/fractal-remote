@@ -151,6 +151,9 @@ import { STAGE_VIEW_NAME, STAGE_VIEW_SUB } from '../lib/stageView'
 import { CONNECT_ROW, IN_USE, PI_TITLE, PI_TROUBLE_PAGE, STILL_STUCK, TROUBLE_ASK, connectRowStatus, troubleWays, wayInUse } from '../lib/setupWays'
 import { ConnectWays, PiSetup, PiTrouble } from '../components/SetupWays'
 import StarterChains from '../components/StarterChains'
+import Backups from '../components/Backups'
+import { BACKUPS_ROW_STATUS, BACKUPS_TITLE } from '../lib/backups'
+import { useBackups } from '../lib/useBackups'
 import { useQuickBuild } from '../lib/useQuickBuild'
 import { useStarterChains } from '../lib/starterChainsHere'
 import { STARTERS_TITLE, startersStatus } from '../lib/starter-chains'
@@ -351,6 +354,8 @@ export default function Settings({
   const [page, setPage] = useState(startPage)
   /* Starter chains (lib/quickBuild): every account's since features QUICK_BUILD_FOR_EVERYONE (2.0.0, 17 November 2026; his alone before), the row and the page alike. */
   const startersOpen = useQuickBuild()
+  /* Backups (lib/backups): his account's until features BACKUPS_FOR_EVERYONE, the row and the page alike. */
+  const backupsOpen = useBackups()
   /* A TONE3000 sign-in kept on this device, for its row in My rig: asked each time the front list comes up. */
   const t3kHere = useTone3000SignedIn(page === null)
   const starterChains = useStarterChains()
@@ -870,6 +875,8 @@ export default function Settings({
             ) : null}
             {/* The chains Quick build offers on an empty preset, kept for this unit (components/StarterChains). */}
             {startersOpen ? <SetupRow title={STARTERS_TITLE} status={startersStatus(starterChains)} onPress={() => setPage('starters')} /> : null}
+            {/* A preset kept on the computer, and put back from it (components/Backups). */}
+            {backupsOpen ? <SetupRow title={BACKUPS_TITLE} status={BACKUPS_ROW_STATUS} onPress={() => setPage('backups')} /> : null}
             {/*
               SIGNED IN TO TONE3000, AND THE WAY OUT (17 November 2026, for
               the store version that opens TONE3000 to everybody: Apple's
@@ -1418,6 +1425,14 @@ export default function Settings({
         <>
           {head(STARTERS_TITLE, 'back')}
           <StarterChains />
+        </>
+      ) : null}
+
+      {/* Settings → Backups: the computer's snapshots listed, one played or put back, and a copy of the preset taken now. */}
+      {page === 'backups' && backupsOpen ? (
+        <>
+          {head(BACKUPS_TITLE, 'back')}
+          <Backups />
         </>
       ) : null}
 

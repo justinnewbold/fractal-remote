@@ -1057,6 +1057,33 @@ export async function readSaveProgress(slug) {
 }
 
 /**
+ * Backups (lib/backups): the computer's list of snapshots, and the request
+ * left for it to take one, play one or put one back. The list is a read
+ * and travels the relay; the three asks are documents in the computer's
+ * store, as a save's is, since every /backup and /version write is refused
+ * from a handset. Never in the demo or on the unit's own wire, where there
+ * is no computer: the list is empty and an ask is refused.
+ */
+export async function listSnapshots(slot) {
+  if (demoDevice() || bluetoothWire()) return []
+  const res = await remoteRequest(`/versions${Number.isInteger(slot) ? `?location=${slot}` : ''}`)
+  return Array.isArray(res?.versions) ? res.versions : []
+}
+
+export function parkBackupAsk(slug, request) {
+  if (!slug || demoDevice() || bluetoothWire()) throw new Error('There is no computer to ask.')
+  return put(`/store/config/${encodeURIComponent(`fractal.pendingRestore.${slug}`)}`, { data: request, origin: 'fractal' })
+}
+
+const backupDoc = async (name) => {
+  const doc = await remoteRequest(`/store/config/${encodeURIComponent(name)}`)
+  const data = doc && typeof doc === 'object' && 'data' in doc ? doc.data : doc
+  return data && typeof data === 'object' ? data : null
+}
+export const readBackupResult = (slug) => (slug ? backupDoc(`fractal.restoreResult.${slug}`) : Promise.resolve(null))
+export const readBackupProgress = (slug) => (slug ? backupDoc(`fractal.restoreProgress.${slug}`) : Promise.resolve(null))
+
+/**
  * One of the computer's own settings, kept in its store's `config`
  * collection by name: its data, null when the computer has none by that name
  * (a 404, which is normal for one never written), or undefined when the

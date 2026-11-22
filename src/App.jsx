@@ -26,6 +26,7 @@ import { RESET_SENT_TO } from '../shared/password-reset.mjs'
 import {
   carryOutRestore,
   dirtyAfterRestore,
+  KEEP,
   restoreNow,
   restoreRequest,
   startRestoreWait,
@@ -3441,13 +3442,17 @@ export default function App() {
     }
     const lookOnce = async () => {
       const req = await takeParkedRestore()
-      if (stop || !req?.id || !req.versionId || req.cancelled) return
+      /* A keep (a copy of a slot taken now, asked for from the phone app's Backups page) has no version in it. */
+      if (stop || !req?.id || req.cancelled || (!req.versionId && req.mode !== KEEP)) return
       if (handledRestores.current.has(req.id)) return
       setBusy(true)
       try {
         const out = await carryOutRestore(req, api, { handled: handledRestores.current })
         if (!out) return
-        if (out.ok) {
+        if (out.ok && out.mode === KEEP) {
+          /* Nothing on the unit changed: no unsaved mark moved, nothing read again. */
+          recordLater.current('version', `${out.said} Asked for from the phone.`)
+        } else if (out.ok) {
           afterRestoreLater.current(out.mode)
           recordLater.current('version', `${out.said} Asked for from the phone.`)
           await readLater.current()

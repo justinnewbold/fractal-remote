@@ -63,6 +63,42 @@ export const RESTORE_LATE_WORDS = 'Still waiting for the computer.'
 
 export const MODES = ['put', 'play']
 
+/*
+ * AND A THIRD ASK, FROM THE PHONE APP'S BACKUPS PAGE (22 November 2026):
+ * keep a copy of a slot NOW, as it is saved on the unit. The relay refuses
+ * /backup from a handset as it refuses /version, so it comes the same way:
+ * a request left in the store, `{ id, mode: 'keep', slot }`, with no version
+ * in it. A computer app from before this passes it over (it wants a
+ * version), and the phone's wait says the computer may need updating.
+ */
+export const KEEP = 'keep'
+export const KEEP_NO_SLOT = 'There’s no preset to back up. Nothing was changed.'
+
+/** Do it, here: a snapshot of what slot `req.slot` holds. `api` is restoreNow's. */
+export async function keepNow(req, api) {
+  const slot = req?.slot
+  if (!Number.isInteger(slot) || slot < 0) throw new Error(KEEP_NO_SLOT)
+  if (api.slotOutside?.(slot)) throw new Error(`Slot ${slot} isn’t on this unit. Nothing was changed.`)
+  const failed = () => new Error(`Couldn’t back up slot ${slot}. Nothing was changed.`)
+  let kept = false
+  try {
+    kept = !!(await api.snapshotSlot(slot))?.version
+  } catch (err) {
+    /* 422 is an empty slot, or a dump that failed its checksum: only the unit's own <EMPTY> says which (see restoreNow). */
+    if (err?.status !== 422) throw failed()
+    let name = null
+    try {
+      name = await api.slotName?.(slot)
+    } catch {}
+    if (isEmptySlotName(name)) throw new Error(`Slot ${slot} is empty, so there’s nothing to back up.`)
+    try {
+      kept = !!(await api.snapshotSlot(slot))?.version
+    } catch {}
+  }
+  if (!kept) throw failed()
+  return { ok: true, mode: KEEP, slot, kept: true, said: `Backed up slot ${slot} as it is saved on the unit.` }
+}
+
 /** What the asking side leaves for the computer. */
 export function restoreRequest(version, mode, { id, now = Date.now } = {}) {
   return {
@@ -212,7 +248,8 @@ export const dirtyAfterRestore = (mode) => mode === 'play'
  */
 export async function carryOutRestore(req, api, { handled, now = Date.now, freshMs = RESTORE_FRESH_MS } = {}) {
   /* A cancelled request has no version in it, and is passed over. */
-  if (!req?.id || !req.versionId || req.cancelled || !MODES.includes(req.mode)) return null
+  const keep = req?.mode === KEEP
+  if (!req?.id || req.cancelled || (!keep && (!req.versionId || !MODES.includes(req.mode)))) return null
   if (handled?.has(req.id)) return null
   handled?.add(req.id)
   const tell = async (result) => {
@@ -229,7 +266,7 @@ export async function carryOutRestore(req, api, { handled, now = Date.now, fresh
     if (still && (still.id !== req.id || still.cancelled)) {
       return tell({ ok: false, cancelled: true, error: RESTORE_CANCELLED })
     }
-    const done = await restoreNow(req, api)
+    const done = keep ? await keepNow(req, api) : await restoreNow(req, api)
     return tell(done)
   } catch (err) {
     return tell({ ok: false, error: err?.message || RESTORE_REFUSED })
