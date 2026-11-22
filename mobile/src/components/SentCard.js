@@ -3,6 +3,7 @@ import { Text, View } from 'react-native'
 import { color, font, radius, space } from '../lib/theme'
 import { forUnit } from '../lib/captureUnit'
 import { ON_UNIT } from '../lib/tone3000Words'
+import { leftWords, percentSent, sentWords } from '../lib/captureLine'
 
 /**
  * A capture is on the unit: said so that it cannot be missed.
@@ -36,17 +37,39 @@ const LOOKS = {
   plain: (c) => ({ ink: c.silk, edge: c.rule, wash: 'transparent', mark: '' })
 }
 
-export default function SentCard({ head, line = '', more = '', tone = 'ok' }) {
+export default function SentCard({ head, line = '', more = '', tone = 'ok', sent = undefined, of = undefined, left = undefined }) {
   const look = (LOOKS[tone] || LOOKS.plain)(color)
+  /*
+   * A SEND THAT IS GOING, WITH HOW FAR IT HAS GOT (`sent` of `of`): the
+   * card grows a bar, the count in large figures and how long is left
+   * ("it needs to be more prominent on the screen", 22 November 2026: half
+   * a minute over an adapter behind one small grey line). Only on the busy
+   * card and only with a count: every other card is as it was.
+   */
+  const going = tone === 'busy' && Number.isInteger(of) && of > 0 && Number.isInteger(sent)
+  const percent = going ? percentSent(sent, of) : 0
   return (
     <View
       accessible
       accessibilityLiveRegion="polite"
-      accessibilityLabel={[head, line, more].filter(Boolean).join('. ')}
-      style={{ gap: 2, borderWidth: 1, borderColor: look.edge, borderRadius: radius.md, padding: space.md, backgroundColor: look.wash }}
+      accessibilityLabel={going ? [head, sentWords(sent, of), leftWords(left)].join('. ') : [head, line, more].filter(Boolean).join('. ')}
+      style={{ gap: going ? space.sm : 2, borderWidth: going ? 2 : 1, borderColor: look.edge, borderRadius: radius.md, padding: going ? space.lg : space.md, backgroundColor: look.wash }}
     >
-      <Text style={{ color: look.ink, fontSize: font.body, fontWeight: '700' }}>{`${look.mark}${head}`}</Text>
-      {line ? <Text style={{ color: tone === 'warn' ? color.silk : color.silkDim, fontSize: font.small, lineHeight: 19 }}>{line}</Text> : null}
+      <Text style={{ color: look.ink, fontSize: going ? font.lead : font.body, fontWeight: '700' }}>{`${look.mark}${head}`}</Text>
+      {going ? (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.sm }}>
+            <Text style={{ flex: 1, color: color.silk, fontSize: font.title, fontWeight: '700' }}>{sentWords(sent, of)}</Text>
+            <Text style={{ color: look.ink, fontSize: font.title, fontWeight: '700' }}>{`${percent}%`}</Text>
+          </View>
+          {/* The bar: as wide as the card, filled by how much has gone. */}
+          <View style={{ height: 14, borderRadius: radius.pill, backgroundColor: color.rule, overflow: 'hidden' }}>
+            <View style={{ width: `${percent}%`, height: 14, borderRadius: radius.pill, backgroundColor: look.ink }} />
+          </View>
+          <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{leftWords(left)}</Text>
+        </>
+      ) : null}
+      {line ? <Text style={{ color: tone === 'warn' ? color.silk : color.silkDim, fontSize: font.small, lineHeight: 19 }}>{going ? line.replace(/: \d+ of \d+$/, '') : line}</Text> : null}
       {more ? <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 19 }}>{more}</Text> : null}
     </View>
   )

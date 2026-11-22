@@ -115,7 +115,7 @@ import { capturesNote, getSays, LOOKING_FOR_SLOT, lookingForSlot, previewSays, s
 import { hostPage, onTone3000Return, pageInApp, signOutHere, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
-import { captureLine, waitOver } from '../lib/captureLine'
+import { captureLine, secondsLeft, waitOver } from '../lib/captureLine'
 import { firstNamOf, forUnit, namBlocksOf, unitOfNam } from '../lib/captureUnit'
 import { isPlaced, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
 import { captureOrder, captureToSlot, sendCapture } from '../lib/captureSend'
@@ -654,6 +654,9 @@ export default function Tone3000Test({ block = null, held = false, onDone = null
        * and did not keep (lib/captureSend, which says why and is run whole
        * in a test). The card's part is the lines on the screen.
        */
+      /* When the send's first message went, and when the card was last redrawn for it (onProgress, below). */
+      let sendBegan = Date.now()
+      let sendDrawn = 0
       const send = (slot, sentBefore) => {
         said = namSlotSaid(slot)
         setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}…` })
@@ -670,8 +673,18 @@ export default function Tone3000Test({ block = null, held = false, onDone = null
             namInstallHere(to, words, {
               replace: how.replace,
               onProgress: (sent, of) => {
-                /* Every tenth message and the last: 130 redraws are no use to anybody. */
-                if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}${how.second ? ' another way' : ''}: ${sent} of ${of}` })
+                /*
+                 * Every message, where they come slowly: over an adapter that is four a second for half a minute, and a count
+                 * that moved by ten every two or three seconds read as a send that had stuck ("it does send it 10 things at a
+                 * time or something, but it needs to be more prominent on the screen", 22 November 2026). Through a computer
+                 * the whole capture goes in under a second, so no more than one redraw in 120 ms, and always the last.
+                 * `sent`, `of` and `left` are the card's bar, its count and how long is left (lib/captureLine, SentCard).
+                 */
+                const now = Date.now()
+                if (sent <= 1) sendBegan = now
+                if (!alive.current || (sent !== of && now - sendDrawn < 120)) return
+                sendDrawn = now
+                setSend({ id: m.id, slot, sent, of, left: secondsLeft({ sent, of, ms: now - sendBegan }), line: `Sending “${rec.name}” to slot ${said}${how.second ? ' another way' : ''}: ${sent} of ${of}` })
               }
             }),
           log: (line) => logDebug('tone3000', `capture ${m.id}, slot ${said}: ${line}`),
@@ -1030,7 +1043,7 @@ export default function Tone3000Test({ block = null, held = false, onDone = null
                   run whole by a test. This draws what it answers, in order.
                 */}
                 {captureLine({ working, fetching: busy === m.id, mine, send, at, slotSaid: at ? namSlotSaid(at.slot) : '', name: named, halted }).map((x, i) =>
-                  x.card ? <SentCard key={i} tone={x.card} head={u(x.head)} line={u(x.line)} more={u(x.more)} /> : <Note key={i}>{u(x.note)}</Note>
+                  x.card ? <SentCard key={i} tone={x.card} head={u(x.head)} line={u(x.line)} more={u(x.more)} sent={x.sent} of={x.of} left={x.left} /> : <Note key={i}>{u(x.note)}</Note>
                 )}
                 {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.way, halted.play, halted.back === true)} /> : null}
                 {/* On the unit, on the Developer page: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the capture's own two buttons play it there (above). */}

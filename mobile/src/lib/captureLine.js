@@ -47,7 +47,9 @@ export function captureLine({ working = false, fetching = false, mine = false, s
   const own = mine && send ? send : null
   const line = own?.line || ''
   const playing = !!own && own.playing === true && !!own.played
-  if (working) out.push({ card: 'busy', head: fetching ? GETTING_CAPTURE : SENDING_TO_UNIT, line, more: '' })
+  /* How far a send has got, where the page was told (`send.sent` of `send.of`): the card draws a bar and a count from them, and how long is left. Never while the file is still being fetched, and never from a send that has no count. */
+  const far = !fetching && own && Number.isInteger(own.of) && own.of > 0 && Number.isInteger(own.sent) ? { sent: Math.max(0, Math.min(own.sent, own.of)), of: own.of, left: Number.isFinite(own.left) && own.left > 0 ? own.left : null } : null
+  if (working) out.push({ card: 'busy', head: fetching ? GETTING_CAPTURE : SENDING_TO_UNIT, line, more: '', ...(far || {}) })
   if (there && !working) out.push({ card: at.sure ? 'ok' : 'plain', head: at.sure ? ON_UNIT : SENT_TO_UNIT, line: onUnitLine(slotSaid, name), more: playing ? own.played : '' })
   /* Not on the unit: said as plainly as one that is. */
   if (own && !working && !there && line) out.push({ card: 'warn', head: NOT_ON_UNIT, line, more: '' })
@@ -61,6 +63,38 @@ export function captureLine({ working = false, fetching = false, mine = false, s
   if (own?.wait && !working) out.push({ note: own.wait })
   return out
 }
+
+/*
+ * HOW FAR A SEND HAS GOT, SAID SO THAT IT CANNOT BE MISSED.
+ *
+ * "Let's make it more clear when it's sending the NAM file what's happening.
+ * Right now it does send it 10 things at a time or something, but it needs
+ * to be more prominent on the screen." (Justin, 22 November 2026, with a
+ * picture of the card half a minute into a send over an adapter: one small
+ * grey line, "50 of 130", that had last moved three seconds before.)
+ *
+ * So the busy card has a bar, the count in large figures and how long is
+ * left (components/SentCard), from the three numbers below. PURE, so a test
+ * runs them.
+ */
+
+/** How many whole seconds a send has left, by how fast it has gone so far: null until three messages have gone (one is no speed at all), and null once it is done. */
+export function secondsLeft({ sent = 0, of = 0, ms = 0 } = {}) {
+  if (!Number.isInteger(sent) || !Number.isInteger(of) || !Number.isFinite(ms)) return null
+  if (sent < 3 || of <= sent || ms <= 0) return null
+  return Math.max(1, Math.round(((ms / sent) * (of - sent)) / 1000))
+}
+
+/** How much of the send has gone, as a whole number of hundredths: never 100 before the last message, so a bar is not full while something is still to go. */
+export function percentSent(sent = 0, of = 0) {
+  if (!Number.isInteger(sent) || !Number.isInteger(of) || of <= 0 || sent <= 0) return 0
+  if (sent >= of) return 100
+  return Math.min(99, Math.floor((sent / of) * 100))
+}
+
+/** The card's words for it: the count, and how long is left where that is known. */
+export const sentWords = (sent, of) => `${sent} of ${of} parts sent`
+export const leftWords = (left) => (Number.isFinite(left) && left > 0 ? (left === 1 ? 'About 1 second left' : `About ${left} seconds left`) : 'Working out how long is left…')
 
 /**
  * The send in hand once nothing is going any more: its "still going" line
