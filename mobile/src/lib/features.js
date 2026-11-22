@@ -937,3 +937,14 @@ export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = true
  * phone. Backing up from the phone needs a computer app that knows the ask.
  */
 export const BACKUPS_FOR_EVERYONE = false
+
+/*
+ * BACKUPS KEPT ON THIS DEVICE, OVER BLUETOOTH OR THE UNIT'S USB CABLE
+ * (lib/presetDump; "OK now go ahead and build the Bluetooth back up for the
+ * phones", Justin, 22 November 2026): the loaded preset of an FM3, FM9 or
+ * Axe-Fx III read whole and kept on the device, and one sent back into the
+ * edit buffer. HIS ACCOUNT ONLY, and it also wants BACKUPS_FOR_EVERYONE's
+ * page (lib/useBackups). No preset has been sent back from a phone to a
+ * unit: it opens on his word, with its What's new line then.
+ */
+export const BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE = false

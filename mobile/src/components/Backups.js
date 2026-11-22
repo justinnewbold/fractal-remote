@@ -28,7 +28,10 @@ import {
   startBackupAsk,
   waitingWords
 } from '../lib/backups'
+import { PHONE_ONLY_GEN3 } from '../lib/presetDump'
+import { usePhoneBackups } from '../lib/useBackups'
 import Note from './Note'
+import PhoneBackups from './PhoneBackups'
 import Press from './Press'
 
 const ofPreset = (s) => s.preset
@@ -52,6 +55,7 @@ export default function Backups() {
   const slot = Number.isInteger(preset?.number) ? preset.number : null
   const way = isDemo() ? 'demo' : caps?.via === 'bluetooth' ? 'bluetooth' : 'computer'
   const here = backupsHere({ way, vp4: !isDemo() && isVp4(slug) })
+  const phoneOpen = usePhoneBackups()
   const [scope, setScope] = useState('slot')
   const [rows, setRows] = useState(null)
   const [fault, setFault] = useState(null)
@@ -124,6 +128,8 @@ export default function Backups() {
   const play = (row) => (unsaved ? confirm(playAsk(), () => ask(restoreRequest(row, 'play'), row.slot)) : ask(restoreRequest(row, 'play'), row.slot))
   const put = (row) => confirm(putAsk(row, { unsaved: !!unsaved }), () => ask(restoreRequest(row, 'put'), row.slot))
 
+  /* Over Bluetooth or the unit's USB cable there is no computer to keep them: they are kept on this device (lib/presetDump), on the three units the phone can read a whole preset from. */
+  if (way === 'bluetooth' && phoneOpen && !isVp4(slug)) return caps?.slotModel === 'grid' ? <PhoneBackups /> : <Note tone="hint">{PHONE_ONLY_GEN3}</Note>
   if (!here.ok) return <Note tone="hint">{here.why}</Note>
 
   const busy = !!out

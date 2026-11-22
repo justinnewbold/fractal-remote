@@ -616,6 +616,22 @@ function fakeGen3(sx, o) {
         }
         return
       }
+      /*
+       * A PRESET SENT TO IT (a dump's head, chunks and foot): kept as it
+       * came in `state.loaded`, and nothing said, as a gen-3 unit answers an
+       * accepted write. A head that names a slot is a STORE to that slot:
+       * counted in `state.storedBy` so a test can hold that none ever
+       * comes. `refuseLoadAt`: the frame (from nought) it refuses.
+       */
+      case 0x77:
+      case 0x78:
+      case 0x79: {
+        state.loaded = state.loaded || []
+        if (opt.refuseLoadAt === state.loaded.length) return reply(0x64, [fn, 0x04])
+        if (fn === 0x77 && !(p[0] === 0x7f && p[1] === 0x7f)) (state.storedBy = state.storedBy || []).push([p[0], p[1]])
+        state.loaded.push([...b])
+        return
+      }
       default:
         reply(0x64, [fn, 0x04])
     }
@@ -1225,6 +1241,7 @@ async function onTheLine(kind, options = {}) {
       am4Nam: options.am4Nam,
       am4NamKnobs: options.am4NamKnobs,
       am4NamAdd: options.am4NamAdd,
+      backups: options.backups,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -6892,7 +6909,7 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './am4-nam.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-help.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-chain.js', './am4-edit.js', './am4-nam.js', './axefx3-edit.js', './bleNames.js', './bleSave.js', './bleTools.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3-grid.js', './gen3-help.js', './gen3-tools.js', './gen3Catalog.js', './metronome-rules.js', './nam-install.js', './own-echo.js', './presetDump.js'])
     /* The chain's messages (test/gen3-grid.mjs): the frame helpers and nothing else, so they reach a unit only through the wire that builds them. */
     assert.deepEqual(imports(read('gen3-grid.js')), ['./fractal-sysex.mjs'], 'the grid’s messages import something')
     assert.deepEqual(imports(read('am4-chain.js')), ['./fractal-sysex.mjs'], 'the AM4’s slot message imports something')
@@ -16464,8 +16481,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, true])
     /* lib/bluetooth hands the wire the level: all of the list, for his account (allUnits) and, since OWN_KNOBS_FOR_EVERYONE (1.91.2), for everybody; the NAM block alone (`'nam'`) is what the NAM switch gives once that one is off. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ AM4_NAM_ADD_FOR_EVERYONE, AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\), .*am4NamAdd: \(\) => am4NamAddHere\(\) \}\)/)
+    assert.match(ble, /import \{ AM4_NAM_ADD_FOR_EVERYONE, AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => capturesOverBluetooth\(\), namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\), chain: \(\) => chainOverBluetooth\(\), live: \(\) => liveKnobsOverBluetooth\(\), tunerAsks: \(\) => tunerAsksOverBluetooth\(\), chainEditor: \(\) => chainEditorOverBluetooth\(\), editTools: \(\) => editToolsOverBluetooth\(\), looper: \(\) => looperOverBluetooth\(\), unitClick: \(\) => unitClickOverBluetooth\(\), modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\), .*am4NamAdd: \(\) => am4NamAddHere\(\), backups: \(\) => backupsOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -21960,6 +21977,131 @@ export function run(test) {
   }
 
   /*
+   * BACKUPS KEPT ON THIS DEVICE (lib/presetDump; bleWire presetDump and
+   * presetLoad; lib/features BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE). The read
+   * is the chain's own whole-preset question; the send is the unit's own
+   * frames back, the head pointed at the edit buffer, nothing between them.
+   */
+  const BACKUPS_OPEN = { backups: () => true }
+  test('a backup over Bluetooth: the loaded preset is read whole as it came, and sent back into the edit buffer frame for frame, with nothing between', async () => {
+    const d = await import('../mobile/src/lib/presetDump.js')
+    const grid = await import(GRID)
+    for (const [kind, model, chunks] of [['fm3', 0x11, 8], ['fm9', 0x12, 8], ['axefx3', 0x10, 16]]) {
+      const t = await onTheLine(kind, { ...BACKUPS_OPEN, grid: kind === 'fm3' ? CHAIN3 : BARE3 })
+      const seenAt = []
+      const got = await drive(t.clock, t.wire.presetDump((p) => seenAt.push(p)))
+      assert.equal(got.frames.length, chunks + 2, kind)
+      assert.equal(got.number, t.unit.state.preset, kind)
+      assert.deepEqual(got.frames.map((f) => grid.gridDumpPart(f, model)), ['head', ...Array(chunks).fill('chunk'), 'foot'], kind)
+      assert.ok(grid.parseGridDump(got.frames, model), `${kind}: what was kept is not a whole preset`)
+      assert.equal(seenAt.at(-1).got, seenAt.at(-1).of, `${kind}: the bar never reached its end`)
+      /* Only questions went: the preset whole, and which preset the unit is on. */
+      assert.ok(t.frames().every((f) => f[5] === 0x03 || f[5] === 0x0d), `${kind}: something else was sent for a backup`)
+      /* Kept as text and read back: the same bytes. */
+      assert.deepEqual(d.unpackFrames(d.packFrames(got.frames)), got.frames, kind)
+      /* A head that names a slot, as a stored preset's does: what is SENT names the edit buffer. */
+      const stored = got.frames.map((f) => [...f])
+      stored[0][6] = 0x00
+      stored[0][7] = 0x05
+      stored[0][stored[0].length - 2] = (await import(SX)).checksum(stored[0], stored[0].length - 2)
+      t.sent.length = 0
+      const progress = []
+      /* A read asked while it goes waits; a write asked while it goes is refused in words. */
+      const going = t.wire.presetLoad(stored, { onProgress: (p) => progress.push(p), paceMs: () => 30 })
+      const res = await drive(t.clock, going)
+      assert.deepEqual(res, { ok: true, frames: chunks + 2, bytes: got.frames.reduce((n, f) => n + f.length, 0) }, kind)
+      const out = t.frames()
+      assert.equal(out[0][5], 0x0d, `${kind}: the unit was not asked which preset it is on first`)
+      const went = out.slice(1)
+      assert.deepEqual(went.map(hex), d.loadable(stored, model).map(hex), `${kind}: what went is not the backup, in order`)
+      assert.deepEqual([went[0][6], went[0][7]], [0x7f, 0x7f], `${kind}: the head named a slot`)
+      assert.equal(t.unit.state.loaded.length, chunks + 2, kind)
+      assert.equal(t.unit.state.storedBy, undefined, `${kind}: a head that stores to a slot reached the unit`)
+      assert.deepEqual(progress.at(-1), { sent: res.bytes, of: res.bytes }, kind)
+      assert.ok(t.logs.some((l) => /a backup sent to the edit buffer/.test(l)), kind)
+    }
+  })
+
+  test('a backup over Bluetooth: shut for an account it is not open to, never an AM4, and the way out passes a preset’s frames only as the one being sent', async () => {
+    const d = await import('../mobile/src/lib/presetDump.js')
+    const open = await onTheLine('fm3', { ...BACKUPS_OPEN, grid: CHAIN3 })
+    const { frames } = await drive(open.clock, open.wire.presetDump())
+    /* Shut: not read, not sent, and nothing left the phone. */
+    for (const options of [{}, { backups: () => false }, { backups: true }, { edit: () => true, chain: () => true }]) {
+      const t = await onTheLine('fm3', { ...options, grid: CHAIN3 })
+      t.sent.length = 0
+      await assert.rejects(drive(t.clock, t.wire.presetDump()), (e) => e.unsupported === true)
+      await assert.rejects(drive(t.clock, t.wire.presetLoad(frames)), (e) => e.unsupported === true)
+      assert.deepEqual(t.frames(), [], JSON.stringify(Object.keys(options)))
+    }
+    const am4 = await onTheLine('am4', BACKUPS_OPEN)
+    await assert.rejects(drive(am4.clock, am4.wire.presetDump()), (e) => e.unsupported === true)
+    await assert.rejects(drive(am4.clock, am4.wire.presetLoad(frames)), (e) => e.unsupported === true)
+    /* Not a whole preset of this unit: nothing sent. A chunk lost, a chunk damaged, another unit's, nothing at all. */
+    const damaged = frames.map((f) => [...f])
+    damaged[2][700] ^= 0x01
+    damaged[2][damaged[2].length - 2] = (await import(SX)).checksum(damaged[2], damaged[2].length - 2)
+    open.sent.length = 0
+    for (const bad of [frames.slice(0, -1), [frames[0], ...frames.slice(2)], damaged, frames.map((f) => f.map((b, i) => (i === 4 ? 0x12 : b))), [], null, 'x']) {
+      await assert.rejects(drive(open.clock, open.wire.presetLoad(bad)), (e) => e.status === 400 && e.message === d.NOT_WHOLE)
+    }
+    assert.deepEqual(open.frames(), [], 'something was sent for a backup that is not whole')
+    assert.equal(open.unit.state.loaded, undefined)
+    /* The way out, by itself: with nothing in hand every frame of a preset is refused; a head that names a slot is refused even in hand. */
+    const { gen3Sender } = await import(WIRE)
+    const good = d.loadable(frames, 0x11)
+    for (const [hand, f, want] of [
+      [null, good[0], 'refused'],
+      [null, good[1], 'refused'],
+      [null, good.at(-1), 'refused'],
+      [good, good[0], 'sent'],
+      [good, good[3], 'sent'],
+      [good, frames.map((x) => [...x])[1].map((b, i) => (i === 700 ? b ^ 1 : b)), 'refused'],
+      [[frames[0].map((b, i) => (i === 6 ? 0 : i === 7 ? 5 : b)), ...good.slice(1)], frames[0].map((b, i) => (i === 6 ? 0 : i === 7 ? 5 : b)), 'refused']
+    ]) {
+      const through = []
+      const out = gen3Sender((b) => through.push(b), () => {}, 0x11, () => null, () => null, () => false, () => null, () => null, () => null, () => null, () => null, () => false, () => false, () => hand)
+      assert.equal(out(f), want)
+      assert.equal(through.length, want === 'sent' ? 1 : 0)
+    }
+    /* And with no `loading` handed in at all (every caller before this), a preset's frame is refused. */
+    assert.equal(gen3Sender(() => true, () => {}, 0x11)(good[1]), 'refused')
+  })
+
+  test('a backup over Bluetooth: a unit that does not answer is sent nothing, one that refuses part-way stops there and says so, and other writes wait their turn in words', async () => {
+    const silent = await onTheLine('fm3', { ...BACKUPS_OPEN, grid: CHAIN3 })
+    const { frames } = await drive(silent.clock, silent.wire.presetDump())
+    silent.unit.state.mutePreset = true
+    silent.sent.length = 0
+    await assert.rejects(drive(silent.clock, silent.wire.presetLoad(frames)), (e) => e.status === 504 && /wasn’t sent/.test(e.message))
+    assert.ok(silent.frames().every((f) => f[5] === 0x0d), 'part of a backup went to a unit that did not answer')
+    /* Refused at the fourth frame: three went, no more, and the error says the preset may be damaged. */
+    const no = await onTheLine('fm3', { ...BACKUPS_OPEN, grid: CHAIN3, refuseLoadAt: 3 })
+    no.sent.length = 0
+    await assert.rejects(drive(no.clock, no.wire.presetLoad(frames, { paceMs: () => 10 })), (e) => e.partial === true && /may be damaged/.test(e.message))
+    assert.equal(no.unit.state.loaded.length, 3)
+    assert.equal(no.frames().filter((f) => f[5] >= 0x77 && f[5] <= 0x79).length, 4, 'frames went on after the unit refused one')
+    /* The line is free again afterwards. */
+    assert.equal((await no.get('/preset')).number, no.unit.state.preset)
+    /* While one goes, a tap that would change the unit is refused in words that name a backup; a read waits and is answered after. */
+    const busy = await onTheLine('fm3', { ...BACKUPS_OPEN, grid: CHAIN3 })
+    busy.sent.length = 0
+    const going = busy.wire.presetLoad(frames, { paceMs: () => 200 })
+    for (let turns = 0; busy.frames().filter((f) => f[5] === 0x78).length < 2; turns++) {
+      await flush()
+      if (turns > 20000 || !busy.clock.next()) break
+    }
+    assert.ok(busy.frames().some((f) => f[5] === 0x78), 'the backup never started')
+    await assert.rejects(busy.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) }), (e) => e.status === 409 && /loading a backup/.test(e.message))
+    const read = busy.wire.request('/preset')
+    await drive(busy.clock, going)
+    await drive(busy.clock, read)
+    const order = busy.frames().map((f) => f[5])
+    const lastOfLoad = order.lastIndexOf(0x79)
+    assert.ok(order.slice(1, lastOfLoad).every((fn) => fn >= 0x77 && fn <= 0x79), `something went between a backup’s frames: ${order.map((n) => n.toString(16)).join(' ')}`)
+  })
+
+  /*
    * RENAME OVER BLUETOOTH (lib/bleNames; bleWire writePresetName and
    * writeSceneName; lib/features EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE).
    * The computer app's own messages, byte for byte: these are the pinned
@@ -22695,7 +22837,7 @@ export function run(test) {
     assert.match(b, /export const looperOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| LOOPER_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /export const unitClickOverBluetooth = \(unit = saved\.unit\) => \(allUnits === true \|\| UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE\) && TOOL_UNITS\.includes\(unit\)/)
     assert.match(b, /const readNoClick = \(\) => readOn\(\) && !unitClickOverBluetooth\(\)/)
-    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\), .*am4NamAdd: \(\) => am4NamAddHere\(\) \}\)/)
+    assert.match(b, /looper: \(\) => looperOverBluetooth\(\), .*unitClick: \(\) => unitClickOverBluetooth\(\), .*modifiers: \(\) => modifiersOverBluetooth\(\), cabs: \(\) => cabPickerOverBluetooth\(\), footswitches: \(\) => footswitchesOverBluetooth\(\), .*am4Nam: \(\) => am4NamOverBluetooth\(\), am4NamKnobs: \(\) => am4NamKnobsOverBluetooth\(\), .*am4NamAdd: \(\) => am4NamAddHere\(\), .*backups: \(\) => backupsOverBluetooth\(\) \}\)/)
     /* The five: the switch in the volume pop-up, Settings → Metronome, the rules' own hook, and the app telling a unit that has just arrived. */
     assert.match(src('mobile/src/components/MetronomeSwitch.js'), /const bluetooth = useBluetoothNoClick\(\)/)
     assert.doesNotMatch(src('mobile/src/components/MetronomeSwitch.js'), /useBluetoothOn/)
