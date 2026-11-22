@@ -1024,6 +1024,23 @@ export async function saveOnWire(slot) {
 }
 
 /**
+ * A backup kept on this device (lib/presetDump, bleWire presetDump and
+ * presetLoad): the preset the unit has loaded, read whole on the unit's own
+ * wire, and one sent back into its edit buffer. Handed to the wire directly,
+ * as a save is. With no such wire, or one that has neither, null.
+ */
+export async function presetDumpOnWire(onProgress) {
+  const wire = bluetoothWire()
+  if (!wire || typeof wire.presetDump !== 'function') return null
+  return wire.presetDump(onProgress)
+}
+export async function presetLoadOnWire(frames, options) {
+  const wire = bluetoothWire()
+  if (!wire || typeof wire.presetLoad !== 'function') return null
+  return wire.presetLoad(frames, options)
+}
+
+/**
  * Save in the demo, which has no computer to ask: the simulated unit keeps the
  * preset on this phone.
  *

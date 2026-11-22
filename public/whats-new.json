@@ -3,7 +3,7 @@
     {
       "date": "2026-11-22",
       "day": "22 November 2026",
-      "version": "2.3.8",
+      "version": "2.3.9",
       "lines": [
         {
           "text": "Sending a TONE3000 capture to your unit now shows a large progress bar, how many parts have gone and about how long is left, so a send over Bluetooth never looks stuck.",

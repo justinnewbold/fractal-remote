@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { RESET_TITLES, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { AM4_NAM_ADD_FOR_EVERYONE, AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { AM4_NAM_ADD_FOR_EVERYONE, AM4_NAM_EDIT_FOR_EVERYONE, AM4_NAM_FOR_EVERYONE, BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE, BLOCK_ORDER_FROM_GRID_FOR_EVERYONE, CAB_PICKER_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_EDITOR_OVER_BLUETOOTH_FOR_EVERYONE, CHAIN_OVER_BLUETOOTH_FOR_EVERYONE, EDIT_TOOLS_OVER_BLUETOOTH_FOR_EVERYONE, FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, LIVE_KNOBS_FOR_EVERYONE, LOOPER_OVER_BLUETOOTH_FOR_EVERYONE, MODIFIERS_OVER_BLUETOOTH_FOR_EVERYONE, NAM_KNOBS_FOR_EVERYONE, NAM_PICKER_FOR_EVERYONE, OUTPUT_AND_SCENE_LEVELS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE, TONE3000_QUICK_FOR_EVERYONE, TUNER_ASKS_FOR_EVERYONE, UNIT_CLICK_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -2712,7 +2712,9 @@ export function openWire() {
     am4Nam: () => am4NamOverBluetooth(),
     am4NamKnobs: () => am4NamKnobsOverBluetooth(),
     /* And the NAM Player as a block the chain editor may ADD to a slot (lib/am4-chain AM4_NAM_PLACE): his account, until lib/features AM4_NAM_ADD_FOR_EVERYONE. */
-    am4NamAdd: () => am4NamAddHere()
+    am4NamAdd: () => am4NamAddHere(),
+    /* A preset kept on this device and sent back (lib/presetDump, bleWire presetDump and presetLoad): his account, until lib/features BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request and every send. */
+    backups: () => backupsOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2802,6 +2804,14 @@ export const saveOverBluetooth = () => allUnits === true || SAVE_OVER_BLUETOOTH_
  * open on the unit.
  */
 export const chainOverBluetooth = () => allUnits === true || CHAIN_OVER_BLUETOOTH_FOR_EVERYONE
+
+/**
+ * Whether this account keeps backups on this device over Bluetooth or the
+ * unit's USB cable, and sends one back (lib/presetDump): his account, until
+ * lib/features BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE. For the wire, and for
+ * the Backups page (lib/useBackups).
+ */
+export const backupsOverBluetooth = () => allUnits === true || BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE
 
 /**
  * Whether this account's blocks are put in the unit's own order on Play and

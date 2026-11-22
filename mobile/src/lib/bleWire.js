@@ -157,6 +157,7 @@ import {
   parseGridLive
 } from './gen3-grid.js'
 import { AM4_PALETTE, AM4_SLOTS, am4Palette, am4SlotAllowed, buildAm4Slot } from './am4-chain.js'
+import { NOT_WHOLE, dumpShaped, loadAllowed, loadable } from './presetDump.js'
 import { createVp4Wire } from './bleVp4.js'
 
 /* ------------------------------------------------------------------ */
@@ -647,7 +648,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null, naming = () => null, tooling = () => null, looperAt = () => false, setupAt = () => false) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null, gridding = () => null, naming = () => null, tooling = () => null, looperAt = () => false, setupAt = () => false, loading = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -669,6 +670,21 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
     return Number.isInteger(eid) && sameBytes(b, fm3Edit.buildReadAll(model, eid))
   }
   return (bytes) => {
+    /*
+     * A PRESET SENT BACK FROM A BACKUP KEPT ON THIS DEVICE (lib/presetDump:
+     * a dump's head, chunk or foot, functions 0x77 to 0x79): goes only as,
+     * byte for byte, one of the frames of the one preset being sent at this
+     * moment (`loading`), and a head only if it names the EDIT BUFFER. A
+     * head that names a slot is a store to that slot, and is never sent
+     * from here. Nothing this file sent before had any of these functions.
+     */
+    if (dumpShaped(bytes, model)) {
+      if (!loadAllowed(bytes, loading())) {
+        log(`refused to send ${toHex(bytes.slice(0, 24))} …: it is part of a preset, and not one being sent to the edit buffer now`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     /*
      * AN AXE-FX III'S CAPTURES (lib/nam-install): a message of an upload, the
      * list's question, "a transfer is under way", a NAM block pointed at a
@@ -787,7 +803,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.footswitches]  whether the Footswitches page's reads are answered from this device (lib/gen3-tools; lib/features FOOTSWITCHES_OVER_BLUETOOTH_FOR_EVERYONE, his account until then); only a unit whose switches the computer reads live (an FM3)
  * @param {() => boolean} [o.tunerAsks]  whether an FM9's or an Axe-Fx III's tuner asks the unit for the frequency, the computer app's own way, when its published switch brings no readings (lib/features TUNER_ASKS_FOR_EVERYONE, his account until then), asked at each open
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam, am4NamKnobs, am4NamAdd } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures, chain, liveGrid, blockOrder, io, live, tunerAsks, chainEditor, editTools, looper, unitClick, modifiers, cabs, footswitches, am4Nam, am4NamKnobs, am4NamAdd, backups } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -912,6 +928,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * is one of them, byte for byte.
    */
   const chainOn = () => editOn() && typeof chain === 'function' && chain() === true
+  /*
+   * A PRESET KEPT ON THIS DEVICE AND SENT BACK (lib/presetDump): open to
+   * this account or not (`backups`, lib/bluetooth: his account until
+   * lib/features BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE), asked at every
+   * request and every send. Never an AM4. `loadHand` is the frames of the
+   * one preset being sent, for exactly as long as it is.
+   */
+  const backupsOn = () => !am4 && typeof backups === 'function' && backups() === true
+  let loadHand = null
+  /* What holds the line while `captureBusy` is up, for the words a refused tap gets: a capture, or a backup being sent. */
+  let busyWith = 'taking a capture'
   const chainHand = gridHand()
   /*
    * AND THE CHAIN EDITOR'S OWN READ (gen3PlacedBlocks): the blocks with the
@@ -1020,7 +1047,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? (Array.isArray(editPlaced) ? editPlaced.filter((c) => !am4KnobsShut(c)) : editPlaced) : null), () => (saveOn() ? savingSlot : null), () => (chainOn() ? chainHand.now() : null), () => (namesOn() ? namingFrame : null), () => am4NamOn(), () => (captureOn() ? capturing : null), () => am4NamAddOn())
-    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock)
+    : gen3Sender(send, say, model, () => (editOn() ? editHeld() : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null), orderOr(() => (chainOn() ? chainHand.now() : null)), () => (namesOn() ? namingFrame : null), () => (looperOn() || clickOn() || modsOn() || fcOn() ? toolsInHand() : null), isLooperBlock, isSetupBlock, () => (backupsOn() ? loadHand : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1478,7 +1505,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      */
     if (captureBusy && opts.capture !== true) {
       if (priority === PRI.poll) return Promise.resolve(SKIPPED)
-      if (isWrite(opts.priority)) return Promise.reject(failure(`The ${spec.name} is taking a capture. Try again when it has finished.`, 409))
+      if (isWrite(opts.priority)) return Promise.reject(failure(`The ${spec.name} is ${busyWith}. Try again when it has finished.`, 409))
     }
     if (priority === PRI.poll && (current || waiting.length || draining())) return Promise.resolve(SKIPPED)
     if (deadline !== null && time.now() >= deadline) {
@@ -4531,10 +4558,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * nothing waits for it: a callback that throws is dropped here, since a
    * screen that has gone cannot stop the read it started.
    */
-  async function gen3DumpGrid(onProgress) {
-    /* The request for the preset is no grid frame, so the way out does not hold it to the job in hand: asked here, as the chain's own frames are asked there. */
-    if (!chainOn()) throw unsupported()
-    const frames = []
+  async function gen3DumpGrid(onProgress, into = null) {
+    /* The request for the preset is no grid frame, so the way out does not hold it to the job in hand: asked here, as the chain's own frames are asked there. `into` is a backup's (presetDump): the frames are kept there as they came, and its own gate has been asked. */
+    if (!into && !chainOn()) throw unsupported()
+    const frames = into || []
     let head = false
     const started = time.now()
     const of = dumpBytes(model)
@@ -4572,8 +4599,112 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       say('the preset came back damaged; not used')
       throw failure(`The ${spec.name}’s preset came back damaged, so the app can’t see where its blocks are. Try again in a moment.`, 504)
     }
-    say(`read the preset for its grid in ${((time.now() - started) / 1000).toFixed(1)} s`)
+    say(`read the preset for ${into ? 'a backup' : 'its grid'} in ${((time.now() - started) / 1000).toFixed(1)} s`)
     return got
+  }
+
+  /**
+   * THE PRESET THE UNIT HAS LOADED, WHOLE, FOR A BACKUP KEPT ON THIS DEVICE
+   * (lib/presetDump): the frames as they came, with the preset's number and
+   * name. One question, the chain's own (gen3DumpGrid); nothing is written.
+   * The unit is asked which preset it is on after the read, as the chain's
+   * read asks (gen3StillHere): a footswitch mid-read says nothing, and a
+   * backup filed under the wrong preset's name is worse than none.
+   */
+  function presetDump(onProgress) {
+    if (!backupsOn()) return Promise.reject(unsupported())
+    return inGrid(async () => {
+      await gen3KnownFirst()
+      const at = moves
+      const frames = []
+      await gen3DumpGrid(onProgress, frames)
+      await gen3StillHere(at)
+      say(`a backup read: preset ${last.preset}, ${frames.length} frames, ${frames.reduce((n, f) => n + f.length, 0)} bytes`)
+      return { frames, number: last.preset, name: last.name || '' }
+    })
+  }
+
+  /**
+   * A BACKUP SENT BACK INTO THE EDIT BUFFER (lib/presetDump `loadable`):
+   * the computer app's own load (ForgeFX gen3.ts loadPresetBytes), the head
+   * pointed at the edit buffer, then every chunk and the foot, in order.
+   * No slot is written: only Save does that, afterwards, on a tap.
+   *
+   * NOTHING ELSE LEAVES THE PHONE WHILE IT GOES, as with a capture (pump,
+   * `captureBusy`): a read between two chunks is not what the computer
+   * does. Each frame is given time to leave before the next (`paceMs`: a
+   * MIDI jack carries 3,125 bytes a second, and an adapter handed 49,000
+   * at once drops most of them). The unit is asked which preset it is on
+   * first: one that does not answer is sent nothing. A frame the unit
+   * refuses stops it there, and the words say the preset may be part
+   * loaded.
+   *
+   * NOT SEEN ON A UNIT from a phone. What a unit answers to each frame is
+   * not known; the log has it.
+   */
+  function presetLoad(given, { onProgress, paceMs } = {}) {
+    if (!backupsOn()) return Promise.reject(unsupported())
+    const frames = loadable(given, model)
+    if (!frames) return Promise.reject(badInput(NOT_WHOLE))
+    if (captureBusy) return Promise.reject(failure(`The ${spec.name} is ${busyWith}. Try again when it has finished.`, 409))
+    const of = frames.reduce((n, f) => n + f.length, 0)
+    const tell = (sent) => {
+      if (typeof onProgress !== 'function') return
+      try {
+        onProgress({ sent, of })
+      } catch {
+        // A screen that has gone cannot stop the send it started.
+      }
+    }
+    return inGrid(async () => {
+      const here = await presetNow('write')
+      if (!here || here === SKIPPED || rejected(here) || !Number.isInteger(here.number)) {
+        say('a backup was not sent: the unit did not say which preset it is on')
+        throw failure(`The ${spec.name} didn’t answer, so the backup wasn’t sent. Try again in a moment.`, 504)
+      }
+      notePreset(here, true)
+      const started = time.now()
+      let sent = 0
+      let went = 0
+      tell(0)
+      loadHand = frames
+      busyWith = 'loading a backup'
+      captureBusy = true
+      try {
+        for (const f of frames) {
+          const answer = await ex(f, { fn: f[5], ms: WAIT.watch, what: `a backup, part ${went + 1} of ${frames.length}`, priority: 'write', capture: true })
+          if (rejected(answer)) {
+            say(`the unit refused part ${went + 1} of ${frames.length} of a backup: code ${answer.rejected}`)
+            throw failure(`The ${spec.name} refused the backup part-way${went ? ', so the preset loaded on it may be damaged. Choose the preset again on the unit to bring it back' : ''}.`, 502, { partial: went > 0 })
+          }
+          went += 1
+          sent += f.length
+          tell(sent)
+          await pause(Number.isFinite(paceMs?.(f.length)) ? Math.max(0, paceMs(f.length)) : Math.ceil(f.length / 3.125) + 60)
+        }
+      } catch (err) {
+        if (went > 0 && went < frames.length && err && err.partial === undefined) {
+          say(`a backup stopped after part ${went} of ${frames.length}: ${err?.message || err}`)
+          err.partial = true
+        }
+        throw err
+      } finally {
+        loadHand = null
+        captureBusy = false
+        busyWith = 'taking a capture'
+        /* Whatever part of it went, what was read of the preset before is not the unit's now. */
+        if (went > 0) {
+          moved()
+          sceneCache = null
+          last.name = ''
+          chainChanged()
+        }
+        /* What was asked meanwhile goes now. */
+        pump()
+      }
+      say(`a backup sent to the edit buffer: ${frames.length} frames, ${of} bytes, in ${((time.now() - started) / 1000).toFixed(1)} s`)
+      return { ok: true, frames: frames.length, bytes: of }
+    })
   }
 
   /**
@@ -6496,7 +6627,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * have its read held with the others and then write once the capture is
      * over: a scene landing half a minute after the tap.
      */
-    if (captureBusy && method !== 'GET' && options?.capturing !== true) throw failure(`The ${spec.name} is taking a capture. Try again when it has finished.`, 409)
+    if (captureBusy && method !== 'GET' && options?.capturing !== true) throw failure(`The ${spec.name} is ${busyWith}. Try again when it has finished.`, 409)
     /* Play's, counted while it is answered: nothing of Edit's starts meanwhile (editWaits). */
     const play = route.edit === true ? null : playBegins(method === 'GET' && BLOCK_READS.includes(clean))
     tapUntil = deadline
@@ -7108,6 +7239,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      */
     /** Save the unit's edit buffer over the preset it is on (lib/bleSave): see storePreset, above. */
     storePreset,
+    /** A backup kept on this device (lib/presetDump): the loaded preset read whole, and one sent back into the edit buffer. Both refuse where `backups` is shut, and on an AM4. */
+    presetDump,
+    presetLoad,
     /** Whether the chain has been read as a grid since the last scene or preset change: what a place or a cable is held to (chainSeen). The chain editor reads the grid first where it has not (lib/device chainReadFirst). */
     chainRead: () => gridSeenAt !== null && gridSeenAt === moves,
     forgetSceneNames() {
