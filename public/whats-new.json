@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-23",
+      "day": "23 November 2026",
+      "version": "2.4.0",
+      "lines": [
+        {
+          "text": "Fixed again: a pedal’s hold pop-up (its quick edit) could refuse to scroll on a page with more knobs than fit. It now lets go by itself, and the sentence about channels is no longer under the knobs, so more pages fit without scrolling.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-22",
       "day": "22 November 2026",
       "version": "2.3.9",
@@ -251,37 +262,6 @@
         },
         {
           "text": "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-13",
-      "day": "13 November 2026",
-      "version": "1.90.53",
-      "lines": [
-        {
-          "text": "On an iPhone or iPad, when your Bluetooth adapter has dropped off, Look for the adapter again now shows straight away instead of after fifteen seconds.",
-          "only": "ios"
-        },
-        {
-          "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time.",
-          "only": null
-        },
-        {
-          "text": "On an Axe-Fx III over Bluetooth or a USB cable, Edit now has the NAM block’s knobs: Input Gain, Bass, Mid, Treble, Bright, Bright Cap and Level. The capture is still chosen on the unit.",
-          "only": null
-        },
-        {
-          "text": "In Edit, tapping the number under a knob now highlights it, so you can type a new number straight over it.",
-          "only": null
-        },
-        {
-          "text": "When Bluetooth won’t connect, the app now says the first thing to try: unplug the Bluetooth adapter for a few seconds and plug it back in.",
-          "only": null
-        },
-        {
-          "text": "Over Bluetooth or a USB cable on an Axe-Fx III, Play now shows the Crossover, Vocoder, Tone Match and Dynamic Distortion blocks, and turns them on and off like your other effects. On an FM9, the Crossover, Vocoder and Tone Match too.",
           "only": null
         }
       ]

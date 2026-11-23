@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-23",
+    "day": "23 November 2026",
+    "version": "2.4.0",
+    "lines": [
+      {
+        "text": "Fixed again: a pedal’s hold pop-up (its quick edit) could refuse to scroll on a page with more knobs than fit. It now lets go by itself, and the sentence about channels is no longer under the knobs, so more pages fit without scrolling.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-22",
     "day": "22 November 2026",
     "version": "2.3.9",

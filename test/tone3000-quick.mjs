@@ -116,7 +116,7 @@ export function run(test) {
     assert.equal((sheet.match(/\{libraryDoor\}/g) || []).length, 2)
     assert.match(sheet, /note="Channel" beside=\{keep\.button\} head=\{keep\.notes\}> \{ampDoor\} \{libraryDoor\} <View/)
     /* Over the knobs, in the pop-up that has them: "on top of it have it say tone 3000". */
-    assert.match(sheet, /\{libraryDoor\} <PopKnobs block=\{block\} onScrollLock=\{setHeld\} \/>/)
+    assert.match(sheet, /\{libraryDoor\} <PopKnobs block=\{block\} onScrollLock=\{holdStill\} \/>/)
     /* The page is in the SAME pop-up (same title, same way out, open on the same condition), with the channels put away while it is up. */
     assert.match(sheet, /<Sheet open=\{!!block && channels\?\.length > 1\} onClose=\{onClose\} title=\{name\} note="Captures" tall scrollKey="library"> <Tone3000InPop id=\{library\.id\} n=\{library\.n\} from=\{library\.from\} onBack=\{\(line\) => \{ setCame\(line\) setBrowsing\(false\) \}\} \/> <\/Sheet>/)
     /* It is one sheet, so each of its two pages starts at its own top: left where a long list was scrolled to, the knobs came up blank. */
