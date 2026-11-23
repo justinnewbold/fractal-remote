@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-23",
+      "version": "2.4.0",
+      "lines": [
+        "Fixed again: a pedal’s hold pop-up (its quick edit) could refuse to scroll on a page with more knobs than fit. It now lets go by itself, and the sentence about channels is no longer under the knobs, so more pages fit without scrolling."
+      ]
+    },
+    {
       "date": "2026-11-22",
       "version": "2.3.9",
       "lines": [

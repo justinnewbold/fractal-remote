@@ -150,6 +150,8 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
         /* Moved: a turn, not a hold. Held: nothing more moves this knob. */
         if (holdWait.current && (Math.abs(gesture.dy) > HOLD_SLOP || Math.abs(gesture.dx) > HOLD_SLOP)) stopHold()
         if (holding.current) return
+        /* Said again as it turns: whoever holds the page still for this knob knows the finger is still on it (Play's hold pop-up lets go of a hold nothing has renewed, screens/Stage HELD_STALE_MS). */
+        live.current.onScrollLock?.(true)
         const { param: p, onChange: change } = live.current
         /*
          * 260 points of travel covers the whole range. Longer than the

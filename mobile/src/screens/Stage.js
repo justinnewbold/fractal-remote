@@ -2593,6 +2593,9 @@ const FOOT_ROW = { flexDirection: 'row', gap: space.sm }
  *
  * The same words the browser uses, because they are the same fact.
  */
+/* How long the hold pop-up stays held still with no word from a knob (components/Knob says it at every move). */
+const HELD_STALE_MS = 2500
+
 function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapped = null, blocks = null, elsewhere = false }) {
   const name = block?.name || block?.slug || ''
   /*
@@ -2623,6 +2626,28 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
    */
   const heldNow = useRef(false)
   heldNow.current = held
+  /*
+   * AND A HOLD NOTHING HAS RENEWED IS LET GO OF. "It won't let me scroll, so
+   * I can see the bottom part" (Justin, 23 November 2026, a reverb's pop-up
+   * again, after the fix above). A knob says it has the finger as it lands
+   * and again at every move (components/Knob); a hold with no such word for
+   * HELD_STALE_MS has no finger turning anything, whatever became of its
+   * release, and the sheet scrolls again. The log says when this had to.
+   */
+  const heldAt = useRef(0)
+  const holdStill = useCallback((on) => {
+    heldAt.current = Date.now()
+    setHeld(on)
+  }, [])
+  useEffect(() => {
+    if (!held) return undefined
+    const t = setInterval(() => {
+      if (Date.now() - heldAt.current < HELD_STALE_MS) return
+      logDebug('play', 'the hold pop-up was held still with no knob turning', 'let go, so it scrolls')
+      setHeld(false)
+    }, 500)
+    return () => clearInterval(t)
+  }, [held])
   const fingersOff = useCallback(() => {
     if (!heldNow.current) return
     /* After the knob's own release, which runs first where it runs at all. */
@@ -2722,12 +2747,8 @@ function ChannelSheet({ block, channels, onClose, onPick, knobs = false, onSwapp
       >
         {ampDoor}
         {libraryDoor}
-        <PopKnobs block={block} onScrollLock={setHeld} />
-        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
-          {block?.channel ? `${name} is on channel ${block.channel}. ` : ''}
-          Each channel keeps its own model and settings; the scene remembers which one this block
-          plays.
-        </Text>
+        <PopKnobs block={block} onScrollLock={holdStill} />
+        {/* No sentence about channels here: with the knobs up it was the one thing pushed off the bottom of a page that otherwise fits (23 November 2026). The pop-up with the channels alone keeps it. */}
         {swapDoor}
       </Sheet>
     )

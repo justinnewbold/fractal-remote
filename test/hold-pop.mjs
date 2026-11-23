@@ -159,7 +159,14 @@ export function run(test) {
     assert.match(foot, /accessibilityRole="radiogroup"/)
     assert.match(foot, /<Press\s+key=\{ch\}\s+grow\s+label=\{ch\}\s+height=\{POP_CHANNEL_TALL\}\s+tone="live"\s+on=\{block\?\.channel === ch\}\s+accessibilityLabel=\{`Channel \$\{ch\}`\}\s+onPress=\{\(\) => onPick\(ch\)\}\s+\/>/, 'the channels under the knobs are not the same buttons, doing the same thing')
     assert.ok(!/<PopKnobs/.test(foot), 'the knobs are in the foot, so they would never scroll')
-    assert.match(withKnobs, /<PopKnobs block=\{block\} onScrollLock=\{setHeld\} \/>/)
+    assert.match(withKnobs, /<PopKnobs block=\{block\} onScrollLock=\{holdStill\} \/>/)
+    /* A hold nothing has renewed is let go of (23 November 2026): a knob says it has the finger at every move, and the sheet stops holding still 2.5 s after the last such word, whatever became of the knob's release. */
+    assert.match(stage, /const HELD_STALE_MS = 2500/)
+    assert.match(sheet, /const holdStill = useCallback\(\(on\) => \{\s+heldAt\.current = Date\.now\(\)\s+setHeld\(on\)\s+\}, \[\]\)/)
+    assert.match(sheet, /if \(Date\.now\(\) - heldAt\.current < HELD_STALE_MS\) return\s+logDebug\('play', 'the hold pop-up was held still with no knob turning', 'let go, so it scrolls'\)\s+setHeld\(false\)/)
+    assert.match(read('mobile/src/components/Knob.js'), /if \(holding\.current\) return\s+\/\*[^*]*\*\/\s+live\.current\.onScrollLock\?\.\(true\)/, 'a turning knob does not say it still has the finger')
+    /* And the sentence about channels is not under the knobs, where it was the one thing pushed off a page that otherwise fits. */
+    assert.ok(!/Each channel keeps its own model/.test(withKnobs), 'the channel sentence is back under the knobs')
     assert.match(sheet, /const \[held, setHeld\] = useState\(false\)\s+useEffect\(\(\) => \{\s+if \(!withKnobs\) setHeld\(false\)\s+\}, \[withKnobs\]\)/, 'a sheet left held when its knobs went would never scroll again')
 
     /* The sheet itself: `still` stops its scroll and nothing else, and a sheet without it scrolls as it did. */
