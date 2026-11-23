@@ -244,7 +244,20 @@ export const WAIT = {
   am4ReadAll: 10000,
   /* The same for an FM3's block (fm3-edit.js): an amp is about 1,700 bytes, half a second at 31,250 baud. */
   gen3ReadAllGap: 2500,
-  gen3ReadAll: 10000,
+  gen3ReadAll: 15000,
+  /*
+   * AND ONCE THE ANSWER HAS BEGUN, A STALL THIS LONG IS WAITED OUT (23
+   * November 2026). His FM3 through a WIDI Uhost at "weak signal": a Cab's
+   * read (424 values) came in as some 1,290 bytes and then nothing for more
+   * than 2.5 s, four times running, each given up and asked again, with the
+   * rest of the last answer arriving inside the next ("2 whole messages
+   * that were not its answer ... function 0x76"). The read took 13.6 s and
+   * a channel tap behind it was dropped as late. An answer that has begun
+   * is worth more waiting than one that has not: the adapter is holding
+   * the rest, and asking again only puts another answer behind it. The
+   * whole may take 15 s now (it was 10).
+   */
+  gen3ReadAllStall: 6000,
   /*
    * AND THE FIRST BYTE OF EDIT'S READ OF A BLOCK, within this (16 November
    * 2026). A healthy read is done in 0.3 to 0.7 s on his units, its first
@@ -1666,7 +1679,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
         /* Only a read with nothing back yet can still have its head to come; one given up part-way has the drain below. */
         if (g3Edit && job.opts.fn === g3Edit.READ_ALL && !job.back && !job.opts.messages) lateReads.set(decode14(job.out[6], job.out[7]), time.now() + LATE_MS)
-        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.back ? job.opts.ms : firstWait} ms${cameBack(job)}`)
+        if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.back ? gapOf(job) : firstWait} ms${cameBack(job)}`)
       }
       /* Given up on part-way through: the unit may still be sending the rest of it. */
       if (job.opts.collect && job.back) {
@@ -1766,6 +1779,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * the wait again; and an answer given up on part-way holds the line until
    * the unit has been quiet for as long again, up to the most it may take.
    */
+  /* The wait between an answer's bytes: longer once a frame of the answer itself has come, for a question that says so (`stallMs`: Edit's whole-block read, WAIT.gen3ReadAllStall). */
+  const gapOf = (job) => (job.back && job.opts.stallMs !== undefined ? job.opts.stallMs : job.opts.ms)
+
   function heardBytes(bytes) {
     if (closed || bytes == null || typeof bytes.length !== 'number') return
     /* Every byte, a timing clock's too: whether anything at all came back on this connection (bytesIn). */
@@ -1806,7 +1822,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } else if (job && job.opts.collect && job.timer !== undefined) {
       time.clearTimeout(job.timer)
       const left = (job.opts.cap ?? Infinity) - (now - job.started)
-      job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
+      job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(gapOf(job), left)))
     } else if (drainUntil > now) {
       drainUntil = Math.min(now + WAIT.am4DumpGap, drainCap)
     }
@@ -1925,7 +1941,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         count('parts')
         time.clearTimeout(job.timer)
         const left = (job.opts.cap ?? Infinity) - (now - job.started)
-        job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
+        job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(gapOf(job), left)))
         return
       }
     }
@@ -5047,6 +5063,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       cap: WAIT.gen3ReadAll,
       /* A read that has not begun in a second is given up, and the line goes to what is waiting (WAIT.gen3ReadAllFirst). */
       firstMs: WAIT.gen3ReadAllFirst,
+      stallMs: WAIT.gen3ReadAllStall,
       collect: g3Edit.readAllCollector(model, e),
       priority: 'editRead'
     })
@@ -6175,6 +6192,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const got = await ask(g3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the settings of the ${name}`, {
       cap: WAIT.gen3ReadAll,
       firstMs: WAIT.gen3ReadAllFirst,
+      stallMs: WAIT.gen3ReadAllStall,
       collect: g3Edit.readAllCollector(model, e),
       priority: 'editRead'
     })
