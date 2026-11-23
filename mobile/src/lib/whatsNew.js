@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-23",
     "day": "23 November 2026",
-    "version": "2.4.0",
+    "version": "2.4.1",
     "lines": [
+      {
+        "text": "Over Bluetooth on an FM3, FM9 or Axe-Fx III with a weak signal: a pedal’s knobs now load on the first try more often. When the connection stalls part-way through, the app waits for the rest instead of starting over.",
+        "only": null
+      },
       {
         "text": "Fixed again: a pedal’s hold pop-up (its quick edit) could refuse to scroll on a page with more knobs than fit. It now lets go by itself, and the sentence about channels is no longer under the knobs, so more pages fit without scrolling.",
         "only": null

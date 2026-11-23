@@ -19989,6 +19989,11 @@ export function run(test) {
     assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, rate: 0.3 }))).slug, 'amp')
     /* Begun, then two seconds before the first page: the wait once anything has come is the gap, so it is read whole. */
     assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editGap: 2000 }))).slug, 'amp')
+    /* And a stall of four seconds part-way (23 November 2026: an FM3 through a WIDI Uhost at weak signal stalled past 2.5 s four times running, each given up and asked again): an answer that has begun is waited out, six seconds between its bytes. Seven is given up, and the log says the six. */
+    assert.equal((await read(await onTheLine('fm3', { edit: () => true, settings, editGap: 4000 }))).slug, 'amp')
+    const stalled = await onTheLine('fm3', { edit: () => true, settings, editGap: 7000 })
+    await assert.rejects(read(stalled), (err) => err.status === 504)
+    assert.ok(stalled.logs.some((l) => /^no answer to the settings of the Amp in 6000 ms: /.test(l)), stalled.logs.filter((l) => /no answer/.test(l)).join(' | '))
     /* A page lost on the way and the footer after it: damaged, never a block read from the wrong places. */
     await assert.rejects(read(await onTheLine('fm3', { edit: () => true, settings, editShort: true })), (err) => err.status === 502 && /came back damaged/.test(err.message))
     /* The collector itself: a head of 8, four values and the footer is damaged; all eight is the block. */
