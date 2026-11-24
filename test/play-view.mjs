@@ -127,6 +127,9 @@ export function run(test) {
     assert.match(stage, /onPick=\{\(n\) => goTo\(n\)\}/, 'a preset tile does not load its preset the way Next does')
     /* The tiles never ask the unit for a name: Play is no reason to read a preset mid-song. */
     assert.doesNotMatch(read('mobile/src/components/PresetTiles.js'), /\bwant\(|wantOnly|refresh\(/)
+    /* The block runs across both lanes, so its tiles are sized from its own measured width, never only Play's lane (a Pixel Fold's eight tiles filled half the row). */
+    assert.match(flat('mobile/src/components/PresetTiles.js'), /const wide = tileWidth\(own \|\| row, cols, space\.sm\)/, 'the preset tiles are sized from the lane, not their own width')
+    assert.match(flat('mobile/src/components/PresetTiles.js'), /setOwn\(w\)/)
     assert.doesNotMatch(read('mobile/src/lib/playView.js'), /^import /m, 'the rules import something, so the test no longer runs them whole')
   })
 }

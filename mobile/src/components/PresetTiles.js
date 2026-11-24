@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
@@ -15,17 +16,31 @@ import { tagEdge } from './PresetTag'
  *
  * Play says which presets, how many to a row and how tall; this draws them
  * and tells Play how tall the block came out (`onGrid`).
+ *
+ * THE WIDTH IS THE BLOCK'S OWN, MEASURED HERE. Play's `row` is the row its
+ * scene tiles share, which on an opened fold or a tablet is one LANE (half
+ * the screen, beside the chain), while this block runs across both: sized
+ * from it, eight tiles came out half as wide as they should and filled half
+ * the row (a Pixel Fold, 24 November 2026). `row` is only the first frame's
+ * guess, until the block has been laid out.
  */
 const HEAD = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }
 const FACE = Platform.select(mono)
 const WORD = { fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }
 
 export default function PresetTiles({ numbers, current, cols, tall, row, said, labelOf, nameOf, tagOf, onPick, onGrid, dimmed = false }) {
-  const wide = tileWidth(row, cols, space.sm)
+  const [own, setOwn] = useState(0)
+  const wide = tileWidth(own || row, cols, space.sm)
   /* Two lines of name where the tile has the height for them under its slot. */
   const lines = tall >= 60 ? 2 : 1
   return (
-    <View style={{ gap: space.sm }}>
+    <View
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width
+        if (w > 0 && Math.abs(w - own) >= 0.5) setOwn(w)
+      }}
+      style={{ gap: space.sm, alignSelf: 'stretch' }}
+    >
       <View style={HEAD}>
         <Text accessibilityRole="header" style={[WORD, { color: color.silkFaint }]}>
           Presets
