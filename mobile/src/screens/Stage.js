@@ -6,6 +6,9 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { BIG_FOUR_ACROSS, bigFourOn, bigFourTile, loadBigFour } from '../lib/bigFour'
+import { SOURCE_SAID, loadCount, loadSource, loadView, postureOf, presetCols, presetTall, showsPedals, showsPresets, showsScenes, tilesFor, viewDrawn } from '../lib/playView'
+import { notePlayPosture, usePlayViews } from '../lib/usePlayViews'
+import PresetTiles from '../components/PresetTiles'
 import { together } from '../lib/name-fit'
 import { firstFrame } from '../lib/screenShape'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
@@ -157,6 +160,19 @@ const ofUnit = (s) => s.unit
 let lastPlay = null
 /* No extra padding on either side: every shape but the spread one. */
 const NO_FOLD = { left: 0, right: 0 }
+const NO_TILES = Object.freeze({ numbers: [], source: 'around', fell: false })
+/** The presets wearing the colour tag preset `n` wears; every tagged preset where it wears none (lib/playView tilesFor). */
+function sameColourAs(n, slots) {
+  const mine = Number.isInteger(n) ? presetTag(n) : null
+  const out = []
+  for (let i = 0; i < slots; i++) {
+    const tag = presetTag(i)
+    if (tag && (!mine || tag === mine)) out.push(i)
+  }
+  return out
+}
+/* The chain where Play's view leaves the pedals out (lib/playView): kept in the tree, so nothing it holds is unmounted, and given no room. */
+const HIDDEN = { display: 'none' }
 /* Lined up (lib/linedPlay): each half's heading is this tall, so the two grids start level. */
 const LANE_HEAD = 18
 /* The two halves side by side, the fold's gap between them; and each half, its heading over its grid. */
@@ -595,7 +611,29 @@ export default function Stage({
    * It settles rather than oscillating: the grids are subtracted out of the
    * measurement, so the chrome figure does not move when the tiles resize.
    */
-  const scenes = sceneShape(caps)
+  /*
+   * PLAY'S VIEW (lib/playView): preset tiles over the scenes and pedals, or
+   * with the scenes alone, or alone. For an account the views are open to
+   * (lib/usePlayViews: his, until features PLAY_VIEWS_FOR_EVERYONE); for
+   * every other, `view` is 'rig' and nothing below changes a number.
+   *
+   * Each way of holding the device keeps its own view (`posture`, from
+   * Play's own shape and size), and the two that hide something are drawn
+   * only where Play is a phone's plain page: never in a half beside a tool,
+   * on a phone on its side, or on a big screen, which are offered presets
+   * on top. A hidden part counts as no tiles everywhere below (`scenes`,
+   * `fitBlocks`, and its grid's height put back to nought, below), so every layout rule
+   * reads a preset with no scenes, or an empty chain, as it always has.
+   */
+  const playViews = usePlayViews()
+  /* Wider than tall or not, from Play's own width and height, as every shape of Play is (never the window, never the kind of device). Its height is measured further down, so it is kept here from the draw before and set again there when it moves. */
+  const [playTall, setPlayTall] = useState(0)
+  const posture = postureOf({ wide: shape.wide, across: playWidth, tall: playTall })
+  const view = playViews ? viewDrawn(loadView(sync, posture), { plain: posture === 'phone' && !inSide && !low, short: low }) : 'rig'
+  const scenesAll = sceneShape(caps)
+  const scenes = showsScenes(view) ? scenesAll : { ...scenesAll, hasScenes: false }
+  const hideChain = !showsPedals(view)
+  const [presetGrid, setPresetGrid] = useState(0)
   const [viewport, setViewport] = useState(0)
   const [content, setContent] = useState(0)
   const [sceneGrid, setSceneGrid] = useState(0)
@@ -701,7 +739,7 @@ export default function Stage({
   }
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
   const held = chainNow.elsewhere && heldGrid.current.count > 0 ? heldGrid.current : null
-  const fitBlocks = held ? held.count : tiles
+  const fitBlocks = hideChain ? 0 : held ? held.count : tiles
   /* The "Updating…" line stands in for a moment and goes: a trim measured
      over it is not the grid's, and is dropped with it. The grey cards no
      longer count — they hold the grid's own height.
@@ -749,6 +787,54 @@ export default function Stage({
   /** The two numbers the tiles are actually drawn with. */
   const tileH = fitted ? fitted.tile : size.tile
   const fxCols = fitted ? fitted.fxCols : shape.fxCols
+  if (playTall !== viewport) setPlayTall(viewport)
+  /* And thrown away when Play's view changes (lib/playView): the trim only ever grows, and a view with fewer tiles has the room back. */
+  const viewKey = view === 'rig' ? 'rig' : `${view}:${loadCount(sync)}:${loadSource(sync)}`
+  const lastView = useRef(viewKey)
+  if (lastView.current !== viewKey) {
+    lastView.current = viewKey
+    if (trim !== 0) setTrim(0)
+  }
+  /* A part the view leaves out has no grid: its last measured height would otherwise stay in the fit's sums. */
+  useEffect(() => {
+    if (hideChain) setBlockGrid(0)
+    if (!scenes.hasScenes) setSceneGrid(0)
+  }, [hideChain, scenes.hasScenes])
+  /*
+   * THE PRESET TILES (lib/playView): which presets, how many to a row, how
+   * tall. On top they are a fixed block, which the fit above already leaves
+   * room for (it is part of `chrome`). Sharing the screen with the scenes,
+   * or alone, they take their share of what Play has for tiles: its height
+   * less everything that is neither their grid nor the scenes' (`chrome`
+   * less their own grid, so the figure does not move as they resize) and
+   * less the same trim the fit takes.
+   */
+  const presetSource = loadSource(sync)
+  const presetTiles = showsPresets(view)
+    ? tilesFor({
+        source: presetSource,
+        count: loadCount(sync),
+        current: preset?.number ?? null,
+        slots: slotCount(caps),
+        order,
+        starred: favourites,
+        sameColour: presetSource === 'colour' ? sameColourAs(preset?.number ?? null, slotCount(caps)) : null
+      })
+    : NO_TILES
+  const presetAcross = presetCols(view, { posture, count: presetTiles.numbers.length })
+  const presetRows = Math.ceil(presetTiles.numbers.length / presetAcross)
+  const presetHigh = presetTall({
+    view,
+    room: viewport > 0 && content > 0 ? viewport - (chrome - presetGrid) - trim : 0,
+    presetRows,
+    sceneRows: scenes.hasScenes ? Math.ceil(scenes.count / Math.max(1, sceneCols)) : 0,
+    gap: space.sm,
+    plainTall: size.tile,
+    most: shape.tileMax,
+    fit: fitOn
+  })
+  /* The View sheet on the top bar chooses for the posture Play says it is in, and says when the tiles fell back to the presets around this one. */
+  useEffect(() => notePlayPosture(posture, presetTiles.fell ? presetSource : null), [posture, presetTiles.fell, presetSource])
   /*
    * PLAY LINED UP (lib/linedPlay), Justin's "A1": on a screen big both ways
    * (Play opened up, and at least LINED_TALL of its own height), the scenes
@@ -1327,6 +1413,25 @@ export default function Stage({
   }
 
   /*
+   * A PRESET TILE (lib/playView): load that preset and, in a setlist, set
+   * its song up, exactly as Next does once it knows where it lands (`step`,
+   * above, whose rules about a late or skipped song are these). Kept beside
+   * it and not inside it, so Previous and Next are the code they were.
+   */
+  const goTo = (next, at = Date.now()) => {
+    const awayAtNext = awayNow()
+    const mine = ++stepsRef.current
+    const loading = loadPreset(next, at)
+    const song = order ? songFor(source, lists, next) : null
+    if (song) {
+      Promise.resolve(loading)
+        .then((landed) => (landed === true && mine === stepsRef.current && !songLate(song, awayAtNext) ? applySong(song, { scene: writeScene, tempo: writeTempo }) : null))
+        .catch(() => {})
+    }
+    return loading
+  }
+
+  /*
    * DIMMED, NEVER MOVED. Opacity only — on the two grids and on the four
    * buttons at the foot that send something — so nothing on the screen is a
    * pixel out of place while the link is down, and nothing jumps when it is
@@ -1454,7 +1559,7 @@ export default function Stage({
       label: Number.isInteger(preset?.number) ? slotLabel(preset.number, caps?.presets?.addressing) : '',
       scene,
       sceneNames,
-      sceneCount: scenes.hasScenes ? scenes.count : 0,
+      sceneCount: scenesAll.hasScenes ? scenesAll.count : 0,
       /* Not another preset's: a tap would switch whatever shares the id. */
       chain: chainNow.elsewhere ? [] : blocks,
       /* What holding a pedal offers on the wrist: what holding its tile does
@@ -1683,6 +1788,24 @@ export default function Stage({
         </View>
         )}
 
+        {/* Preset tiles (lib/playView), for an account Play's views are open to: over the scenes and the chain in every layout, since everything above the two is room the fit already leaves alone. */}
+        {showsPresets(view) && presetTiles.numbers.length ? (
+          <PresetTiles
+            numbers={presetTiles.numbers}
+            current={preset?.number ?? null}
+            cols={presetAcross}
+            tall={presetHigh}
+            row={row}
+            said={SOURCE_SAID[presetTiles.source]}
+            labelOf={(n) => slotLabel(n, caps?.presets?.addressing)}
+            nameOf={nameOf}
+            tagOf={presetTag}
+            onPick={(n) => goTo(n)}
+            onGrid={setPresetGrid}
+            dimmed={Boolean(dim)}
+          />
+        ) : null}
+
         {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
         <View
           onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
@@ -1785,7 +1908,7 @@ export default function Stage({
         {/* ---------------------------------------------------------- blocks */}
         {/* Lined up with no scenes, the chain keeps its own half. */}
         {lined && !fill && !scenes.hasScenes ? <View style={laneBox} /> : null}
-        <View onLayout={noteChainAlone} style={chainLane}>
+        <View onLayout={noteChainAlone} style={hideChain ? HIDDEN : chainLane}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
@@ -2266,9 +2389,9 @@ export default function Stage({
           presetName={presetSays}
           presetSlot={presetSlot || ''}
           presetNumber={preset?.number ?? null}
-          scene={scenes.hasScenes ? scene : null}
+          scene={scenesAll.hasScenes ? scene : null}
           sceneNames={sceneNames}
-          sceneCount={scenes.hasScenes ? scenes.count : 0}
+          sceneCount={scenesAll.hasScenes ? scenesAll.count : 0}
           onScene={writeScene}
           onStep={step}
           canPrevious={lastAt !== null}

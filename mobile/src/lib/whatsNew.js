@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-24",
+    "day": "24 November 2026",
+    "version": "2.4.2",
+    "lines": [
+      {
+        "text": "Your account photo on the top bar is a little bigger, the same size as the volume and settings buttons beside it.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-23",
     "day": "23 November 2026",
     "version": "2.4.1",

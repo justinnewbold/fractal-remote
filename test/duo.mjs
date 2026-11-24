@@ -625,7 +625,7 @@ export function run(test) {
         if (/\bfitted\b/.test(styleText)) sized.push(`{ style: ${styleText}, onLayout: ${stage.slice(onLayout.start, onLayout.end)} }`)
       }
     })
-    const names = ['useState', 'useRef', 'useEffect', 'loadFit', 'sync', 'findLooper', 'allBlocks', 'chainNow', 'blockColor', 'vp4Here', 'blocks', 'playWidth', 'scenes', 'sceneCols', 'fitWide', 'shape', 'space', 'row', 'size']
+    const names = ['useState', 'useRef', 'useEffect', 'loadFit', 'sync', 'findLooper', 'allBlocks', 'chainNow', 'blockColor', 'vp4Here', 'blocks', 'playWidth', 'scenes', 'sceneCols', 'fitWide', 'shape', 'space', 'row', 'size', 'hideChain']
     // eslint-disable-next-line no-new-func
     const lines = new Function(
       ...names,
@@ -677,7 +677,7 @@ export function run(test) {
           deps[at] = list
         }
         dirty = false
-        out = lines(useState, useRef, useEffect, (_s, fallback) => fallback, {}, () => null, [], { elsewhere: false, late: false }, () => '#888', () => false, Array(pedals).fill({}), width, { hasScenes: true, count: 8 }, shape.sceneCols, g.fitWide, shape, { sm: 8, lg: 16 }, row, g.SIZES[step])
+        out = lines(useState, useRef, useEffect, (_s, fallback) => fallback, {}, () => null, [], { elsewhere: false, late: false }, () => '#888', () => false, Array(pedals).fill({}), width, { hasScenes: true, count: 8 }, shape.sceneCols, g.fitWide, shape, { sm: 8, lg: 16 }, row, g.SIZES[step], false)
         return effects
       }
       /* Draw until nothing more is set, running each render's effects as React does. */
@@ -807,7 +807,7 @@ export function run(test) {
     /* The cards are the pedals' own height, so their rows are the chain's. */
     assert.ok(stage.split('height={pedalHigh}').length - 1 >= 2, 'the grey cards are not the pedals’ height')
     assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\n/)
-    assert.match(stage, /const fitBlocks = held \? held\.count : tiles\n/)
+    assert.match(stage, /const fitBlocks = hideChain \? 0 : held \? held\.count : tiles\n/)
   })
 
   test('the tempo box, the channel picker, the Looper, the tuner and the watch tip sit on Play’s own frame, outside its scrolling page', () => {

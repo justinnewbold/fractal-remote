@@ -54,6 +54,12 @@ const NEW_HERE = { 'mobile/src/components/Colours.js': ['StyleSection', 'StyleCh
  * coverage test below holds by reading them.
  */
 const NEW_FILES = ['mobile/src/components/UnitCard.js']
+/*
+ * New since the record, and its one read of the glass is the speaker's own
+ * disc (components/Glass GlassDisc), which Classic already takes away: the
+ * round View button on the top bar (24 November 2026).
+ */
+const DISC_ONLY = ['mobile/src/components/PlayViewButton.js']
 
 /* The keys that make an object a style. Over-collecting is harmless: an object drawn the same compares the same. */
 const STYLE_KEYS = new Set(
@@ -744,7 +750,8 @@ export function run(test) {
     /* Every file that reads a glass colour, the card corner, a builder or the components is in the record, or is the mechanism. */
     const READS = /\bcolor\.(glass[A-Z]\w*|sheetFill|sheetLift|scrim|grabber)\b|\bradius\.card\b|\bglass(Card|Field|Control|Float|Sheet|Pane|Lit)\(|\bpane(Rim|Fill|Well|Rule)\(|<Glass(Card|Disc)\b|\bcapsule\(|\bclassic\(\)|\bcardCorner\(/
     const all = phoneFiles()
-    const outside = all.filter((f) => READS.test(code(read(f))) && !covered.has(f) && !MECHANISM.includes(f) && !NEW_FILES.includes(f))
+    const outside = all.filter((f) => READS.test(code(read(f))) && !covered.has(f) && !MECHANISM.includes(f) && !NEW_FILES.includes(f) && !DISC_ONLY.includes(f))
+    for (const f of DISC_ONLY) assert.deepEqual((code(read(f)).match(new RegExp(READS.source, 'g')) || []), ['<GlassDisc'], `${f} reads more of the glass than the disc`)
     assert.deepEqual(outside, [], `these read the glass and are not held to main in Classic: ${outside.join(', ')}`)
     /* A file new since the record draws no shadow and no sheen in Classic, and takes the card's corner from cardCorner. */
     for (const f of NEW_FILES) {

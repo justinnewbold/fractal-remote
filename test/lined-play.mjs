@@ -198,7 +198,7 @@ export function run(test) {
     assert.match(stage, /const sceneLane = fill \? fillGrid\(fill\.sceneCols, fill\.scene\.wide\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the scenes are not a half lined up')
     assert.match(stage, /const chainLane = fill \? fillGrid\(fill\.chainCols, fill\.pedal\.wide\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the chain is not a half lined up')
     assert.match(stage, /<View style=\{sceneLane\}>/)
-    assert.match(stage, /<View onLayout=\{noteChainAlone\} style=\{chainLane\}>/)
+    assert.match(stage, /<View onLayout=\{noteChainAlone\} style=\{hideChain \? HIDDEN : chainLane\}>/)
     /*
      * Each half its own width, never flex: on an iPad Pro on its side
      * (7 November 2026) flex: 1 came out 661 points for the scenes and 463

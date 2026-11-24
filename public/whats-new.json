@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-24",
+      "day": "24 November 2026",
+      "version": "2.4.2",
+      "lines": [
+        {
+          "text": "Your account photo on the top bar is a little bigger, the same size as the volume and settings buttons beside it.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-23",
       "day": "23 November 2026",
       "version": "2.4.1",
@@ -243,29 +254,6 @@
         },
         {
           "text": "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM, IR Player, Vocoder, Tone Match and Dynamic Distortion blocks now have their own colors on Play instead of gray. On an FM9, the Vocoder and Tone Match do too. On an FM9 or Axe-Fx III, the browser’s Starter chain now builds on the third row of an empty preset.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-14",
-      "day": "14 November 2026",
-      "version": "1.90.72",
-      "lines": [
-        {
-          "text": "Over Bluetooth or a USB cable on an Axe-Fx III, the NAM block has its own picture on Play: a small neural network in rainbow colors.",
-          "only": null
-        },
-        {
-          "text": "On an iPhone or iPad on iOS 26 or later, Apple’s Bluetooth screen has no button that says Done, so the app now says how to close it: swipe that screen down.",
-          "only": "ios"
-        },
-        {
-          "text": "After you send feedback or a problem report, the button at the top now says Done instead of Back.",
-          "only": null
-        },
-        {
-          "text": "Bluetooth: when your adapter connects but your unit isn’t answering, the Bluetooth page now offers Use a different adapter right there, in case your unit is on another adapter than last time. And after Use a different adapter, the app no longer goes straight back to the adapter you had.",
           "only": null
         }
       ]
