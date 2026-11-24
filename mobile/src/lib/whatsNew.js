@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-24",
     "day": "24 November 2026",
-    "version": "2.4.3",
+    "version": "2.4.4",
     "lines": [
       {
         "text": "AM4: the Pitch block is called Pitch (it showed as “0x6e” through a computer) and has its own settings in Edit and in its quick edit: type, mix, level, shift, detune, harmony, key and scale. Through a computer this needs the newest computer app.",
