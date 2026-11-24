@@ -32,6 +32,8 @@ import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 import { deviceNoun } from '../lib/device-word'
 import Avatar from './Avatar'
+import PlayViewButton from './PlayViewButton'
+import { usePlayViews } from '../lib/usePlayViews'
 import { useProfilePhoto } from '../lib/accountPhoto'
 import { avatarShown } from '../lib/profile-photo'
 
@@ -65,11 +67,17 @@ const TRIAL_PILL_SIZE = font.micro + 2
  * apps cannot drift into saying different things about the same link.
  */
 /* The bar on a phone held on its side (`slim`): less over and under its row, laid over the bar's own style. */
+/*
+ * The account's photo: as big as the round of glass behind the speaker and
+ * the gear. "Also make the profile little picture the same size as those
+ * ones as well. It's a little small" (Justin, 23 November 2026). It was 24.
+ */
+const PHOTO = 30
 const SLIM = { paddingVertical: space.xs }
 /* What App puts on the bar's left (`lead`), in the version's place and taking the slack it took; with the version kept in front of it on a big screen, the bar's own gap between them. */
 const LEAD_ROW = { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.md }
 
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0 }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0, onPlay = false }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -320,6 +328,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * until the word is gone.
    */
   const photo = useProfilePhoto()
+  /* The round View button (components/PlayViewButton), between the speaker and the gear: only while Play is the screen, for an account Play's views are open to (lib/usePlayViews). */
+  const views = usePlayViews()
+  const viewHere = Boolean(onPlay) && views
   const { width: across, fontScale = 1 } = useWindowDimensions()
   /* The bar is the window less the side strips App's SafeAreaView keeps clear of (the Duo closed, a tablet with its camera down one side): 0 on a phone held upright. */
   const { left: stripLeft = 0, right: stripRight = 0 } = useSafeAreaInsets()
@@ -329,7 +340,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const whereNeeds = 2 + 2 * space.sm + String(pill.where || '').length * 0.56 * font.micro * (fontScale || 1)
   /* And less what the two sides' buttons keep on the bar's left on a big screen (`leadWide`, below: from the bar's edge, so its own left padding is already in it). Nothing on any other window. */
   const leadKeeps = Math.max(0, (Number(leadWide) || 0) - space.lg)
-  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0) - leadKeeps
+  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - PHOTO - 22 - (hasOutput ? space.md + 24 : 0) - (viewHere ? space.md + 24 : 0) - leadKeeps
   const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && Math.max(pillNeeds, whereNeeds) <= besidePhoto
   /*
    * ON A PHONE HELD ON ITS SIDE (App: lib/twoSides phoneSidewaysOn, his
@@ -453,7 +464,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
             onOpenAccount()
           }}
         >
-          <Avatar uri={photo.uri} size={24} />
+          <Avatar uri={photo.uri} size={PHOTO} />
         </Pressable>
       ) : null}
 
@@ -701,6 +712,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           />
         </Pressable>
       ) : null}
+
+      {viewHere ? <PlayViewButton /> : null}
 
       {/*
         The gear is a picture now, and it is his own.

@@ -15647,7 +15647,7 @@ export function run(test) {
     const bar = withoutComments(raw).replace(/\s+/g, ' ')
     /* Beside the pill, before it; only for somebody signed in here, never in the demo, and out of the way while Save needs the room. */
     assert.match(bar, /const photo = useProfilePhoto\(\) [\s\S]{0,900}?const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows in the demo, signed out, beside Save, or beside words it cuts')
-    assert.match(bar, /\{showPhoto \? \( <Pressable accessibilityRole="button" accessibilityLabel="Your account" accessibilityHint="Your name, photo and password" hitSlop=\{\{ top: 10, bottom: 10, left: 14, right: 6 \}\} onPress=\{\(\) => \{ tick\(\) onOpenAccount\(\) \}\} > <Avatar uri=\{photo\.uri\} size=\{24\} \/> <\/Pressable> \) : null\}/, 'the photo is not its own button, named Your account, opening the account')
+    assert.match(bar, /\{showPhoto \? \( <Pressable accessibilityRole="button" accessibilityLabel="Your account" accessibilityHint="Your name, photo and password" hitSlop=\{\{ top: 10, bottom: 10, left: 14, right: 6 \}\} onPress=\{\(\) => \{ tick\(\) onOpenAccount\(\) \}\} > <Avatar uri=\{photo\.uri\} size=\{PHOTO\} \/> <\/Pressable> \) : null\}/, 'the photo is not its own button, named Your account, opening the account')
     assert.ok(raw.indexOf('<Avatar ') > raw.indexOf('v${APP_VERSION}') && raw.indexOf('<Avatar ') < raw.indexOf('{pill.status}'), 'the photo is not between the version and the pill')
     /* A thumb's 44 each way, and the pill keeps the overlap it reaches into. */
     assert.ok(10 + 24 + 10 >= 44 && 14 + 24 + 6 >= 44, 'the photo is smaller than a thumb')
@@ -15690,8 +15690,10 @@ export function run(test) {
     const { pillWords } = await import('../shared/pill-words.mjs')
     const bar = withoutComments(read('mobile/src/components/TopBar.js')).replace(/\s+/g, ' ')
     assert.match(bar, /gap: space\.md, paddingHorizontal: space\.lg,/)
-    const photo = Number(/<Avatar uri=\{photo\.uri\} size=\{(\d+)\} \/>/.exec(bar)?.[1])
-    assert.equal(photo, 24)
+    /* As big as the round of glass behind the speaker and the gear, since 24 November 2026 ("a little small"); it was 24. */
+    assert.match(bar, /<Avatar uri=\{photo\.uri\} size=\{PHOTO\} \/>/)
+    const photo = Number(/const PHOTO = (\d+) /.exec(bar)?.[1])
+    assert.equal(photo, 30)
     const speaker = 24
     const gear = 22
     /*
@@ -15706,9 +15708,9 @@ export function run(test) {
     assert.match(bar, /const \{ left: stripLeft = 0, right: stripRight = 0 \} = useSafeAreaInsets\(\)/, 'the bar takes its width for the window’s, past a side strip (the Duo closed)')
     assert.match(bar, /const whereNeeds = 2 \+ 2 \* space\.sm \+ String\(pill\.where \|\| ''\)\.length \* 0\.56 \* font\.micro \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s second line, where the computer is')
     /* (Less `leadKeeps`, what the two sides' buttons keep on a big screen's bar: 0 on every phone held upright, test/two-sides.mjs.) */
-    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\) - leadKeeps /, 'the bar no longer works out what the row leaves the pill beside the photo')
+    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - PHOTO - 22 - \(hasOutput \? space\.md \+ 24 : 0\) - \(viewHere \? space\.md \+ 24 : 0\) - leadKeeps /, 'the bar no longer works out what the row leaves the pill beside the photo')
     assert.match(bar, /const showPhoto = [^\n]*&& !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
-    assert.match(bar, /leadWide = 0 \}\)/, 'the bar keeps room for the two sides’ buttons on a window that has none')
+    assert.match(bar, /leadWide = 0, onPlay = false \}\)/, 'the bar keeps room for the two sides’ buttons on a window that has none')
     assert.match(bar, /const leadKeeps = Math\.max\(0, \(Number\(leadWide\) \|\| 0\) - space\.lg\) /)
     const shows = (across, status, unit, withSpeaker, scale = 1, where = '', strip = 0) => {
       const letter = 0.602 * font.small * scale
@@ -23719,7 +23721,7 @@ export function run(test) {
        the last chain's room — as many cards, as wide, as high — and the fit
        keeps counting those blocks, so nothing below the pedals jumps. */
     assert.match(stage, /if \(!chainNow\.elsewhere && tiles > 0 && blockGrid > 0\) heldGrid\.current = \{ count: tiles, height: blockGrid \}/, 'the pedals’ room is not remembered')
-    assert.match(stage, /const fitBlocks = held \? held\.count : tiles/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
+    assert.match(stage, /const fitBlocks = hideChain \? 0 : held \? held\.count : tiles/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
     assert.match(stage, /blocks: fitBlocks,/, 'the fit does not use the held count')
     assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? pedalWide : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
     assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')

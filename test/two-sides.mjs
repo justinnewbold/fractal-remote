@@ -921,7 +921,7 @@ export function run(test) {
     assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     /* The bar: something on its left in the version's place, and less padding, only when App says. */
-    assert.match(bar, /onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0 \}\)/)
+    assert.match(bar, /onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0, onPlay = false \}\)/)
     assert.match(bar, /\{lead \? \(\s*<View style=\{LEAD_ROW\}>\s*\{leadKeepsVersion \? \(/)
     assert.match(bar, /const LEAD_ROW = \{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space\.md \}\n/)
     /* The two sides' buttons there: the names for the list, Swap between them, Full or Two sides; a block's knobs never fill the window. Every line a big screen changes is behind `big`, so with it false this is what #850 drew. */
@@ -1051,7 +1051,7 @@ export function run(test) {
     /* The bar: the version, as wide as its words, then the buttons; and the photo only where the pill still fits beside what they keep. */
     assert.match(bar, /\{leadKeepsVersion \? \(\s*<Text numberOfLines=\{1\} style=\{\{ color: color\.silkFaint, fontSize: font\.micro, fontFamily: face, letterSpacing: 1 \}\}>\s*\{`v\$\{APP_VERSION\}`\}\s*<\/Text>\s*\) : null\}\s*\{lead\}/)
     assert.match(bar, /const leadKeeps = Math\.max\(0, \(Number\(leadWide\) \|\| 0\) - space\.lg\)\n/)
-    assert.match(bar, /\(hasOutput \? space\.md \+ 24 : 0\) - leadKeeps\n/)
+    assert.match(bar, /\(hasOutput \? space\.md \+ 24 : 0\) - \(viewHere \? space\.md \+ 24 : 0\) - leadKeeps\n/)
     /* Only `slim` is laid over the bar's style: its height on a big screen is what it was. */
     assert.match(bar, /zIndex: 3\s*\}, slim \? SLIM : null\]\}/)
     /* The buttons: Play alone, Two sides; a tool filling the window, its name and Two sides; beside Play, measured from where the row starts so Swap is on the line. */

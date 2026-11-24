@@ -2068,6 +2068,8 @@ export default function App() {
               lead={sideLead}
               leadKeepsVersion={big}
               leadWide={sideLeadWide}
+              /* The round View button is Play's (components/PlayViewButton). */
+              onPlay={screen === 'stage'}
             />
             <DemoUnit open={pickUnit} onClose={() => setPickUnit(false)} />
             <LiveUnit

@@ -948,3 +948,14 @@ export const BACKUPS_FOR_EVERYONE = false
  * unit: it opens on his word, with its What's new line then.
  */
 export const BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE = false
+
+/*
+ * PLAY'S VIEWS (lib/playView; "I would like to make more options for people
+ * to be able to adjust their views of the screens ... they should be able to
+ * adjust the views of their presets as well", Justin, 23 November 2026): the
+ * round View button on the top bar, between the speaker and the gear, and
+ * preset tiles on Play. "Put the view settings on my account only at first,
+ * so I can test it out." HIS ACCOUNT ONLY (lib/usePlayViews). It opens on
+ * his word, with its What's new line then.
+ */
+export const PLAY_VIEWS_FOR_EVERYONE = false
