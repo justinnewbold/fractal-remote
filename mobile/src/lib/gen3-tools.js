@@ -3,7 +3,7 @@
  * new pin; a test holds the commits below to the lock. */
 
 /** The commits these tables were read from. */
-export const TOOLS_FROM = {"forgefx":"68a7ffbb112e4cd7993c847bcb8b9b804266c15a","codec":"a17eb4a51d6d86985d8d8040966caa8da295f364"}
+export const TOOLS_FROM = {"forgefx":"3a401cc73ba12e0d75151e6a876f786c487c59c8","codec":"a17eb4a51d6d86985d8d8040966caa8da295f364"}
 
 /** The cab IR names, one list per distinct bank; a unit names its banks by their place here (GEN3_TOOLS[unit].irs). */
 export const IR_BANKS = [

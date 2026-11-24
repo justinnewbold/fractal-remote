@@ -137,8 +137,8 @@ export const AM4_PITCH_CODE = 0x6e
 const isAm4 = (deviceSlug) => String(deviceSlug || '').toLowerCase() === 'am4'
 export function nameAm4Nam(blocks, deviceSlug, open, knobs = false, add = false) {
   if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
-  /* Where this account may add the new blocks, the Pitch block is named with it (nameAm4Pitch, below). */
-  if (add === true) blocks = nameAm4Pitch(blocks, deviceSlug, open)
+  /* The Pitch block is named with it (nameAm4Pitch, below), whoever put it in the preset. */
+  blocks = nameAm4Pitch(blocks, deviceSlug, open)
   let named = false
   const out = blocks.map((b) => {
     if (!b || b.unknown !== true || b.slug || !AM4_NAM_CODES.includes(b.effectId)) return b
@@ -179,13 +179,23 @@ export function am4PitchInPalette(list, deviceSlug, open) {
   if (list.some((b) => b?.page === AM4_PITCH_CODE)) return list
   return [...list, { page: AM4_PITCH_CODE, name: 'Pitch', slug: 'pitch', family: 'pitch' }]
 }
+/*
+ * A computer app that does not know the block sends it as a block of its
+ * own called by its number ("0x6e", not held as unknown), which Play drew
+ * as a pedal named 0x6e (Justin's picture, 24 November 2026: "The pitch
+ * block shows up weird"). So it is named whether it came with no slug or
+ * with that number for one. One from a computer app that knows the block
+ * comes as `pitch` already and is left as it is.
+ */
+const PITCH_SENT_AS = ['', '0x6e']
 export function nameAm4Pitch(blocks, deviceSlug, open) {
   if (open !== true || !Array.isArray(blocks) || !isAm4(deviceSlug)) return blocks
   let named = false
   const out = blocks.map((b) => {
-    if (!b || b.unknown !== true || b.slug || b.effectId !== AM4_PITCH_CODE) return b
+    if (!b || b.effectId !== AM4_PITCH_CODE || !PITCH_SENT_AS.includes(String(b.slug || '').toLowerCase())) return b
     named = true
-    return { ...b, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, knobs: false, movable: true }
+    const { unknown, ...rest } = b
+    return { ...rest, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, turns: true, movable: true }
   })
   return named ? out : blocks
 }
