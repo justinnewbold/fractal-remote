@@ -24249,7 +24249,16 @@ export function run(test) {
       assert.deepEqual(p.unit.state.slots, [0x3a, 0x76, 0x77, 0x6e])
       const drawn = (await p.get('/preset/blocks')).find((b) => b.effectId === 0x6e)
       assert.equal(drawn.slug, 'pitch')
-      assert.equal(drawn.knobs, false, 'Edit is offered knobs the app does not have for the Pitch block')
+      assert.notEqual(drawn.knobs, false, 'the Pitch block has no knobs with its list open')
+      /* Its settings, one at a time, by numbers worked out from the gen-3 list (lib/am4-own-knobs): Type is 10, Shift 1 is 25, Mix is 1. */
+      const own = await import('../mobile/src/lib/am4-own-knobs.js')
+      const rows = own.AM4_OWN_KNOBS.pitch.params
+      assert.equal(own.AM4_OWN_KNOBS.pitch.each, true)
+      const at = (label) => rows.find((r) => r[1] === label)[3]
+      assert.deepEqual([at('Level'), at('Mix'), at('Type'), at('Master Pitch'), at('Shift 1'), at('Detune 1'), at('Key'), at('Scale')], [0, 1, 10, 12, 25, 21, 18, 19])
+      assert.equal(new Set(rows.map((r) => r[3])).size, rows.length, 'a Pitch setting is listed twice')
+      assert.ok(!rows.some((r) => [2, 3, 4].includes(r[3])), 'the balance, the on and off or the bypass mode is among the Pitch block’s settings')
+      assert.ok(rows.every((r) => r[2] === 0x6e))
       assert.equal(drawn.bypassed, false)
       assert.ok(!p.logs.some((l) => /refused to send|no name for yet/.test(l)), p.logs.join(' | '))
       assert.ok(!p.unit.state.frozen)

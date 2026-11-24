@@ -3371,9 +3371,21 @@ export function run(test) {
       assert.deepEqual(am4NamInPalette(computers, 'am4', true), [...computers, { page: 0xd1, name: 'NAM', slug: 'nam', family: 'NAM' }, { page: 0x6e, name: 'Pitch', slug: 'pitch', family: 'pitch' }])
       /* The Pitch block the computer sends with no name: named, on Play with no knobs, and the editor's to move and remove; only where this account may add it. */
       const pitch = [{ effectId: 0x6e, unknown: true, row: 0, col: 2 }]
-      assert.deepEqual(nameAm4Nam(pitch, 'am4', true, false, true)[0], { effectId: 0x6e, unknown: true, row: 0, col: 2, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, knobs: false, movable: true })
-      assert.equal(ownInChainEditor(nameAm4Nam(pitch, 'am4', true, false, true), true)[0].unknown, false)
-      assert.equal(nameAm4Nam(pitch, 'am4', true, false), pitch)
+      assert.deepEqual(nameAm4Nam(pitch, 'am4', true, false, true)[0], { effectId: 0x6e, row: 0, col: 2, slug: 'pitch', family: 'pitch', name: 'Pitch', onPlay: true, turns: true, movable: true })
+      /* A computer app that does not know the block sends it called by its number, not held as unknown: Play drew a pedal named 0x6e (24 November 2026). Named all the same, whoever put it in the preset. */
+      const numbered = [{ effectId: 0x6e, slug: '0x6e', name: '0x6e', row: 1, col: 1, bypassed: null }]
+      const called = nameAm4Nam(numbered, 'am4', true, false, false)[0]
+      assert.equal(called.name, 'Pitch')
+      assert.equal(called.slug, 'pitch')
+      assert.equal(called.turns, true)
+      assert.equal(nameAm4Nam(numbered, 'fm3', true, false, false)[0].name, '0x6e', 'another unit’s block 110 was named Pitch')
+      assert.equal(nameAm4Nam(numbered, 'am4', false, false, false)[0].name, '0x6e')
+      /* One a computer app that knows the block has already named is left as it came. */
+      const known = [{ effectId: 0x6e, slug: 'pitch', name: 'Pitch', row: 1, col: 1, bypassed: false }]
+      assert.equal(nameAm4Nam(known, 'am4', true, false, false), known)
+      assert.notEqual(ownInChainEditor(nameAm4Nam(pitch, 'am4', true, false, true), true)[0].unknown, true)
+      /* Named whether or not this account may add it: the block is in the preset either way. */
+      assert.equal(nameAm4Nam(pitch, 'am4', true, false)[0].name, 'Pitch')
       assert.equal(nameAm4Nam(pitch, 'fm3', true, false, true), pitch)
       assert.equal(am4NamInPalette(computers, 'am4', false), computers)
       assert.equal(am4NamInPalette(computers, 'fm3', true), computers)
