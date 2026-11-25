@@ -5202,6 +5202,91 @@ export function run(test) {
       assert.equal(keptFor(t.store, end)?.many, true, 'the count of two was not written down for the next launch')
     })
 
+    /*
+     * "C#2 −36 cents" and "A#2 −9.249712944030762 cents", some twenty times a
+     * second on one tuner (Justin, 25 November 2026): two Raspberry Pis on his
+     * account, each with a unit and its tuner going. The channel is the
+     * account's, every computer sends its events down it, and each end handed
+     * all of them on. A computer app from ForgeFX 8154957 on says whose each
+     * event is; the one not driven is not used.
+     */
+    test(`${end}: two computers, each sending events: only the driven computer's are handed on, without the name, and the other is said once in the log`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, store } = t
+      bench.computers = [PI5(), PI3()]
+      const got = []
+      const stop = relay.subscribeRemoteEvents((e) => got.push(e))
+      const evt = (payload) => bench.handlers['broadcast:evt']({ payload })
+      const census = counted(t)
+      await clock.advance(5000)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the pick is not driven: this does not test the filter')
+      /* The two tuners, interleaved as they came. */
+      evt({ type: 'tuner', freq: 69.3, note: 'C#', octave: 2, cents: -36, host: 'fractalpi' })
+      evt({ type: 'tuner', freq: 116.5, note: 'A#', octave: 2, cents: -9, host: 'raspberry pi 3' })
+      evt({ type: 'tuner', freq: 69.4, note: 'C#', octave: 2, cents: -35, host: 'fractalpi' })
+      evt({ type: 'scene', index: 3, host: 'fractalpi' })
+      evt({ type: 'scene', index: 1, host: 'raspberry pi 3' })
+      assert.deepEqual(
+        got,
+        [
+          { type: 'tuner', freq: 116.5, note: 'A#', octave: 2, cents: -9 },
+          { type: 'scene', index: 1 }
+        ],
+        'an event from the computer not driven was handed on, or the driven one’s came with its name still on it'
+      )
+      const said = store.logged.filter((line) => /not the computer driven/.test(line))
+      assert.equal(said.length, 1, `said once for each other computer on a connection, not at every event: ${said.join(' | ')}`)
+      assert.match(said[0], /an event \(tuner\) from fractalpi, which is not the computer driven \(raspberry pi 3\): not used/)
+      /* An older computer app names nobody: handed on as it always was, from whoever it is. */
+      got.length = 0
+      const old = { type: 'tempo', bpm: 120 }
+      evt(old)
+      assert.deepEqual(got, [old], 'an event with no name on it was dropped')
+      /* Another computer picked: its events are the ones used from then on. */
+      const picked = t.watch(relay.pickHost('fractalpi', { windowMs: 1500, sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      await clock.advance(5000)
+      assert.equal(picked.done && !picked.error, true, picked.error?.message)
+      assert.equal(relay.remoteChosenHost(), 'fractalpi')
+      got.length = 0
+      evt({ type: 'scene', index: 5, host: 'fractalpi' })
+      evt({ type: 'scene', index: 6, host: 'raspberry pi 3' })
+      assert.deepEqual(got, [{ type: 'scene', index: 5 }], 'the events did not follow the computer picked')
+      /* A new connection says it again, once. */
+      await newLink(t)
+      bench.computers = [PI5(), PI3()]
+      const again = counted(t)
+      await clock.advance(5000)
+      assert.equal(again.done, true)
+      const other = relay.remoteChosenHost() === 'fractalpi' ? 'raspberry pi 3' : 'fractalpi'
+      const before = store.logged.filter((line) => /not the computer driven/.test(line)).length
+      bench.handlers['broadcast:evt']({ payload: { type: 'scene', index: 2, host: other } })
+      bench.handlers['broadcast:evt']({ payload: { type: 'scene', index: 2, host: other } })
+      assert.equal(store.logged.filter((line) => /not the computer driven/.test(line)).length, before + 1, 'a new connection did not say it again, once')
+      stop()
+    })
+
+    test(`${end}: one computer: its events are handed on whatever name is on them, and the name is taken off`, async () => {
+      const t = await relayOnABench(end)
+      const { bench, clock, relay, store } = t
+      bench.computers = [computer('Studio', 'FM3')]
+      const got = []
+      relay.subscribeRemoteEvents((e) => got.push(e))
+      /* Before any count, and after it: with nothing chosen nothing is dropped. */
+      bench.handlers['broadcast:evt']({ payload: { type: 'scene', index: 1, host: 'Studio' } })
+      const census = counted(t)
+      await clock.advance(5000)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteChosenHost(), null, 'one computer was chosen by name: this does not test the unchosen road')
+      bench.handlers['broadcast:evt']({ payload: { type: 'tuner', note: 'E', octave: 2, cents: 4, host: 'Studio' } })
+      /* A computer the roll call never heard (it joined since): still handed on, since nothing says another is driven. */
+      bench.handlers['broadcast:evt']({ payload: { type: 'scene', index: 2, host: 'Late' } })
+      /* And what is no event object at all goes on as it came. */
+      bench.handlers['broadcast:evt']({ payload: null })
+      assert.deepEqual(got, [{ type: 'scene', index: 1 }, { type: 'tuner', note: 'E', octave: 2, cents: 4 }, { type: 'scene', index: 2 }, null])
+      assert.ok(!store.logged.some((line) => /not the computer driven/.test(line)), 'the log names a computer not driven on a one-computer account')
+    })
+
     test(`${end}: one computer and nothing picked: reads go at once and unaddressed, exactly as before`, async () => {
       const { bench, clock, relay, watch } = await relayOnABench(end)
       bench.computers = [computer('Studio', 'FM3')]
