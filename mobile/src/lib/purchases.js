@@ -75,8 +75,10 @@ const STUCK_KEY = 'fractal.stuck'
 
 /* And the free trial this phone last heard of, for the account it was heard
    for, with the latest time the phone's clock has shown: { account, endsAt,
-   used, seen }. Read at launch so a trial works at a gig with no signal,
-   and never moved later (shared/trial-rule.mjs keptTrial, trialClock). */
+   used, seen }. Read at launch so a trial works at a gig with no signal.
+   Only the server's own answer moves the end, earlier or later (later is
+   an extension); never the phone's clock (shared/trial-rule.mjs keptTrial,
+   trialClock). */
 const TRIAL_KEY = 'fractal.trial'
 
 /*

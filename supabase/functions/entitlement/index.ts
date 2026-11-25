@@ -256,8 +256,10 @@ async function claim(email: string): Promise<boolean> {
  *
  * `undefined` when the question could not be put (the table not there yet,
  * the database out of reach): then the answer carries no `trial` at all, and
- * the app keeps the end it heard last, which it never moves later. null is a
- * definite "never had one".
+ * the app keeps the end it heard last. An answer's end is the row's own, so
+ * a trial given more days (extend_trial, 20261125_trial_extensions.sql) is
+ * told to the app here, and the app keeps the later end. null is a definite
+ * "never had one".
  */
 async function trialFor(account: string): Promise<ReturnType<typeof trialAnswer> | undefined> {
   const url = Deno.env.get('SUPABASE_URL')

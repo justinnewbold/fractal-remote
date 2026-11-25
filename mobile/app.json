@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "2.4.7",
+    "version": "2.4.8",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",

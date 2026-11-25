@@ -22,8 +22,9 @@
  * end (shared/trial-rule.mjs; 7 November 2026). `trialEndsAt` is the end the
  * phone last heard from the server for the account signed in here, in ms,
  * and `now` the phone's clock that never runs backwards (trialClock). Past
- * the end it is nothing, offline or not: the phone never moves an end later,
- * and no "the store cannot be reached" makes a trial last.
+ * the end it is nothing, offline or not: only the server's own answer moves
+ * an end later (an extension), never the phone, and no "the store cannot be
+ * reached" makes a trial last.
  *
  * Written out here rather than imported, because this file imports nothing
  * (see above); test/trial.mjs holds it to trial-rule's trialLive.
