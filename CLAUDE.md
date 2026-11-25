@@ -753,6 +753,14 @@ rest) stay where a VP4 owner meets them.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**2.0.0 is live in both stores** (Justin, 25 November 2026: "2.0.0 are live
+in both stores so please update that"; Apple approved it on 18 November).
+public/store-versions.json says 2.0.0 on both, so a 1.90.0 copy is told to
+update, and public/bluetooth.html and public/support.html say saving, Quick
+build, the chain editor and renaming work over Bluetooth from 2.0.0. STILL
+AS THEY WERE: the setup email's "with no saving (save on the unit itself)"
+(his yes and a redeploy) and the Google Play Description (when he asks).
+
 **1.90.0 is live in both stores** (the App Store on 9 November 2026, 17:12
 UTC by Apple's own listing; Google Play on 10 November 2026, by its own
 listing and Justin's "Google's 1.9 0.0 is already live"), so Edit over
