@@ -89,11 +89,19 @@ export const trialClock = (now = Date.now(), seen = 0) => Math.max(Number.isFini
  *           for a definite "no trial", or { endsAt }
  *   account who is signed in on the device now
  *
- * The server's word wins whenever there is one, and it can never be longer
- * than the trial it started: the row's end is fixed when it is written. With
- * no word, the device keeps the last end it heard for THIS account, and only
- * that: an end heard for another account is nobody's here. Nothing here ever
- * moves an end later than one already kept for the same account.
+ * The server's word wins whenever there is one, EARLIER OR LATER: the end it
+ * answers is the end kept. Later is an extension (25 November 2026: Justin
+ * can give a trial more days, and the trial email adds a week for somebody
+ * who never got connected; extend_trial in
+ * supabase/migrations/20261125_trial_extensions.sql is the only thing that
+ * moves a row's end). Until then the kept end was never moved later, whoever
+ * said so, and a device told of an extension would have gone on ending the
+ * trial on the old day.
+ *
+ * With no word, the device keeps the last end it heard for THIS account, and
+ * only that: an end heard for another account is nobody's here. So nothing
+ * on the device itself makes a trial longer: not being offline, and not its
+ * clock (trialClock, above). Only the server's own answer does.
  */
 export function keptTrial({ kept = null, heard, account = null } = {}) {
   const mine = kept && account && kept.account === account ? kept : null
@@ -101,8 +109,7 @@ export function keptTrial({ kept = null, heard, account = null } = {}) {
   if (heard === null) return account ? { account, endsAt: null, used: false } : null
   const end = timeOf(heard?.endsAt)
   if (end === null || !account) return mine
-  const was = timeOf(mine?.endsAt)
-  return { account, endsAt: was !== null ? Math.min(was, end) : end, used: true }
+  return { account, endsAt: end, used: true }
 }
 
 /**
@@ -182,6 +189,63 @@ export function trialStart({ bought = false, had = false, deviceTaken = false, s
     return { ok: true, startedAt: began, endsAt: trialEndsFrom(began), source: 'app_store_trial' }
   }
   return { ok: true, startedAt: now, endsAt: trialEndsFrom(now), source: 'server' }
+}
+
+/*
+ * MORE TIME, AND THE ONE EMAIL NEAR THE END (25 November 2026).
+ *
+ * A trial started and maybe never used again: one friendly email from Justin
+ * on its last day asking how it is going, and, for somebody who never got a
+ * unit connected, a week more by itself. Justin can also give any trial more
+ * days from his Developer page. The database holds the limits
+ * (20261125_trial_extensions.sql); which email goes is decided here, so a
+ * test runs every case and supabase/functions/trial-nudge only does what
+ * this says.
+ */
+
+/** How many days an extension adds: the week the email gives by itself, and the button on Justin's page. */
+export const TRIAL_EXTRA_DAYS = 7
+
+/** The most one extension may add, as the database checks it. */
+export const TRIAL_EXTRA_MOST = 30
+
+/** How close to its end a trial is when the email goes: its last day. */
+export const NUDGE_WITHIN_MS = DAY_MS
+
+/** A week added by a run whose email then did not go is still said as "added" for this long. After it, the email only asks. */
+export const NUDGE_TELL_MS = 2 * DAY_MS
+
+/** A number of days an extension may add: a whole number from 1 to TRIAL_EXTRA_MOST. */
+export const extraDaysOk = (days) => Number.isInteger(days) && days >= 1 && days <= TRIAL_EXTRA_MOST
+
+/**
+ * WHICH TRIAL EMAIL, IF ANY, for one trial at `now`:
+ *
+ *   'none'      no email: bought, emailed already, over, or not on its last
+ *               day yet
+ *   'extend'    never connected a unit, and not an iPhone or iPad's trial:
+ *               add TRIAL_EXTRA_DAYS and say so
+ *   'extended'  that week was added a moment ago by a run whose email did
+ *               not go (`autoExtendedAt`): say so, and add nothing more
+ *   'ask'       ask how it is going, and offer more time for a reply
+ *
+ * AN iPHONE OR iPAD'S TRIAL IS NEVER EXTENDED BY ITSELF. Apple's guideline
+ * 3.1.1 lets an app that is not a subscription offer a free trial only as an
+ * item named for its length, and that item is "7-Day Trial": a trial that
+ * grew by itself would not be the item Apple approved. So there the email
+ * asks, and more time is Justin's to give by hand when somebody replies.
+ *
+ * And never a second week by itself: somebody who has had it is asked.
+ */
+export function nudgePlan({ platform, connected = false, bought = false, nudged = false, endsAt, autoExtendedAt = null, now = Date.now() } = {}) {
+  if (bought || nudged) return 'none'
+  const end = timeOf(endsAt)
+  if (end === null || !Number.isFinite(now)) return 'none'
+  const added = timeOf(autoExtendedAt)
+  if (added !== null && now >= added && now - added < NUDGE_TELL_MS) return end > now ? 'extended' : 'none'
+  if (end <= now || end - now > NUDGE_WITHIN_MS) return 'none'
+  if (connected === true || platform === 'ios' || added !== null) return 'ask'
+  return TRIAL_PLATFORMS.includes(platform) ? 'extend' : 'ask'
 }
 
 /** A device id as a copy sends it: letters, digits and a few marks, 8 to 200 long. Anything else is refused. */

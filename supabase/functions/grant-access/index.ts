@@ -22,6 +22,11 @@
  *   leave-out        one email left out of them ({ out: false } puts it back)
  *   try-again        a refused setup email, by its address, due again
  *   reminder-sample  both setup emails to his own inbox, to read first
+ *   trials           every free trial, for the Trials page
+ *   extend-trial     more days on one account's trial ({ days }, 7 unless said)
+ *   trial-nudge-switch  the trial email on or off ({ enabled: true } is on;
+ *                    with no `enabled`, only read)
+ *   trial-nudge-sample  both trial emails to his own inbox, to read first
  *   handled          a Paid twice (or never confirmed) row on Sales, dealt with
  *   delete           one account deleted for good, from Everyone with an
  *                    account: asked once without { confirm } to look, then
@@ -48,7 +53,7 @@
  */
 import { forgetAccount } from '../_shared/forget-account.ts'
 import { dayCounts } from '../_shared/usage-count.mjs'
-import { TRIAL_PRODUCT_ID } from '../_shared/trial-rule.mjs'
+import { TRIAL_EXTRA_DAYS, TRIAL_EXTRA_MOST, TRIAL_PRODUCT_ID, extraDaysOk } from '../_shared/trial-rule.mjs'
 
 const RC = 'https://api.revenuecat.com/v2'
 const DEFAULT_PROJECT = 'proj827190e9'
@@ -216,10 +221,84 @@ async function trialProductIds(): Promise<Set<string>> {
  */
 async function trialsList(): Promise<unknown[] | null> {
   try {
+    /*
+     * Each row as the database gives it, so what 20261125_trial_extensions.sql
+     * added goes through with nothing to list here: whether the account ever
+     * connected a unit, when the trial email went and which, and the days it
+     * was extended by, by whom and when. Never an account's id.
+     */
     const rows = await rpc('owner_trials', {})
     return Array.isArray(rows) ? rows : null
   } catch {
     return null
+  }
+}
+
+/*
+ * MORE TIME ON SOMEBODY'S TRIAL, from the Trials page (25 November 2026):
+ * `days` more, by Justin's own hand ('owner'), written down by the database
+ * (extend_trial, 20261125_trial_extensions.sql), which is also what refuses
+ * an account with no trial or one that has the full version. Their app shows
+ * the new end the next time it asks the server. Nothing is emailed.
+ */
+async function extendTrial(found: Record<string, any> | null, email: string, asked: unknown) {
+  const account = found?.id ? String(found.id) : null
+  if (!account) return { ok: false, found: false, email, message: `No account uses ${email}.` }
+  const days = asked === undefined || asked === null ? TRIAL_EXTRA_DAYS : asked
+  if (!extraDaysOk(days)) return { ok: false, found: true, email, message: `More time is a whole number of days, from 1 to ${TRIAL_EXTRA_MOST}.` }
+  const said = (await rpc('extend_trial', { uid: account, days, who: 'owner' })) as { ok?: boolean; why?: string; ends_at?: string; old_ends_at?: string } | null
+  if (said?.ok === true) {
+    return { ok: true, found: true, email, days, endsAt: said.ends_at ?? null, was: said.old_ends_at ?? null, message: `${email} has ${days} more ${days === 1 ? 'day' : 'days'}.` }
+  }
+  const message =
+    said?.why === 'none'
+      ? `${email} has not started a free trial, so there is nothing to add days to.`
+      : said?.why === 'bought'
+        ? `${email} has the full version already, so there is no trial to add days to.`
+        : 'The database would not add the days.'
+  return { ok: false, found: true, email, why: said?.why ?? null, message }
+}
+
+/*
+ * THE TRIAL EMAIL'S SWITCH, off until he turns it on. Asked with `enabled`
+ * exactly true or false it is set; asked with anything else it is only
+ * read, which is how the Trials page shows it.
+ */
+async function trialNudgeSwitch(enabled: unknown) {
+  const set = enabled === true || enabled === false
+  const on = set ? (await rpc('set_trial_nudge_switch', { turn_on: enabled })) === true : (await rpc('trial_nudge_sending', {})) === true
+  return {
+    ok: true,
+    enabled: on,
+    message: !set
+      ? `The trial email is ${on ? 'on' : 'off'}.`
+      : on
+        ? 'The trial email is on. Anybody on their trial’s last day gets it within the hour.'
+        : 'The trial email is off. Nothing is sent, and nobody is given more time by itself, until you turn it on.'
+  }
+}
+
+/*
+ * BOTH TRIAL EMAILS, MARKED [Sample], to read before turning the email on.
+ * Sent by the trial-nudge function itself, so the words are the ones a
+ * customer would get; it sends them to the address replies go to, his own,
+ * and to nobody else. Nothing in the database is touched.
+ */
+async function trialNudgeSample() {
+  const service = env('SUPABASE_SERVICE_ROLE_KEY')
+  try {
+    const res = await fetch(`${env('SUPABASE_URL')}/functions/v1/trial-nudge`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${service}`, apikey: service, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sample' })
+    })
+    const body = await res.json().catch(() => ({}))
+    if (res.status === 404) return { ok: false, message: 'The trial email isn’t on the server yet, so there is no sample to send.' }
+    if (body?.why === 'not configured') return { ok: false, message: 'The server has no mail key set, so nothing was sent.' }
+    if (!res.ok || !body?.ok) return { ok: false, message: `The sample didn’t send (${res.status}).` }
+    return { ok: true, message: 'Both trial emails are on their way to your Gmail, marked [Sample]: the one that adds a week, and the one that asks. Replies to the real ones land there too.' }
+  } catch (err) {
+    return { ok: false, message: `Could not reach the trial email (${String((err as Error)?.message || err).slice(0, 120)}).` }
   }
 }
 
@@ -1112,7 +1191,7 @@ Deno.serve(async (req: Request) => {
   /* The lock. Anybody else gets the same answer as nobody at all. */
   if (!internal && (!me || !ADMINS.includes(me.id))) return json({ ok: false, message: 'Not allowed.' }, 403)
 
-  let input: { action?: string; email?: string; on?: unknown; out?: unknown; kind?: unknown; until?: unknown; count?: unknown; nearCount?: unknown } & DeleteInput = {}
+  let input: { action?: string; email?: string; on?: unknown; out?: unknown; kind?: unknown; until?: unknown; count?: unknown; nearCount?: unknown; days?: unknown; enabled?: unknown } & DeleteInput = {}
   try {
     input = await req.json()
   } catch {
@@ -1120,11 +1199,11 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled', 'delete']
+  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled', 'delete', 'extend-trial', 'trial-nudge-switch', 'trial-nudge-sample']
   if (internal ? action !== 'claim' : !ACTIONS.includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
-  if (!['sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'reminder-sample'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
+  if (!['sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'reminder-sample', 'trial-nudge-switch', 'trial-nudge-sample'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
   if (!env('REVENUECAT_SECRET')) return json({ ok: false, message: 'The server has no RevenueCat key set.' }, 500)
 
   try {
@@ -1143,8 +1222,13 @@ Deno.serve(async (req: Request) => {
     if (action === 'stuck') return json(await stuck())
     if (action === 'reminders') return json(await reminderSwitch(input.on === true))
     if (action === 'reminder-sample') return json(await reminderSample())
+    /* The trial email (25 November 2026): its switch, read or set, and both emails to his own inbox. */
+    if (action === 'trial-nudge-switch') return json(await trialNudgeSwitch(input.enabled))
+    if (action === 'trial-nudge-sample') return json(await trialNudgeSample())
 
     const found = (await rpc('account_details', { address: email })) as Record<string, any> | null
+    /* More days on their trial, by his hand (extendTrial above). */
+    if (action === 'extend-trial') return json(await extendTrial(found, email, input.days))
     if (action === 'leave-out') return json(await leaveOut(found, email, input.out !== false))
     if (action === 'try-again') return json(await tryAgain(found, email))
     /* A row of Sales at a glance, dealt with (see markHandled above). */

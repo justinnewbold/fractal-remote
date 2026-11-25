@@ -289,14 +289,27 @@ export function run(test) {
     assert.equal(rule.shouldAskToPay({ inApp: true, demo: true, checking: false, available: true, ...over }), false)
   })
 
-  test('trial: offline the phone keeps the last end it heard, for that account only, and never moves it later', () => {
+  test('trial: offline the phone keeps the last end it heard, for that account only, and only the server’s own answer moves it', () => {
     const kept = { account: 'a', endsAt: ENDS, used: true }
-    /* No answer (no signal, an older server): what was kept, for its own account only. */
+    /* No answer (no signal, an older server): what was kept, for its own account only, and never a day more. */
     assert.deepEqual(keptTrial({ kept, heard: undefined, account: 'a' }), kept)
     assert.equal(keptTrial({ kept, heard: undefined, account: 'b' }), null, 'one account’s trial shows on another')
-    /* The server's word wins, and never lengthens what was kept. */
-    assert.equal(keptTrial({ kept, heard: { endsAt: new Date(ENDS + 5 * DAY_MS).toISOString() }, account: 'a' }).endsAt, ENDS, 'a later end from anywhere moved the trial later')
+    assert.deepEqual(keptTrial({ kept, account: 'a' }), kept, 'with no word from the server the kept end moved')
+    /*
+     * The server's word wins, earlier or later. Later is an extension (25
+     * November 2026: extend_trial moves the row's end, and `entitlement`
+     * answers the row): until then a later end was thrown away, and a trial
+     * given a week more would have ended on the device on the old day.
+     */
+    assert.deepEqual(keptTrial({ kept, heard: { endsAt: new Date(ENDS + 7 * DAY_MS).toISOString() }, account: 'a' }), { account: 'a', endsAt: ENDS + 7 * DAY_MS, used: true }, 'a trial the server extended still ends on the old day on the device')
     assert.equal(keptTrial({ kept, heard: { endsAt: new Date(ENDS - DAY_MS).toISOString() }, account: 'a' }).endsAt, ENDS - DAY_MS)
+    /* A trial that had ended on the device runs again once the server says it was extended. */
+    assert.equal(trialLive(keptTrial({ kept, heard: { endsAt: new Date(ENDS + 7 * DAY_MS).toISOString() }, account: 'a' }).endsAt, ENDS + DAY_MS), true)
+    /* An answer with no end in it, or one that is not a date, is no word: what was kept stays. */
+    assert.deepEqual(keptTrial({ kept, heard: {}, account: 'a' }), kept)
+    assert.deepEqual(keptTrial({ kept, heard: { endsAt: 'soon' }, account: 'a' }), kept)
+    /* Another account's kept end is never the start of this one's. */
+    assert.deepEqual(keptTrial({ kept, heard: { endsAt: ENDS + DAY_MS }, account: 'b' }), { account: 'b', endsAt: ENDS + DAY_MS, used: true })
     assert.deepEqual(keptTrial({ kept, heard: null, account: 'a' }), { account: 'a', endsAt: null, used: false })
     /* A clock put back is not more trial: the latest time seen is the clock. */
     assert.equal(trialClock(START, ENDS + 1), ENDS + 1)

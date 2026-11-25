@@ -1712,6 +1712,81 @@ export function run(test) {
     }
   })
 
+  test('Trials: more days, the trial email’s switch and its sample are his alone, and each asks the database or the email function for exactly that', async () => {
+    /* 25 November 2026: Give 7 more days on the Trials page, and the trial email (supabase/functions/trial-nudge). */
+    const ann = { id: CUSTOMER, email: 'ann@example.com' }
+    const nudgeFn = (answer) => (c) => (c.url === `${PROJECT}/functions/v1/trial-nudge` ? new Response(JSON.stringify(answer.body), { status: answer.status }) : null)
+    /* MORE DAYS: by his hand ('owner'), 7 unless he says, for the account that email finds. */
+    const given = await grantAccess({ token: 'his-token', body: { action: 'extend-trial', email: 'Ann@Example.com' }, account: ann, rpcs: { extend_trial: { ok: true, ends_at: '2026-12-03T10:00:00Z', old_ends_at: '2026-11-26T10:00:00Z' } } })
+    assert.equal(given.status, 200, JSON.stringify(given.said))
+    assert.deepEqual(given.said, { ok: true, found: true, email: 'ann@example.com', days: 7, endsAt: '2026-12-03T10:00:00Z', was: '2026-11-26T10:00:00Z', message: 'ann@example.com has 7 more days.' })
+    assert.deepEqual(given.calls.filter((c) => c.url.endsWith('/rpc/extend_trial')).map((c) => c.body), [{ uid: CUSTOMER, days: 7, who: 'owner' }])
+    /* One query and the account's own lookup: no RevenueCat, no purchase written, nobody emailed. */
+    assert.ok(!given.calls.some((c) => c.url.startsWith(RC_PROJECT) || c.url.includes('record_entitlement') || c.url.includes('resend') || c.url.includes('/functions/v1/')), 'more days asks RevenueCat, writes a purchase or sends an email')
+    const one = await grantAccess({ token: 'his-token', body: { action: 'extend-trial', email: 'ann@example.com', days: 1 }, account: ann, rpcs: { extend_trial: { ok: true, ends_at: '2026-11-27T10:00:00Z' } } })
+    assert.equal(one.said.message, 'ann@example.com has 1 more day.')
+    /* Days that are not a whole number from 1 to 30 never reach the database. */
+    for (const days of [0, 31, 1.5, '7', -7]) {
+      const bad = await grantAccess({ token: 'his-token', body: { action: 'extend-trial', email: 'ann@example.com', days }, account: ann, rpcs: { extend_trial: { ok: true } } })
+      assert.equal(bad.said.ok, false, `${days} days were given`)
+      assert.match(bad.said.message, /from 1 to 30/)
+      assert.ok(!bad.calls.some((c) => c.url.endsWith('/rpc/extend_trial')), `${days} days reached the database`)
+    }
+    /* The database's own refusals, in plain words; nobody with that email; no email typed. */
+    for (const [why, words] of [['none', /has not started a free trial/], ['bought', /has the full version already/], ['bad', /would not add the days/]]) {
+      const no = await grantAccess({ token: 'his-token', body: { action: 'extend-trial', email: 'ann@example.com' }, account: ann, rpcs: { extend_trial: { ok: false, why } } })
+      assert.equal(no.said.ok, false)
+      assert.match(no.said.message, words)
+    }
+    const nobody = await grantAccess({ token: 'his-token', body: { action: 'extend-trial', email: 'nobody@example.com' }, account: null, rpcs: { extend_trial: { ok: true } } })
+    assert.deepEqual([nobody.said.ok, nobody.said.message], [false, 'No account uses nobody@example.com.'])
+    assert.ok(!nobody.calls.some((c) => c.url.endsWith('/rpc/extend_trial')))
+    assert.equal((await grantAccess({ token: 'his-token', body: { action: 'extend-trial' }, account: ann })).status, 400)
+    /* THE SWITCH: only read unless `enabled` is exactly true or false. */
+    const read1 = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-switch' }, rpcs: { trial_nudge_sending: false, set_trial_nudge_switch: true } })
+    assert.deepEqual(read1.said, { ok: true, enabled: false, message: 'The trial email is off.' })
+    assert.ok(!read1.calls.some((c) => c.url.endsWith('/rpc/set_trial_nudge_switch')), 'reading the switch set it')
+    for (const loose of ['true', 1, null, 'on']) {
+      const run = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-switch', enabled: loose }, rpcs: { trial_nudge_sending: false, set_trial_nudge_switch: true } })
+      assert.ok(!run.calls.some((c) => c.url.endsWith('/rpc/set_trial_nudge_switch')), `${JSON.stringify(loose)} turned the trial email on`)
+      assert.equal(run.said.enabled, false)
+    }
+    for (const enabled of [true, false]) {
+      const set = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-switch', enabled }, rpcs: { set_trial_nudge_switch: (b) => b.turn_on } })
+      assert.deepEqual(set.calls.filter((c) => c.url.endsWith('/rpc/set_trial_nudge_switch')).map((c) => c.body), [{ turn_on: enabled }])
+      assert.equal(set.said.enabled, enabled)
+      assert.match(set.said.message, enabled ? /is on\. Anybody on their trial’s last day gets it within the hour\./ : /is off\. Nothing is sent, and nobody is given more time by itself/)
+    }
+    /* THE SAMPLE: asked of the email function with the server's own key, and to no address from the request. */
+    const sample = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-sample', email: 'attacker@example.com' }, more: nudgeFn({ status: 200, body: { ok: true, sent: 2 } }) })
+    const asked = sample.calls.filter((c) => c.url === `${PROJECT}/functions/v1/trial-nudge`)
+    assert.equal(asked.length, 1)
+    assert.deepEqual(asked[0].body, { action: 'sample' }, 'the sample is sent where the request said')
+    assert.equal(asked[0].headers.Authorization, `Bearer ${SERVICE}`)
+    assert.equal(sample.said.ok, true)
+    assert.match(sample.said.message, /Both trial emails are on their way/)
+    const missing = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-sample' }, more: nudgeFn({ status: 404, body: {} }) })
+    assert.deepEqual([missing.said.ok, missing.said.message], [false, 'The trial email isn’t on the server yet, so there is no sample to send.'])
+    const nokey = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-sample' }, more: nudgeFn({ status: 200, body: { ok: false, why: 'not configured' } }) })
+    assert.match(nokey.said.message, /no mail key set/)
+    /* The lock every other action is behind: nobody else, and never the server's own key. */
+    for (const body of [{ action: 'extend-trial', email: 'ann@example.com' }, { action: 'trial-nudge-switch', enabled: true }, { action: 'trial-nudge-sample' }]) {
+      for (const [who, token, status] of [['nobody signed in', undefined, 403], ['a token that has run out', 'an-expired-token', 403], ['somebody else', 'a-strangers-token', 403], ['the server’s own key', SERVICE, 400]]) {
+        const run = await grantAccess({ token, body, account: ann, rpcs: { extend_trial: { ok: true }, set_trial_nudge_switch: true, trial_nudge_sending: true }, more: nudgeFn({ status: 200, body: { ok: true } }) })
+        assert.equal(run.status, status, `${who} asking ${body.action} was answered ${run.status}`)
+        assert.ok(!run.calls.some((c) => /\/rpc\/(extend_trial|set_trial_nudge_switch|trial_nudge_sending|account_details)$/.test(c.url) || c.url.includes('/functions/v1/trial-nudge')), `${who} asking ${body.action} reached the database or the email`)
+      }
+    }
+    /* The page's own words for a server, or a database, from before any of it. */
+    const { trialNudgeProblem } = await import('../shared/admin.mjs')
+    const noTable = await grantAccess({ token: 'his-token', body: { action: 'trial-nudge-switch' }, more: (c) => (c.url.endsWith('/rest/v1/rpc/trial_nudge_sending') ? new Response('{"code":"PGRST202"}', { status: 404 }) : null) })
+    assert.equal(noTable.said.ok, false)
+    assert.match(trialNudgeProblem(noTable.said), /database change that goes with it/)
+    /* The trials list passes the database's rows through as they are, the new facts with them. */
+    const rows = [{ email: 'ann@example.com', started_at: '2026-11-19T10:00:00Z', ends_at: '2026-12-03T10:00:00Z', platform: 'android', source: 'server', converted: false, connected: false, nudged_at: '2026-11-25T10:41:00Z', nudge_kind: 'extend', extended_days: 7, extended_by: 'auto', extended_at: '2026-11-25T10:41:00Z' }]
+    assert.deepEqual((await grantAccess({ token: 'his-token', body: { action: 'trials' }, rpcs: { owner_trials: rows } })).said, { ok: true, trials: rows })
+  })
+
   test('Day by day: People answers the days kept, and how many RevenueCat did not answer about, and still answers without the table', async () => {
     const { rpcs, more } = dayPeople()
     const { status, said } = await grantAccess({ token: 'his-token', body: { action: 'usage' }, rpcs, more })

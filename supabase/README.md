@@ -917,6 +917,113 @@ on an Apple ID that has bought the free item before, however long ago, taps
 Start 7-day free trial and gets seven days from that moment, on a device
 that has not had a trial. The function's log says `trial: started on ios`.
 
+## Trial email and extensions
+
+A trial started and never used again tells Justin nothing. So (25 November
+2026): one plain email from him on a trial's last day asking how it is
+going; a week more by itself for somebody who never connected a unit; a
+**Give 7 more days** button on each trial on his Trials page; and every
+extension written down. Three pieces, none of them live until Justin says
+so, and the email itself **off until** he has read the sample and turned it
+on:
+
+- `migrations/20261125_trial_extensions.sql` — `trial_extensions` (every
+  extension: whose, how many days, by `owner` or `auto`, the end before and
+  after), two columns on `trials` (`nudged_at`, `nudge_kind`: when the email
+  went and which), `extend_trial(uid, days, who)`, the switch
+  (`trial_nudge_switch`, **off**), who is due (`trial_nudges_due`), the claim
+  (`claim_trial_nudge`), a new `owner_trials()` for the Trials page, a hook
+  secret made in vault (`trial_nudge_hook_secret`, as the setup emails' is:
+  nothing to type or copy), and one pg_cron job, `trial-nudges`, at 41
+  minutes past every hour, which calls `run_trial_nudges()`. Everything is
+  service_role only.
+- `functions/trial-nudge/` — reads the switch; off, it only counts, and
+  sends and extends nothing; on, for each trial ending within a day it claims
+  the email in the database, adds the week if one is owed, and sends through
+  Resend from `noreply@newbold.cloud`, with replies to
+  `justinnewbold@gmail.com` (the setup emails' own secrets: `RESEND_API_KEY`,
+  `SETUP_FROM`, `SETUP_REPLY_TO`). One email a trial, ever, only to a
+  confirmed address, never to somebody who has the full version.
+- `functions/grant-access/` — three actions behind the same lock as every
+  other (Justin's account only): `extend-trial` (`{ email, days }`, 7 unless
+  said, `extend_trial` as `owner`), `trial-nudge-switch` (`{ enabled }`; with
+  no `enabled` it only reads) and `trial-nudge-sample` (both emails, marked
+  [Sample], to the reply address).
+
+**Which email** is `nudgePlan` in shared/trial-rule.mjs (test/trial-extensions.mjs
+runs every case):
+
+| The trial | The email | The trial's end |
+| --- | --- | --- |
+| never connected a unit, started on Android, the website or the computer app | "I've added 7 more days", no card needed | 7 days later (`extend_trial`, `auto`, once per account) |
+| started on an iPhone or iPad, connected or not | asks how it is going, and offers more time for a reply | unchanged |
+| has connected a unit (a computer app seen signed in, or the phone's own note that a unit answered over Bluetooth) | the same asking email | unchanged |
+
+An iPhone or iPad's trial is never extended by itself: Apple's guideline
+3.1.1 allows a free trial in an app that is not a subscription only as an
+item named for its length, and that item is the "7-Day Trial". More time
+there is Justin's button, when somebody replies.
+
+**What moves a trial's end** is `extend_trial` and nothing else, and only
+later: from the trial's end if it is still running, from now if it is over.
+It refuses an account with no trial (`none`), one with the full version
+(`bought`), and a second automatic week (`had`); Justin's button has no such
+limit, up to 30 days at a time. The apps hear the new end from `entitlement`
+the next time they ask (`trial_of` reads the row) and keep it
+(`keptTrial`, which until this change threw a later end away).
+
+A refusal from the mail service is sorted as the setup emails' is: a refused
+address is kept (`nudge_kind` `refused`, never tried again); a wrong key or
+a limit takes the claim back, and the next hour tries again; a fault may
+have gone, so the claim stays. A week added by a run whose email was then
+turned away is still said: that trial stays due for two days, and its email
+says the week as added without adding another.
+
+### Putting it live, in this order
+
+1. **Apply `migrations/20261125_trial_extensions.sql`** (after
+   20261107_trials.sql, 20261015_setup_reminders.sql and
+   20261101_bluetooth_seen.sql, which are live). It makes the vault secret
+   itself and schedules the hourly job; where pg_cron is off it says so, and
+   then: turn it on (Integrations → Cron) and run
+   `select cron.schedule('trial-nudges', '41 * * * *', 'select public.run_trial_nudges()');`.
+   The switch is off, so the job only counts. Check:
+   `select public.trial_nudge_sending();` is `false`, and
+   `select public.trial_nudge_hook_secret() is not null;` is `true`.
+2. **Deploy the email function**:
+   `supabase functions deploy trial-nudge --no-verify-jwt` (the caller is
+   the database, with its own secret, as for setup-reminder). It sends
+   `_shared/trial-rule.mjs` with it.
+3. **Deploy grant-access**: `supabase functions deploy grant-access` (verify
+   JWT on, as it is). It carries the same `_shared/trial-rule.mjs`. The
+   `entitlement` and `trial` functions need no redeploy for this.
+4. **Read the sample.** Developer → Customers → Trials → **Send me a sample**
+   puts both emails in Justin's inbox, marked [Sample]. Nothing is sent to
+   anybody else, with the switch on or off.
+5. **Turn the trial email on**, on the same page, only once Justin has read
+   both and said so. From the next 41 minutes past, each trial on its last
+   day gets its one email.
+
+Merged before step 1, nothing breaks: the Trials page lists the trials as
+before, its card says the server or the database does not have this yet, and
+Give 7 more days answers the same. The phone's half (a later end kept) does
+nothing until an end is moved.
+
+### Checking it
+
+- The function's log each hour: `trial-nudge: switched off, nothing sent and
+  nobody given more time; 1 with a week added and 2 asking would go`, and
+  once on: `trial-nudge: 1 with a week added and 2 asking sent, 0 refused, 0
+  skipped`. Never an address.
+- `select "by", days, old_ends_at, new_ends_at, created_at from
+  public.trial_extensions order by created_at desc limit 10;`
+- The Trials page: each trial says connected or not, "Emailed on", and
+  "Extended by 7 days (automatically / by you) on", with counts of emailed,
+  given more time, and the full version after more time.
+- To stop it: **Turn the trial email off** on the Trials page. The claim
+  reads the switch before every email, so a run in progress stops at the
+  next one.
+
 ## How many people, day by day (counts only, naming nobody)
 
 "A day-by-day history of how many people use the app, on your Developer

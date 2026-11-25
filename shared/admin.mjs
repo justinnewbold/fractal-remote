@@ -438,7 +438,7 @@ export function trialCounts(all, now = Date.now()) {
 /** The counts as rows, on Sales and at the top of Trials. */
 function trialCountRows(all, now) {
   const c = trialCounts(all, now)
-  return [
+  const rows = [
     { label: 'Started today', value: String(c.today) },
     { label: 'Last 7 days', value: String(c.week) },
     { label: 'Last 30 days', value: String(c.month) },
@@ -446,7 +446,97 @@ function trialCountRows(all, now) {
     { label: 'On a trial now', value: String(c.on) },
     { label: 'Full version after a trial', value: `${c.bought}, ${c.rate}` }
   ]
+  /* The trial email and more time (25 November 2026), only from a server that says them: an older one's rows carry neither, and a nought there would be a guess. */
+  if (all.some((t) => t && ('nudged_at' in t || 'extended_days' in t))) {
+    const extended = all.filter(trialExtended)
+    rows.push(
+      { label: 'Emailed', value: String(all.filter((t) => t?.nudged_at && t.nudge_kind !== 'refused').length) },
+      { label: 'Given more time', value: String(extended.length) },
+      { label: 'Full version after more time', value: String(extended.filter((t) => t.converted).length) }
+    )
+  }
+  return rows
 }
+
+/*
+ * MORE TIME, AND THE ONE EMAIL NEAR A TRIAL'S END (25 November 2026). The
+ * server's rows say, for each trial, whether the account ever connected a
+ * unit, when the trial email went, and the days it was extended by, by whom
+ * and when (owner_trials, 20261125_trial_extensions.sql). Each row on the
+ * Trials page says them in plain words after what it said before, and a row
+ * whose account has not got the full version carries `extend`, which is what
+ * the page draws its Give 7 more days button under. From an older server
+ * none of it is there, and the rows read exactly as they did.
+ */
+
+/** How many days the Trials page's button gives. The email's own week is the same (shared/trial-rule.mjs TRIAL_EXTRA_DAYS; a test holds the two equal). */
+export const TRIAL_EXTEND_DAYS = 7
+
+/** The button under a trial that has not got the full version. */
+export const TRIAL_EXTEND_LABEL = `Give ${TRIAL_EXTEND_DAYS} more days`
+
+const trialExtended = (t) => (Number(t?.extended_days) || 0) > 0
+
+/** What is known of one trial beyond its dates, as sentences: " Never connected a unit. Emailed on Nov 13, 2026." or nothing. */
+export function trialNotes(t) {
+  const notes = []
+  if (t?.connected === true) notes.push('Connected a unit.')
+  else if (t?.connected === false) notes.push('Never connected a unit.')
+  if (t?.nudged_at) notes.push(t.nudge_kind === 'refused' ? `The trial email was refused on ${dayOf(t.nudged_at)}.` : `Emailed on ${dayOf(t.nudged_at)}.`)
+  if (trialExtended(t)) {
+    const days = Number(t.extended_days)
+    const who = t.extended_by === 'auto' ? 'automatically' : 'by you'
+    notes.push(`Extended by ${days} ${days === 1 ? 'day' : 'days'} (${who})${t.extended_at ? ` on ${dayOf(t.extended_at)}` : ''}.`)
+  }
+  return notes.length ? ` ${notes.join(' ')}` : ''
+}
+
+/** A row of the Trials page for one trial: its words, who it is, and whether the button is drawn under it. */
+const trialRow = (t, value) => ({
+  label: t.email || 'An account',
+  value: `${value}${trialNotes(t)}`,
+  ...(t.email ? { email: t.email, extend: !t.converted } : {})
+})
+
+/** The check before the button gives the days. */
+export function trialExtendAsk(email) {
+  return `${email}’s free trial gets ${TRIAL_EXTEND_DAYS} more days, counted from its end, or from now if it has ended. They aren’t emailed: their app shows the new end the next time it is opened with a connection.`
+}
+
+/**
+ * What the Trials page says when the server refused something about more
+ * time or the trial email: the page's update can reach a device before the
+ * server's and the database's, and "Unknown action." alone says nothing to
+ * him (the same words as stuckProblem).
+ */
+export function trialNudgeProblem(answer) {
+  if (!answer || answer.ok) return null
+  const said = String(answer.message || '')
+  if (said === 'Unknown action.') return 'The server doesn’t have this yet. It needs the server update that goes with it, which hasn’t been put live.'
+  if (/extend_trial|trial_nudge|PGRST202/.test(said)) return 'The database doesn’t have this yet. It needs the database change that goes with it, which hasn’t been put live.'
+  return said || 'Something went wrong.'
+}
+
+/** What is said after the button: the days given and the new end, or why not. */
+export function trialExtendSaid(answer) {
+  if (!answer?.ok) return trialNudgeProblem(answer) || 'Something went wrong.'
+  const day = dayOf(answer.endsAt)
+  return `${answer.message}${day ? ` Their trial now ends ${day}.` : ''}`
+}
+
+/** The card at the top of the Trials page: "Trial email: on" or "off", and what the email does. Null until the server has said. */
+export function trialNudgeCard(answer) {
+  if (!answer?.ok) return null
+  const on = answer.enabled === true
+  return {
+    on,
+    title: `Trial email: ${on ? 'on' : 'off'}`,
+    line: `One email on a trial’s last day, asking how it’s going. Somebody who never connected a unit gets ${TRIAL_EXTEND_DAYS} more days with it, by itself, except on an iPhone or iPad, where the email offers more time for a reply.`
+  }
+}
+
+/** The check before the trial email goes on: it emails real people within the hour. */
+export const TRIAL_NUDGE_TURN_ON = `Anybody on their trial’s last day gets the email within the hour, and each one who never connected a unit gets ${TRIAL_EXTEND_DAYS} more days with it. Have you read the sample?`
 
 /** On Sales: the counts only. The people are on the Trials page. */
 export function trialSections(answer, now = Date.now()) {
@@ -471,16 +561,15 @@ export function trialsPageSections(answer, now = Date.now()) {
   sections.push({
     title: TRIALS_NOW_TITLE,
     rows: on.length
-      ? on.map((t) => ({ label: t.email || 'An account', value: `${trialWhere(t)}, started ${dayOf(t.started_at)}, ${trialLeft(t.ends_at, now)}.` }))
+      ? on.map((t) => trialRow(t, `${trialWhere(t)}, started ${dayOf(t.started_at)}, ${trialLeft(t.ends_at, now)}.`))
       : [{ label: '', value: NOBODY_ON_TRIAL }]
   })
   if (done.length) {
     sections.push({
       title: TRIALS_DONE_TITLE,
-      rows: done.slice(0, 15).map((t) => ({
-        label: t.email || 'An account',
-        value: `${trialWhere(t)}, started ${dayOf(t.started_at)}. ${t.converted ? 'Has the full version.' : `Ended ${dayOf(t.ends_at)}, no full version.`}`
-      }))
+      rows: done.slice(0, 15).map((t) =>
+        trialRow(t, `${trialWhere(t)}, started ${dayOf(t.started_at)}. ${t.converted ? 'Has the full version.' : `Ended ${dayOf(t.ends_at)}, no full version.`}`)
+      )
     })
   }
   return sections
