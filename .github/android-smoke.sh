@@ -255,7 +255,8 @@ press() {
 # app for the first time goes: the card's OK, the walkthrough's first page,
 # its demo, a unit, and Play. On Play, a tip may sit over it once.
 walk() {
-  press 'OK' card || return 1
+  # The "An independent app" card went in 2.4.5 (25 November 2026), so the
+  # first screen is the walkthrough's own first page now and there is no OK.
   press 'Get started' walk-start || return 1
   press 'Try the demo' walk-how || return 1
   press 'Play with .+' walk-pick || return 1

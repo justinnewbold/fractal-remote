@@ -153,5 +153,14 @@ store. He sends the builds the testers already have: TestFlight build 33
 for review in App Store Connect, and Android with Promote release from
 internal testing to production in Play Console.
 
+Release day for the iPhone's 2.3.5 was 25 November 2026 ("push out the
+2.3.5 build to apple for production"): rejoin-adapter went into main, the
+recorded ios fingerprint is the build's own (f368eee1…; android e44134a7…
+and the watch 34149f04… as they were), and the patch file and
+next-store.json went in the same change. No new build: TestFlight build 34
+is the one sent for review. From that merge main's updates reach iPhones on
+2.3.5 only, and the App Store's 2.0.0 iPhone copies keep update 2.4.6 until
+their owners take 2.3.5; Android is unchanged, on 2.0.0.
+
 **Left this month: 5 iOS, 9 Android**, his count of 13 November less the
 2.0.0 pair and the iPhone build of 22 November.
