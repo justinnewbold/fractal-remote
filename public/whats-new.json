@@ -3,8 +3,16 @@
     {
       "date": "2026-11-25",
       "day": "25 November 2026",
-      "version": "2.4.7",
+      "version": "2.4.9",
       "lines": [
+        {
+          "text": "Bluetooth: after you tap Connect, the page shows it is looking for your adapter, and a second tap no longer starts a second search. And with two computers on your account, the app shows a computer’s name only once it knows which one it is driving, so the wrong name no longer appears for a few seconds.",
+          "only": null
+        },
+        {
+          "text": "AM4 through a computer or Raspberry Pi: a slow Rate knob (a chorus’s, a tremolo’s, a flanger’s) now reads with two decimal places, so a small change no longer shows as “did not take”. It needs the computer app update that came with this version.",
+          "only": null
+        },
         {
           "text": "From version 2.3.5 of the app, on an iPhone or iPad: the app connects your Bluetooth adapter by itself, and connects it again whenever it drops and comes back, with no trip to Apple’s Bluetooth screen. You still choose the adapter there the first time.",
           "only": "ios"

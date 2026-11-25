@@ -288,8 +288,11 @@ function fromInternal(p, internal) {
  * chorus's or a tremolo's Rate (0.1 to 10): his AM4 took Rate 2.245 Hz and
  * 0.423 Hz, the app read them back as 2 and 0, said the knob did not take,
  * sent it again and put the knob back (21 November 2026, "Control knob
- * changes didn't save to unit"). On purpose unlike the pinned codec, which
- * rounds the same way through a computer.
+ * changes didn't save to unit"). On purpose unlike the pinned codec.
+ * THROUGH A COMPUTER THE SERVER HAS THIS SAME RULE (ForgeFX 219fbc6,
+ * server/src/am4Rates.ts isAm4SlowRate, from the computer release that
+ * carries it; an older computer app still reads such a rate whole): THE TWO
+ * ARE CHANGED TOGETHER.
  */
 export const placesOf = (p) => (p.unit === 'hz' && typeof p.max === 'number' && p.max <= 20 ? 2 : PRECISION[p.unit])
 

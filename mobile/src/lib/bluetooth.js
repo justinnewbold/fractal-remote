@@ -72,6 +72,8 @@ const NOW = {
   devices: [],
   /* Android is scanning. */
   looking: false,
+  /* A Connect's search is under way and has not said what it found yet: from the tap, before the scan has even started (findAdapters). */
+  finding: false,
   /* The name the adapter gave when it connected. */
   connectedTo: null,
   /* The unit that answered instead of the one picked, by its bare name (an FM9 on an FM3's connection: 'FM9'), or null. */
@@ -1752,7 +1754,37 @@ export function pairScreenShut() {
  * tap. Until 15 November 2026 the same held, for an FM3, of the adapters
  * then ruled out for one by name.
  */
-export async function findAdapters({ cableFirst = true } = {}) {
+/*
+ * ONE SEARCH AT A TIME, AND SAID FROM THE TAP. "Connect" with no adapter kept
+ * waited about ten seconds with nothing on the page to say it was looking,
+ * and Justin pressed it twice (his log of 22 November 2026, 12:52:19 and
+ * 12:52:31). The page was told only once the scan itself had started
+ * (`looking`), after the permission question and the module's answer. Now
+ * `finding` is up from the tap until this search has said what it found (or
+ * handed on to the ten-second look, which keeps `looking` up), the page draws
+ * a turning circle and a line for either, and a search asked for while one
+ * is going starts nothing: no second question, no second scan, no second
+ * trip to Apple's screen. What is sent and which adapter is chosen are as
+ * they were.
+ */
+let findingNow = false
+export async function findAdapters(options = {}) {
+  if (!ble()) return
+  if (findingNow) {
+    logDebug('ble', 'Connect asked again while it is already looking for the adapter: nothing more started')
+    return
+  }
+  findingNow = true
+  noteBluetooth({ finding: true })
+  try {
+    return await findAdaptersOnce(options)
+  } finally {
+    findingNow = false
+    noteBluetooth({ finding: false })
+  }
+}
+
+async function findAdaptersOnce({ cableFirst = true } = {}) {
   const mod = ble()
   if (!mod) return
   listenForList()

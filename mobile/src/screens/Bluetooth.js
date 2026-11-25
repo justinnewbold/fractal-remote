@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Linking, Platform, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
@@ -157,6 +157,7 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import Tabs from '../components/Tabs'
 import { OFFER_LOOK, SEEN_NOT_HERE, SEEN_NOT_HERE_AFTER, offerNote, ownAwayNote } from '../lib/offerWords'
+import { searchingLine } from '../lib/searchWords'
 import { SWITCH_UNIT, SWITCH_UNIT_HINT } from '../lib/unitSwitch'
 import { howToClose } from '../lib/closeApp'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
@@ -413,6 +414,8 @@ const toneColor = (tone, cable) => (tone === 'ok' && cable ? color.ok : TONES[to
 
 export default function BluetoothPage({ purchase, admin = false, onReport = null, onOpen = null, onConnected = null }) {
   const b = useBluetooth()
+  /* A Connect's search is going, from its tap to what it found (lib/bluetooth findAdapters `finding`, and the ten-second look's `looking`): said under Connect, and nothing that starts another is pressed meanwhile. */
+  const searching = b.finding || b.looking
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
   /*
@@ -514,10 +517,19 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* Apple's screen kept shut (iOS 27, before the build with Apple's fix): no hint sends anybody to it. */
   const shut = pairScreenShut()
   /* `cableFirst: false` when a Bluetooth adapter is what is looked for (another, below): Apple's screen, never a cable in its place (lib/bluetooth findAdapters). */
+  /* One at a time: a second tap that lands before the page has redrawn is not a second search, nor a miss counted (`finding`, a ref, since the tap can beat the redraw). */
+  const finding = useRef(false)
   const find = async ({ cableFirst = true } = {}) => {
+    if (searching || finding.current) return
+    finding.current = true
     setMissed(false)
     setWanted(b.unit)
-    const pick = await findAdapters({ cableFirst })
+    let pick = null
+    try {
+      pick = await findAdapters({ cableFirst })
+    } finally {
+      finding.current = false
+    }
     const none = ios && !pick && !adapterDevices().some((d) => !d.offline)
     if (none) setMissed(true)
     setMisses((n) => (none ? n + 1 : 0))
@@ -606,7 +618,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     setBluetooth(true)
   }
   const start = () => {
-    if (!canStart) return
+    /* A second tap while a search is going does nothing (the lib refuses it too). */
+    if (!canStart || searching) return
     arm()
     if (b.adapter && cable && offlineHere(b.adapter)) return cableFromLastTime()
     if (b.adapter && ios && offlineHere(b.adapter)) return another()
@@ -726,10 +739,10 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     chooseCableHere(d)
   }
   const cableButtons = offerCables.map((d) => (
-    <Press key={d.id} label={CABLE_USE_HERE} sub={d.name || CABLE_ROW} tone={b.on ? 'live' : undefined} height={52} disabled={b.looking} onPress={() => useCable(d)} />
+    <Press key={d.id} label={CABLE_USE_HERE} sub={d.name || CABLE_ROW} tone={b.on ? 'live' : undefined} height={52} disabled={searching} onPress={() => useCable(d)} />
   ))
   const differentButton = offerDifferent ? (
-    <Press label="Use a different adapter" sub={silentAdapter ? `If ${adapterName(b.adapter) || 'this adapter'} isn’t on your ${unitName(b.unit)}` : b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
+    <Press label="Use a different adapter" sub={silentAdapter ? `If ${adapterName(b.adapter) || 'this adapter'} isn’t on your ${unitName(b.unit)}` : b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={searching} onPress={different} />
   ) : null
   /*
    * RECONNECT, ON AN IPHONE WHOSE ADAPTER HAS GONE. An iPhone lets a
@@ -1056,10 +1069,17 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 never taken without the tap (offerFromOther, lib/offerWords).
               */}
               {offerMain ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}
-              {offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}
+              {offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={searching} onPress={takeOffer} /> : null}
               {/* This unit's own adapter is only away (report d9a2f5fe): said in red over Connect, which stays the big button. */}
               {offerFromOther && !offerMain ? <Note tone="fault">{ownAwayNote(b.offer.own, unitName(b.unit), deviceNoun())}</Note> : null}
-              <Press label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'} icon={cable || takes.length || offerMain ? null : bluetoothIcon} inkColor={color.ble} labelSize={offerMain ? undefined : font.lead} height={offerMain ? 52 : 64} tone={offerMain ? undefined : 'live'} disabled={!canStart || b.looking} onPress={start} />
+              <Press label={searching ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'} icon={cable || takes.length || offerMain ? null : bluetoothIcon} inkColor={color.ble} labelSize={offerMain ? undefined : font.lead} height={offerMain ? 52 : 64} tone={offerMain ? undefined : 'live'} disabled={!canStart || searching} onPress={start} />
+              {/* From the tap: a turning circle and what is happening, so nobody presses Connect a second time into ten seconds of nothing (lib/searchWords). */}
+              {searching ? (
+                <View accessibilityRole="progressbar" accessibilityLabel={searchingLine(Platform.OS)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                  <ActivityIndicator size="small" color={color.ble} />
+                  <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{searchingLine(Platform.OS)}</Text>
+                </View>
+              ) : null}
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
@@ -1084,10 +1104,10 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 </Hint>
               )}
               {/* And the other unit's adapter small, under Connect's line, for somebody who did move it. */}
-              {offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={b.looking} onPress={takeOffer} /> : null}
+              {offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={searching} onPress={takeOffer} /> : null}
               {cableButtons}
               {differentButton}
-              {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
+              {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={searching} onPress={adapterInstead} /> : null}
             </View>
           </View>
         )}

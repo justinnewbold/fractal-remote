@@ -33,6 +33,7 @@ import {
   remoteDisconnect,
   remoteCountDue,
   remoteCountOwed,
+  remoteCountPending,
   remoteMayBeTwo,
   remoteMissingPick,
   remoteHostSeen,
@@ -52,6 +53,7 @@ import {
 } from './relay'
 import { computerChanged, listen, setOnScreen as rigOnScreen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
+import { nameIsOf } from './hostName'
 
 export const PROBE_FIRST = 3000
 export const PROBE_CAP = 30000
@@ -455,6 +457,8 @@ async function turn(gen) {
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
+  /* Or its name waited for a count that is over now, and nothing asked again since (readMacName). */
+  else if (running && state.link === 'connected' && nameWaits && !remoteCountPending()) await readMacName()
   if (!ours()) return
   // And the computer hears that a phone is using it, so it does not go to sleep under the song.
   if (running) tellComputer()
@@ -646,11 +650,15 @@ async function afterCount(was, run, began = Date.now()) {
      * whichever computer answered first, and it goes, names, chain, tempo
      * and all (rig.startClean), before the unit is read again.
      */
+    let named = false
     if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
+      named = true
       readMacName()
       if (remoteReadsAskedOf() !== remoteChosenHost()) startClean()
       else if (unitReadSince(began)) before = remoteChosenHost()
     }
+    /* And a name that waited for this count, where the read above did not ask for it again: one computer heard, or the same one driven as before. */
+    if (nameWaits && !named) readMacName()
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */
     if (remoteHosts().length > 1 && remoteChosenHost() !== before) await refreshAll()
@@ -872,6 +880,8 @@ export const NAME_AGAIN = 2 * 60 * 1000
 
 /** When the computer was last asked what it is. */
 let namedAt = 0
+/** An answer came while the roll call had not said which computer is driven, and was not used: asked again once it has (readMacName, lib/hostName). */
+let nameWaits = false
 /*
  * The last answer, so asking again every couple of minutes does not write the
  * same line into the log thirty times an hour. The log is read by being pasted
@@ -904,6 +914,35 @@ async function readMacName() {
     if (!name) {
       say('the computer has not written its name yet')
       return
+    }
+    /*
+     * ONLY THE COMPUTER DRIVEN IS NAMED. This read is never held for the
+     * roll call (relay.js neverHeld), so on an account with two computers it
+     * goes to nobody in particular and the quicker one answers, while the
+     * unit, its capabilities and its blocks are read off the one picked.
+     * Justin's log of 22 November 2026, after Turn off Bluetooth: "the
+     * computer is MacBook Pro …" and "the computer has a unit — AM4", four
+     * seconds before "driving raspberry pi 3", whose AM4 it was; the day
+     * after, a block of the Pi's Axe-Fx III under the MacBook's name. So an
+     * answer that cannot be said to be the driven computer's is not put on
+     * screen or in the log (lib/hostName): while the count is still to say
+     * which is driven it is asked again once it has (afterCount, turn), and
+     * one from another computer than the one driven is never used.
+     */
+    const whose = nameIsOf({ name: String(name), hosts: remoteHosts(), chosen: remoteChosenHost(), pending: remoteCountPending(), mayBeTwo: remoteMayBeTwo() })
+    if (whose === 'wait') {
+      /* Asked again only for a count still to come: with none to wait for, the next ordinary read is the retry. */
+      nameWaits = remoteCountPending()
+      say('a computer said its name before the count has said which one is driven: not used yet')
+      return false
+    }
+    nameWaits = false
+    if (whose === 'other') {
+      const driven = remoteChosenHost()
+      /* The driven one's own name is the roll call's, from this same document; its version is not known from here. */
+      if (driven && state.macName !== driven) set({ macName: driven, hostVersion: null, hostOs: null, hostUpdate: null })
+      say(`another computer than the one driven (${driven}) answered with its name: not used`)
+      return false
     }
     /*
      * Both together, and the version cleared when it is absent, the way the
@@ -1188,6 +1227,7 @@ export async function stopLink() {
   unbind = []
   namedAt = 0
   namedSaid = null
+  nameWaits = false
   toldAt = 0
   metersAgain()
   /* Reset first, then wait: see enterDemo. */
