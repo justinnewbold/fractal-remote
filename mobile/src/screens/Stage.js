@@ -6,6 +6,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { BIG_FOUR_ACROSS, bigFourOn, bigFourTile, loadBigFour } from '../lib/bigFour'
+import { squeezeKey, squeezeNow } from '../lib/fitSqueeze'
 import { SOURCE_SAID, loadCount, loadSource, loadView, postureOf, presetCols, presetTall, showsPedals, showsPresets, showsScenes, tilesFor, viewDrawn } from '../lib/playView'
 import { notePlayPosture, usePlayViews } from '../lib/usePlayViews'
 import PresetTiles from '../components/PresetTiles'
@@ -585,7 +586,9 @@ export default function Stage({
    * being asked to fit, so all of that gives too — and nothing pressable goes
    * below the platform's own 44.
    */
-  const tight = size === SIZES[0]
+  /* Or when Fit needs it: its tiles at their least and the page still too tall (lib/fitSqueeze). */
+  const [squeezed, setSqueezed] = useState(false)
+  const tight = size === SIZES[0] || squeezed === true
 
   /*
    * FIT ON SCREEN: the screen decides the height, not a step on the ladder.
@@ -754,9 +757,24 @@ export default function Stage({
     lastKey.current = fitKey
     if (trim !== 0) setTrim(0)
   }
+  /* The squeeze is kept for this screen and this many tiles, loading or not, and let go of when either changes (lib/fitSqueeze). */
+  const squeezeAt = squeezeKey({ viewport, width: widthKey, scenes: scenes.hasScenes ? scenes.count : 0, blocks: fitBlocks, fitOn, sceneCols })
+  const lastSqueeze = useRef(squeezeAt)
+  if (lastSqueeze.current !== squeezeAt) {
+    lastSqueeze.current = squeezeAt
+    if (squeezed) setSqueezed(false)
+  }
+  /* What Fit last answered, for the check below: it runs after the draw that answer is in. */
+  const fitTile = useRef(0)
   useEffect(() => {
     if (!fitOn || !viewport || !content) return
     const over = content - viewport
+    /* The tiles at their least and still over: everything round them gives too, and Fit starts its sums again in the room that frees. */
+    if (!squeezed && squeezeNow({ fitOn, plain: !shape.wide && !inSide && !low, tile: fitTile.current, over })) {
+      setSqueezed(true)
+      setTrim(0)
+      return
+    }
     /* A pixel or two is rounding, not an overflow worth another pass. */
     if (over > 2) setTrim((was) => was + over)
   }, [fitOn, content, viewport, laid])
@@ -784,6 +802,7 @@ export default function Stage({
           width: row
         })
       : null
+  fitTile.current = fitted ? fitted.tile : 0
   /** The two numbers the tiles are actually drawn with. */
   const tileH = fitted ? fitted.tile : size.tile
   const fxCols = fitted ? fitted.fxCols : shape.fxCols

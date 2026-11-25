@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-25",
     "day": "25 November 2026",
-    "version": "2.5.0",
+    "version": "2.5.2",
     "lines": [
+      {
+        "text": "Fit to screen now fits a big preset too. When the tiles are as small as they go and Play would still scroll, the gaps, the preset button and the bottom buttons get a little smaller, so everything is on the screen.",
+        "only": null
+      },
       {
         "text": "Fixed: with two computers on your account, each with a unit, the tuner could flip between two readings many times a second. The app now uses only what the computer it is driving sends. Update the computer app on each computer.",
         "only": null

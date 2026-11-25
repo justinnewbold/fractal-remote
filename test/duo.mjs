@@ -625,7 +625,7 @@ export function run(test) {
         if (/\bfitted\b/.test(styleText)) sized.push(`{ style: ${styleText}, onLayout: ${stage.slice(onLayout.start, onLayout.end)} }`)
       }
     })
-    const names = ['useState', 'useRef', 'useEffect', 'loadFit', 'sync', 'findLooper', 'allBlocks', 'chainNow', 'blockColor', 'vp4Here', 'blocks', 'playWidth', 'scenes', 'sceneCols', 'fitWide', 'shape', 'space', 'row', 'size', 'hideChain']
+    const names = ['useState', 'useRef', 'useEffect', 'loadFit', 'sync', 'findLooper', 'allBlocks', 'chainNow', 'blockColor', 'vp4Here', 'blocks', 'playWidth', 'scenes', 'sceneCols', 'fitWide', 'shape', 'space', 'row', 'size', 'hideChain', 'squeezeKey', 'squeezeNow', 'squeezed', 'setSqueezed', 'inSide', 'low']
     // eslint-disable-next-line no-new-func
     const lines = new Function(
       ...names,
@@ -677,7 +677,8 @@ export function run(test) {
           deps[at] = list
         }
         dirty = false
-        out = lines(useState, useRef, useEffect, (_s, fallback) => fallback, {}, () => null, [], { elsewhere: false, late: false }, () => '#888', () => false, Array(pedals).fill({}), width, { hasScenes: true, count: 8 }, shape.sceneCols, g.fitWide, shape, { sm: 8, lg: 16 }, row, g.SIZES[step], false)
+        out = lines(useState, useRef, useEffect, (_s, fallback) => fallback, {}, () => null, [], { elsewhere: false, late: false }, () => '#888', () => false, Array(pedals).fill({}), width, { hasScenes: true, count: 8 }, shape.sceneCols, g.fitWide, shape, { sm: 8, lg: 16 }, row, g.SIZES[step], false, () => 'k', () => false, false, () => {}, false, false)
+        /* The page's own squeeze (lib/fitSqueeze) is held off: this is Fit's trim alone, and test/fit-squeeze.mjs has the squeeze. */
         return effects
       }
       /* Draw until nothing more is set, running each render's effects as React does. */
