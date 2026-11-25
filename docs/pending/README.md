@@ -30,46 +30,17 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `rejoin-adapter.patch` | On an iPhone or iPad, the app connects the Bluetooth adapter itself and connects it again whenever it comes back, with no trip to Apple's Bluetooth screen | ios |
 
-## rejoin-adapter (22 November 2026)
+Nothing is waiting now. rejoin-adapter (22 November 2026: on an iPhone or
+iPad the app connects the Bluetooth adapter itself, and makes its view of
+MIDI afresh when Apple's screen closes with nothing it can see) was applied
+on 25 November 2026, in the release-day pull request for the iPhone's store
+version 2.3.5, and its file and next-store.json deleted in the same change.
+That build (22 November 2026, TestFlight build 34) was made from main with
+the patch put in in the build's own checkout. It moved the ios line only, so
+there was no Android build and Android's 2.0.0 copies keep taking updates.
 
-"We need to do better than just telling people to restart their phone and
-look for connectors and things like that. They should connect automatically
-every time." (Justin, after report 934e02be: a customer's MD-BT01 dropped off
-an iPhone while the app was in the background, and three trips to Apple's
-Bluetooth screen did not bring it back.)
-
-Until this build, the only way an adapter reaches an iPhone is Apple's own
-Bluetooth MIDI screen, by hand, and again after every drop: iOS lets go of a
-Bluetooth link nobody is using after a few minutes. The patch adds a second
-way to the module (`Rejoiner` in FractalBleMidiModule.swift): the adapter is
-connected with CoreBluetooth, by its name and then by the identifier kept
-from last time, and asked for again the moment it drops. A connect asked of
-iOS has no time limit, so an adapter that was off, out of range or let go of
-is connected when it is back, with nothing tapped. iOS's own Bluetooth MIDI
-driver then gives it the CoreMIDI port it always had, and the rest of the
-module is unchanged. Apple's screen stays, as the way to choose an adapter
-the first time and as the fallback.
-
-The JavaScript half is merged and inert (lib/bluetooth `rejoinAdapter`,
-asked by bleLink each time it looks and the adapter is not there): it asks
-only a build that answers `rejoins`, which no copy out today does.
-
-It changes one Swift file, so it moves the ios line only. By the house rule
-the build is still both phones together unless he asks for the iPhone alone.
-
-NOT SEEN ON A PHONE, and what only one can show: that an adapter connected
-with CoreBluetooth gets its CoreMIDI port by itself (how every account of it
-reads; not watched here); that iOS asks for Bluetooth sensibly the first
-time (the usage sentence is already in the build); what happens with two
-adapters of the same name in range (the first found is taken, then kept by
-its identifier); and that nothing is connected while the app is in the
-background (no background mode is asked for; the waiting connect is taken
-up when the app is in front again). The log says each step ("connecting the
-adapter with no screen: ...").
-
-Before this, nothing was waiting. phone-turns (10 November 2026), watch-page-order (11
+Before that, nothing was waiting. phone-turns (10 November 2026), watch-page-order (11
 November 2026), bluetooth-done (14 November 2026), tone3000-in-app (14
 November 2026) and play-internal (16 November 2026) were applied on 17
 November 2026, in that order, in the release-day pull request for store

@@ -1,7 +1,0 @@
-{
-  "version": "2.3.5",
-  "only": "ios",
-  "ios": "f368eee1637e4b725ade8864e6ae9b3388fe690e",
-  "android": "e44134a75beb5338a193710d335aebbb2db450bd",
-  "watch": "34149f047fb13102c37a1ab690c8a43303dc8cf5"
-}

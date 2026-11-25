@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-25",
     "day": "25 November 2026",
-    "version": "2.4.5",
+    "version": "2.4.7",
     "lines": [
+      {
+        "text": "From version 2.3.5 of the app, on an iPhone or iPad: the app connects your Bluetooth adapter by itself, and connects it again whenever it drops and comes back, with no trip to Apple’s Bluetooth screen. You still choose the adapter there the first time.",
+        "only": "ios"
+      },
       {
         "text": "The “An independent app” card no longer stops you the first time you open the app, the website or the computer app. The same sentence is still on the start screen and in About.",
         "only": null

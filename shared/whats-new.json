@@ -4,8 +4,12 @@
   "days": [
     {
       "date": "2026-11-25",
-      "version": "2.4.5",
+      "version": "2.4.7",
       "lines": [
+        {
+          "text": "From version 2.3.5 of the app, on an iPhone or iPad: the app connects your Bluetooth adapter by itself, and connects it again whenever it drops and comes back, with no trip to Apple’s Bluetooth screen. You still choose the adapter there the first time.",
+          "only": "ios"
+        },
         "The “An independent app” card no longer stops you the first time you open the app, the website or the computer app. The same sentence is still on the start screen and in About."
       ]
     },
@@ -31,8 +35,14 @@
       "lines": [
         "Sending a TONE3000 capture to your unit now shows a large progress bar, how many parts have gone and about how long is left, so a send over Bluetooth never looks stuck.",
         "Settings → Bluetooth → What Bluetooth can’t do now lists only what a computer would add on the unit you picked. An AM4’s page no longer lists a looper, a volume button, modifiers and other things an AM4 has on no connection.",
-        { "text": "On an iPhone or iPad over Bluetooth: when Look for the adapter again doesn\u2019t bring your adapter back, the screen now says what to try, in order, instead of only offering the same button.", "only": "ios" },
-        { "text": "On an iPhone or iPad over Bluetooth: when the adapter can’t be found, the first thing the app now suggests is closing the app completely and opening it again, which usually brings it back.", "only": "ios" }
+        {
+          "text": "On an iPhone or iPad over Bluetooth: when Look for the adapter again doesn’t bring your adapter back, the screen now says what to try, in order, instead of only offering the same button.",
+          "only": "ios"
+        },
+        {
+          "text": "On an iPhone or iPad over Bluetooth: when the adapter can’t be found, the first thing the app now suggests is closing the app completely and opening it again, which usually brings it back.",
+          "only": "ios"
+        }
       ]
     },
     {
@@ -42,7 +52,7 @@
         "From version 2.0.0, over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III: the “?” under a knob in Edit says what that knob does, as it does through a computer.",
         "Fixed on an AM4: a Pitch block added from the app now appears on the unit, and a slow Rate knob (a chorus’s or a tremolo’s) shows two decimal places instead of jumping back as if it didn’t take. And the front of Settings sits closer together, so more fits on one screen.",
         "On an AM4, hold the NAM block and get a capture from TONE3000: there is now a Save button at the top, beside the block’s name, with the warning that it overwrites the preset. The same on an Axe-Fx III, and after a knob is turned in any block’s hold pop-up. The AM4’s NAM block is also spelled NAM in that pop-up’s title.",
-        "Help & fixes: the button at the top right is now Send logs, which sends the log with your note in one tap. Back is at the top left. And fixed: a pedal\u2019s hold pop-up could get stuck and not scroll after a knob was touched.",
+        "Help & fixes: the button at the top right is now Send logs, which sends the log with your note in one tap. Back is at the top left. And fixed: a pedal’s hold pop-up could get stuck and not scroll after a knob was touched.",
         "On an AM4 or a VP4, with a phone held upright: the four pedals are now two by two, the same size as the scenes, and the tiles fill the screen. To go back to one row, switch off Big pedals, two by two in Settings, Play screen, Tiles & scenes.",
         "Edit chain has Clear this preset at the bottom: it takes every block out in one go, leaving the Input and Output, so you can start fresh with Quick build. It asks first, and nothing is saved until you save."
       ]

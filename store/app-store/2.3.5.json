@@ -1,0 +1,9 @@
+{
+  "version": "2.3.5",
+  "build": "34",
+  "whatsNew": "• Your Bluetooth adapter now connects by itself, and reconnects when it drops, with no trip to the Bluetooth MIDI screen each time.\n• Over Bluetooth or USB: Edit chain moves, adds and removes blocks; rename presets and scenes; the looper, modifiers, cab picker and the unit's own metronome click.\n• AM4 firmware 3.00: the NAM block, with TONE3000 captures, and the Pitch block.\n• Hold the Amp on Play to swap it for a NAM block.\n• Clear this preset, in Edit chain, to start fresh.\n• A clear progress bar while a capture is sent to your unit.\n• Many Bluetooth fixes.",
+  "description": [],
+  "notes": [],
+  "notesNew": "New in 2.3.5:\n• Bluetooth: after an adapter is chosen once in Apple's Bluetooth MIDI screen, the app connects it itself (CoreBluetooth, in the foreground only, no background mode) and again when it drops. Needs a real adapter; the demo has no Bluetooth.\n• Over Bluetooth or USB, with a unit: Edit chain moves, adds and removes blocks; Rename; Copy channel; looper buttons; modifiers; cab picker; the unit's metronome click; an FM3's Footswitches page.\n• AM4: its NAM and Pitch blocks, with TONE3000 as on an Axe-Fx III.\n• Hold the Amp on Play: Swap for a NAM block.\n• Edit chain: Clear this preset.\n• The independent-app card shows on the first launch only.",
+  "testedOn": "Tested on: iPhone 17 Pro Max, iOS 27.2.1; Apple Watch Ultra 2."
+}
