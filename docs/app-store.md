@@ -3922,6 +3922,12 @@ merged and its update is out. What is left is Justin's:
 
 ### Live day for 2.0.0 (each store's own day, not before)
 
+**Done on 25 November 2026**, both stores at once, on Justin's word ("2.0.0
+are live in both stores so please update that"): the numbers, and the two
+pages, which now say saving, Quick build, the chain editor and renaming
+work over Bluetooth from 2.0.0. The setup email and the Google Play
+Description are still as they were (the two bullets below).
+
 - public/store-versions.json: that store's number to 2.0.0. Moved early,
   it tells every 1.90.0 copy to update to a version its store cannot give.
 - public/bluetooth.html and public/support.html still say there is no

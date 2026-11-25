@@ -3942,11 +3942,14 @@ export function run(test) {
     const editLine = (said.match(/From version 1\.90\.0 of the app, Edit opens over Bluetooth[^.]*\./) || [''])[0]
     assert.equal(editLine, 'From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III too: turn knobs, change models and switch blocks on and off.', '/bluetooth does not say Edit opens over Bluetooth from 1.90.0, or names other units than the four whose Edit is built')
     assert.ok(!/VP4/.test(editLine), '/bluetooth says a VP4 edits over Bluetooth')
-    assert.match(said, /Changes play right away; to keep one, save it on the unit itself\./, '/bluetooth does not say an edit is kept by saving on the unit')
+    /* Since 25 November 2026, with 2.0.0 live in both stores: saved from the app, not on the unit. */
+    assert.match(said, /Changes play right away\. From version 2\.0\.0 you can keep them too: save the preset from the app, fill an empty preset with Quick build, add, move or remove blocks, and rename presets and scenes, all over Bluetooth\./, '/bluetooth does not say what 2.0.0 brought over Bluetooth')
     assert.ok(!/No editing or saving over Bluetooth|with no editing or saving/.test(said), '/bluetooth still says there is no editing over Bluetooth, with 1.90.0 live in both stores')
     assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(said), '/bluetooth says editing works on a unit')
-    /* Saving is still the computer's. And not for a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
-    assert.match(said, /No saving over Bluetooth: for saving, moving blocks and renaming, use the desktop app , on any unit but the VP4, which the app doesn’t edit or save either way\./, '/bluetooth sends a VP4 owner to the computer for editing and saving, which it does not get there either, or no longer says saving needs the computer')
+    /* Never a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
+    assert.match(said, /On a VP4 the app doesn’t edit or save, with or without a computer\./, '/bluetooth lets a VP4 owner think the app edits or saves one')
+    assert.ok(!/No saving over Bluetooth/.test(said), '/bluetooth still says there is no saving over Bluetooth, with 2.0.0 live in both stores')
+    { const live = JSON.parse(read('public/store-versions.json')); assert.ok(live.ios === '2.0.0' || !/^[01]\./.test(live.ios), 'the page says what 2.0.0 does and the App Store number is older'); assert.ok(!/^[01]\./.test(live.android), 'the page says what 2.0.0 does and Google Play’s number is older') }
     /* The USB cable, in a section of its own after Which units: the AM4's, with what Bluetooth does, Edit included, and never the FM3's own USB port. */
     assert.ok(page.indexOf('<h2>USB cable</h2>') > page.indexOf('<h2>Which units</h2>') && page.indexOf('<h2>USB cable</h2>') < page.indexOf('<h2>Setting it up</h2>'), '/bluetooth has no USB cable section after Which units')
     assert.match(said, /An AM4 can also plug straight into your (iPhone or iPad|phone or tablet) with a USB cable: no computer and no adapter, with the same features as Bluetooth, Edit included\. Plug it in, then Settings → My rig → Bluetooth\. The FM3 can’t plug in this way, because its USB port isn’t MIDI\./, '/bluetooth does not say the AM4’s USB cable, or says the FM3’s own USB port plugs in')
@@ -3985,7 +3988,7 @@ export function run(test) {
     assert.match(support, /href="\/bluetooth"/, 'the support page does not lead on to /bluetooth')
     assert.match(supportWords, /From version 1\.89\.0/, 'the support page does not say which versions have Bluetooth')
     /* And editing, from the same day as /bluetooth: from 1.90.0 on the four units, saved on the unit, the AM4's cable doing the same; never the VP4. */
-    assert.match(supportWords, /lets the app control it directly, and from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III, with no saving: save on the unit itself\. An AM4 can also plug straight into your (iPhone or iPad|phone or tablet) with a USB cable, and does the same\./, 'the support page does not say Edit opens over Bluetooth from 1.90.0, or still says no editing')
+    assert.match(supportWords, /lets the app control it directly, and from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III\. From version 2\.0\.0 you can save from the app over Bluetooth too\. An AM4 can also plug straight into your (iPhone or iPad|phone or tablet) with a USB cable, and does the same\./, 'the support page does not say Edit opens over Bluetooth from 1.90.0, or still says no editing')
     assert.ok(!/with no editing or saving/.test(supportWords), 'the support page still says there is no editing over Bluetooth')
     /* The Android page is about getting the app, and still says nothing about Bluetooth. */
     assert.ok(!/bluetooth/i.test(read('public/android.html')), 'the Android page mentions Bluetooth')
@@ -5101,7 +5104,7 @@ export function run(test) {
        */
       const web = words('public/bluetooth.html') + ' ' + words('public/support.html')
       assert.match(words('public/bluetooth.html'), /From version 1\.90\.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III too/, '/bluetooth does not say what 1.90.0 does, with 1.90.0 live in both stores')
-      assert.match(words('public/support.html'), /from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III, with no saving: save on the unit itself\./, 'the support page does not say what 1.90.0 does, with 1.90.0 live in both stores')
+      assert.match(words('public/support.html'), /from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III\./, 'the support page does not say what 1.90.0 does, with 1.90.0 live in both stores')
       assert.ok(!/no editing or saving/i.test(web), 'a website page still says there is no editing over Bluetooth, with 1.90.0 live in both stores')
       for (const line of web.match(/[^.]*\bEdit opens over[^.]*\./g) || []) assert.ok(!/VP4/.test(line), `a website page says a VP4 edits over Bluetooth: ${line}`)
       /* The guide is short since 9 November 2026 and no longer has the list the editing bullet was written for: it still says nothing of editing, either way. */
