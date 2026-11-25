@@ -672,6 +672,51 @@ export function onKnobNews(fn) {
  * and all of it is worth following. This is what makes the phone a view of the
  * unit rather than a record of what the phone last did to it.
  */
+/*
+ * A TUNER READING'S CENTS ARE A WHOLE NUMBER BEFORE ANYTHING DRAWS THEM.
+ *
+ * "A#2 -9.249712944030762 cents" (Justin's tuner, 25 November 2026): through a
+ * computer an AM4's reading came with the unit's own float for its cents,
+ * where every other unit's is whole, and the tuner drew it as it came. The
+ * computer app rounds it now; this is for one that does not yet, and for
+ * anything else that ever hands a reading on unrounded. A reading with no
+ * cents (no note sounding: null) is left exactly as it is. Pure:
+ * test/tuner-hosts.mjs runs it.
+ */
+export function wholeCents(reading) {
+  const cents = reading?.cents
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) return reading
+  const whole = Math.round(cents)
+  return Object.is(whole, cents) ? reading : { ...reading, cents: whole === 0 ? 0 : whole }
+}
+
+/*
+ * AND A READING ONLY AN AM4 SENDS IS NOT USED WHILE ANOTHER UNIT IS DRIVEN.
+ *
+ * For a computer app too old to say whose its events are (lib/relay, the
+ * 'evt' handler): two computers on one account, both tuners going, and
+ * nothing in a reading to say which it came from. One thing does tell, one
+ * way round. Only the AM4's driver ever sent cents that are not whole
+ * (ForgeFX drivers/am4.ts readTuner, the unit's own float); every other
+ * unit's come from one sum that rounds them (registryCore freqToNote). So a
+ * reading with part of a cent, while the unit driven is known and is not an
+ * AM4, is another computer's AM4, and is dropped.
+ *
+ * NOT THE OTHER WAY ROUND: with an AM4 driven, a whole number of cents may be
+ * its own (a float can land on one), so nothing is dropped there, and those
+ * two tuners stay mixed until the other computer's app is updated. Never
+ * while the unit has not said what it is. Over Bluetooth and in the demo
+ * every reading is whole, so this drops nothing there. Pure:
+ * test/tuner-hosts.mjs runs it.
+ */
+export function anotherUnitsTuner(reading, { slug, settled } = {}) {
+  const cents = reading?.cents
+  if (typeof cents !== 'number' || !Number.isFinite(cents) || Number.isInteger(cents)) return false
+  return settled === true && !!slug && slug !== DEFAULT_SLUG && !isAm4(slug)
+}
+/* Said once for each time the tuner is opened. */
+let otherTunerSaid = false
+
 export function handleEvent(event) {
   if (!event) return
 
@@ -718,7 +763,15 @@ export function handleEvent(event) {
    * several times a second with no tuner in sight.
    */
   if ((event.type === 'tuner' || event.note !== undefined) && state.tunerOn) {
-    set({ tuning: event })
+    if (anotherUnitsTuner(event, { slug: state.deviceSlug, settled: unitSettled })) {
+      if (!otherTunerSaid) {
+        otherTunerSaid = true
+        logDebug('tuner', `a tuner reading with part of a cent (${event.note ?? '?'}${event.octave ?? ''} ${event.cents}), which only an AM4 through an older computer app sends, while the unit driven is ${state.deviceName || state.deviceSlug}: another computer's, not used`)
+      }
+    } else {
+      /* Whole cents, whoever sent them (wholeCents, above). */
+      set({ tuning: wholeCents(event) })
+    }
   }
 
   /*
@@ -3470,6 +3523,7 @@ export async function writeTuner(on, at = Date.now()) {
   const press = ++tunerPress
   const card = linkCard()
   stopTunerKeep()
+  otherTunerSaid = false
   set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false, dropped: null })
   if (!on) stopDemoTuner()
   /* An open is on its way until its answer, whatever tunerOn says meanwhile (tunerAskWaits). */

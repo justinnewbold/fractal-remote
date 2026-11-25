@@ -333,7 +333,9 @@ export function handleEvent(event) {
    * forever, with no tuner open anywhere.
    */
   if ((event.type === 'tuner' || event.note !== undefined) && state.tunerOn) {
-    set({ tuning: event })
+    /* Whole cents, whoever sent them: an AM4's came through an older computer app as the unit's own float ("-9.249712944030762 cents"). */
+    const cents = typeof event.cents === 'number' && Number.isFinite(event.cents) ? Math.round(event.cents) : event.cents
+    set({ tuning: cents === event.cents ? event : { ...event, cents } })
   }
 
   /*

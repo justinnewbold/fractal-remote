@@ -94,6 +94,8 @@ let hosts = []
 let rollAnswers = []
 /** Which of them requests are addressed to. Null while there is only one. */
 let chosen = null
+/* The other computers whose events were dropped on this connection, each said once in the log (the 'evt' handler). */
+const eventsNotUsed = new Set()
 /** How that one was chosen, for the log: 'pick' or 'first' (see rollCallLine). */
 let chosenWhy = null
 /** Whether addressing one Mac has been PROVED to leave the others out. */
@@ -975,7 +977,39 @@ async function joinChannel() {
    */
   chan.on('presence', { event: 'sync' }, () => {})
 
-  chan.on('broadcast', { event: 'evt' }, ({ payload }) => {
+  /*
+   * AN EVENT FROM A COMPUTER THAT IS NOT THE ONE DRIVEN IS NOT USED.
+   *
+   * The channel is the account's, so every computer signed in to it sends its
+   * events here, and they were all handed on. Justin's tuner, 25 November
+   * 2026, flipping some twenty times a second between "C#2 -36 cents" and
+   * "A#2 -9.249712944030762 cents": two Raspberry Pis on his account, an AM4
+   * on one and another unit on the other, both tuners open, both readings on
+   * one screen. The same went for a scene, a tempo or a knob changed on the
+   * computer nobody was driving.
+   *
+   * A computer app new enough says whose each event is (`host`, the name it
+   * calls itself, the one requests are addressed by). With a computer chosen
+   * (two or more answered the roll call), an event that names another is
+   * dropped, and said once in the log for each of them on a connection. With
+   * none chosen (one computer, or the count still going) nothing is dropped.
+   * An event with no name, from an older computer app, is handed on as it
+   * always was: nothing in it says whose it is. The name is taken off before
+   * the event is handed on, so the screens get what they always got.
+   */
+  chan.on('broadcast', { event: 'evt' }, ({ payload: heard }) => {
+    let payload = heard
+    if (heard && typeof heard === 'object' && typeof heard.host === 'string' && heard.host) {
+      const { host, ...event } = heard
+      if (chosen && host !== chosen) {
+        if (!eventsNotUsed.has(host)) {
+          eventsNotUsed.add(host)
+          logDebug('link', `an event (${event.type ?? 'no type'}) from ${host}, which is not the computer driven (${chosen}): not used`)
+        }
+        return
+      }
+      payload = event
+    }
     for (const fn of listeners) {
       try {
         fn(payload)
@@ -1097,6 +1131,7 @@ export async function remoteDisconnect() {
   chosen = null
   targeted = false
   censuses.clear()
+  eventsNotUsed.clear()
   chosenWhy = null
   /* Reads held for a roll call on this link are let go: the link they were waiting on has gone. */
   readsHeld?.open()

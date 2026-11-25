@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-25",
     "day": "25 November 2026",
-    "version": "2.4.9",
+    "version": "2.5.0",
     "lines": [
+      {
+        "text": "Fixed: with two computers on your account, each with a unit, the tuner could flip between two readings many times a second. The app now uses only what the computer it is driving sends. Update the computer app on each computer.",
+        "only": null
+      },
       {
         "text": "Bluetooth: after you tap Connect, the page shows it is looking for your adapter, and a second tap no longer starts a second search. And with two computers on your account, the app shows a computer’s name only once it knows which one it is driving, so the wrong name no longer appears for a few seconds.",
         "only": null
