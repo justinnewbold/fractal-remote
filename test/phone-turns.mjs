@@ -469,7 +469,7 @@ export function run(test) {
     assert.match(main, /^import \{ PhoneTurns \} from '\.\/src\/components\/PhoneTurns'$/m)
     assert.equal(tree.split('<PhoneTurns ').length - 1, 1, 'the phone is told which way up from two places')
     assert.match(tree, /<SafeAreaProvider> \{ \} <PhoneTurns allowed=\{sidewaysAllowed\} inApp=\{turnsInApp\} onPlay=\{screen === 'stage'\} beside=\{sideTool !== null\} stageView=\{stageViewUp\} frame=\{frame\} \/>/, 'the rule is not over every screen, or is told something else')
-    assert.match(tree, /const turnsInApp = auth === 'in' && seenWalk === true && !independentDue && !askHow && !askShare && !buying /, 'a page in front of the app can be turned')
+    assert.match(tree, /const turnsInApp = auth === 'in' && seenWalk === true && !askHow && !askShare && !buying /, 'a page in front of the app can be turned')
     /* The same switch as the layout it turns for: his account until the switch opens it. */
     assert.match(tree, /const sidewaysAllowed = sidesAdmin \|\| \(sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE\) /)
 

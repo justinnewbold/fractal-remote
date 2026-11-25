@@ -44,7 +44,7 @@ const ONBOARDING = 'mobile/src/screens/Onboarding.js'
 const PAYWALL = 'mobile/src/screens/Paywall.js'
 const PICKER = 'mobile/src/components/SongPicker.js'
 const SONG_SETUP = 'mobile/src/components/SongSetup.js'
-const NOTICES = ['mobile/src/components/IndependentNotice.js', 'mobile/src/components/GearShareNotice.js']
+const NOTICES = ['mobile/src/components/GearShareNotice.js']
 const FILES = [
   PRESETS, SETLISTS, EDIT, SIGN_IN, ONBOARDING, PAYWALL, PICKER, SONG_SETUP,
   'mobile/src/components/RowsPanel.js', 'mobile/src/components/IrPicker.js', 'mobile/src/components/RenamePreset.js',
@@ -247,7 +247,6 @@ export function run(test) {
       /* mobile.mjs: never a scroll view that centres what can outgrow it. */
       assert.match(text, /contentContainerStyle=\{\{ flexGrow: 1, padding: space\.xl \}\}/, `${file}: the scroll view under the card changed`)
     }
-    assert.ok(read(NOTICES[0]).includes('{NOT_AFFILIATED}'), 'the startup card no longer says the sentence')
   })
 
   test('glass screens: the chain cards on Edit sit on the page ground over their red ✕, and their colours stay', () => {

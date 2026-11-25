@@ -24,7 +24,7 @@
  * exist reads as careless about exactly the point it is making.
  *
  * WHY IT IS ONE STRING IN ONE FILE. This sentence has to appear in several
- * places — the startup card on every end, the startup screens, both About
+ * places — the startup screens, the walkthrough's first screen, both About
  * screens, the website's pages, the third-party notices and the store
  * listings — and the version of it that matters is whichever one somebody's
  * lawyer reads. Hand-typed copies drift, and a disclaimer that says three
@@ -107,9 +107,3 @@ export const SUPPORT_URL = 'https://fractal.newbold.cloud/support.html'
  * make a computer release of every update.
  */
 export const WHATS_NEW_URL = 'https://fractal.newbold.cloud/whats-new.html'
-
-/**
- * The startup card's heading, over the sentence and the line above: once on
- * every device, before anything else, with one button, OK.
- */
-export const STARTUP_NOTICE_TITLE = 'An independent app'

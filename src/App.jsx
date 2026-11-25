@@ -276,7 +276,6 @@ import BluetoothInApps from './components/BluetoothInApps'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
-import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './components/IndependentNotice'
 import { ChainCards, TipCard } from './components/Walk'
 import { linkChain } from '../shared/link-chain.mjs'
 import { UPDATE_STEPS } from '../shared/computer-update.mjs'
@@ -726,32 +725,21 @@ export default function App() {
    * that keeps coming back is the thing everybody remembers hating.
    *
    * "Opens" is when it can be seen, not when it is drawn: on a first visit it
-   * is drawn under the startup card (`independentDue`, below), which is
-   * opaque, and a tab closed with the card still up has seen none of it. So
-   * it is marked once OK has been pressed, and that visitor meets the card
-   * and then the walkthrough next time.
+   * was once drawn under a startup card; that card is gone (25 November
+   * 2026), so it is marked as it opens.
    */
   const [walkthrough, setWalkthrough] = useState(() => !onboarded())
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
   /*
-   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
-   * Audio's sentence and where help comes from, once per browser
-   * (components/IndependentNotice). Decided in the very first render, like
-   * the walkthrough, so the card covers the page from its first frame rather
-   * than arriving over something already in use. A name of its own, and
-   * drawn after the walkthrough: the walkthrough's own condition is read as
-   * text by test/structure.mjs, and is never written anywhere above it.
+   * WHAT PLAY'S ONE-TIME NOTES WAIT BEHIND: the walkthrough, which is drawn
+   * over the page with Play running under it. A note "shown" under it is a
+   * note nobody saw but the app remembers as said. (The startup card, "An
+   * independent app", stood here too until 25 November 2026, when Justin
+   * had it taken out: the sentence is on the walkthrough's first screen,
+   * the connect screens and About.)
    */
-  const [independentDue, setIndependentDue] = useState(() => !independentNoticeSeen())
-  /*
-   * WHAT PLAY'S ONE-TIME NOTES WAIT BEHIND: the startup card, then the
-   * walkthrough. Both are drawn over the page, with Play running under
-   * them, and a note "shown" under either is a note nobody saw but the app
-   * remembers as said. The startup card comes first and alone; the colours
-   * line waits for both, and for the sign-in sheet (Gig `noteAbove`).
-   */
-  const startupOver = independentDue || walkthrough
+  const startupOver = walkthrough
   /*
    * On the computer, whether the walkthrough has moved on from its phone-style
    * welcome and choice to the computer's own plug-in steps — which is where
@@ -759,8 +747,8 @@ export default function App() {
    */
   const [computerSetup, setComputerSetup] = useState(false)
   useEffect(() => {
-    if (walkthrough && !independentDue) markOnboarded()
-  }, [walkthrough, independentDue])
+    if (walkthrough) markOnboarded()
+  }, [walkthrough])
   const [device, setDevice] = useState(null)
   /*
    * The unit's own state comes from the store, not from here.
@@ -1209,24 +1197,17 @@ export default function App() {
     /* Opened from fractal.newbold.cloud/join: straight onto Create Account,
        over the welcome, and the address back to plain `/`. See lib/joinLink.
 
-       AFTER THE STARTUP CARD, NEVER UNDER IT. A first visit through the
-       link owes the card too (independentDue), and the form used to open in
-       the same first moment: on a phone the sheet shut the page under it,
-       the card with it, and OK did nothing, over a form nobody could see.
-       The only way out was Back, which closed the form the link was sent
-       for. So the link is remembered from the first render and kept until
-       OK, and the address stays /join until then, so a reload while the
-       card is up still ends on Create Account. Then the card goes and the
-       form arrives, in sight, the way the link promised. */
+       (It once waited for a startup card's OK; the card is gone since 25
+       November 2026, so the form opens at once.) */
     const joinOwed = useRef(null)
     if (joinOwed.current === null) joinOwed.current = arrivedToJoin()
     useEffect(() => {
-      if (!joinOwed.current || independentDue) return
+      if (!joinOwed.current) return
       joinOwed.current = false
       window.history.replaceState(null, '', '/')
       setSignInStart('up')
       setSignIn('account')
-    }, [independentDue])
+    }, [])
     /* WHETHER THE SIGN-IN SHEET IS OVER PLAY, or the join link's is owed:
        Play's colours line waits for it (Gig `noteAbove`), as it waits for the
        startup card. The link's own answer counts as well as the sheet,
@@ -5719,22 +5700,6 @@ export default function App() {
           moment over Play, which Apply closes Settings onto, and out of sight
           under any sheet (components/Colours). */}
       <LookUndo hidden={sheet !== null} />
-
-      {/*
-        "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
-        letter, 18 October 2026). Opaque and over the walkthrough, which waits
-        under it; see components/IndependentNotice for why it covers the page
-        rather than replacing it, and how it keeps the keyboard out of what
-        is under it.
-      */}
-      {independentDue ? (
-        <IndependentNotice
-          onDone={() => {
-            markIndependentNotice()
-            setIndependentDue(false)
-          }}
-        />
-      ) : null}
 
       <SignInSheet
         open={Boolean(signIn)}

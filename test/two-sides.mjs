@@ -337,7 +337,7 @@ export function run(test) {
     /* Android's back: full screen first, then today's step (the side's Done). */
     assert.match(app, /if \(twoSidesUp && backUnwinds\(\{ tool: sideTool, sideFull \}\) === 'full'\) \{\s*setSideFull\(false\)\s*return true\s*\}\s*if \(screen !== 'stage'\)/)
     /* Siri: told Play is elsewhere while a tool fills the window (screen is the tool), and not while it is beside one. */
-    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen: stageViewUp \? 'stage' : screen, shareCard: askHow \|\| askShare \}\) && !playBeside\n/)
+    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, screen: stageViewUp \? 'stage' : screen, shareCard: askHow \|\| askShare \}\) && !playBeside\n/)
     /* The host: nothing for anybody else, Play in one View in every mode, the hidden side at no width and silent to a screen reader, the divider on the window's middle. */
     assert.match(sides, /if \(!allowed\) return children\n/)
     assert.match(sides, /<EdgeBack onBack=\{beside \? swallow : null\} style=\{\{ flex: 1 \}\}>\s*\{children\}\s*<\/EdgeBack>/, 'Play is wrapped in one View in one mode and another in the next, so it is drawn afresh')

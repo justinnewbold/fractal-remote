@@ -483,7 +483,6 @@ export function run(test) {
     /* And How do you connect to your unit? comes before it, in Play's place too (components/HowConnect). */
     assert.ok(app.indexOf(') : askHow ? (') > app.indexOf(") : auth === 'paywall' ? (") && app.indexOf(') : askHow ? (') < app.indexOf(') : askShare ? ('), 'How do you connect is not between the purchase page and the sharing card')
     const at = (s) => app.indexOf(s)
-    assert.ok(at(') : independentDue ? (') > 0 && at(') : independentDue ? (') < at(') : askShare ? ('), 'the sharing card can come before "An independent app"')
     assert.ok(at(') : seenWalk === false ? (') < at(') : askShare ? ('), 'the sharing card can come before the walkthrough')
     assert.ok(at(") : auth === 'paywall' ? (") < at(') : askShare ? ('), 'the sharing card can come before the purchase page')
     assert.match(app, /onAnswer=\{\(yes\) => \{\n\s+setSharing\(yes\)\n\s+setShareDue\(false\)/, 'an answer on the card is not kept')

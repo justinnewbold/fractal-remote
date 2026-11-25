@@ -39,7 +39,6 @@ import Settings from './src/screens/Settings'
 import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
 import Onboarding from './src/screens/Onboarding'
-import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
 import GearShareNotice from './src/components/GearShareNotice'
 import HowConnect from './src/components/HowConnect'
 import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
@@ -210,15 +209,6 @@ export default function App() {
    */
   const [replaying, setReplaying] = useState(false)
   /*
-   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
-   * Audio's sentence and where help comes from, once on every install
-   * (components/IndependentNotice). Read with the walkthrough's answer and
-   * set in the same moment, so the spinner covers both and nothing is drawn
-   * on a guess: the card is decided before the walkthrough, the sign-in or
-   * Play can be, and so it is never laid over any of them.
-   */
-  const [independentDue, setIndependentDue] = useState(false)
-  /*
    * WHETHER "HELP MAKE FRACTAL REMOTE BETTER?" IS STILL OWED (components/
    * GearShareNotice, 26 October 2026): never answered on this device
    * ('first'), or a Yes given to its words before 4 November 2026, which
@@ -236,8 +226,7 @@ export default function App() {
   const [connectedBefore, setConnectedBefore] = useState(false)
   useEffect(() => {
     /* A first run is told where Match my unit is too, on Play after the walkthrough (components/ColoursNotice): nothing is marked here for it. */
-    Promise.all([walkthroughSeen(), independentNoticeSeen()]).then(([seen, noticed]) => {
-      setIndependentDue(!noticed)
+    walkthroughSeen().then((seen) => {
       setSeenWalk(seen)
     })
   }, [])
@@ -1245,7 +1234,7 @@ export default function App() {
    * playElsewhereOf says which is which).
    */
   /* And not elsewhere while it is beside a tool on two sides (playBeside): Play is showing, so a command is for it, not "Open Play". A tool filling the window over it is the tool's screen, and elsewhere. */
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen: stageViewUp ? 'stage' : screen, shareCard: askHow || askShare }) && !playBeside
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, screen: stageViewUp ? 'stage' : screen, shareCard: askHow || askShare }) && !playBeside
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * WHICH WAY UP A PHONE MAY BE HELD (lib/phoneTurns; components/PhoneTurns
@@ -1259,7 +1248,7 @@ export default function App() {
    * a phone on a stand is not turned upright and back each time its adapter
    * drops. A tablet is asked for nothing.
    */
-  const turnsInApp = auth === 'in' && seenWalk === true && !independentDue && !askHow && !askShare && !buying
+  const turnsInApp = auth === 'in' && seenWalk === true && !askHow && !askShare && !buying
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
    * reader says it does cannot disagree (TopBar unitGoes). Which unit only
@@ -1712,25 +1701,11 @@ export default function App() {
             {/* Fractal Audio's sentence, every launch, while the app starts:
                 in small type that can be read, and costing no wait, because
                 this screen is only up while two stored answers load (a
-                fraction of a second). The card below is the one that is sure
-                to be seen; this is the reminder. */}
+                fraction of a second). */}
             <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45), textAlign: 'center' }}>
               {NOT_AFFILIATED}
             </Text>
           </View>
-        ) : independentDue ? (
-          /*
-           * "An independent app", once, before anything else (Fractal
-           * Audio's letter, 18 October 2026): in place of the walkthrough,
-           * the sign-in or Play, never over them. OK remembers it and the
-           * app opens where it would have.
-           */
-          <IndependentNotice
-            onDone={() => {
-              markIndependentNotice()
-              setIndependentDue(false)
-            }}
-          />
         ) : seenWalk === false ? (
           /*
            * NOT `auth === 'out' && !seenWalk`, WHICH IS THE BUG THIS LINE HAD.
