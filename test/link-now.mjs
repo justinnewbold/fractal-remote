@@ -356,6 +356,7 @@ async function linkOnABench() {
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
     'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll'); if (bench.holdRead) await bench.holdRead }\nexport const reset = () => {}\nexport const startClean = (o) => { bench.order.push('startClean'); (bench.cleans = bench.cleans || []).push(o ?? null) }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => { bench.watching = true }\nexport const stopWatching = () => { bench.watching = false }\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
+    'hostName.mjs': read('mobile/src/lib/hostName.js'),
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -415,6 +416,8 @@ async function linkOnABench() {
       export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; bench.forgot = (bench.forgot || 0) + 1; return had }
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
+      /* Whether which computer is driven is still to be said (relay.js remoteCountPending): \`bench.countPending\`, false unless a test says. */
+      export const remoteCountPending = () => bench.countPending === true
       /* Which unit (relay.js pickHost): \`bench.pick\` runs inside it; \`bench.switched(name)\` tells link.js it moved, as relay.js does before the proof. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       const switchWatchers = new Set()
@@ -450,7 +453,9 @@ async function linkOnABench() {
     ["from './relay-rules'", "from './relay-rules.mjs'"],
     ["from './relay'", "from './relay.mjs'"],
     ["from './rig'", "from './rig.mjs'"],
-    ["from './phone-note'", "from './phone-note.mjs'"]
+    ["from './phone-note'", "from './phone-note.mjs'"],
+    /* Whose name an answer is (lib/hostName): the real rule, which imports nothing. */
+    ["from './hostName'", "from './hostName.mjs'"]
   ]
   let src = read('mobile/src/lib/link.js')
   for (const [from, to] of swaps) {
@@ -7143,3 +7148,6 @@ export function run(test) {
     )
   })
 }
+
+/* The benches, for a test file of its own (test/connect-search.mjs). */
+export { linkOnABench, stackOnABench }

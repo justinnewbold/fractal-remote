@@ -5,7 +5,7 @@
  * What each knob does, as the computer app answers GET /help/blocks/<slug>
  * for an FM3, FM9 and Axe-Fx III, for the phone to answer over Bluetooth.
  */
-export const GEN3_HELP_FROM = {"forgefx":"3a401cc73ba12e0d75151e6a876f786c487c59c8","codec":"a17eb4a51d6d86985d8d8040966caa8da295f364"}
+export const GEN3_HELP_FROM = {"forgefx":"219fbc6a92a2fcfb31af9b867e4c1ff3abc70b7d","codec":"a17eb4a51d6d86985d8d8040966caa8da295f364"}
 
 /** Every distinct piece of help, once: { blurb, tip? }. */
 export const HELP_TEXTS = [

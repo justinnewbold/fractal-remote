@@ -778,6 +778,15 @@ export function remoteCountDue() {
 export const remoteCountOwed = () => recountOwed
 
 /**
+ * Whether which computer is driven is still to be said on this link: no roll
+ * call tried on it yet, one running, or one a drop cut short and owed. For
+ * link.js readMacName, whose read is never held (neverHeld) and so, on an
+ * account that may have two computers, is answered by whichever is quicker
+ * until the count has picked (lib/hostName).
+ */
+export const remoteCountPending = () => !countTried || recountOwed || Boolean(counting && countingLink === session)
+
+/**
  * Whether this account's record says it may have two computers (shared
  * relay-rules mayBeTwo): its last count heard two, or it has a 1.87.47 pick
  * not counted since. link.js keeps 1.87.47's order at join for every other

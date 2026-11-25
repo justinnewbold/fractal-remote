@@ -9779,7 +9779,7 @@ export function run(test) {
     assert.match(page, /<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
-    assert.match(page, /tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
+    assert.match(page, /tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| searching\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
     assert.match(flat('mobile/src/components/Tabs.js'), /on=\{it\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
     assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 3, 'a unit chip somewhere can be changed while connected')
@@ -10893,7 +10893,7 @@ export function run(test) {
     assert.equal((await lib('android', 30)).allow, 'Allow Location for Fractal Remote in Android’s settings, and turn Location on')
 
     const page = flat('mobile/src/screens/Bluetooth.js')
-    assert.match(page, /import \{ Linking, Platform, Text, View \} from 'react-native'/)
+    assert.match(page, /import \{ ActivityIndicator, Linking, Platform, Text, View \} from 'react-native'/)
     assert.match(page, /if \(b\.trouble === 'restricted'\) return \{ line: RESTRICTED_WORDS, tone: 'fault' \}/, 'a blocked iPhone is not told so')
     /* On both phones: openSettings is the app's own page, the Bluetooth switch on an iPhone and Permissions on Android. One button, drawn by one function. */
     assert.match(page, /function OpenSettings\(\) \{ return <Press label="Open Settings" height=\{44\} onPress=\{\(\) => Linking\.openSettings\(\)\.catch\(\(\) => \{\}\)\} \/> \}/)
@@ -11445,7 +11445,7 @@ export function run(test) {
       '{said.line}',
       '<Heading>1 · Pick your unit</Heading>',
       '<Heading>2 · Connect</Heading>',
-      "label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}",
+      "label={searching ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}",
       '<Press label="Setup guide"',
       '<Press label="How to connect my Bluetooth device"',
       '<Press label="Troubleshooting"',
@@ -18857,7 +18857,7 @@ export function run(test) {
     }
     /* In the file: before the iPhone's question and Apple's screen, and before Android's permission and scan. */
     const lib = flat('mobile/src/lib/bluetooth.js')
-    const find = lib.slice(lib.indexOf('export async function findAdapters({ cableFirst = true } = {})'), lib.indexOf('export function adapterAway()'))
+    const find = lib.slice(lib.indexOf('async function findAdaptersOnce({ cableFirst = true } = {})'), lib.indexOf('export function adapterAway()'))
     const first = find.indexOf('const cables = cableFirst ? cablesFirst(listed, cableRule()) : []')
     for (const later of ['mod.authorization?.()', 'if (pairScreenShut()) {', 'await mod.pair()', 'await mod.requestPermissions()', 'await mod.scan(SCAN_SECONDS)']) {
       assert.ok(first > 0 && first < find.indexOf(later), `${later} comes before the cable`)
@@ -19066,7 +19066,7 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     /* Off, with a cable kept: Use a Bluetooth adapter instead, under Connect. */
     assert.match(page, /const offerAdapterInstead = !!b\.adapter && cable && canStart && !b\.on/)
-    assert.match(page, /\{offerAdapterInstead \? <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} height=\{52\} disabled=\{b\.looking\} onPress=\{adapterInstead\} \/> : null\}/)
+    assert.match(page, /\{offerAdapterInstead \? <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} height=\{52\} disabled=\{searching\} onPress=\{adapterInstead\} \/> : null\}/)
     assert.match(page, /const back = adapterInsteadOfCable\(\{ byHand: true \}\) if \(!back\) return find\(\{ cableFirst: false \}\)/, 'the page’s Use a Bluetooth adapter instead can take the cable back')
     /* The hint under Connect says what it does with the cable out. */
     assert.match(page, /: cableOut \? cableAwayHint\(before \? adapterName\(before\) \|\| 'the Bluetooth adapter' : null\)/)
@@ -19096,7 +19096,7 @@ export function run(test) {
      * the top bar's (test/independent.mjs), and none when Connect reaches the
      * unit by USB cable.
      */
-    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : offerMain \? OFFER_LOOK : 'Connect'\} icon=\{cable \|\| takes\.length \|\| offerMain \? null : bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{offerMain \? undefined : font\.lead\} height=\{offerMain \? 52 : 64\} tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
+    assert.match(page, /<Press label=\{searching \? 'Looking…' : offerMain \? OFFER_LOOK : 'Connect'\} icon=\{cable \|\| takes\.length \|\| offerMain \? null : bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{offerMain \? undefined : font\.lead\} height=\{offerMain \? 52 : 64\} tone=\{offerMain \? undefined : 'live'\} disabled=\{!canStart \|\| searching\} onPress=\{start\} \/>/)
     assert.match(src('mobile/src/screens/Bluetooth.js'), /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     const press = flat('mobile/src/components/Press.js')
     assert.match(press, /const wordInk = inkColor && !on && !disabled \? inkColor : ink/, 'Press’s own colour is not kept for lit or disabled')
@@ -19849,7 +19849,7 @@ export function run(test) {
     assert.match(page, /const cableWanted = !b\.on \|\| notThere \|\| \(quiet && !cable\) \|\| footswitch \|\| cableAwayNow/)
     assert.match(page, /const offerCables = canStart && cableWanted \? cablesToOffer\(listed\)\.filter\(\(d\) => !saidElsewhere\(d\)\) : \[\]/)
     assert.match(page, /const saidElsewhere = \(d\) => !b\.on && !b\.adapter && \(\(takes\.length === 1 && takes\[0\]\.id === d\.id\) \|\| b\.devices\.some\(\(x\) => x\.id === d\.id\)\)/)
-    assert.match(page, /<Press key=\{d\.id\} label=\{CABLE_USE_HERE\} sub=\{d\.name \|\| CABLE_ROW\} tone=\{b\.on \? 'live' : undefined\} height=\{52\} disabled=\{b\.looking\} onPress=\{\(\) => useCable\(d\)\} \/>/)
+    assert.match(page, /<Press key=\{d\.id\} label=\{CABLE_USE_HERE\} sub=\{d\.name \|\| CABLE_ROW\} tone=\{b\.on \? 'live' : undefined\} height=\{52\} disabled=\{searching\} onPress=\{\(\) => useCable\(d\)\} \/>/)
     const button = page.slice(page.indexOf('const cableButtons'), page.indexOf('const differentButton'))
     assert.ok(!/icon=/.test(button), 'the USB cable’s button wears a picture')
     assert.match(page, /const useCable = \(d\) => \{ if \(!canStart\) return arm\(\) chooseCableHere\(d\) \}/)
@@ -20189,13 +20189,13 @@ export function run(test) {
     /* Connected to a footswitch taken for the adapter (8 November 2026): the way out, under the line that names it. */
     assert.equal(drawnWith(state({ on: true, phase: 'connected' }), false, true, true), true, 'no Use a different adapter under a footswitch')
     /* Named, and "from last time" only when it is: with Bluetooth on it can be one picked a moment ago. */
-    assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{silentAdapter \? `If \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\} isn’t on your \$\{unitName\(b\.unit\)\}` : b\.on \? `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}` : `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{b\.looking\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter, or says from last time of one picked a moment ago')
+    assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{silentAdapter \? `If \$\{adapterName\(b\.adapter\) \|\| 'this adapter'\} isn’t on your \$\{unitName\(b\.unit\)\}` : b\.on \? `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}` : `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{searching\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter, or says from last time of one picked a moment ago')
     const ternary = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
     const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
     assert.ok(cut > 0, 'the on/off ternary could not be split')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
     assert.ok(onPart.includes('{differentButton}') && onPart.indexOf('{differentButton}') < onPart.indexOf('<Press label={stop.label}'), 'no Use a different adapter while it is trying the one kept, or it is under Stop')
-    assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}"), 'no Use a different adapter under Connect')
+    assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={searching ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}"), 'no Use a different adapter under Connect')
     assert.ok(!/A different adapter is Troubleshooting['’]s/.test(page), 'the page still says a different adapter is Troubleshooting’s')
   })
 
@@ -21171,6 +21171,76 @@ export function run(test) {
     const link = flat('mobile/src/lib/bleLink.js')
     assert.match(link, /const OFF_ANSWER_MS = 500/)
     assert.match(link, /if \(!ok && mine === attempt && Platform\.OS === 'android' && !isCable\(s\.adapter\) && Date\.now\(\) - asked < OFF_ANSWER_MS\) await bluetoothLooksOff\(\)/)
+  })
+
+  /*
+   * CONNECT SAYS IT IS LOOKING FROM THE TAP, AND A SECOND TAP STARTS NOTHING.
+   * Justin's log of 22 November 2026: Connect with no adapter kept, about ten
+   * seconds of nothing, and Connect pressed twice. The page was told only
+   * once the scan had started; `finding` is up from the tap (lib/bluetooth
+   * findAdapters), and a search asked for while one is going is not a second
+   * permission question or a second scan. test/connect-search.mjs has the
+   * page's half.
+   */
+  test('Connect is looking from the tap, before Android has answered anything, and a second Connect meanwhile starts no second search', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const clock = fakeClock()
+    const asked = []
+    let allow = null
+    const JACK = { id: 'AA:BB:CC:00:00:09', name: 'WIDI Jack', rssi: -55 }
+    const UHOST = { id: 'AA:BB:CC:00:00:0A', name: 'WIDI Uhost', rssi: -70 }
+    const mod = {
+      supported: () => true,
+      devices: () => [JACK, UHOST],
+      /* Android's question stays up until somebody answers it. */
+      requestPermissions: () => (asked.push('permission'), new Promise((r) => (allow = r))),
+      scan: async (secs) => (asked.push(`scan ${secs}`), true),
+      addListener: () => ({ remove() {} })
+    }
+    const bench = await bluetoothOnABench({ os: 'android', version: 34, mod, clock })
+    try {
+      const b = bench.ble
+      b.allowBluetooth(ADMINS[0])
+      b.setBluetoothUnit('am4')
+      assert.equal(b.useBluetooth().finding, false)
+      const first = b.findAdapters()
+      assert.equal(b.useBluetooth().finding, true, 'the page is told nothing at the tap')
+      assert.equal(b.useBluetooth().looking, false)
+      /* The second tap, with the first still waiting on Android. */
+      const second = b.findAdapters()
+      assert.deepEqual(asked, ['permission'], 'a second Connect asked Android again')
+      /* And it is answered at once, with nothing chosen: it does not wait on the first. */
+      assert.equal(await Promise.race([second.then((pick) => pick ?? 'nothing'), new Promise((r) => setImmediate(() => r('still out')))]), 'nothing')
+      assert.ok(bench.log.includes('ble Connect asked again while it is already looking for the adapter: nothing more started'), bench.log.join(' | '))
+      assert.equal(b.useBluetooth().finding, true, 'the second Connect ended the first one’s looking')
+      allow(true)
+      await first
+      /* Handed on to the ten-second look with no gap: the page reads `finding || looking`. */
+      assert.deepEqual(asked, ['permission', 'scan 10'])
+      assert.equal(b.useBluetooth().finding, false)
+      assert.equal(b.useBluetooth().looking, true, 'nothing says it is looking once the scan has started')
+      await advance(clock, 11000)
+      assert.equal(b.useBluetooth().looking, false)
+      assert.equal(b.bluetoothSettings().adapter ?? null, null, 'one of two adapters was chosen without a tap')
+      assert.equal(b.useBluetooth().devices.length, 2)
+      /* And once it is over, Connect looks again. */
+      const again = b.findAdapters()
+      assert.equal(b.useBluetooth().finding, true)
+      allow(true)
+      await again
+      assert.deepEqual(asked, ['permission', 'scan 10', 'permission', 'scan 10'])
+      /* A search that throws lets go too. */
+      await advance(clock, 11000)
+      mod.requestPermissions = async () => true
+      mod.scan = async () => {
+        throw new Error('no radio')
+      }
+      await b.findAdapters()
+      assert.equal(b.useBluetooth().finding, false, 'a search that failed left the page looking for good')
+      assert.match(b.useBluetooth().said, /^Looking did not start: no radio$/)
+    } finally {
+      bench.done()
+    }
   })
 
   test('Bluetooth off on Android: Connect says so and logs it, Turn on Bluetooth asks Android, and the look starts by itself once it is on', async () => {
@@ -24644,11 +24714,11 @@ export function run(test) {
      * offer is Connect's size and has the Bluetooth mark; Connect under it
      * is smaller, unlit, and says what it does then.
      */
-    const press = '{offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={b.looking} onPress={takeOffer} /> : null}'
+    const press = '{offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} icon={bluetoothIcon} inkColor={color.ble} labelSize={font.lead} tone="live" height={64} disabled={searching} onPress={takeOffer} /> : null}'
     assert.ok(page.includes(press), 'the offer is not drawn as one big tap with its words')
     assert.equal(page.split('onPress={takeOffer}').length - 1, 2, 'the offer is not drawn once big and once small')
     const note = '{offerMain ? <Note>{offerNote(adapterName(b.offer) || b.offer.name, unitName(b.unit), unitName(b.offer.unit), deviceNoun())}</Note> : null}'
-    const connect = page.indexOf("<Press label={b.looking ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}")
+    const connect = page.indexOf("<Press label={searching ? 'Looking…' : offerMain ? OFFER_LOOK : 'Connect'}")
     assert.ok(connect > 0, 'Connect does not say what it does while another unit’s adapter is offered')
     assert.ok(page.indexOf(note) > 0 && page.indexOf(note) < page.indexOf(press) && page.indexOf(press) < connect, 'the sentence, the offer and Connect are not in that order')
     assert.ok(page.slice(connect, page.indexOf('/>', connect)).includes("height={offerMain ? 52 : 64} tone={offerMain ? undefined : 'live'}"), 'Connect is as big and as lit as the offer over it')
@@ -24668,7 +24738,7 @@ export function run(test) {
      */
     assert.match(page, /const offerMain = offerFromOther && !b\.offer\.own/)
     const away = '{offerFromOther && !offerMain ? <Note tone="fault">{ownAwayNote(b.offer.own, unitName(b.unit), deviceNoun())}</Note> : null}'
-    const small = '{offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={b.looking} onPress={takeOffer} /> : null}'
+    const small = '{offerFromOther && !offerMain ? <Press label={takeFromOther(b.offer.name, b.unit)} sub={takeFromOtherSub(b.offer.unit)} height={52} disabled={searching} onPress={takeOffer} /> : null}'
     assert.ok(page.indexOf(away) > 0 && page.indexOf(away) < connect && page.indexOf(small) > connect && page.indexOf(small) < page.indexOf('{cableButtons}', connect), 'the unit’s own adapter is not said over Connect with the offer small under it')
     assert.equal(
       w.ownAwayNote('WIDI Uhost Bluetooth', 'FM3', 'iPhone'),

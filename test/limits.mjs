@@ -4449,7 +4449,7 @@ export function run(test) {
     const page = read('mobile/src/screens/Bluetooth.js')
     assert.ok(page.includes('<Heading>1 · Pick your unit</Heading>'), 'the notes name step 1 by a heading the Bluetooth page no longer draws')
     assert.match(page, /const canStart = !!b\.unit && paid/, 'Connect no longer waits for a unit, and the notes say it does')
-    assert.match(page, /disabled=\{!canStart \|\| b\.looking\}/, 'Connect is not the button that waits for a unit')
+    assert.match(page, /disabled=\{!canStart \|\| searching\}/, 'Connect is not the button that waits for a unit')
     assert.ok(page.includes(": 'Connect'}") && page.includes('No adapter was connected.'), 'the notes name a Connect button or a no-adapter line the page no longer has')
     assert.match(read('mobile/src/components/Press.js'), /opacity: disabled \? 0\.45/, 'a button that waits no longer looks dimmed, and the notes say Connect does')
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
