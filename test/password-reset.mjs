@@ -199,7 +199,7 @@ export function run(test) {
     assert.equal((main.match(/<App\b/g) || []).length, 1, 'the app is drawn somewhere else as well')
     /* And the page itself starts nothing of the app's: no sign-in, no link, no startup card, no walkthrough, no update check. */
     const page = code(read('src/components/ResetPassword.jsx'))
-    for (const name of ['lib/remote', 'lib/link', 'IndependentNotice', 'Onboarding', 'PhoneWalkthrough', 'UpdateNotice', 'restoreSession', 'bootLink']) {
+    for (const name of ['lib/remote', 'lib/link', 'Onboarding', 'PhoneWalkthrough', 'UpdateNotice', 'restoreSession', 'bootLink']) {
       assert.ok(!page.includes(name), `the page brings ${name} with it`)
     }
   })

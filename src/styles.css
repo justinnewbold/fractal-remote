@@ -93,9 +93,6 @@
   /* A panel opened from inside a sheet — the colour sheet in Settings →
      Colours — over that sheet, and still under a toast. */
   --z-over-sheet: 65;
-  /* "An independent app", once, at startup (components/IndependentNotice):
-     over the walkthrough, every page and every sheet, still under a toast. */
-  --z-notice: 68;
   --z-toast: 70;
 
   /*
@@ -15610,61 +15607,6 @@ button.chip.scene-colour {
 
 [data-theme='light'] .scene-colour-dot {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-fill) 50%, black);
-}
-
-/*
- * "AN INDEPENDENT APP", ONCE, AT STARTUP (components/IndependentNotice).
- *
- * Fractal Audio's letter of 18 October 2026 asks for its sentence at
- * startup. A page of its own over everything, opaque, so nothing behind it
- * is seen until OK: the walkthrough, the connecting screen and Play all wait
- * under it. Covering stops the mouse; the keyboard is stopped by the card
- * making the rest of the page inert while it is up, which no style can do.
- * The phone's card in this app's materials, at the walkthrough's width.
- */
-.independent {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-notice);
-  display: grid;
-  place-items: center;
-  padding: var(--s-5) var(--s-4);
-  background: var(--chassis);
-  overflow: auto;
-}
-.independent-card {
-  width: 100%;
-  max-width: 460px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  padding: var(--s-5);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-3);
-  background: var(--panel);
-}
-.independent-title {
-  margin: 0;
-  font-family: var(--display);
-  font-size: var(--f-6);
-  line-height: 1.15;
-}
-.independent-words {
-  margin: 0;
-  color: var(--silk);
-  font-size: var(--f-4);
-  line-height: 1.5;
-}
-.independent-help {
-  margin: 0;
-  color: var(--silk-dim);
-  font-size: var(--f-3);
-  line-height: 1.5;
-}
-.independent-ok {
-  width: 100%;
-  min-height: 48px;
-  font-size: var(--f-4);
 }
 
 /* Fractal Audio's sentence under "Finding your computer.", on the screen a

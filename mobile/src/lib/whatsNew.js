@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-25",
+    "day": "25 November 2026",
+    "version": "2.4.5",
+    "lines": [
+      {
+        "text": "The “An independent app” card no longer stops you the first time you open the app, the website or the computer app. The same sentence is still on the start screen and in About.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-24",
     "day": "24 November 2026",
     "version": "2.4.4",

@@ -363,7 +363,6 @@ export function run(test) {
       'For help with this app, use Settings → Troubleshooting → Feedback or visit fractal.newbold.cloud/support.html. Fractal Audio does not provide support for this app.'
     )
     assert.equal(a.SUPPORT_URL, 'https://fractal.newbold.cloud/support.html')
-    assert.equal(a.STARTUP_NOTICE_TITLE, 'An independent app')
     for (const [name, words] of Object.entries(a)) {
       assert.ok(!/this phone/i.test(words), `${name} says “this phone”, and the app runs on iPads, tablets and computers too`)
       assert.ok(!/sponsored by|Systems, Inc\b/.test(words), `${name} says “sponsored by” or “Inc.”, which Fractal Audio did not write`)
@@ -509,68 +508,22 @@ export function run(test) {
     }
   })
 
-  test('the startup card: once on every device, under its own key, before anything else, at both ends', async () => {
-    /* THE PHONE. The card, from the shared words, and OK. */
-    const card = read('mobile/src/components/IndependentNotice.js')
-    assert.match(card, /import \{ NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE \} from '\.\.\/lib\/affiliation'/)
-    for (const piece of ['{STARTUP_NOTICE_TITLE}', '{NOT_AFFILIATED}', '{HELP_LINE}', 'label="OK"']) {
-      assert.ok(card.includes(piece), `the phone’s card has lost ${piece}`)
+  /*
+   * THE STARTUP CARD IS GONE (25 November 2026). "Remove this initial screen
+   * from the app, website and computers. It's all over the app in other
+   * places already." (Justin.) The sentence stays where it always was beside
+   * it: the launch screens, the walkthrough's first screen, About. This
+   * holds the card out, so it does not come back by a merge of old work.
+   */
+  test('there is no startup card at either end, and the sentence is still on the launch screens', () => {
+    for (const f of ['mobile/src/components/IndependentNotice.js', 'src/components/IndependentNotice.jsx']) {
+      assert.ok(!existsSync(new URL('../' + f, import.meta.url)), `${f} is back`)
     }
-    /*
-     * The help line is the shared one with one unseen place to break, after
-     * the address's slash: on a 320-wide phone the address cut mid-word at
-     * "support.ht" / "ml." without it. Run here as the card runs it.
-     */
-    const { SUPPORT_LINE } = await import('../shared/affiliation.mjs')
-    const made = card.match(/const HELP_LINE = SUPPORT_LINE\.replace\('([^']+)', '([^']+)'\)/)
-    assert.ok(made, 'the phone’s help line is not made from the shared one')
-    const helpLine = SUPPORT_LINE.replace(made[1], JSON.parse(`"${made[2]}"`))
-    assert.notEqual(helpLine, SUPPORT_LINE, 'the address has nowhere to break; the shared line no longer has what the card looks for')
-    assert.equal(helpLine.replace(/\u200B/g, ''), SUPPORT_LINE, 'the phone’s help line says something besides the shared one')
-    assert.ok(helpLine.includes('fractal.newbold.cloud/\u200Bsupport.html'))
-    /* Its own key, not the walkthrough's, so every phone that had the app sees it once. */
-    assert.match(card, /const KEY = 'fractal\.independent\.v1'/)
-    assert.doesNotMatch(read('mobile/src/lib/walkthrough.js'), /fractal\.independent/, 'the card shares the walkthrough’s key, so nobody who had the app sees it')
-    /* Storage that will not answer shows it: the failure that matters is the device that never saw it. */
-    assert.match(card, /export async function independentNoticeSeen\(\) \{\s+try \{\s+return \(await AsyncStorage\.getItem\(KEY\)\) === 'done'\s+\} catch \{[\s\S]{0,80}return false/, 'a phone whose storage fails never sees the card')
-
-    /* In the launch gate, after the spinner and before the walkthrough, the sign-in and Play: in place of them, never over them. */
-    const app = read('mobile/App.js')
-    const spinner = app.indexOf("{auth === 'checking' || seenWalk === null ? (")
-    const gate = app.indexOf(') : independentDue ? (')
-    const walk = app.indexOf(') : seenWalk === false ? (')
-    const signIn = app.indexOf(") : auth === 'out' ? (")
-    assert.ok(spinner > 0 && spinner < gate && gate < walk && walk < signIn, 'the card is not between the spinner and the walkthrough in the launch gate')
-    assert.match(app.slice(gate, walk), /<IndependentNotice\s+onDone=\{\(\) => \{\s+markIndependentNotice\(\)\s+setIndependentDue\(false\)/, 'OK does not remember the card')
-    assert.equal(app.split('<IndependentNotice').length, 2, 'the card is drawn somewhere besides the launch gate')
-    /* Decided with the walkthrough's answer, in one moment, so nothing is drawn on a guess. */
-    assert.match(app, /Promise\.all\(\[walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,300}setIndependentDue\(!noticed\)\s+setSeenWalk\(seen\)/)
-    /* The demo is no exception: nothing about the demo stands between the gate and the card. */
-    assert.ok(!/demo/.test(app.slice(spinner, gate).replace(/\/\*[\s\S]*?\*\/|\{\/\*[\s\S]*?\*\/\}/g, '')), 'the demo skips the card')
-
-    /* THE BROWSER, and the computer app's window, which is the same page. */
-    const web = read('src/components/IndependentNotice.jsx')
-    assert.match(web, /import \{ NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE \} from '\.\.\/\.\.\/shared\/affiliation\.mjs'/)
-    for (const piece of ['{STARTUP_NOTICE_TITLE}', '{NOT_AFFILIATED}', '{SUPPORT_LINE}', '>\n          OK\n        </button>']) {
-      assert.ok(web.includes(piece), `the browser’s card has lost ${JSON.stringify(piece)}`)
+    for (const f of ['mobile/App.js', 'src/App.jsx']) {
+      assert.doesNotMatch(read(f), /IndependentNotice|independentDue/, `${f} draws or waits for the startup card`)
     }
-    assert.match(web, /const KEY = 'fractal\.independent\.v1'/)
-    assert.match(web, /localStorage\.getItem\(KEY\) === 'done'\s+\} catch \{[\s\S]{0,400}return false/, 'a browser with no storage never sees the card')
-    assert.match(web, /role="dialog" aria-modal="true"/)
-    const page = read('src/App.jsx')
-    /* A named condition, decided in the first render; never the walkthrough's own conditional written above it (test/structure.mjs reads App.jsx as text). */
-    assert.match(page, /const \[independentDue, setIndependentDue\] = useState\(\(\) => !independentNoticeSeen\(\)\)/)
-    const drawn = page.indexOf('{independentDue ? (')
-    assert.ok(drawn > page.indexOf('<PhoneWalkthrough') && drawn > page.indexOf('<Onboarding\n'), 'the card is not drawn after (over) the walkthrough')
-    assert.ok(page.indexOf('open={walkthrough &&') === page.indexOf('<PhoneWalkthrough') + '<PhoneWalkthrough\n        '.length, 'the walkthrough’s conditional is written somewhere above its own screen')
-    assert.match(page.slice(drawn), /^\{independentDue \? \(\s+<IndependentNotice\s+onDone=\{\(\) => \{\s+markIndependentNotice\(\)\s+setIndependentDue\(false\)/)
-    /* Over everything: the walkthrough and every sheet, opaque. */
-    const css = read('src/styles.css')
-    const z = (name) => Number(css.match(new RegExp(`--z-${name}: (\\d+);`))?.[1])
-    assert.ok(z('notice') > z('onb') && z('notice') > z('sheet') && z('notice') > z('over-sheet'), 'the card is not over the walkthrough and the sheets')
-    const rule = css.slice(css.indexOf('\n.independent {'), css.indexOf('}', css.indexOf('\n.independent {')))
-    assert.match(rule, /position: fixed;\s+inset: 0;\s+z-index: var\(--z-notice\);/)
-    assert.match(rule, /background: var\(--chassis\);/, 'the card lets the app show through')
+    assert.doesNotMatch(read('src/styles.css'), /\.independent\b|--z-notice/)
+    assert.match(read('mobile/App.js'), /\{NOT_AFFILIATED\}/, 'the phone’s launch screen has lost the sentence')
   })
 
   /*
@@ -586,7 +539,7 @@ export function run(test) {
   test('the startup messages take turns on the phone: the card alone, then one note at a time, the colours line last', async () => {
     /* The card is drawn by the launch gate in place of the walkthrough and Play (the test above), so nothing on Play is ever up beside it. */
     const app = read('mobile/App.js')
-    assert.ok(app.indexOf(') : independentDue ? (') < app.indexOf(') : seenWalk === false ? (') && app.indexOf(') : seenWalk === false ? (') < app.indexOf('<Stage'), 'Play can be drawn beside the startup card or the walkthrough')
+    assert.ok(app.indexOf(') : seenWalk === false ? (') > 0 && app.indexOf(') : seenWalk === false ? (') < app.indexOf('<Stage'), 'Play can be drawn beside the walkthrough')
 
     /* Stage: the notes at the top in their turns, the quick tip and the watch's sheet after them, the colours line last. */
     const stage = read('mobile/src/screens/Stage.js')
@@ -779,9 +732,8 @@ export function run(test) {
 
   test('the startup messages take turns in the browser: the colours line waits for the startup card and the walkthrough as well', async () => {
     const page = read('src/App.jsx')
-    /* A named condition (test/structure.mjs reads App.jsx as text): the card, then the walkthrough. */
-    assert.match(page, /const startupOver = independentDue \|\| walkthrough\n/)
-    assert.ok(page.indexOf('const startupOver') > page.indexOf('const [independentDue, setIndependentDue]'), 'startupOver is read before the card’s answer')
+    /* A named condition (test/structure.mjs reads App.jsx as text): the walkthrough. */
+    assert.match(page, /const startupOver = walkthrough\n/)
     assert.match(page, /noteAbove=\{startupOver \|\| signInOver \|\| playNotesUp \|\| holdTipDue\}/, 'the colours line is said under the startup card, the walkthrough or the sign-in sheet')
     assert.match(page, /const playNotesUp = demoNoteUp \|\| offerWanted\n/, 'the colours line is said under the demo’s line or card')
     assert.match(page, /const demoNoteUp = isDemo\(\) && status === 'live' && !demoNoteSeen\n/)
@@ -794,7 +746,7 @@ export function run(test) {
      * the line's effect runs before App's that opens the sheet, in the same
      * commit, so waiting on the sheet alone still said it under the sheet.
      */
-    assert.match(page, /\}, \[independentDue\]\)\s+(?:\/\*[\s\S]*?\*\/\s+)?const signInOver = Boolean\(signIn\) \|\| Boolean\(joinOwed\.current\)\n/, 'the colours line is said in the moment the join link opens its sheet')
+    assert.match(page, /\}, \[\]\)\s+(?:\/\*[\s\S]*?\*\/\s+)?const signInOver = Boolean\(signIn\) \|\| Boolean\(joinOwed\.current\)\n/, 'the colours line is said in the moment the join link opens its sheet')
     assert.match(page, /<SignInSheet\s+open=\{Boolean\(signIn\)\}/, 'the colours line waits for something other than the sign-in sheet')
     /* And the hold tip still waits for the demo's line, and the demo's card after it: one note at a time under the bar. */
     assert.match(page, /const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp\n/)
@@ -923,157 +875,6 @@ export function run(test) {
     assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Match your unit’s colors in Settings'"))
     assert.match(read('mobile/src/components/ColoursNotice.js'), /\{COLOURS_NOTICE\}/)
     assert.match(read('src/components/ColoursNotice.jsx'), /className="colours-notice-open"[\s\S]{0,120}\{COLOURS_NOTICE\}/)
-  })
-
-  test('while the browser’s card is up, the keyboard reaches nothing behind it', async () => {
-    /*
-     * Found in review, with a real browser: from OK, Tab walked on into the
-     * page under the card (Settings, NO DEVICE, and on Play the Next button),
-     * and Enter pressed them where nobody could see, a preset change on a
-     * real unit included. Covering the page stops a mouse; aria-modal stops a
-     * screen reader; only inert stops Tab. So the card makes everything else
-     * inert while it is up, and gives back exactly what it took when it goes.
-     */
-    const web = read('src/components/IndependentNotice.jsx')
-    assert.match(web, /const own = useRef\(null\)\s+useNothingBehind\(own\)\s+return createPortal\(\s+<div ref=\{own\} className="independent"/, 'the card no longer shuts the page behind it, or is drawn inside the app again')
-    assert.match(web, /<\/div>,\s+document\.body\s+\)\s+\}/, 'the card is not drawn into the body, beside the app')
-    assert.match(web, /useEffect\(\(\) => \(own\.current \? nothingBehind\(own\.current\) : undefined\), \[own\]\)/, 'what the card shut is not given back when it goes')
-    assert.match(web, /made\.set\(el, holdInert\(el\)\)/, 'the card shuts the page with a switch, which a sheet closing under it undoes')
-    /*
-     * Found in review, with a real browser at phone width: a first visit to
-     * fractal.newbold.cloud/join opened Create Account in the same moment as
-     * the card, the sheet made the app inert with the card inside it, and OK
-     * did nothing. So a sheet shuts the app with a hold too, never a switch,
-     * and keys a shut sheet hears are not its own.
-     */
-    const sheetCode = read('src/components/Sheet.jsx')
-    assert.match(sheetCode, /const giveBack = holdInert\(root\)/, 'a sheet shuts the app with a switch again')
-    assert.ok(!/root\.inert\s*=/.test(code(sheetCode)), 'a sheet sets the app inert by hand, and opens it under the card when it closes')
-    assert.match(sheetCode, /const key = \(e\) => \{\s+(?:\/\*[\s\S]*?\*\/\s+)?if \(panel\.current\?\.closest\?\.\('\[inert\]'\)\) return\s+if \(e\.key === 'Escape'\)/, 'Escape on the card closes a sheet nobody can see under it')
-    /* And the join link opens its form after OK, never under the card. */
-    const page = read('src/App.jsx')
-    assert.match(page, /if \(joinOwed\.current === null\) joinOwed\.current = arrivedToJoin\(\)\s+useEffect\(\(\) => \{\s+if \(!joinOwed\.current \|\| independentDue\) return\s+joinOwed\.current = false\s+window\.history\.replaceState\(null, '', '\/'\)\s+setSignInStart\('up'\)\s+setSignIn\('account'\)\s+\}, \[independentDue\]\)/, 'the join link opens Create Account under the startup card')
-
-    /* And run: the card's own function and the holds, bundled as the page bundles them, on a page of stand-in elements. */
-    const { build } = await import('esbuild')
-    const out = await build({
-      stdin: {
-        contents: "export { nothingBehind } from './src/components/IndependentNotice.jsx'\nexport { holdInert } from './src/lib/inert.js'",
-        resolveDir: root,
-        loader: 'js'
-      },
-      bundle: true,
-      platform: 'node',
-      format: 'cjs',
-      write: false,
-      jsx: 'automatic',
-      logLevel: 'silent',
-      define: { 'process.env.NODE_ENV': '"production"' }
-    })
-    const dir = mkdtempSync(join(tmpdir(), 'independent-'))
-    const file = join(dir, 'card.cjs')
-    writeFileSync(file, out.outputFiles[0].text)
-    const watchers = new Set()
-    class Element {
-      constructor(name) {
-        this.name = name
-        this.nodeType = 1
-        this.children = []
-        this.parentElement = null
-        this.inert = false
-      }
-      append(...kids) {
-        for (const kid of kids) {
-          kid.parentElement = this
-          this.children.push(kid)
-          for (const w of watchers) if (w.target === this) w.fn([{ addedNodes: [kid] }])
-        }
-        return this
-      }
-      contains(other) {
-        for (let at = other; at; at = at.parentElement) if (at === this) return true
-        return false
-      }
-    }
-    const was = { MutationObserver: globalThis.MutationObserver, document: globalThis.document }
-    globalThis.MutationObserver = class {
-      constructor(fn) {
-        this.fn = fn
-      }
-      observe(target) {
-        this.target = target
-        watchers.add(this)
-      }
-      disconnect() {
-        watchers.delete(this)
-      }
-    }
-    try {
-      const { nothingBehind, holdInert } = createRequire(import.meta.url)(file)
-      const el = (name) => new Element(name)
-      /* Whether anything can reach it: inert is inherited, so it and everything it sits in. */
-      const reachable = (e) => {
-        for (let at = e; at; at = at.parentElement) if (at.inert) return false
-        return true
-      }
-      /* The page as it is: the app (its shell holding the bar and Play) and, beside it in the body, the card, a sheet, and one thing inert already. */
-      const body = el('body')
-      const root = el('#root')
-      const shell = el('.shell')
-      const [bar, play, card, sheet, already] = ['bar', 'play', 'card', 'sheet', 'already'].map(el)
-      already.inert = true
-      body.append(root.append(shell.append(bar, play)), card, sheet, already)
-      globalThis.document = { body }
-
-      const giveBack = nothingBehind(card)
-      assert.deepEqual([bar, play, sheet].map(reachable), [false, false, false], 'something beside the card can still be reached')
-      assert.ok(reachable(card) && !body.inert, 'the card shut itself, or what holds it')
-      /* What arrives while it is up: Play changing under it, a sheet opening by itself. */
-      const later = el('settings sheet')
-      const screen = el('connecting')
-      body.append(later, { nodeType: 3, data: 'a text node' })
-      shell.append(screen)
-      assert.ok(!reachable(later) && !reachable(screen), 'something that arrived while the card was up can be reached')
-      /* A sheet that opens by itself and closes again while the card is up: OK stays OK, and the app stays shut behind the card. */
-      const sheetGoes = holdInert(root)
-      assert.ok(reachable(card), 'a sheet opening under the card shut the card')
-      sheetGoes()
-      assert.ok(!reachable(bar), 'a sheet closing under the card opened the app behind it')
-
-      giveBack()
-      assert.deepEqual([bar, play, sheet, later, screen].map(reachable), [true, true, true, true, true], 'OK left part of the page dead')
-      assert.equal(already.inert, true, 'OK woke something the card never shut')
-      assert.equal(watchers.size, 0, 'the card goes on watching the page after it has gone')
-
-      /* The other way round: a sheet already open (the join link, the unlock page after a reload) when the card comes up. */
-      const signUp = el('create account')
-      body.append(signUp)
-      const signUpGoes = holdInert(root)
-      const card2 = el('card again')
-      body.append(card2)
-      const giveBack2 = nothingBehind(card2)
-      assert.ok(reachable(card2), 'a sheet open under the card shut the card, and OK did nothing')
-      assert.ok(!reachable(signUp) && !reachable(play), 'the sheet, or the app, can be reached past the card')
-      giveBack2()
-      assert.ok(reachable(signUp), 'OK left the sheet that was waiting under it dead')
-      assert.ok(!reachable(play), 'OK opened the app behind a sheet that is still open')
-      signUpGoes()
-      assert.ok(reachable(play), 'the last sheet closed and the app stayed shut')
-      /* A hold given back twice is given back once. */
-      const one = holdInert(root)
-      const two = holdInert(root)
-      one()
-      one()
-      assert.ok(root.inert, 'a hold given back twice let go of somebody else’s')
-      two()
-      assert.equal(root.inert, false)
-    } finally {
-      for (const [k, v] of Object.entries(was)) {
-        if (v === undefined) delete globalThis[k]
-        else globalThis[k] = v
-      }
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 
   test('Fractal Audio’s sentence on the startup screens, and readable on the first one', () => {

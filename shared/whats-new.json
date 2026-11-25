@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-25",
+      "version": "2.4.5",
+      "lines": [
+        "The “An independent app” card no longer stops you the first time you open the app, the website or the computer app. The same sentence is still on the start screen and in About."
+      ]
+    },
+    {
       "date": "2026-11-24",
       "version": "2.4.4",
       "lines": [

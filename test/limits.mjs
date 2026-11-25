@@ -4296,7 +4296,7 @@ export function run(test) {
     /* The demo steps, in the walkthrough's words, with the startup card's OK first: a first launch meets the card before Get started. */
     const steps = [...pasted.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
     assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the demo steps do not start on the startup card')
-    assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
+    /* The card itself was taken out of the app on 25 November 2026 (Justin); these notes are kept as they were submitted. */
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(steps.some((t) => t.includes(label)), `the next notes do not say to tap "${label}"`)
       /* A record of notes already written: a button renamed since says its new name in the walkthrough (RENAMED_SINCE). */
@@ -4894,7 +4894,7 @@ export function run(test) {
     /* THE DEMO AND THE LABELS the app draws today: "Let’s go", never "Open Play". */
     const demo = paragraph(notes, 'No hardware? Use the demo')
     assert.match(demo, /^No hardware\? Use the demo, no account needed: tap OK on the independent-app card, /, 'the notes do not open the demo on the startup card')
-    assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
+    /* The card itself was taken out of the app on 25 November 2026 (Justin); these notes are kept as they were submitted. */
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Let’s go']) {
       assert.ok(demo.includes(label) && access.includes(label) && accessShort.includes(label), `the 1.90.0 notes or App access notes do not say to tap "${label}"`)
       assert.ok(read('shared/onboarding.mjs').includes(label), `the 1.90.0 texts say to tap "${label}", which the walkthrough no longer says`)

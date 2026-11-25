@@ -19017,8 +19017,7 @@ export function run(test) {
     /* Seen once, and reachable again from Settings under the name its own
        last screen promises. */
     const app = read('mobile/App.js')
-    /* With the startup card's answer, in one Promise.all since 18 October 2026, so the two land together. */
-    assert.match(app, /Promise\.all\(\[walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,300}setSeenWalk\(seen\)/, 'nothing decides whether the walkthrough has been through')
+    assert.match(app, /walkthroughSeen\(\)\.then\(\(seen\) => \{\s+setSeenWalk\(seen\)/, 'nothing decides whether the walkthrough has been through')
     assert.match(app, /auth === 'out' && !seenWalk/, 'the walkthrough is not the way in')
     assert.match(app, /onReplay=\{/, 'there is no way back into the walkthrough')
     const set = read('mobile/src/screens/Settings.js')
@@ -25352,7 +25351,7 @@ export function run(test) {
     /* A first run is told too, after the walkthrough: App no longer puts it away unsaid. */
     const app = read('mobile/App.js')
     assert.ok(!/markColoursNotice/.test(app), 'a first run is never told where Match my unit is')
-    assert.match(app, /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{\s+setIndependentDue\(!noticed\)\s+setSeenWalk\(seen\)/)
+    assert.match(app, /walkthroughSeen\(\)\.then\(\(seen\) => \{\s+setSeenWalk\(seen\)/)
     /* Pressed, it opens Settings on Colors. */
     assert.match(app, /onOpenColours=\{\(\) => openSettings\('colours'\)\}/, 'the line does not open Settings → Colors')
     /* Last of Play's one-time notes since 18 October 2026: it waits for every other (test/independent.mjs, the startup messages take turns). */

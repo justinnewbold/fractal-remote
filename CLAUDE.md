@@ -5594,7 +5594,20 @@ not suggest renaming. Everything else is held, and is not to regress:
   carried as its author wrote it). Every copy (the website's pages, the store
   text, NOTICES, licences/MODIFICATIONS.md, the computer app's tray) is held
   to that file by a test.
-- **It is shown at startup**: a card, "An independent app", once on every
+- **THE STARTUP CARD IS GONE SINCE 2.4.5 (25 November 2026), ON HIS WORD.**
+  "Remove this initial screen from the app, website and computers. It's all
+  over the app in other places already." (with the website's "An independent
+  app" card on his iPhone.) Both components, the browser's styles and
+  `STARTUP_NOTICE_TITLE` are out, and a test fails if the card comes back.
+  The sentence is still at startup, where it always was beside the card:
+  under the phone's spinner, under "Finding your computer…", on the
+  walkthrough's first screen, and in About. Fractal's letter asked for a
+  statement at startup; he was told that is now those lines and not a card.
+  Do not put the card back or raise it again. THE NEXT REVIEW NOTES' DEMO
+  STEPS MUST NOT START "Tap OK on the card that says the app is
+  independent" (the past blocks in docs/app-store.md keep it, as submitted).
+  The bullet below is how it was.
+- **It was shown at startup**: a card, "An independent app", once on every
   device under its own storage key (the phone's launch gate, and the
   browser and computer window over everything, with the rest of the page
   inert so the keyboard cannot reach Play under it), and the sentence

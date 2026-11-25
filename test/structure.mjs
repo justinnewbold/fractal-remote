@@ -5667,8 +5667,8 @@ export function run(test) {
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     /* Nothing else is decided in the same breath since 19 October 2026: a first run is told where Match my unit is too (ColoursNotice). */
     assert.match(app, /const \[walkthrough, setWalkthrough\] = useState\(\(\) => !onboarded\(\)\)/, 'the walkthrough does not open itself on a first run')
-    /* Remembered once it can be seen: on a first visit it is drawn under the opaque startup card, and a tab closed there has seen none of it. */
-    assert.match(app, /useEffect\(\(\) => \{\s+if \(walkthrough && !independentDue\) markOnboarded\(\)\s+\}, \[walkthrough, independentDue\]\)/, 'the walkthrough is not remembered, so it returns every load, or it is remembered under the startup card')
+    /* Remembered as it opens (the startup card it once waited under is gone since 25 November 2026). */
+    assert.match(app, /useEffect\(\(\) => \{\s+if \(walkthrough\) markOnboarded\(\)\s+\}, \[walkthrough\]\)/, 'the walkthrough is not remembered, so it returns every load')
   })
 
   test('the walkthrough is worded the way he wrote it', async () => {
@@ -6525,7 +6525,7 @@ export function run(test) {
     assert.match(src, /const offerWanted = isDemo\(\) && status === 'live' && !paid\.unlocked && !offerAway\n/, 'the demo’s card is told apart by something else')
     assert.match(src, /const playNotesUp = demoNoteUp \|\| offerWanted\n/, 'the line does not wait for the demo’s line and card')
     assert.match(src, /const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp\n/, 'the line does not wait for the hold tip')
-    assert.match(src, /const startupOver = independentDue \|\| walkthrough\n/, 'the line is said under the startup card or the walkthrough')
+    assert.match(src, /const startupOver = walkthrough\n/, 'the line is said under the walkthrough')
     /* One row at 320: the cross never wraps under the words, and both are a thumb's size on a touch screen. */
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     assert.match(css, /\.colours-notice \{\s+flex-wrap: nowrap;\s+\}/, 'the cross can wrap under the words')
