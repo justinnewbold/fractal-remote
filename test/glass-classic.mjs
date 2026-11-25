@@ -300,7 +300,16 @@ async function kit() {
     __GlassCard: (props) => el(GlassCard({ ...props, children: [] })),
     __GlassDisc: (props) => el(GlassDisc(props)),
     __h: (type, props) => ({ type, props }),
-    __Frag: 'Fragment'
+    __Frag: 'Fragment',
+    /*
+     * Play's squeeze for Fit to screen (lib/fitSqueeze, 25 November 2026) is
+     * new since the record's commit and is part of `tight`, which the bottom
+     * strip's padding reads. It is only ever on on a phone's plain page, where
+     * that strip is not drawn (footFixed is a wide window's or a side's), so
+     * the strip is held to main with it off. test/fit-squeeze.mjs pins where
+     * it may come on.
+     */
+    squeezed: false
   }
 }
 
