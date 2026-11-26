@@ -17,6 +17,8 @@ import {
   KEEP_NOTE,
   PLAY_BUTTON,
   PUT_BUTTON,
+  RESTORE_NOTE,
+  RESTORE_ROW,
   THIS_PRESET,
   backupRows,
   backupsHere,
@@ -47,14 +49,14 @@ const ofUnsaved = (s) => s.unsaved
  * the computer and waited for here, one at a time. Nothing is written from
  * this device: the computer app does it, and says how it went.
  */
-export default function Backups() {
+export default function Backups({ only = false }) {
   const preset = useRig(ofPreset)
   const slug = useRig(ofSlug)
   const caps = useRig(ofCaps)
   const unsaved = useRig(ofUnsaved)
   const slot = Number.isInteger(preset?.number) ? preset.number : null
   const way = isDemo() ? 'demo' : caps?.via === 'bluetooth' ? 'bluetooth' : 'computer'
-  const here = backupsHere({ way, vp4: !isDemo() && isVp4(slug) })
+  const here = backupsHere({ way, vp4: !isDemo() && isVp4(slug), am4: !isDemo() && slug === 'am4' })
   const phoneOpen = usePhoneBackups()
   const [scope, setScope] = useState('slot')
   const [rows, setRows] = useState(null)
@@ -78,14 +80,14 @@ export default function Backups() {
     try {
       const list = await listSnapshots(scope === 'slot' && slot != null ? slot : undefined)
       if (!live.current) return
-      setRows(backupRows(list, { slot: scope === 'slot' ? slot : null }))
+      setRows(backupRows(list, { slot: scope === 'slot' ? slot : null, unit: slug }))
       setFault(null)
     } catch (err) {
       if (!live.current) return
       setRows([])
       setFault(`${BACKUPS_NO_LIST} ${err?.message || ''}`.trim())
     }
-  }, [here.ok, scope, slot])
+  }, [here.ok, scope, slot, slug])
   useEffect(() => {
     setRows(null)
     load()
@@ -135,15 +137,15 @@ export default function Backups() {
   const busy = !!out
   return (
     <View style={{ gap: space.md }}>
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>{BACKUPS_WHERE}</Text>
-      <Press label={KEEP_BUTTON} sub={slot != null ? `Slot ${slot}${preset?.name ? ` · ${preset.name}` : ''}` : undefined} tone="signal" on disabled={busy || slot == null} onPress={keep} />
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>{KEEP_NOTE}</Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small }}>{only ? RESTORE_NOTE : BACKUPS_WHERE}</Text>
+      {only ? null : <Press label={KEEP_BUTTON} sub={slot != null ? `Slot ${slot}${preset?.name ? ` · ${preset.name}` : ''}` : undefined} tone="signal" on disabled={busy || slot == null} onPress={keep} />}
+      {only ? null : <Text style={{ color: color.silkDim, fontSize: font.small }}>{KEEP_NOTE}</Text>}
       {out?.mode === 'keep' ? <Waiting out={out} onCancel={() => job.current?.cancel()} /> : null}
       {said ? <Note tone={said.tone}>{said.text}</Note> : null}
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
+      {only ? null : <View style={{ flexDirection: 'row', gap: space.sm }}>
         <Press grow height={44} label={THIS_PRESET} on={scope === 'slot'} onPress={() => setScope('slot')} />
         <Press grow height={44} label={ALL_PRESETS} on={scope === 'all'} onPress={() => setScope('all')} />
-      </View>
+      </View>}
       {fault ? <Note tone="warn">{fault}</Note> : null}
       {rows === null ? <Text style={{ color: color.silkDim, fontSize: font.small }}>Reading the backups on the computer…</Text> : null}
       {rows && !rows.length && !fault ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{scope === 'slot' ? BACKUPS_NONE_SLOT : BACKUPS_NONE}</Text> : null}
@@ -155,7 +157,7 @@ export default function Backups() {
           <Text style={{ color: color.silkDim, fontSize: font.small }}>{rowLine(row)}</Text>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Press grow height={44} label={PLAY_BUTTON} accessibilityLabel={`${PLAY_BUTTON}: ${row.name}`} disabled={busy} onPress={() => play(row)} />
-            <Press grow height={44} label={PUT_BUTTON} accessibilityLabel={`${PUT_BUTTON}: ${row.name}`} disabled={busy || row.slot == null} onPress={() => put(row)} />
+            <Press grow height={44} label={only ? RESTORE_ROW : PUT_BUTTON} accessibilityLabel={`${only ? RESTORE_ROW : PUT_BUTTON}: ${row.name}`} disabled={busy || row.slot == null} onPress={() => put(row)} />
           </View>
           {out && out.mode !== 'keep' && out.id === row.id ? <Waiting out={out} onCancel={() => job.current?.cancel()} /> : null}
         </View>

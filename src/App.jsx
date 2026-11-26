@@ -27,6 +27,7 @@ import {
   carryOutRestore,
   dirtyAfterRestore,
   KEEP,
+  keepBeforeSave,
   restoreNow,
   restoreRequest,
   startRestoreWait,
@@ -2985,6 +2986,9 @@ export default function App() {
           await reportSave({ id: req.id, ok: false, cancelled: true, slot: req.slot, error: SAVE_CANCELLED }).catch(() => {})
           return
         }
+        /* A copy of the slot as it is saved, first, where the phone asked for one (lib/restoreViaComputer keepBeforeSave): never in the save's way. */
+        const before = await keepBeforeSave(req, { snapshotSlot })
+        if (before.asked) step(before.kept ? 'kept a copy of the slot first' : `no copy kept first${before.why ? `: ${before.why}` : ''}`)
         const name = (req.name || '').trim()
         if (name && name !== preset?.name?.trim()) await setPresetName(name)
         step('asking the unit to store it')
@@ -2998,7 +3002,7 @@ export default function App() {
         await clearParkedSave()
         // The phone is watching for this; without it, "asked" never becomes
         // "done" over there and the only honest thing it could say is nothing.
-        await reportSave({ id: req.id, ok: true, slot: req.slot })
+        await reportSave({ id: req.id, ok: true, slot: req.slot, ...(before.asked ? { kept: before.kept } : {}) })
         step('told the phone it was saved')
         setDirty(false)
         setSavedAt(Date.now())

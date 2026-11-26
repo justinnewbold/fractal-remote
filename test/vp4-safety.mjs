@@ -164,6 +164,8 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
       export const savedToSlot = () => {}
       export const useRig = (pick) => pick({ preset: { number: 5, name: 'My Preset' }, deviceSlug: ${JSON.stringify(slug)} })
     `,
+    /* The save's words and the automatic backup's switch (lib/backups, lib/useBackups): off here, so the request is the one it always was. */
+    'backups.mjs': 'export const savedWords = (slot) => `Saved to slot ${slot}.`\nexport const useAutoBackup = () => false\n',
     'rest.mjs': 'export const font = {}\nexport const logDebug = () => {}\nexport default function Stub() { return null }\n'
   }
   let src = transformSync(read('mobile/src/components/SaveToSlot.js'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
@@ -174,6 +176,8 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
     ['from "../lib/device"', "from './device.mjs'"],
     ['from "../lib/demo"', "from './demo.mjs'"],
     ['from "../lib/saveViaComputer"', "from './saveViaComputer.mjs'"],
+    ['from "../lib/backups"', "from './backups.mjs'"],
+    ['from "../lib/useBackups"', "from './backups.mjs'"],
     ['from "../lib/vp4-safety"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
     ['from "../lib/bleSave"', "from './bleSave.mjs'"],
     ['from "../lib/save-wait"', `from '${repoUrl('shared/save-wait.mjs')}'`],

@@ -50,6 +50,8 @@ export function startComputerSave({
   slug = '',
   slot,
   name = '',
+  /* Ask the computer to keep a copy of the slot as it is saved before it writes over it (the browser's lib/restoreViaComputer keepBeforeSave). An older computer app ignores it. */
+  keepFirst = false,
   id = saveId(),
   waitMs = SAVE_WAIT_MS,
   pollMs = SAVE_POLL_MS,
@@ -69,7 +71,7 @@ export function startComputerSave({
     try {
       /* `fromSlot` is what lets the computer refuse a save if the unit has
          moved on to another preset by the time it looks. */
-      await park({ id, slot, name: String(name || '').trim(), fromSlot: slot, fromName: name || null })
+      await park({ id, slot, name: String(name || '').trim(), fromSlot: slot, fromName: name || null, ...(keepFirst === true ? { keepFirst: true } : {}) })
     } catch (err) {
       return { ok: false, error: `Couldn’t leave the request for the computer: ${err?.message || err}` }
     }
@@ -94,7 +96,7 @@ export function startComputerSave({
     if (cancelled) wait.cancel()
     if (stopped) wait.stop()
     const res = await wait.done
-    return res.ok ? { ok: true, slot: Number.isInteger(res.slot) ? res.slot : slot } : res
+    return res.ok ? { ok: true, slot: Number.isInteger(res.slot) ? res.slot : slot, ...(typeof res.kept === 'boolean' ? { kept: res.kept } : {}) } : res
   })()
   return {
     done,

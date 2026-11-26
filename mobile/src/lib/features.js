@@ -938,6 +938,19 @@ export const AM4_NAM_THROUGH_COMPUTER_FOR_EVERYONE = true
  */
 export const BACKUPS_FOR_EVERYONE = false
 
+/**
+ * A BACKUP TAKEN BY ITSELF BEFORE A SAVE, AND "RESTORE PRESET" AT THE FOOT
+ * OF EDIT (lib/backups, components/RestorePreset), 26 November 2026: "let's
+ * make it back it up automatically when someone changes a preset or adds a
+ * NAM block ... after they save there's a button ... Restore preset"
+ * (Justin). Through a computer, a save asks the computer to keep a copy of
+ * the slot as it is saved before it writes over it; the button is drawn only
+ * where the slot has such copies. His account only until he says. Needs the
+ * computer app that came with 2.5.4; an older one saves as before and keeps
+ * nothing. NOT SEEN ON A UNIT.
+ */
+export const AUTO_BACKUP_FOR_EVERYONE = false
+
 /*
  * BACKUPS KEPT ON THIS DEVICE, OVER BLUETOOTH OR THE UNIT'S USB CABLE
  * (lib/presetDump; "OK now go ahead and build the Bluetooth back up for the

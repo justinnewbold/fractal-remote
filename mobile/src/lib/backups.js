@@ -33,6 +33,7 @@
  * lib/backupsHere.js and the page components/Backups.js.
  */
 import { SAVE_FRESH_MS, SAVE_LATE_MS, SAVE_POLL_MS, startSaveWait } from './save-wait.js'
+import { DEFAULT_SLUG, deviceSlug } from './device-slug.js'
 
 /** The three documents, the browser's own (src/lib/restoreViaComputer.js). */
 export const pendingRestoreDoc = (slug) => `fractal.pendingRestore.${slug}`
@@ -52,6 +53,17 @@ export const BACKUPS_WHERE = 'Backups are kept on your computer, not on this dev
 export const BACKUPS_NEED_COMPUTER =
   'Backups are kept on a computer, so they need one. Connect through a computer or a Raspberry Pi to back up a preset or put one back.'
 export const BACKUPS_NOT_VP4 = 'Backups aren’t available for a VP4.'
+/* The computer app cannot take or put back a snapshot of an AM4 yet (its engine has no snapshot of one): said, in place of a button that fails. */
+export const BACKUPS_NOT_AM4 = 'Backups aren’t available for an AM4 yet.'
+/* RESTORE PRESET, at the foot of Edit (components/RestorePreset): the backups of the preset the unit is on, where there are any. */
+export const RESTORE_BUTTON = 'Restore preset'
+export const RESTORE_TITLE = 'Restore preset'
+export const RESTORE_ROW = 'Restore'
+export const restoreSub = (n) => (n === 1 ? '1 earlier version kept on the computer' : `${n} earlier versions kept on the computer`)
+export const RESTORE_NOTE = 'Each is this preset as it was saved before a change. Play it to hear one. Restore puts it back in the slot.'
+/** What a save says, and that the version before it was kept where it was. */
+export const savedWords = (slot, kept) =>
+  kept === true ? `Saved to slot ${slot}. The version before it is backed up: Restore preset is at the bottom of Edit.` : `Saved to slot ${slot}.`
 export const BACKUPS_NONE_SLOT = 'No backups of this preset yet.'
 export const BACKUPS_NONE = 'No backups on the computer yet.'
 export const BACKUPS_NO_LIST = 'Couldn’t read the backups on the computer.'
@@ -118,15 +130,25 @@ export const cancelledAsk = (id) => ({ id, cancelled: true })
 /**
  * The computer's list, made into rows: newest first, each with the slot it
  * is of and when it was taken. Anything that is no snapshot is left out.
- * `slot`, when given, keeps that slot's alone.
+ * `slot`, when given, keeps that slot's alone. `unit` (the linked unit's
+ * slug) leaves out a backup the computer says is ANOTHER unit's: a computer
+ * that has had two units plugged in keeps both units' backups in one list,
+ * and a tap on the other's could only be refused ("That snapshot is from an
+ * FM3, and the unit plugged in isn’t one": Justin's AM4, 26 November 2026).
+ * One whose unit is not known is kept, as the computer keeps it.
  */
-export function backupRows(versions, { slot = null } = {}) {
+export function otherUnits(model, unit) {
+  if (!unit || unit === DEFAULT_SLUG || typeof model !== 'string' || !model || /^model_0x/i.test(model)) return false
+  return deviceSlug(model) !== unit
+}
+export function backupRows(versions, { slot = null, unit = null } = {}) {
   const rows = []
   for (const v of Array.isArray(versions) ? versions : []) {
     if (!v || (typeof v.id !== 'string' && typeof v.id !== 'number')) continue
     const at = Number(v.at ?? v.capturedAt)
     const of = Number.isInteger(v.location) ? v.location : null
     if (slot != null && of !== slot) continue
+    if (otherUnits(v.model, unit)) continue
     rows.push({
       id: v.id,
       slot: of,
@@ -163,9 +185,10 @@ export const rowLine = (row, now = Date.now()) =>
  * `way` is how the device is connected: 'computer', 'bluetooth', 'cable' or
  * 'demo' (lib/linkWay); `linked` whether a unit is there.
  */
-export function backupsHere({ way, vp4 = false } = {}) {
+export function backupsHere({ way, vp4 = false, am4 = false } = {}) {
   if (vp4) return { ok: false, why: BACKUPS_NOT_VP4 }
   if (way !== 'computer') return { ok: false, why: BACKUPS_NEED_COMPUTER }
+  if (am4) return { ok: false, why: BACKUPS_NOT_AM4 }
   return { ok: true, why: null }
 }
 

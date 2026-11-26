@@ -1,5 +1,5 @@
 import { useBluetoothAdmin } from './bluetooth'
-import { BACKUPS_FOR_EVERYONE, BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
+import { AUTO_BACKUP_FOR_EVERYONE, BACKUPS_FOR_EVERYONE, BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 import { backupsOn } from './backups'
 
 /**
@@ -16,3 +16,10 @@ export const useBackups = () => backupsOn({ admin: useBluetoothAdmin(), everyone
  * lib/bluetooth backupsOverBluetooth.
  */
 export const usePhoneBackups = () => backupsOn({ admin: useBluetoothAdmin(), everyone: BACKUPS_OVER_BLUETOOTH_FOR_EVERYONE })
+
+/**
+ * Whether a save from this device asks the computer to keep a copy of the
+ * slot first, and Edit draws Restore preset (components/RestorePreset): his
+ * account until features AUTO_BACKUP_FOR_EVERYONE.
+ */
+export const useAutoBackup = () => backupsOn({ admin: useBluetoothAdmin(), everyone: AUTO_BACKUP_FOR_EVERYONE })

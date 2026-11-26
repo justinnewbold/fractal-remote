@@ -34,6 +34,7 @@ import { PLACED_FAILED, chainEditorHere, placedReady } from '../lib/chainOnWire'
 import ChainReading from '../components/ChainReading'
 import { bluetoothAdmin, useCableNow, useOutputAndSceneLevels } from '../lib/bluetooth'
 import { sceneFloor, sceneLevelToSend, sceneRowsFor } from '../lib/sceneLevel'
+import RestorePreset from '../components/RestorePreset'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { editNoteUp, noChainLine } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
@@ -908,6 +909,9 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
+
+      {/* RESTORE PRESET (components/RestorePreset): only where the computer holds an earlier version of this preset, at the foot, out of the knobs' way. */}
+      <RestorePreset />
 
       {/*
         WHAT EDIT DOES OVER BLUETOOTH (or on the USB cable), at the foot of
