@@ -4,7 +4,9 @@ import { isDemo } from '../lib/demo'
 import { listSnapshots } from '../lib/device'
 import { isVp4 } from '../lib/vp4-safety'
 import { useRig } from '../lib/rig'
-import { RESTORE_BUTTON, RESTORE_TITLE, backupRows, backupsHere, restoreSub } from '../lib/backups'
+import { RESTORE_BUTTON, RESTORE_TITLE, am4TooOld, backupRows, backupsHere, restoreSub } from '../lib/backups'
+import { linkState } from '../lib/link'
+import { isOlder } from '../lib/versions'
 import { useAutoBackup } from '../lib/useBackups'
 import Backups from './Backups'
 import Press from './Press'
@@ -39,7 +41,7 @@ export default function RestorePreset() {
   const unsaved = useRig(ofUnsaved)
   const slot = Number.isInteger(preset?.number) ? preset.number : null
   const way = isDemo() ? 'demo' : caps?.via === 'bluetooth' ? 'bluetooth' : 'computer'
-  const here = allowed && slot != null && backupsHere({ way, vp4: isVp4(slug), am4: slug === 'am4' }).ok
+  const here = allowed && slot != null && backupsHere({ way, vp4: isVp4(slug), am4: am4TooOld(slug, linkState().hostVersion, isOlder) }).ok
   const [count, setCount] = useState(0)
   const [open, setOpen] = useState(false)
   const asked = useRef(0)

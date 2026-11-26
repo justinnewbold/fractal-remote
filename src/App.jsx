@@ -199,6 +199,7 @@ import {
   listVersions,
   versionBytes,
   snapshotSlot,
+  restorePresetDump,
   presetName as storedSlotName,
   loadPresetBytes,
   lookUpName,
@@ -3308,6 +3309,9 @@ export default function App() {
       slotName: (n) => storedSlotName(n).then((r) => r?.name),
       loadPresetBytes,
       storePreset,
+      /* An AM4's way back, and the slot loaded again where it is the one playing (lib/restoreViaComputer VERBATIM_UNITS). */
+      restoreDump: restorePresetDump,
+      reload: (n) => (deviceSnapshot().preset?.number === n ? selectPreset(n) : null),
       unitSlug: currentDeviceSlug,
       slotOutside: (n) => slotOutside(n, device?.capabilities),
       demo: isDemo()

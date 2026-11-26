@@ -1003,6 +1003,18 @@ export const backupPreset = (location) =>
       })
 
 /**
+ * AN AM4'S WAY BACK (26 November 2026). An AM4 has no load into its edit
+ * buffer (the engine's am4 driver has no loadPresetBytes), so a snapshot of
+ * one goes back as it came: the same bytes sent again, which the unit files
+ * in the slot the dump's own header names (POST /preset/restore, the engine's
+ * restorePreset, whose replay to the same slot is the one restore the codec
+ * calls hardware-verified). It WRITES THE SLOT, with no stop in the edit
+ * buffer first. Only lib/restoreViaComputer.js reaches for it.
+ */
+export const restorePresetDump = (bytes) =>
+  mock ? tick().then(() => ({ ok: true })) : request('/preset/restore', { method: 'POST', body: JSON.stringify({ bytes: Array.from(bytes) }) })
+
+/**
  * Push raw .syx back to the unit.
  *
  * The FM3 reports restoreDump: false, so /preset/restore is refused. /preset/load
