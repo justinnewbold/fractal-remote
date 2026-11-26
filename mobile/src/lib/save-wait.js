@@ -206,7 +206,9 @@ export function startSaveWait({
       ? {
           ok: true,
           slot: Number.isInteger(res.slot) ? res.slot : null,
-          ...(typeof res.said === 'string' && res.said ? { said: res.said } : {})
+          ...(typeof res.said === 'string' && res.said ? { said: res.said } : {}),
+          /* Whether the computer kept a copy of the slot before a save wrote over it (lib/restoreViaComputer keepBeforeSave). */
+          ...(typeof res.kept === 'boolean' ? { kept: res.kept } : {})
         }
       : { ok: false, error: res.error || told.refused, ...(res.cancelled ? { cancelled: true } : {}) }
 

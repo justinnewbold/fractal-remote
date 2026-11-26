@@ -16137,7 +16137,7 @@ export function run(test) {
       /useEffect\(\(\) => \{ if \(!said\?\.done\) return undefined const timer = setTimeout\(\(\) => setSaid\(\(now\) => \(now === said \? null : now\)\), SAID_FOR_MS\) return \(\) => clearTimeout\(timer\) \}, \[said\]\)/,
       '"Saved to slot N." never goes away on its own'
     )
-    assert.match(flat, /\? \{ tone: 'hint', text: `Saved to slot \$\{res\.slot\}\.`, done: true \}/, 'the saved note is not marked to go')
+    assert.match(flat, /\? \{ tone: 'hint', text: savedWords\(res\.slot, res\.kept\), done: true \}/, 'the saved note is not marked to go')
     assert.match(flat, /: \{ tone: res\.cancelled \? 'hint' : 'warn', text: res\.error \}/, 'a failure is marked to go on its own')
     assert.match(flat, /text: `Saved to slot \$\{slot\} on this \$\{deviceNoun\(\)\}\.`, done: true/)
   })

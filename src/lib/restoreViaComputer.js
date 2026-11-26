@@ -99,6 +99,39 @@ export async function keepNow(req, api) {
   return { ok: true, mode: KEEP, slot, kept: true, said: `Backed up slot ${slot} as it is saved on the unit.` }
 }
 
+/*
+ * AND A COPY KEPT BEFORE A SAVE WRITES OVER A SLOT (26 November 2026).
+ * "Let's make it back it up automatically when someone changes a preset or
+ * adds a NAM block ... where after they save there's a button ... Restore
+ * preset" (Justin). A save the phone asks for may say `keepFirst: true`; the
+ * computer then takes a snapshot of the slot AS IT IS SAVED, before the
+ * store, so the version the save replaces is the newest backup of that slot.
+ *
+ * NEVER IN THE SAVE'S WAY: a snapshot that fails, is refused (a unit the
+ * computer cannot snapshot, an empty slot) or takes longer than
+ * KEEP_FIRST_MS is given up on and the save goes on. The answer says whether
+ * one was kept, and nothing else changes. A save that does not ask is
+ * exactly the save it always was.
+ */
+export const KEEP_FIRST_MS = 8000
+
+/** `{ asked, kept, why? }`; never throws. `api.snapshotSlot` is restoreNow's. */
+export async function keepBeforeSave(req, api, { limitMs = KEEP_FIRST_MS, timer = setTimeout, clear = clearTimeout } = {}) {
+  if (req?.keepFirst !== true || !Number.isInteger(req?.slot) || req.slot < 0) return { asked: false, kept: false }
+  let t = null
+  try {
+    const late = new Promise((_, no) => {
+      t = timer(() => no(new Error('took too long')), limitMs)
+    })
+    const got = await Promise.race([Promise.resolve().then(() => api.snapshotSlot(req.slot)), late])
+    return { asked: true, kept: !!got?.version }
+  } catch (err) {
+    return { asked: true, kept: false, why: err?.message || String(err) }
+  } finally {
+    if (t != null) clear(t)
+  }
+}
+
 /** What the asking side leaves for the computer. */
 export function restoreRequest(version, mode, { id, now = Date.now } = {}) {
   return {

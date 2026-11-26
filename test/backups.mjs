@@ -173,4 +173,86 @@ export function run(test) {
     assert.ok(app.includes('if (stop || !req?.id || req.cancelled || (!req.versionId && req.mode !== KEEP)) return'))
     assert.ok(app.includes("if (out.ok && out.mode === KEEP) { recordLater.current('version', `${out.said} Asked for from the phone.`) } else if (out.ok) { afterRestoreLater.current(out.mode)"), 'a keep from the phone clears the unsaved mark, or reads the preset again')
   })
+  test('backups: another unit’s backups are left out, an AM4 is told, and a save asks for a copy first only where it is asked to', async () => {
+    const b = await import('../mobile/src/lib/backups.js')
+    const c = await import('../src/lib/restoreViaComputer.js')
+    /* Justin's AM4, 26 November 2026: the computer's list had an FM3's backups in it, and a tap on one could only be refused. */
+    const list = [
+      { id: 'a', location: 5, model: 'FM3', at: 3 },
+      { id: 'b', location: 5, model: 'AM4', at: 2 },
+      { id: 'c', location: 5, model: 'model_0x15', at: 1 },
+      { id: 'd', location: 5, at: 0 }
+    ]
+    assert.deepEqual(b.backupRows(list, { unit: 'am4' }).map((r) => r.id), ['b', 'c', 'd'])
+    assert.deepEqual(b.backupRows(list, { unit: 'fm3' }).map((r) => r.id), ['a', 'c', 'd'])
+    /* With no unit known, or the fallback drawer, nothing is left out. */
+    assert.equal(b.backupRows(list).length, 4)
+    assert.equal(b.backupRows(list, { unit: 'device' }).length, 4)
+    assert.equal(b.otherUnits('Axe-Fx III', 'axefxiii'), false)
+    /* An AM4 is told there are none yet, in place of a button that fails. */
+    assert.equal(b.backupsHere({ way: 'computer', am4: true }).why, b.BACKUPS_NOT_AM4)
+    assert.equal(b.backupsHere({ way: 'computer' }).ok, true)
+    const page = flat(read('mobile/src/components/Backups.js'))
+    assert.ok(page.includes("am4: !isDemo() && slug === 'am4'"))
+    assert.ok(page.includes("unit: slug }))"))
+
+    /* The save's words name Restore preset only where the computer said it kept a copy. */
+    assert.equal(b.savedWords(92), 'Saved to slot 92.')
+    assert.equal(b.savedWords(92, false), 'Saved to slot 92.')
+    assert.ok(b.savedWords(92, true).includes(b.RESTORE_BUTTON))
+    assert.equal(b.restoreSub(1), '1 earlier version kept on the computer')
+
+    /* The computer: asked, a copy is taken; not asked, nothing is; a failure or a slow one never throws. */
+    const calls = []
+    const api = { snapshotSlot: async (n) => { calls.push(n); return { version: { id: 'v' } } } }
+    assert.deepEqual(await c.keepBeforeSave({ slot: 7 }, api), { asked: false, kept: false })
+    assert.deepEqual(await c.keepBeforeSave({ slot: 7, keepFirst: 'yes' }, api), { asked: false, kept: false })
+    assert.deepEqual(calls, [])
+    assert.deepEqual(await c.keepBeforeSave({ slot: 7, keepFirst: true }, api), { asked: true, kept: true })
+    assert.deepEqual(calls, [7])
+    const refused = await c.keepBeforeSave({ slot: 7, keepFirst: true }, { snapshotSlot: async () => { throw new Error('unsupported') } })
+    assert.equal(refused.kept, false)
+    assert.equal(refused.why, 'unsupported')
+    assert.equal((await c.keepBeforeSave({ slot: 7, keepFirst: true }, { snapshotSlot: async () => ({}) })).kept, false)
+    const slow = await c.keepBeforeSave({ slot: 7, keepFirst: true }, { snapshotSlot: () => new Promise(() => {}) }, { limitMs: 5 })
+    assert.deepEqual(slow, { asked: true, kept: false, why: 'took too long' })
+
+    /* The window takes the copy BEFORE the store, and tells the phone whether it did. */
+    const app = flat(read('src/App.jsx'))
+    const at = app.indexOf('const before = await keepBeforeSave(req, { snapshotSlot })')
+    assert.ok(at > 0 && at < app.indexOf('await storePreset(req.slot)', at), 'the copy is taken after the store, or not at all')
+    assert.ok(app.includes('...(before.asked ? { kept: before.kept } : {})'))
+
+    /* The phone: the request says keepFirst only where it is handed, and the answer's `kept` comes through. */
+    const save = await import('../mobile/src/lib/saveViaComputer.js')
+    for (const [keepFirst, kept] of [[true, true], [false, undefined]]) {
+      let parked = null
+      const run = save.startComputerSave({
+        park: async (req) => { parked = req },
+        readResult: async () => ({ id: parked.id, ok: true, slot: 4, at: Date.now(), ...(kept ? { kept } : {}) }),
+        readProgress: async () => null,
+        slot: 4,
+        keepFirst,
+        pollMs: 1,
+        sleep: () => new Promise((r) => setTimeout(r, 1))
+      })
+      const res = await run.done
+      assert.equal(res.ok, true)
+      assert.equal(parked.keepFirst, keepFirst ? true : undefined)
+      assert.equal(res.kept, kept)
+    }
+    const slotSave = flat(read('mobile/src/components/SaveToSlot.js'))
+    assert.ok(slotSave.includes('keepFirst: autoBackup,'))
+    assert.ok(slotSave.includes('const autoBackup = useAutoBackup()'))
+
+    /* His account until the switch; and Restore preset is at the foot of Edit, drawn only where there is a backup. */
+    const features = await import('../mobile/src/lib/features.js')
+    assert.equal(features.AUTO_BACKUP_FOR_EVERYONE, false)
+    assert.ok(flat(read('mobile/src/lib/useBackups.js')).includes('export const useAutoBackup = () => backupsOn({ admin: useBluetoothAdmin(), everyone: AUTO_BACKUP_FOR_EVERYONE })'))
+    const button = flat(read('mobile/src/components/RestorePreset.js'))
+    assert.ok(button.includes('if (!here || (!count && !open)) return null'))
+    assert.ok(button.includes('const allowed = useAutoBackup()'))
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.ok(edit.indexOf('<RestorePreset />') > edit.indexOf('Tap a block to open its controls.'), 'Restore preset is above the knobs')
+  })
 }

@@ -5,6 +5,8 @@ import { logDebug } from '../lib/debugLog'
 import { currentPreset, parkSave, readSaveProgress, readSaveResult, saveInDemo, saveOnWire } from '../lib/device'
 import { isDemo } from '../lib/demo'
 import { startComputerSave } from '../lib/saveViaComputer'
+import { savedWords } from '../lib/backups'
+import { useAutoBackup } from '../lib/useBackups'
 import { isVp4, VP4_NO_SAVE } from '../lib/vp4-safety'
 import { SAVE_NOT_OPEN } from '../lib/bleSave'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS, stillOnPreset } from '../lib/save-wait'
@@ -46,6 +48,7 @@ export function useSaveToSlot() {
   const preset = useRig(ofPreset)
   const slug = useRig(ofSlug)
   const caps = useRig(ofCaps)
+  const autoBackup = useAutoBackup()
   const [armed, setArmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [said, setSaid] = useState(null)
@@ -152,6 +155,7 @@ export function useSaveToSlot() {
       readResult: () => readSaveResult(slug),
       slot: preset?.number,
       name: preset?.name || '',
+      keepFirst: autoBackup,
       slug,
       readProgress: () => readSaveProgress(slug),
       /* The computer's store says the moment the answer is written. */
@@ -173,7 +177,7 @@ export function useSaveToSlot() {
     if (res.ok) savedToSlot(res.slot)
     setSaid(
       res.ok
-        ? { tone: 'hint', text: `Saved to slot ${res.slot}.`, done: true }
+        ? { tone: 'hint', text: savedWords(res.slot, res.kept), done: true }
         : { tone: res.cancelled ? 'hint' : 'warn', text: res.error }
     )
   }
