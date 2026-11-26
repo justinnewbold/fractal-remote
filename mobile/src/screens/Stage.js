@@ -1837,7 +1837,7 @@ export default function Stage({
         {/* Derek's panel, where the scenes were (`knobsLane`): as tall as the room under the preset, with its own scroll, so the blocks beside it never move for it. */}
         {knobsLane ? (
           <View style={[KNOBS_BOX, { borderColor: color.rule, width: knobsLane.panel, height: Math.max(0, fillRoom) }]}>
-            <BlockSide eid={knobsAt} onClose={onCloseKnobs} onScrollLock={setKnobHeld} />
+            <BlockSide eid={knobsAt} onClose={onCloseKnobs} onScrollLock={setKnobHeld} onMove={onHoldBlock} />
           </View>
         ) : null}
 

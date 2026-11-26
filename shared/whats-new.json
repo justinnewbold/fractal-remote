@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-26",
+      "version": "2.5.3",
+      "lines": [
+        "On a tablet, a fold opened up or any wide screen, where holding a pedal opens its knobs beside Play: that panel now has the same buttons as the pop-up on a phone. Swap for a NAM block on an amp, and TONE3000 on a NAM block."
+      ]
+    },
+    {
       "date": "2026-11-25",
       "version": "2.5.2",
       "lines": [

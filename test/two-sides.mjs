@@ -683,7 +683,7 @@ export function run(test) {
     /* Close gives the side back. */
     assert.match(app, /const closeBlock = \(\) => \{\s*setBlockAt\(null\)\s*if \(screen === BLOCK\) setScreen\(blockGivesBack\(blockLent\.current\)\)\s*\}/)
     /* In the side: the panel, with that Close; Edit told which block to jump to; neither kept for Two sides. */
-    assert.match(app, /\) : sideTool === BLOCK \? \(\s*blockAt !== null \? <BlockSide eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\s*\) : \(\s*<Edit\s+onBack=\{closeSide\}\s+jump=\{editJump\}/)
+    assert.match(app, /\) : sideTool === BLOCK \? \(\s*blockAt !== null \? <BlockSide eid=\{blockAt\} onClose=\{closeBlock\} onMove=\{holdBlock\} \/> : null\s*\) : \(\s*<Edit\s+onBack=\{closeSide\}\s+jump=\{editJump\}/)
     assert.match(app, /useEffect\(\(\) => \{\s*if \(screen !== 'edit' && third !== 'edit'\) setEditJump\(null\)\s*\}, \[screen, third\]\)/)
     assert.match(edit, /export default function Edit\(\{ onBack, onOpenGear, jump = null, beside = false \}\)/)
     assert.match(edit, /if \(!jumpAt \|\| jump\?\.eid == null\) return\s*setOpenEid\(jump\.eid\)\s*setFocus\(\{ eid: jump\.eid, paramId: null, nonce: jumpAt \}\)/)
@@ -700,7 +700,7 @@ export function run(test) {
     assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : low \? lowFill : fillOwn\n/)
     /* The blocks beside a panel with a column of its own are planned in what is left of the row, for the whole room, with no scenes. */
     assert.match(stage, /const laneAgain =\s*lanePlan && knobsAt !== null && !lanePlan\.stays\s*\? tilePlan\(\{\s*width: lanePlan\.chain,\s*room: fillRoom,\s*scenes: 0,\s*pedals: fitBlocks,\s*\.\.\.fillAsk\s*\}\)\s*: null\n/)
-    assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, fillRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} \/>\s*<\/View>\s*\) : null\}/)
+    assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, fillRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} onMove=\{onHoldBlock\} \/>\s*<\/View>\s*\) : null\}/)
     assert.match(stage, /\{scenes\.hasScenes && !knobsLane \? \(\s*<View style=\{sceneLane\}>/)
     assert.match(stage, /scrollEnabled=\{!\(knobHeld && knobsLane\)\}/)
     assert.match(stage, /const LANES_KNOBS = \{ \.\.\.LANES, justifyContent: 'flex-start' \}\n/)

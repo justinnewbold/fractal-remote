@@ -15,6 +15,7 @@ import { PANEL_FOOT, panelFollows } from '../lib/twoSides'
 import { BLE_NOTE, BlockPanel } from '../screens/Edit'
 import { useChain } from './ChainWait'
 import Note from './Note'
+import { usePanelDoors } from './PanelDoors'
 import Press from './Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from './SaveToSlot'
 
@@ -24,6 +25,9 @@ const ofBufferRev = (s) => s.bufferRev
 const ofCaps = (s) => s.capabilities
 const ofPreset = (s) => s.preset
 const ofUnsaved = (s) => s.unsaved
+
+/* A name that came all in small letters (an AM4's blocks through a computer come by their code word, "amp") is given its capital: "Make the work NAM be capitalized" was the same thing in the pop-up. */
+const titled = (name) => (name && name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name || '')
 
 /*
  * DEREK'S IDEA: HOLD A BLOCK, GET ITS PANEL (docs/two-sides, "Derek's idea",
@@ -63,7 +67,9 @@ export default function BlockSide({
   eid,
   onClose,
   /* While a knob has the finger: Play's own page must not scroll under it either (Stage). */
-  onScrollLock = null
+  onScrollLock = null,
+  /* Another block put where this one was (a swap): the app's own hold, so the panel opens on it (components/PanelDoors). */
+  onMove = null
 }) {
   const [held, setHeld] = useState(false)
   const lockOut = useRef(onScrollLock)
@@ -89,6 +95,8 @@ export default function BlockSide({
   const named = useRef('')
   if (block) named.current = block.name
   const hue = block ? blockColor(block.slug) : null
+  /* What the hold pop-up has over and under its knobs, here too: Swap for a NAM block, TONE3000, Swap for another pedal (components/PanelDoors). */
+  const doors = usePanelDoors(block, { blocks, elsewhere: chainNow.elsewhere, onMove })
 
   /* Save: only with something to save on this slot, which only the computer's path marks (rig.noteEdited). */
   const pending = !!unsaved && unsaved.number === preset?.number
@@ -140,7 +148,7 @@ export default function BlockSide({
       >
         <View style={{ flex: 1, borderLeftWidth: 4, borderLeftColor: hue ? hue.fill : color.rule, paddingLeft: space.md }}>
           <Text accessibilityRole="header" numberOfLines={1} style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
-            {block?.name || named.current}
+            {titled(block?.name || named.current)}
           </Text>
         </View>
         {pending ? <SaveButton s={saveTo} waiting /> : null}
@@ -170,7 +178,10 @@ export default function BlockSide({
             {error}
           </Note>
         ) : null}
-        {block ? (
+        {doors.over}
+        {doors.page ? (
+          doors.page
+        ) : block ? (
           <BlockPanel
             key={`${idOf(block)}:${block.channel || ''}:${scene}:${bufferRev}`}
             panel
@@ -199,6 +210,7 @@ export default function BlockSide({
         ) : (
           <Note>Reading what’s in this preset…</Note>
         )}
+        {doors.under}
         <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 20, textAlign: 'center', paddingTop: space.sm }}>{PANEL_FOOT}</Text>
       </ScrollView>
     </View>

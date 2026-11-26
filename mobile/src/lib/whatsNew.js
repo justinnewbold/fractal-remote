@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-26",
+    "day": "26 November 2026",
+    "version": "2.5.3",
+    "lines": [
+      {
+        "text": "On a tablet, a fold opened up or any wide screen, where holding a pedal opens its knobs beside Play: that panel now has the same buttons as the pop-up on a phone. Swap for a NAM block on an amp, and TONE3000 on a NAM block.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-25",
     "day": "25 November 2026",
     "version": "2.5.2",
