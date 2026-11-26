@@ -193,7 +193,16 @@ export function run(test) {
     assert.equal(b.backupsHere({ way: 'computer', am4: true }).why, b.BACKUPS_NOT_AM4)
     assert.equal(b.backupsHere({ way: 'computer' }).ok, true)
     const page = flat(read('mobile/src/components/Backups.js'))
-    assert.ok(page.includes("am4: !isDemo() && slug === 'am4'"))
+    assert.ok(page.includes('am4: !isDemo() && am4TooOld(slug, linkState().hostVersion, isOlder)'))
+    /* An AM4 is turned away only by a computer app known to be older than the one that keeps its presets; and its rows have no Play it. */
+    const { isOlder } = await import('../shared/versions.mjs')
+    assert.equal(b.am4TooOld('am4', '2.3.7', isOlder), true)
+    assert.equal(b.am4TooOld('am4', b.AM4_BACKUPS_FROM, isOlder), false)
+    assert.equal(b.am4TooOld('am4', null, isOlder), false)
+    assert.equal(b.am4TooOld('fm3', '2.3.7', isOlder), false)
+    assert.equal(b.playsHere('am4'), false)
+    assert.equal(b.playsHere('axefxiii'), true)
+    assert.ok(page.includes('{playsHere(slug) ? <Press grow height={44} label={PLAY_BUTTON}'))
     assert.ok(page.includes("unit: slug }))"))
 
     /* The save's words name Restore preset only where the computer said it kept a copy. */
@@ -254,5 +263,47 @@ export function run(test) {
     assert.ok(button.includes('const allowed = useAutoBackup()'))
     const edit = read('mobile/src/screens/Edit.js')
     assert.ok(edit.indexOf('<RestorePreset />') > edit.indexOf('Tap a block to open its controls.'), 'Restore preset is above the knobs')
+  })
+  test('backups, at the computer: an AM4’s goes back by its own dump, straight to its slot, with a copy kept first, and is never played', async () => {
+    const c = await import('../src/lib/restoreViaComputer.js')
+    const calls = []
+    const api = (over = {}) => ({
+      listVersions: async () => ({ versions: [{ id: 'v1', location: 92, model: 'AM4', name: 'Rig' }] }),
+      versionBytes: async () => new Uint8Array([1, 2, 3]),
+      snapshotSlot: async (n) => { calls.push(`snapshot ${n}`); return { version: { id: 's' } } },
+      loadPresetBytes: async () => { calls.push('load') },
+      storePreset: async (n) => { calls.push(`store ${n}`) },
+      restoreDump: async (bytes) => { calls.push(`dump ${bytes.length}`) },
+      reload: async (n) => { calls.push(`reload ${n}`) },
+      slotName: async () => 'Rig',
+      unitSlug: () => 'am4',
+      ...over
+    })
+    const put = await c.restoreNow({ versionId: 'v1', mode: 'put', slot: 92, model: 'AM4' }, api())
+    assert.equal(put.ok, true)
+    assert.equal(put.kept, true)
+    /* The copy first, then the dump, then the slot loaded again; never the gen-3 load and store. */
+    assert.deepEqual(calls, ['snapshot 92', 'dump 3', 'reload 92'])
+    /* No copy, no write. */
+    calls.length = 0
+    await assert.rejects(() => c.restoreNow({ versionId: 'v1', mode: 'put', slot: 92 }, api({ snapshotSlot: async () => { throw new Error('cable') } })), /Couldn’t keep a copy/)
+    assert.deepEqual(calls, [])
+    /* Play it is refused in words, with nothing sent. */
+    await assert.rejects(() => c.restoreNow({ versionId: 'v1', mode: 'play', slot: 92 }, api()), new RegExp(c.AM4_NO_PLAY.slice(0, 30)))
+    assert.deepEqual(calls, [])
+    /* A window with no way to send the dump refuses, and writes nothing. */
+    await assert.rejects(() => c.restoreNow({ versionId: 'v1', mode: 'put', slot: 92 }, api({ restoreDump: undefined })), new RegExp(c.RESTORE_REFUSED))
+    assert.deepEqual(calls, [])
+    /* A reload that fails does not unsay a write that happened. */
+    const noReload = await c.restoreNow({ versionId: 'v1', mode: 'put', slot: 92 }, api({ reload: async () => { throw new Error('busy') } }))
+    assert.equal(noReload.ok, true)
+    /* And a gen-3 unit is as it was: load, then store, never the dump. */
+    calls.length = 0
+    const gen3 = { listVersions: async () => ({ versions: [{ id: 'v2', location: 5, model: 'FM3', name: 'Lead' }] }), unitSlug: () => 'fm3' }
+    await c.restoreNow({ versionId: 'v2', mode: 'put', slot: 5 }, api(gen3))
+    assert.deepEqual(calls, ['snapshot 5', 'load', 'store 5'])
+    const app = flat(read('src/App.jsx'))
+    assert.ok(app.includes('restoreDump: restorePresetDump,'))
+    assert.ok(app.includes('reload: (n) => (deviceSnapshot().preset?.number === n ? selectPreset(n) : null),'))
   })
 }

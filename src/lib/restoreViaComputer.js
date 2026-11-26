@@ -64,6 +64,17 @@ export const RESTORE_LATE_WORDS = 'Still waiting for the computer.'
 export const MODES = ['put', 'play']
 
 /*
+ * AN AM4 (26 November 2026). Its snapshot cannot be loaded to be heard: the
+ * computer has no way to put a preset in an AM4's edit buffer. It goes back
+ * by being sent again as it came, which writes the slot it was taken from
+ * (api.restoreDump). So Play it is refused in words, and a Put back keeps
+ * its copy of the slot first as ever, sends the dump, and asks the unit to
+ * load the slot again where it is the one playing (api.reload).
+ */
+export const VERBATIM_UNITS = ['am4']
+export const AM4_NO_PLAY = 'An AM4 can’t play a backup without putting it back. Use Restore to put it back in its slot. Nothing was changed.'
+
+/*
  * AND A THIRD ASK, FROM THE PHONE APP'S BACKUPS PAGE (22 November 2026):
  * keep a copy of a slot NOW, as it is saved on the unit. The relay refuses
  * /backup from a handset as it refuses /version, so it comes the same way:
@@ -200,6 +211,9 @@ export async function restoreNow(req, api) {
   }
   if (!bytes || (!bytes.length && !api.demo)) throw new Error(RESTORE_UNREADABLE)
 
+  const verbatim = VERBATIM_UNITS.includes(here)
+  if (verbatim && (req.mode === 'play' || typeof api.restoreDump !== 'function')) throw new Error(req.mode === 'play' ? AM4_NO_PLAY : RESTORE_REFUSED)
+
   if (req.mode === 'play') {
     await api.loadPresetBytes(bytes)
     return {
@@ -243,8 +257,16 @@ export async function restoreNow(req, api) {
       if (!kept) throw noCopy()
     }
   }
-  await api.loadPresetBytes(bytes)
-  await api.storePreset(slot)
+  if (verbatim) {
+    await api.restoreDump(bytes)
+    /* The slot is written; what is PLAYING is still the old sound until the slot is loaded again. Best effort: the write has happened either way. */
+    try {
+      await api.reload?.(slot)
+    } catch {}
+  } else {
+    await api.loadPresetBytes(bytes)
+    await api.storePreset(slot)
+  }
   return {
     ok: true,
     mode: 'put',

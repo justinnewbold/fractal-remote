@@ -9,6 +9,9 @@ import { isVp4 } from '../lib/vp4-safety'
 import { onConfigDoc, refreshAll, useRig } from '../lib/rig'
 import {
   ALL_PRESETS,
+  AM4_NO_PLAY_NOTE,
+  am4TooOld,
+  playsHere,
   BACKUPS_NONE,
   BACKUPS_NONE_SLOT,
   BACKUPS_NO_LIST,
@@ -30,6 +33,8 @@ import {
   startBackupAsk,
   waitingWords
 } from '../lib/backups'
+import { linkState } from '../lib/link'
+import { isOlder } from '../lib/versions'
 import { PHONE_ONLY_GEN3 } from '../lib/presetDump'
 import { usePhoneBackups } from '../lib/useBackups'
 import Note from './Note'
@@ -56,7 +61,7 @@ export default function Backups({ only = false }) {
   const unsaved = useRig(ofUnsaved)
   const slot = Number.isInteger(preset?.number) ? preset.number : null
   const way = isDemo() ? 'demo' : caps?.via === 'bluetooth' ? 'bluetooth' : 'computer'
-  const here = backupsHere({ way, vp4: !isDemo() && isVp4(slug), am4: !isDemo() && slug === 'am4' })
+  const here = backupsHere({ way, vp4: !isDemo() && isVp4(slug), am4: !isDemo() && am4TooOld(slug, linkState().hostVersion, isOlder) })
   const phoneOpen = usePhoneBackups()
   const [scope, setScope] = useState('slot')
   const [rows, setRows] = useState(null)
@@ -146,6 +151,7 @@ export default function Backups({ only = false }) {
         <Press grow height={44} label={THIS_PRESET} on={scope === 'slot'} onPress={() => setScope('slot')} />
         <Press grow height={44} label={ALL_PRESETS} on={scope === 'all'} onPress={() => setScope('all')} />
       </View>}
+      {playsHere(slug) || !rows?.length ? null : <Text style={{ color: color.silkDim, fontSize: font.small }}>{AM4_NO_PLAY_NOTE}</Text>}
       {fault ? <Note tone="warn">{fault}</Note> : null}
       {rows === null ? <Text style={{ color: color.silkDim, fontSize: font.small }}>Reading the backups on the computer…</Text> : null}
       {rows && !rows.length && !fault ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{scope === 'slot' ? BACKUPS_NONE_SLOT : BACKUPS_NONE}</Text> : null}
@@ -156,7 +162,7 @@ export default function Backups({ only = false }) {
           </Text>
           <Text style={{ color: color.silkDim, fontSize: font.small }}>{rowLine(row)}</Text>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Press grow height={44} label={PLAY_BUTTON} accessibilityLabel={`${PLAY_BUTTON}: ${row.name}`} disabled={busy} onPress={() => play(row)} />
+            {playsHere(slug) ? <Press grow height={44} label={PLAY_BUTTON} accessibilityLabel={`${PLAY_BUTTON}: ${row.name}`} disabled={busy} onPress={() => play(row)} /> : null}
             <Press grow height={44} label={only ? RESTORE_ROW : PUT_BUTTON} accessibilityLabel={`${only ? RESTORE_ROW : PUT_BUTTON}: ${row.name}`} disabled={busy || row.slot == null} onPress={() => put(row)} />
           </View>
           {out && out.mode !== 'keep' && out.id === row.id ? <Waiting out={out} onCancel={() => job.current?.cancel()} /> : null}

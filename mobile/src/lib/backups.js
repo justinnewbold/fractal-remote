@@ -53,14 +53,28 @@ export const BACKUPS_WHERE = 'Backups are kept on your computer, not on this dev
 export const BACKUPS_NEED_COMPUTER =
   'Backups are kept on a computer, so they need one. Connect through a computer or a Raspberry Pi to back up a preset or put one back.'
 export const BACKUPS_NOT_VP4 = 'Backups aren’t available for a VP4.'
-/* The computer app cannot take or put back a snapshot of an AM4 yet (its engine has no snapshot of one): said, in place of a button that fails. */
-export const BACKUPS_NOT_AM4 = 'Backups aren’t available for an AM4 yet.'
+/*
+ * AN AM4 (26 November 2026): the computer app keeps and puts back an AM4's
+ * presets from version AM4_BACKUPS_FROM (its engine had no snapshot of one
+ * before: "Couldn’t back up slot 92", Justin's AM4). An older one is told to
+ * update, in place of a button that fails; one whose version is not known is
+ * let try. And an AM4's backup cannot be PLAYED first: the computer has no
+ * way to load one to be heard, only to put it back in its slot, so its rows
+ * have Restore alone (the computer refuses a Play it there in words).
+ */
+export const AM4_BACKUPS_FROM = '2.5.5'
+export const BACKUPS_NOT_AM4 = `Update the computer app to version ${AM4_BACKUPS_FROM} or later to back up an AM4’s presets.`
+export const AM4_NO_PLAY_NOTE = 'On an AM4 a backup can’t be played first: Restore puts it straight back in its slot.'
+/** Whether the computer app is too old for an AM4's backups. `older(a, b)` is lib/versions isOlder. */
+export const am4TooOld = (slug, version, older) => slug === 'am4' && typeof version === 'string' && !!version && older(version, AM4_BACKUPS_FROM) === true
+/** Whether a row gets Play it: never an AM4's. */
+export const playsHere = (slug) => slug !== 'am4'
 /* RESTORE PRESET, at the foot of Edit (components/RestorePreset): the backups of the preset the unit is on, where there are any. */
 export const RESTORE_BUTTON = 'Restore preset'
 export const RESTORE_TITLE = 'Restore preset'
 export const RESTORE_ROW = 'Restore'
 export const restoreSub = (n) => (n === 1 ? '1 earlier version kept on the computer' : `${n} earlier versions kept on the computer`)
-export const RESTORE_NOTE = 'Each is this preset as it was saved before a change. Play it to hear one. Restore puts it back in the slot.'
+export const RESTORE_NOTE = 'Each is this preset as it was saved before a change. Restore puts one back in the slot.'
 /** What a save says, and that the version before it was kept where it was. */
 export const savedWords = (slot, kept) =>
   kept === true ? `Saved to slot ${slot}. The version before it is backed up: Restore preset is at the bottom of Edit.` : `Saved to slot ${slot}.`
