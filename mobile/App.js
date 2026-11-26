@@ -2334,7 +2334,7 @@ export default function App() {
                     <TunerSide onClose={() => writeTuner(false)} down={link.down === true && !demo} />
                   ) : sideTool === BLOCK ? (
                     /* A block held on Play: its knobs, in the side it borrowed; Close gives the side back. */
-                    blockAt !== null ? <BlockSide eid={blockAt} onClose={closeBlock} /> : null
+                    blockAt !== null ? <BlockSide eid={blockAt} onClose={closeBlock} onMove={holdBlock} /> : null
                   ) : (
                     <Edit
                       onBack={closeSide}
